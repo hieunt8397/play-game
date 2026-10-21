@@ -1,0 +1,1594 @@
+{
+  "textures": [
+    {
+      "image": "touch-talk-0.png",
+      "format": "RGBA8888",
+      "size": {
+        "w": 2043,
+        "h": 2048
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "filename": "apple/idle/00",
+          "frame": {
+            "x": 1593,
+            "y": 421,
+            "w": 281,
+            "h": 253
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1359,
+            "y": 200,
+            "w": 281,
+            "h": 253
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "apple/react/00",
+          "frame": {
+            "x": 572,
+            "y": 674,
+            "w": 278,
+            "h": 238
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1377,
+            "y": 218,
+            "w": 278,
+            "h": 238
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "banana/idle/00",
+          "frame": {
+            "x": 687,
+            "y": 276,
+            "w": 282,
+            "h": 146
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 779,
+            "y": 719,
+            "w": 282,
+            "h": 146
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "banana/react/00",
+          "frame": {
+            "x": 854,
+            "y": 858,
+            "w": 258,
+            "h": 158
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 788,
+            "y": 708,
+            "w": 258,
+            "h": 158
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "beach-ball/idle/00",
+          "frame": {
+            "x": 429,
+            "y": 1815,
+            "w": 230,
+            "h": 231
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 759,
+            "y": 713,
+            "w": 230,
+            "h": 231
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "beach-ball/react/00",
+          "frame": {
+            "x": 2,
+            "y": 1264,
+            "w": 247,
+            "h": 202
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 751,
+            "y": 745,
+            "w": 247,
+            "h": 202
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "boat/idle/00",
+          "frame": {
+            "x": 2,
+            "y": 2,
+            "w": 341,
+            "h": 321
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1361,
+            "y": 232,
+            "w": 341,
+            "h": 321
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "boat/react/00",
+          "frame": {
+            "x": 347,
+            "y": 2,
+            "w": 336,
+            "h": 320
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1371,
+            "y": 242,
+            "w": 336,
+            "h": 320
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "bread/idle/00",
+          "frame": {
+            "x": 347,
+            "y": 326,
+            "w": 281,
+            "h": 210
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 179,
+            "y": 654,
+            "w": 281,
+            "h": 210
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "bread/react/00",
+          "frame": {
+            "x": 1297,
+            "y": 260,
+            "w": 292,
+            "h": 201
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 175,
+            "y": 666,
+            "w": 292,
+            "h": 201
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "bucket/idle/00",
+          "frame": {
+            "x": 1471,
+            "y": 678,
+            "w": 261,
+            "h": 249
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1275,
+            "y": 706,
+            "w": 261,
+            "h": 249
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "bucket/react/00",
+          "frame": {
+            "x": 856,
+            "y": 611,
+            "w": 263,
+            "h": 243
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1270,
+            "y": 720,
+            "w": 263,
+            "h": 243
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "bus/idle/00",
+          "frame": {
+            "x": 992,
+            "y": 275,
+            "w": 282,
+            "h": 165
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 859,
+            "y": 288,
+            "w": 282,
+            "h": 165
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "bus/react/00",
+          "frame": {
+            "x": 1297,
+            "y": 2,
+            "w": 298,
+            "h": 154
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 851,
+            "y": 299,
+            "w": 298,
+            "h": 154
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car/idle/00",
+          "frame": {
+            "x": 2,
+            "y": 656,
+            "w": 281,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 400,
+            "y": 337,
+            "w": 281,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car/react/00",
+          "frame": {
+            "x": 1599,
+            "y": 2,
+            "w": 298,
+            "h": 108
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 391,
+            "y": 345,
+            "w": 298,
+            "h": 108
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "carrot/idle/00",
+          "frame": {
+            "x": 1900,
+            "y": 260,
+            "w": 128,
+            "h": 261
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1436,
+            "y": 603,
+            "w": 128,
+            "h": 261
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "carrot/react/00",
+          "frame": {
+            "x": 1736,
+            "y": 678,
+            "w": 126,
+            "h": 261
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1437,
+            "y": 603,
+            "w": 126,
+            "h": 261
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "coconut/idle/00",
+          "frame": {
+            "x": 2,
+            "y": 1823,
+            "w": 188,
+            "h": 211
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 133,
+            "y": 1103,
+            "w": 188,
+            "h": 211
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "coconut/react/00",
+          "frame": {
+            "x": 511,
+            "y": 1237,
+            "w": 187,
+            "h": 200
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 153,
+            "y": 1117,
+            "w": 187,
+            "h": 200
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "cone/idle/00",
+          "frame": {
+            "x": 1116,
+            "y": 962,
+            "w": 253,
+            "h": 296
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1387,
+            "y": 1037,
+            "w": 253,
+            "h": 296
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "cone/react/00",
+          "frame": {
+            "x": 1372,
+            "y": 1530,
+            "w": 250,
+            "h": 289
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1390,
+            "y": 1033,
+            "w": 250,
+            "h": 289
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "crab/idle/00",
+          "frame": {
+            "x": 2,
+            "y": 327,
+            "w": 261,
+            "h": 103
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 470,
+            "y": 1202,
+            "w": 261,
+            "h": 103
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "crab/react/00",
+          "frame": {
+            "x": 878,
+            "y": 1208,
+            "w": 221,
+            "h": 114
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 502,
+            "y": 1191,
+            "w": 221,
+            "h": 114
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dumpster/idle/00",
+          "frame": {
+            "x": 1385,
+            "y": 931,
+            "w": 254,
+            "h": 194
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 959,
+            "y": 1138,
+            "w": 254,
+            "h": 194
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dumpster/react/00",
+          "frame": {
+            "x": 1385,
+            "y": 1129,
+            "w": 254,
+            "h": 184
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 965,
+            "y": 1141,
+            "w": 254,
+            "h": 184
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "egg/idle/00",
+          "frame": {
+            "x": 829,
+            "y": 1461,
+            "w": 244,
+            "h": 318
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 964,
+            "y": 1015,
+            "w": 244,
+            "h": 318
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "egg/react/00",
+          "frame": {
+            "x": 260,
+            "y": 1237,
+            "w": 247,
+            "h": 315
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 985,
+            "y": 1019,
+            "w": 247,
+            "h": 315
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "fish/idle/00",
+          "frame": {
+            "x": 194,
+            "y": 1823,
+            "w": 231,
+            "h": 208
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 550,
+            "y": 321,
+            "w": 231,
+            "h": 208
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "fish/react/00",
+          "frame": {
+            "x": 620,
+            "y": 1557,
+            "w": 205,
+            "h": 243
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 571,
+            "y": 314,
+            "w": 205,
+            "h": 243
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "frying-pan/idle/00",
+          "frame": {
+            "x": 572,
+            "y": 589,
+            "w": 280,
+            "h": 81
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 860,
+            "y": 372,
+            "w": 280,
+            "h": 81
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "frying-pan/react/00",
+          "frame": {
+            "x": 1297,
+            "y": 160,
+            "w": 275,
+            "h": 82
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 859,
+            "y": 373,
+            "w": 275,
+            "h": 82
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "house/idle/00",
+          "frame": {
+            "x": 1643,
+            "y": 1187,
+            "w": 214,
+            "h": 262
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 813,
+            "y": 603,
+            "w": 214,
+            "h": 262
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "house/react/00",
+          "frame": {
+            "x": 392,
+            "y": 1557,
+            "w": 224,
+            "h": 254
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 808,
+            "y": 613,
+            "w": 224,
+            "h": 254
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "mug/idle/00",
+          "frame": {
+            "x": 1372,
+            "y": 1317,
+            "w": 252,
+            "h": 209
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 104,
+            "y": 1124,
+            "w": 252,
+            "h": 209
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "mug/react/00",
+          "frame": {
+            "x": 878,
+            "y": 1823,
+            "w": 243,
+            "h": 204
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 125,
+            "y": 1121,
+            "w": 243,
+            "h": 204
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "parasol/idle/00",
+          "frame": {
+            "x": 687,
+            "y": 2,
+            "w": 301,
+            "h": 270
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 141,
+            "y": 662,
+            "w": 301,
+            "h": 270
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "parasol/react/00",
+          "frame": {
+            "x": 992,
+            "y": 2,
+            "w": 301,
+            "h": 269
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 134,
+            "y": 665,
+            "w": 301,
+            "h": 269
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "police-car/idle/00",
+          "frame": {
+            "x": 917,
+            "y": 444,
+            "w": 280,
+            "h": 163
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1360,
+            "y": 701,
+            "w": 280,
+            "h": 163
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "police-car/react/00",
+          "frame": {
+            "x": 1599,
+            "y": 114,
+            "w": 297,
+            "h": 159
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1351,
+            "y": 710,
+            "w": 297,
+            "h": 159
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "pot/idle/00",
+          "frame": {
+            "x": 287,
+            "y": 540,
+            "w": 281,
+            "h": 133
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 400,
+            "y": 320,
+            "w": 281,
+            "h": 133
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "pot/react/00",
+          "frame": {
+            "x": 1593,
+            "y": 277,
+            "w": 282,
+            "h": 140
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 405,
+            "y": 316,
+            "w": 282,
+            "h": 140
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "scene-thumb-kitchen/idle/00",
+          "frame": {
+            "x": 1878,
+            "y": 525,
+            "w": 152,
+            "h": 152
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 152,
+            "h": 152
+          },
+          "sourceSize": {
+            "w": 152,
+            "h": 152
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "scene-thumb-sea/idle/00",
+          "frame": {
+            "x": 1878,
+            "y": 681,
+            "w": 152,
+            "h": 152
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 152,
+            "h": 152
+          },
+          "sourceSize": {
+            "w": 152,
+            "h": 152
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "scene-thumb-street/idle/00",
+          "frame": {
+            "x": 1866,
+            "y": 837,
+            "w": 152,
+            "h": 152
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 0,
+            "y": 0,
+            "w": 152,
+            "h": 152
+          },
+          "sourceSize": {
+            "w": 152,
+            "h": 152
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "seagull/idle/00",
+          "frame": {
+            "x": 632,
+            "y": 426,
+            "w": 281,
+            "h": 159
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 983,
+            "y": 181,
+            "w": 281,
+            "h": 159
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "seagull/react/00",
+          "frame": {
+            "x": 2,
+            "y": 444,
+            "w": 281,
+            "h": 208
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 983,
+            "y": 132,
+            "w": 281,
+            "h": 208
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "shell/idle/00",
+          "frame": {
+            "x": 1125,
+            "y": 1557,
+            "w": 210,
+            "h": 138
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1318,
+            "y": 1151,
+            "w": 210,
+            "h": 138
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "shell/react/00",
+          "frame": {
+            "x": 878,
+            "y": 1326,
+            "w": 211,
+            "h": 131
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1322,
+            "y": 1159,
+            "w": 211,
+            "h": 131
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "spoon/idle/00",
+          "frame": {
+            "x": 1116,
+            "y": 1262,
+            "w": 252,
+            "h": 291
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 532,
+            "y": 1041,
+            "w": 252,
+            "h": 291
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "spoon/react/00",
+          "frame": {
+            "x": 1123,
+            "y": 686,
+            "w": 258,
+            "h": 272
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 527,
+            "y": 1063,
+            "w": 258,
+            "h": 272
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "starfish/idle/00",
+          "frame": {
+            "x": 1643,
+            "y": 962,
+            "w": 216,
+            "h": 221
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 928,
+            "y": 1068,
+            "w": 216,
+            "h": 221
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "starfish/react/00",
+          "frame": {
+            "x": 663,
+            "y": 1804,
+            "w": 211,
+            "h": 225
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 924,
+            "y": 1075,
+            "w": 211,
+            "h": 225
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tractor/idle/00",
+          "frame": {
+            "x": 559,
+            "y": 916,
+            "w": 254,
+            "h": 288
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 531,
+            "y": 1045,
+            "w": 254,
+            "h": 288
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tractor/react/00",
+          "frame": {
+            "x": 287,
+            "y": 678,
+            "w": 268,
+            "h": 280
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 524,
+            "y": 1057,
+            "w": 268,
+            "h": 280
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "traffic-light/idle/00",
+          "frame": {
+            "x": 1901,
+            "y": 2,
+            "w": 140,
+            "h": 254
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1430,
+            "y": 199,
+            "w": 140,
+            "h": 254
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "traffic-light/react/00",
+          "frame": {
+            "x": 1866,
+            "y": 993,
+            "w": 148,
+            "h": 254
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1435,
+            "y": 198,
+            "w": 148,
+            "h": 254
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tree/idle/00",
+          "frame": {
+            "x": 2,
+            "y": 1557,
+            "w": 190,
+            "h": 262
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 225,
+            "y": 603,
+            "w": 190,
+            "h": 262
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tree/react/00",
+          "frame": {
+            "x": 196,
+            "y": 1557,
+            "w": 192,
+            "h": 261
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 239,
+            "y": 604,
+            "w": 192,
+            "h": 261
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "truck/idle/00",
+          "frame": {
+            "x": 2,
+            "y": 1039,
+            "w": 254,
+            "h": 221
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 103,
+            "y": 1112,
+            "w": 254,
+            "h": 221
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "truck/react/00",
+          "frame": {
+            "x": 1201,
+            "y": 465,
+            "w": 266,
+            "h": 217
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 98,
+            "y": 1119,
+            "w": 266,
+            "h": 217
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "watermelon/idle/00",
+          "frame": {
+            "x": 273,
+            "y": 962,
+            "w": 254,
+            "h": 271
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1387,
+            "y": 1061,
+            "w": 254,
+            "h": 271
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "watermelon/react/00",
+          "frame": {
+            "x": 2,
+            "y": 775,
+            "w": 267,
+            "h": 260
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1377,
+            "y": 1073,
+            "w": 267,
+            "h": 260
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "app": "be-hoc-choi tools/atlas",
+    "version": "1"
+  }
+}

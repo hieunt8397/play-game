@@ -1,0 +1,3686 @@
+diff --git a/app/package.json b/app/package.json
+new file mode 100644
+index 0000000..230feb8
+--- /dev/null
++++ b/app/package.json
+@@ -0,0 +1,47 @@
++{
++  "name": "be-hoc-choi",
++  "private": true,
++  "version": "0.1.0",
++  "description": "Bé Học Chơi — offline toddler learning games for iPad (Phaser 4 + Vite). Scaffolded from phaserjs/template-vite-ts 1.4.0.",
++  "type": "module",
++  "license": "MIT",
++  "engines": {
++    "node": ">=24 <25"
++  },
++  "scripts": {
++    "dev": "vite",
++    "build": "vite build",
++    "preview": "vite preview",
++    "tokens": "node tools/tokens/generate.ts",
++    "tokens:check": "node tools/tokens/generate.ts --check",
++    "audio:placeholders": "node tools/audio/make-placeholders.ts",
++    "audio:normalize": "node tools/audio/normalize.ts",
++    "content:export": "node tools/content/export-voice-lines.ts",
++    "tts": "npm run content:export && node tools/tts/generate.ts",
++    "typecheck": "tsc --noEmit",
++    "lint": "eslint .",
++    "test": "vitest run",
++    "validate:content": "node tools/lint/validate-content.ts",
++    "check": "npm run typecheck && npm run lint && npm run test && npm run tokens:check && npm run validate:content",
++    "art:build": "node tools/render/build.ts",
++    "render": "node tools/render/render.ts",
++    "atlas": "node tools/atlas/pack.ts",
++    "doctor": "node tools/doctor/doctor.ts"
++  },
++  "dependencies": {
++    "phaser": "4.2.1"
++  },
++  "devDependencies": {
++    "@eslint/js": "10.0.1",
++    "@types/node": "24.19.1",
++    "eslint": "10.12.0",
++    "free-tex-packer-core": "0.3.9",
++    "happy-dom": "20.14.5",
++    "sharp": "0.35.4",
++    "typescript": "~5.9.3",
++    "typescript-eslint": "8.71.1",
++    "vite": "8.3.3",
++    "vitest": "5.0.3",
++    "yaml": "2.9.1"
++  }
++}
+diff --git a/app/eslint.config.js b/app/eslint.config.js
+new file mode 100644
+index 0000000..3e417ca
+--- /dev/null
++++ b/app/eslint.config.js
+@@ -0,0 +1,196 @@
++// ESLint flat config (AD-8, AD-12).
++// Layer rule (ARCHITECTURE-SPINE › Design Paradigm), enforced with no-restricted-imports:
++//   scenes → games / core / content
++//   games  → core / content          (never scenes, never another game, never the registry)
++//   core   → content                 (never scenes or games)
++//   content → nothing but types      (value imports from other layers/packages banned)
++// Scenes and games: no colour literals, no magic numbers, and design values only through the
++// `Tokens` facade (core/tokens) — never core/tokens.generated or core/timing directly.
++// Relative-path bans are text patterns: a game's own files must import each other with paths that
++// stay inside its folder (`./x`, not `../ice-cream/x`).
++import js from '@eslint/js';
++import { defineConfig } from 'eslint/config';
++import tseslint from 'typescript-eslint';
++
++/** Must equal GAME_IDS in src/content/types.ts (asserted by tools/lint/rules.test.ts). */
++export const LINT_GAME_IDS = ['ice-cream', 'pizza', 'race', 'fishing', 'touch-talk', 'dino-puzzle', 'shadow-match'];
++
++const GAME_ALT = LINT_GAME_IDS.join('|');
++const RULE = '@typescript-eslint/no-restricted-imports';
++/** Optional leading `./` before `../` segments (e.g. `./../scenes/Boot`). */
++const UP = String.raw`^(\./)?(\.\./)+`;
++
++const ban = (regex, message, allowTypeImports = false) => ({ regex, message, allowTypeImports });
++
++const TOKENS_FACADE_ONLY = ban(
++  String.raw`(^|/)core/(tokens\.generated|timing)(\.ts)?$`,
++  'Use the Tokens facade (core/tokens: Tokens.* / Tokens.Timing.*), not core/tokens.generated or core/timing.',
++);
++
++// esquery's selector parser drops backslash escapes, so these regexes avoid them (no \b, no \().
++const HEX = '#[0-9a-fA-F]{3,8}([^0-9a-zA-Z_]|$)';
++const FN_COLOR = '(rgb|hsl)a?[(]';
++const NO_COLOR_LITERALS = [
++  { selector: `Literal[value=/${HEX}/]`, message: 'Hex colour literal: use Tokens.colors.* (generated from DESIGN.md).' },
++  { selector: `Literal[value=/${FN_COLOR}/]`, message: 'rgb()/rgba()/hsl()/hsla() colour literal: use Tokens.* (generated from DESIGN.md).' },
++  { selector: `TemplateElement[value.raw=/${HEX}/]`, message: 'Hex colour literal: use Tokens.colors.* (generated from DESIGN.md).' },
++  { selector: `TemplateElement[value.raw=/${FN_COLOR}/]`, message: 'rgb()/rgba()/hsl()/hsla() colour literal: use Tokens.* (generated from DESIGN.md).' },
++];
++
++// no-magic-numbers treats `const SPEED = 42` / `speed = 42` class fields as named constants and
++// allows them; AD-8 wants those numbers in Tokens/content too. Allow-list mirrors [-1, 0, 1, 2, 0.5].
++const NOT_ALLOWED_NUMBER = ':not([value=0]):not([value=1]):not([value=2]):not([value=0.5])';
++const NO_NAMED_MAGIC_NUMBERS = [
++  `VariableDeclarator > Literal[raw=/^[0-9.]/]${NOT_ALLOWED_NUMBER}`,
++  `VariableDeclarator > UnaryExpression[operator='-'] > Literal[raw=/^[0-9.]/]:not([value=1])`,
++  `PropertyDefinition > Literal[raw=/^[0-9.]/]${NOT_ALLOWED_NUMBER}`,
++  `PropertyDefinition > UnaryExpression[operator='-'] > Literal[raw=/^[0-9.]/]:not([value=1])`,
++].map((selector) => ({
++  selector,
++  message: 'Magic number in a named constant: put it in Tokens (DESIGN/EXPERIENCE) or content/.',
++}));
++
++// AD-3: all sound goes through core/audio-director by catalog id (content/audio-catalog).
++// esquery regexes: no slashes or backslashes inside, so 'assets.audio' and '[.]m4a'.
++const AUDIO_PATH = '[.]m4a|assets.audio';
++const AUDIO_MSG = 'Sound only through core/audio-director by catalog id (content/audio-catalog), never this.sound or audio paths.';
++const NO_DIRECT_AUDIO = [
++  { selector: "MemberExpression[object.type='ThisExpression'][property.name='sound']", message: AUDIO_MSG },
++  { selector: "MemberExpression[property.name='sound'][object.property.name='game']", message: AUDIO_MSG },
++  { selector: `Literal[value=/${AUDIO_PATH}/]`, message: AUDIO_MSG },
++  { selector: `TemplateElement[value.raw=/${AUDIO_PATH}/]`, message: AUDIO_MSG },
++];
++
++// AD-4 / Story 1.6: input only through core/input (InputGuard, TapRouter, TapTarget, HotspotPolygon).
++// Merged into the scenes/games no-restricted-syntax block below (a second block would override it in
++// flat config) and applied alone to the rest of src/ (core, content) except core/input and tests.
++const POINTER_MSG = 'Input only through core/input (createTapRouter / createTapTarget / HotspotPolygon), never raw pointer events.';
++const CLIENT_MSG = 'Client coordinates are read only in core/input (pointer-adapter / space.ts toDesign).';
++const POINTER_EVENT = '/^(pointer|gameobject)(down|move|up|upoutside)$/';
++const LISTEN_FN = '/^(on|once|addListener|addEventListener)$/';
++const CLIENT_PROP = '/^(clientX|clientY|pageX|pageY)$/';
++const NO_RAW_POINTER = [
++  { selector: `CallExpression[callee.property.name=${LISTEN_FN}][arguments.0.value=${POINTER_EVENT}]`, message: POINTER_MSG },
++  { selector: `CallExpression[callee.name=${LISTEN_FN}][arguments.0.value=${POINTER_EVENT}]`, message: POINTER_MSG },
++  { selector: "MemberExpression[property.name=/^(POINTER_DOWN|POINTER_MOVE|POINTER_UP)$/]", message: POINTER_MSG },
++  { selector: `MemberExpression[property.name=${CLIENT_PROP}]`, message: CLIENT_MSG },
++  { selector: `ObjectPattern > Property[key.name=${CLIENT_PROP}]`, message: CLIENT_MSG },
++];
++
++const CORE_MSG = 'Layer rule: core/ must not import scenes/ or games/ (core → content only).';
++const GAME_SCENES_MSG = 'Layer rule: games/ must not import scenes/ (games → core/content only).';
++const GAME_CROSS_MSG = 'Layer rule: a game must not import another game or the registry.';
++const CONTENT_MSG = 'Layer rule: content/ may only import types from other layers.';
++const CONTENT_PKG_MSG = 'Layer rule: content/ may only import types from packages.';
++
++export default defineConfig(
++  { ignores: ['dist/**', 'node_modules/**'] },
++  js.configs.recommended,
++  tseslint.configs.recommended,
++  {
++    files: ['**/*.ts'],
++    rules: {
++      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
++    },
++  },
++
++  // --- Layering --------------------------------------------------------------
++  {
++    files: ['src/core/**/*.ts'],
++    rules: {
++      [RULE]: [
++        'error',
++        {
++          patterns: [
++            ban(`${UP}(scenes|games)(/|$)`, CORE_MSG),
++            ban('(^|/)src/(scenes|games)(/|$)', CORE_MSG),
++          ],
++        },
++      ],
++    },
++  },
++  {
++    files: ['src/scenes/**/*.ts'],
++    rules: {
++      [RULE]: ['error', { patterns: [TOKENS_FACADE_ONLY] }],
++    },
++  },
++  {
++    files: ['src/games/**/*.ts'],
++    rules: {
++      [RULE]: [
++        'error',
++        {
++          patterns: [
++            ban(`${UP}scenes(/|$)|(^|/)src/scenes(/|$)`, GAME_SCENES_MSG),
++            ban(String.raw`${UP}(${GAME_ALT}|registry)(/|\.|$)`, GAME_CROSS_MSG),
++            ban(String.raw`^(\./)?\.\./(\.\./)+games(/|$)|(^|/)src/games(/|$)`, GAME_CROSS_MSG),
++            TOKENS_FACADE_ONLY,
++          ],
++        },
++      ],
++    },
++  },
++  {
++    files: ['src/content/*.ts'],
++    ignores: ['**/*.test.ts'], // tests may import vitest; layer rule applies to shipped content only
++    rules: {
++      [RULE]: [
++        'error',
++        {
++          patterns: [
++            ban(`${UP}(core|scenes|games)(/|$)|(^|/)src/(core|scenes|games)(/|$)`, CONTENT_MSG, true),
++            ban('^[^./]', CONTENT_PKG_MSG, true),
++          ],
++        },
++      ],
++    },
++  },
++  {
++    files: ['src/content/*/**/*.ts'],
++    ignores: ['**/*.test.ts'],
++    rules: {
++      [RULE]: [
++        'error',
++        {
++          patterns: [
++            ban(
++              String.raw`${UP}(core|scenes)(/|$)|^(\./)?\.\./(\.\./)+games(/|$)|(^|/)src/(core|scenes|games)(/|$)`,
++              CONTENT_MSG,
++              true,
++            ),
++            ban('^[^./]', CONTENT_PKG_MSG, true),
++          ],
++        },
++      ],
++    },
++  },
++
++  // --- Raw pointer input outside core/input (AD-4, Story 1.6); scenes/games get it below ------------
++  {
++    files: ['src/**/*.ts'],
++    ignores: ['src/core/input/**', '**/*.test.ts', 'src/scenes/**', 'src/games/**'],
++    rules: {
++      'no-restricted-syntax': ['error', ...NO_RAW_POINTER],
++    },
++  },
++
++  // --- Literals, direct audio and raw pointer input in scenes and games (AD-8, AD-3, AD-4) ----------
++  {
++    files: ['src/scenes/**/*.ts', 'src/games/**/*.ts'],
++    rules: {
++      'no-restricted-syntax': ['error', ...NO_COLOR_LITERALS, ...NO_NAMED_MAGIC_NUMBERS, ...NO_DIRECT_AUDIO, ...NO_RAW_POINTER],
++      'no-magic-numbers': 'off',
++      '@typescript-eslint/no-magic-numbers': [
++        'error',
++        {
++          ignore: [-1, 0, 1, 2, 0.5],
++          ignoreEnums: true,
++          ignoreTypeIndexes: true,
++          ignoreNumericLiteralTypes: true,
++          detectObjects: true,
++        },
++      ],
++    },
++  },
++);
+diff --git a/app/tools/lint/rules.test.ts b/app/tools/lint/rules.test.ts
+new file mode 100644
+index 0000000..323d4ea
+--- /dev/null
++++ b/app/tools/lint/rules.test.ts
+@@ -0,0 +1,105 @@
++// Exercises eslint.config.js rule branches on virtual files (nothing is written to disk).
++import { dirname, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { ESLint } from 'eslint';
++import { describe, expect, it } from 'vitest';
++import { LINT_GAME_IDS } from '../../eslint.config.js';
++import { GAME_IDS } from '../../src/content/types.ts';
++
++const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
++const eslint = new ESLint({ cwd: appRoot });
++
++async function ruleIds(file: string, code: string): Promise<string[]> {
++  const [result] = await eslint.lintText(code, { filePath: resolve(appRoot, file) });
++  return (result?.messages ?? []).map((m) => m.ruleId ?? `fatal: ${m.message}`);
++}
++
++const IMPORTS = '@typescript-eslint/no-restricted-imports';
++const SYNTAX = 'no-restricted-syntax';
++
++describe('eslint.config.js', () => {
++  it('keeps its GameId list in sync with content/types.ts', () => {
++    expect(LINT_GAME_IDS).toEqual([...GAME_IDS]);
++  });
++
++  it.each([
++    ['games → scenes', 'src/games/pizza/scene.ts', "import '../../scenes/Boot';"],
++    ['game → registry', 'src/games/pizza/scene.ts', "import '../registry';"],
++    ['game → sibling game', 'src/games/pizza/scene.ts', "import '../ice-cream/scene';"],
++    ['nested game → other game', 'src/games/ice-cream/sub/x.ts', "import '../../pizza/x';"],
++    ['core → games', 'src/core/x.ts', "import '../games/pizza/scene';"],
++    ['core → scenes with ./ prefix', 'src/core/x.ts', "import './../scenes/Boot';"],
++    ['content value import from phaser', 'src/content/x.ts', "import { Scene } from 'phaser';\nexport const s = Scene;"],
++    ['nested content value import from core', 'src/content/voice/x.ts', "import { bus } from '../../core/bus';\nexport const b = bus;"],
++    ['scenes → core/timing', 'src/scenes/X.ts', "import { Timing } from '../core/timing';\nexport const t = Timing;"],
++    ['games → core/tokens.generated', 'src/games/pizza/scene.ts', "import { designTokens } from '../../core/tokens.generated';\nexport const t = designTokens;"],
++  ])('bans import: %s', async (_name, file, code) => {
++    expect(await ruleIds(file, code)).toContain(IMPORTS);
++  });
++
++  it.each([
++    ['template-literal hex', 'export const c = `#FF0000`;'],
++    ['hex inside a longer string', "export const c = 'color:#FF0000';"],
++    ['hsl()', "export const c = 'hsl(0, 100%, 50%)';"],
++    ['negative named constant', 'export const S = -42;'],
++    ['class field', 'export class K { speed = 42; }'],
++  ])('bans in scenes: %s', async (_name, code) => {
++    expect(await ruleIds('src/scenes/X.ts', code)).toContain(SYNTAX);
++  });
++
++  it.each([
++    ['this.sound in a scene', 'src/scenes/X.ts', 'export class S { sound = { play: (_k: string) => true }; f() { this.sound.play(AUDIO_ID); } }\nconst AUDIO_ID = String(1);'],
++    ['this.game.sound in a game', 'src/games/pizza/scene.ts', 'export class S { game = { sound: {} }; f() { return this.game.sound; } }'],
++    ['.m4a path in a scene', 'src/scenes/X.ts', "export const p = 'pop.m4a';"],
++    ['assets/audio path in a game', 'src/games/pizza/scene.ts', "export const p = 'assets/audio/sfx/x';"],
++    ['template-literal audio path', 'src/scenes/X.ts', 'export const id = String(1);\nexport const p = `assets/audio/sfx/${id}.m4a`;'],
++  ])('bans direct audio: %s', async (_name, file, code) => {
++    expect(await ruleIds(file, code)).toContain(SYNTAX);
++  });
++
++  it.each([
++    ['audio catalog id in a scene', 'src/scenes/X.ts', "import { audio } from '../core/audio-director';\naudio.sfx('sfx.shell.pop');\naudio.music('music.island');"],
++    ['audio catalog paths inside content/', 'src/content/x.ts', "export const p = 'assets/audio/sfx/sfx.shell.pop.m4a';"],
++    ['this.sound inside core/', 'src/core/x.ts', 'export class S { sound = { locked: false }; f() { return this.sound.locked; } }'],
++    ['an unrelated .sound property in a scene', 'src/scenes/X.ts', 'export const o = { sound: true };\nexport const s = o.sound;'],
++  ])('allows audio use: %s', async (_name, file, code) => {
++    expect(await ruleIds(file, code)).toEqual([]);
++  });
++
++  it.each([
++    ['scene-level pointerdown in Map', 'src/scenes/Map.ts', "export function f(s: { input: { on(e: string, fn: () => void): void } }) { s.input.on('pointerdown', () => undefined); }"],
++    ['gameobjectup once in a game', 'src/games/pizza/scene.ts', "export function f(o: { once(e: string, fn: () => void): void }) { o.once('gameobjectup', () => undefined); }"],
++    ['addEventListener pointermove in core', 'src/core/x.ts', "export function f(d: Document) { d.addEventListener('pointermove', () => undefined); }"],
++    ['pointerupoutside via addListener in a scene', 'src/scenes/X.ts', "export function f(o: { addListener(e: string, fn: () => void): void }) { o.addListener('pointerupoutside', () => undefined); }"],
++    ['Input.Events.POINTER_DOWN in a scene', 'src/scenes/X.ts', "import { Input } from 'phaser';\nexport const e = Input.Events.POINTER_DOWN;"],
++    ['POINTER_UP in core', 'src/core/x.ts', "export const f = (E: { POINTER_UP: string }) => E.POINTER_UP;"],
++    ['e.clientX in a scene', 'src/scenes/X.ts', 'export const f = (e: MouseEvent) => e.clientX;'],
++    ['pageY in core', 'src/core/x.ts', 'export const f = (e: MouseEvent) => e.pageY;'],
++    ['destructured clientY in a game', 'src/games/pizza/scene.ts', 'export const f = ({ clientY }: MouseEvent) => clientY;'],
++  ])('bans raw pointer input: %s', async (_name, file, code) => {
++    expect(await ruleIds(file, code)).toContain(SYNTAX);
++  });
++
++  it.each([
++    ['pointerdown inside core/input', 'src/core/input/x.ts', "export function f(s: { input: { on(e: string, fn: () => void): void } }) { s.input.on('pointerdown', () => undefined); }"],
++    ['clientX inside core/input', 'src/core/input/x.ts', 'export const f = (e: MouseEvent) => e.clientX + e.pageY;'],
++    ['pointer events in a test', 'src/core/x.test.ts', "export function f(d: Document) { d.addEventListener('pointerdown', () => undefined); return (d as unknown as MouseEvent).clientX; }"],
++    ['other events in a scene', 'src/scenes/X.ts', "export function f(s: { events: { on(e: string, fn: () => void): void } }) { s.events.on('shutdown', () => undefined); }"],
++  ])('allows: %s', async (_name, file, code) => {
++    expect(await ruleIds(file, code)).toEqual([]);
++  });
++
++  it('the scenes/games block keeps its literal bans next to the pointer ban', async () => {
++    const ids = await ruleIds('src/scenes/X.ts', "export const c = '#FF0000';\nexport const f = (e: MouseEvent) => e.clientX;");
++    expect(ids.filter((id) => id === SYNTAX)).toHaveLength(2);
++  });
++
++  it.each([
++    ['scene → Tokens facade, games, content', 'src/scenes/X.ts', "import { Tokens } from '../core/tokens';\nimport '../games/pizza/scene';\nimport '../content/types';\nexport const t = Tokens;"],
++    ['game → own file, core, content', 'src/games/pizza/scene.ts', "import './helpers';\nimport { bus } from '../../core/bus';\nimport '../../content/games/pizza';\nexport const b = bus;"],
++    ['content type import from core', 'src/content/x.ts', "import type { Bus } from '../core/bus';\nexport type B = Bus;"],
++    ['allowed numbers in scenes', 'src/scenes/X.ts', 'export const a = [-1, 0, 1, 2, 0.5];\nexport const b = 2;'],
++  ])('allows: %s', async (_name, file, code) => {
++    expect(await ruleIds(file, code)).toEqual([]);
++  });
++});
+diff --git a/app/src/styles/stage.css b/app/src/styles/stage.css
+new file mode 100644
+index 0000000..711e25a
+--- /dev/null
++++ b/app/src/styles/stage.css
+@@ -0,0 +1,76 @@
++/* NFR6 page guards + stage layout (AD-4, AD-7). No colours here: they come from Tokens (set in main.ts). */
++
++/* Safe-area insets of the screen (CSS px), read by core/input/space.ts (dead zones, Hud layout). */
++:root {
++  --sai-top: env(safe-area-inset-top, 0px);
++  --sai-right: env(safe-area-inset-right, 0px);
++  --sai-bottom: env(safe-area-inset-bottom, 0px);
++  --sai-left: env(safe-area-inset-left, 0px);
++}
++
++html,
++body {
++  margin: 0;
++  padding: 0;
++  width: 100%;
++  height: 100%;
++  overflow: hidden;
++  position: fixed;
++  inset: 0;
++  overscroll-behavior: none;
++  touch-action: none;
++  user-select: none;
++  -webkit-user-select: none;
++  -webkit-touch-callout: none;
++  -webkit-tap-highlight-color: transparent;
++  -webkit-text-size-adjust: 100%;
++}
++
++* {
++  -webkit-touch-callout: none;
++  user-select: none;
++  -webkit-user-select: none;
++}
++
++img {
++  -webkit-user-drag: none;
++  pointer-events: none;
++}
++
++/* Landscape: the stage fills the viewport. Phaser ENVELOP covers it (no black bars). */
++#stage {
++  position: fixed;
++  top: 0;
++  left: 0;
++  width: 100vw;
++  height: 100vh;
++  height: 100dvh;
++  overflow: hidden;
++  touch-action: none;
++  overscroll-behavior: none;
++}
++
++#game-container {
++  width: 100%;
++  height: 100%;
++  overflow: hidden;
++}
++
++#game-container canvas {
++  display: block;
++  touch-action: none;
++}
++
++/* Portrait: rotate the whole stage 90° so play stays landscape (no "rotate your device" screen). */
++@media (orientation: portrait) {
++  #stage {
++    left: 100vw;
++    left: 100dvw;
++    width: 100vh;
++    width: 100dvh;
++    height: 100vw;
++    height: 100dvw;
++    transform-origin: top left;
++    transform: rotate(90deg);
++  }
++}
+diff --git a/app/src/core/input/space.ts b/app/src/core/input/space.ts
+new file mode 100644
+index 0000000..5cd8f00
+--- /dev/null
++++ b/app/src/core/input/space.ts
+@@ -0,0 +1,171 @@
++// The one screen <-> design transform (Story 1.6, AD-4/AD-7). Pure core plus `readView`/`toDesign`
++// glue. Frames:
++// - client: CSS px of the viewport (what touch/mouse events report);
++// - local: CSS px of the #stage box before its CSS transform (landscape = client; portrait rotates
++//   #stage by 90deg around its top-left corner, placed at left: 100dvw);
++// - design: the 1024x768 frame that Phaser's ENVELOP scales to cover the stage, centred.
++// Safe-area insets come from the `--sai-*` CSS custom properties (stage.css) in screen terms.
++import type { Rect } from '../safe-rect';
++import { Tokens } from '../tokens';
++import { clientPoint, type PointerPointLike, type ScaleLike } from './pointer-adapter';
++import type { Point } from './polygon';
++
++export interface Insets {
++  readonly top: number;
++  readonly right: number;
++  readonly bottom: number;
++  readonly left: number;
++}
++
++export interface View {
++  /** Stage layout width (CSS px, ignores transforms). */
++  readonly w: number;
++  /** Stage layout height (CSS px, ignores transforms). */
++  readonly h: number;
++  /** Portrait: the stage is rotated 90deg (same media query as stage.css). */
++  readonly rotated: boolean;
++  /** Safe-area insets of the screen (CSS px). */
++  readonly insets: Insets;
++}
++
++export const PORTRAIT_QUERY = '(orientation: portrait)';
++export const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
++
++const DESIGN_W = Tokens.design.width;
++const DESIGN_H = Tokens.design.height;
++
++/** Client CSS px -> stage-local CSS px. */
++export function toLocal(client: Point, view: View): Point {
++  if (!view.rotated) return { x: client.x, y: client.y };
++  return { x: client.y, y: view.h - client.x };
++}
++
++/** Stage-local CSS px -> client CSS px (inverse of `toLocal`). */
++export function toClient(local: Point, view: View): Point {
++  if (!view.rotated) return { x: local.x, y: local.y };
++  return { x: view.h - local.y, y: local.x };
++}
++
++/** Screen insets expressed in the stage-local frame. */
++export function localInsets(view: View): Insets {
++  const i = view.insets;
++  if (!view.rotated) return { ...i };
++  return { top: i.right, right: i.bottom, bottom: i.left, left: i.top };
++}
++
++/** ENVELOP scale and centred offsets of the design frame inside the stage. */
++export function envelop(view: Pick<View, 'w' | 'h'>): { s: number; ox: number; oy: number } {
++  const s = Math.max(view.w / DESIGN_W, view.h / DESIGN_H);
++  return { s, ox: (view.w - DESIGN_W * s) / 2, oy: (view.h - DESIGN_H * s) / 2 };
++}
++
++export function localToDesign(local: Point, view: View): Point {
++  const { s, ox, oy } = envelop(view);
++  return { x: (local.x - ox) / s, y: (local.y - oy) / s };
++}
++
++export function designToLocal(design: Point, view: View): Point {
++  const { s, ox, oy } = envelop(view);
++  return { x: design.x * s + ox, y: design.y * s + oy };
++}
++
++/** The design rect covered by the whole stage. */
++export function visibleDesignRect(view: View): Rect {
++  const { s, ox, oy } = envelop(view);
++  return { x: -ox / s, y: -oy / s, w: view.w / s, h: view.h / s };
++}
++
++/** Local insets converted to design px (÷ s). */
++export function designInsets(view: View): Insets {
++  const { s } = envelop(view);
++  const li = localInsets(view);
++  return { top: li.top / s, right: li.right / s, bottom: li.bottom / s, left: li.left / s };
++}
++
++/** True when a stage-local point lies in the edge strip (dead zone) plus the safe-area inset. */
++export function isDeadZone(local: Point, view: View): boolean {
++  const sp = Tokens.spacing;
++  const li = localInsets(view);
++  return (
++    local.x < sp.edgeDeadSide + li.left ||
++    local.x > view.w - sp.edgeDeadSide - li.right ||
++    local.y < sp.edgeDeadTop + li.top ||
++    local.y > view.h - sp.edgeDeadBottom - li.bottom
++  );
++}
++
++/** Slices of `document` / `window` that `readView` needs (fakeable). */
++export interface ViewDocLike {
++  getElementById(id: string): { readonly clientWidth: number; readonly clientHeight: number } | null;
++  readonly documentElement: unknown;
++}
++export interface ViewWinLike {
++  readonly innerWidth: number;
++  readonly innerHeight: number;
++  matchMedia?(query: string): { readonly matches: boolean };
++  getComputedStyle?(el: never): { getPropertyValue(name: string): string };
++}
++
++function px(value: string | undefined): number {
++  const n = Number.parseFloat(value ?? '');
++  return Number.isFinite(n) ? n : 0;
++}
++
++/** Reads the current stage view from the DOM. Falls back to the window size and no insets. */
++export function readView(doc: ViewDocLike, win: ViewWinLike): View {
++  let rotated: boolean;
++  try {
++    rotated = typeof win.matchMedia === 'function' && win.matchMedia(PORTRAIT_QUERY).matches;
++  } catch {
++    rotated = false;
++  }
++  const stage = doc.getElementById('stage');
++  const w = stage && stage.clientWidth > 0 ? stage.clientWidth : rotated ? win.innerHeight : win.innerWidth;
++  const h = stage && stage.clientHeight > 0 ? stage.clientHeight : rotated ? win.innerWidth : win.innerHeight;
++  let insets: Insets = NO_INSETS;
++  try {
++    const style = win.getComputedStyle?.(doc.documentElement as never);
++    if (style) {
++      insets = {
++        top: px(style.getPropertyValue('--sai-top')),
++        right: px(style.getPropertyValue('--sai-right')),
++        bottom: px(style.getPropertyValue('--sai-bottom')),
++        left: px(style.getPropertyValue('--sai-left')),
++      };
++    }
++  } catch {
++    insets = NO_INSETS;
++  }
++  return { w, h, rotated, insets };
++}
++
++/** The view of the running page (browser), or undefined under node. */
++export function currentView(): View | undefined {
++  if (typeof document === 'undefined' || typeof window === 'undefined') return undefined;
++  return readView(document, window as unknown as ViewWinLike);
++}
++
++/** Where a pointer is: its stage-local point, design point and whether it starts in a dead zone. */
++export interface Located {
++  readonly local: Point;
++  readonly design: Point;
++  readonly dead: boolean;
++}
++
++/**
++ * Locates a pointer. Without a DOM (node tests) the pointer's own x/y are taken as design px and
++ * nothing is dead.
++ */
++export function locate(pointer: PointerPointLike, scale?: ScaleLike, view: View | undefined = currentView()): Located {
++  if (!view) {
++    const p = { x: pointer.x, y: pointer.y };
++    return { local: p, design: p, dead: false };
++  }
++  const local = toLocal(clientPoint(pointer, scale), view);
++  return { local, design: localToDesign(local, view), dead: isDeadZone(local, view) };
++}
++
++/** Design point of a pointer (the only pointer -> design mapping in the app). */
++export function toDesign(pointer: PointerPointLike, scale?: ScaleLike): Point {
++  return locate(pointer, scale).design;
++}
+diff --git a/app/src/core/input/space.test.ts b/app/src/core/input/space.test.ts
+new file mode 100644
+index 0000000..63d018a
+--- /dev/null
++++ b/app/src/core/input/space.test.ts
+@@ -0,0 +1,163 @@
++// Story 1.6: the screen <-> design transform (I/O matrix space rows), dead zones and readView.
++import { describe, expect, it } from 'vitest';
++import { Tokens } from '../tokens';
++import {
++  designInsets,
++  designToLocal,
++  isDeadZone,
++  localInsets,
++  localToDesign,
++  locate,
++  NO_INSETS,
++  readView,
++  toClient,
++  toLocal,
++  visibleDesignRect,
++  type View,
++} from './space';
++
++const view = (w: number, h: number, rotated = false, insets = NO_INSETS): View => ({ w, h, rotated, insets });
++const toDesignAt = (client: { x: number; y: number }, v: View) => localToDesign(toLocal(client, v), v);
++
++describe('space: client -> design', () => {
++  it('landscape 4:3 is the identity', () => {
++    expect(toDesignAt({ x: 512, y: 384 }, view(1024, 768))).toEqual({ x: 512, y: 384 });
++  });
++
++  it('1180x820: client (0,0) is design (0, 28.2)', () => {
++    const d = toDesignAt({ x: 0, y: 0 }, view(1180, 820));
++    expect(d.x).toBeCloseTo(0, 6);
++    expect(Math.abs(d.y - 28.2)).toBeLessThan(1);
++  });
++
++  it('1366x1024: the centre maps to the design centre', () => {
++    const d = toDesignAt({ x: 683, y: 512 }, view(1366, 1024));
++    expect(Math.abs(d.x - 512)).toBeLessThan(1);
++    expect(Math.abs(d.y - 384)).toBeLessThan(1);
++  });
++
++  it('portrait (rotated): screen 820x1180, client (820,0) is local (0,0) -> design (0, 28.2)', () => {
++    const v = view(1180, 820, true);
++    expect(toLocal({ x: 820, y: 0 }, v)).toEqual({ x: 0, y: 0 });
++    const d = toDesignAt({ x: 820, y: 0 }, v);
++    expect(d.x).toBeCloseTo(0, 6);
++    expect(Math.abs(d.y - 28.2)).toBeLessThan(1);
++    // Rotation: screen down = local right; screen left = local down.
++    expect(toLocal({ x: 820, y: 100 }, v)).toEqual({ x: 100, y: 0 });
++    expect(toLocal({ x: 720, y: 0 }, v)).toEqual({ x: 0, y: 100 });
++  });
++
++  it('portrait and landscape agree on the same stage point', () => {
++    const land = view(1180, 820);
++    const port = view(1180, 820, true);
++    const local = { x: 300, y: 500 };
++    expect(localToDesign(toLocal(toClient(local, port), port), port)).toEqual(localToDesign(local, land));
++  });
++
++  it('round-trips local <-> design and client <-> local', () => {
++    for (const v of [view(1024, 768), view(1180, 820), view(1366, 1024), view(1180, 820, true)]) {
++      const p = { x: 123.5, y: 456.25 };
++      const back = designToLocal(localToDesign(p, v), v);
++      expect(back.x).toBeCloseTo(p.x, 9);
++      expect(back.y).toBeCloseTo(p.y, 9);
++      expect(toLocal(toClient(p, v), v)).toEqual(p);
++    }
++  });
++
++  it.each([
++    [1024, 768],
++    [1180, 820],
++    [1210, 834],
++    [1366, 1024],
++  ])('every Tokens.safeRect corner is on screen at %ix%i (landscape and portrait)', (w, h) => {
++    const r = Tokens.safeRect;
++    for (const rotated of [false, true]) {
++      const v = view(w, h, rotated);
++      for (const c of [
++        { x: r.x, y: r.y },
++        { x: r.x + r.w, y: r.y },
++        { x: r.x, y: r.y + r.h },
++        { x: r.x + r.w, y: r.y + r.h },
++      ]) {
++        const local = designToLocal(c, v);
++        expect(local.x).toBeGreaterThanOrEqual(-1e-9);
++        expect(local.y).toBeGreaterThanOrEqual(-1e-9);
++        expect(local.x).toBeLessThanOrEqual(w + 1e-9);
++        expect(local.y).toBeLessThanOrEqual(h + 1e-9);
++      }
++    }
++  });
++
++  it('visibleDesignRect covers the whole stage', () => {
++    const r = visibleDesignRect(view(1180, 820));
++    expect(r.x).toBeCloseTo(0, 9);
++    expect(r.w).toBeCloseTo(1024, 9);
++    expect(Math.abs(r.y - 28.2)).toBeLessThan(0.1);
++    expect(r.y + r.h).toBeCloseTo(768 - r.y, 9);
++  });
++});
++
++describe('space: insets and dead zones', () => {
++  it('rotated: screen top inset is the local left inset (and so on)', () => {
++    const v = view(1180, 820, true, { top: 24, right: 1, bottom: 2, left: 3 });
++    expect(localInsets(v)).toEqual({ top: 1, right: 2, bottom: 3, left: 24 });
++    expect(localInsets({ ...v, rotated: false })).toEqual(v.insets);
++  });
++
++  it('design insets are local insets / s', () => {
++    const v = view(2048, 1536, false, { top: 20, right: 0, bottom: 0, left: 10 });
++    expect(designInsets(v)).toEqual({ top: 10, right: 0, bottom: 0, left: 5 });
++  });
++
++  it('edge strips: 24 side, 32 top, 40 bottom (local CSS px)', () => {
++    const v = view(1024, 768);
++    expect(isDeadZone({ x: 10, y: 400 }, v)).toBe(true);
++    expect(isDeadZone({ x: 23.9, y: 400 }, v)).toBe(true);
++    expect(isDeadZone({ x: 24, y: 400 }, v)).toBe(false);
++    expect(isDeadZone({ x: 1010, y: 400 }, v)).toBe(true);
++    expect(isDeadZone({ x: 500, y: 31 }, v)).toBe(true);
++    expect(isDeadZone({ x: 500, y: 32 }, v)).toBe(false);
++    expect(isDeadZone({ x: 500, y: 730 }, v)).toBe(true);
++    expect(isDeadZone({ x: 500, y: 727 }, v)).toBe(false);
++  });
++
++  it('insets widen the strips', () => {
++    const v = view(1024, 768, false, { top: 0, right: 0, bottom: 0, left: 20 });
++    expect(isDeadZone({ x: 40, y: 400 }, v)).toBe(true);
++    expect(isDeadZone({ x: 44, y: 400 }, v)).toBe(false);
++  });
++
++  it('locate: client point -> local, design and dead flag', () => {
++    const v = view(1024, 768);
++    expect(locate({ x: 10, y: 400 }, undefined, v)).toEqual({ local: { x: 10, y: 400 }, design: { x: 10, y: 400 }, dead: true });
++    expect(locate({ x: 500, y: 400 }, undefined, v).dead).toBe(false);
++  });
++});
++
++describe('readView', () => {
++  const doc = (w: number, h: number) => ({
++    documentElement: {},
++    getElementById: (id: string) => (id === 'stage' ? { clientWidth: w, clientHeight: h } : null),
++  });
++  const win = (portrait: boolean, vars: Record<string, string> = {}) => ({
++    innerWidth: portrait ? 820 : 1180,
++    innerHeight: portrait ? 1180 : 820,
++    matchMedia: (q: string) => ({ matches: q === '(orientation: portrait)' && portrait }),
++    getComputedStyle: () => ({ getPropertyValue: (name: string) => vars[name] ?? '' }),
++  });
++
++  it('reads the stage layout size, the portrait query and the --sai-* insets', () => {
++    expect(readView(doc(1180, 820), win(true, { '--sai-top': ' 24px', '--sai-left': '0px' }))).toEqual({
++      w: 1180,
++      h: 820,
++      rotated: true,
++      insets: { top: 24, right: 0, bottom: 0, left: 0 },
++    });
++  });
++
++  it('falls back to the window size without a stage and to no insets', () => {
++    const d = { documentElement: {}, getElementById: () => null };
++    expect(readView(d, { innerWidth: 1024, innerHeight: 768 })).toEqual({ w: 1024, h: 768, rotated: false, insets: NO_INSETS });
++    expect(readView(d, win(true)).w).toBe(1180);
++  });
++});
+diff --git a/app/src/core/input/pointer-adapter.ts b/app/src/core/input/pointer-adapter.ts
+new file mode 100644
+index 0000000..241ac86
+--- /dev/null
++++ b/app/src/core/input/pointer-adapter.ts
+@@ -0,0 +1,67 @@
++// The only file that reads raw client coordinates (Story 1.6). Under the portrait CSS rotation
++// Phaser's canvasBounds is the rotated box, so pointer.x/y mix the axes; the raw client point plus
++// core/input/space.ts maps correctly. Phaser reads pageX/Y; the page never scrolls (stage.css), so
++// client == page.
++import type { Point } from './polygon';
++
++interface TouchLike {
++  readonly identifier: number;
++  readonly clientX: number;
++  readonly clientY: number;
++}
++
++interface TouchListLike {
++  readonly length: number;
++  [index: number]: TouchLike | undefined;
++}
++
++/** The slice of `Phaser.Input.Pointer` the adapter needs. */
++export interface PointerPointLike {
++  readonly x: number;
++  readonly y: number;
++  /** Touch identifier of the finger this pointer tracks (Phaser `pointer.identifier`). */
++  readonly identifier?: number;
++  /** The DOM event that last updated the pointer. */
++  readonly event?: unknown;
++}
++
++/** The slice of `Phaser.Scale.ScaleManager` used for the inverse fallback. */
++export interface ScaleLike {
++  readonly displayScale: { readonly x: number; readonly y: number };
++  readonly canvasBounds: { readonly left: number; readonly top: number };
++}
++
++function findTouch(list: TouchListLike | undefined, id: number | undefined): TouchLike | undefined {
++  if (!list) return undefined;
++  for (let i = 0; i < list.length; i++) {
++    const t = list[i];
++    if (t && t.identifier === id) return t;
++  }
++  return undefined;
++}
++
++function isFiniteNumber(v: unknown): v is number {
++  return typeof v === 'number' && Number.isFinite(v);
++}
++
++/** The pointer's client point (CSS px of the viewport). */
++export function clientPoint(pointer: PointerPointLike, scale?: ScaleLike): Point {
++  const ev = pointer.event as
++    | { changedTouches?: TouchListLike; touches?: TouchListLike; clientX?: unknown; clientY?: unknown }
++    | null
++    | undefined;
++  if (ev && typeof ev === 'object') {
++    if (ev.changedTouches || ev.touches) {
++      const t = findTouch(ev.changedTouches, pointer.identifier) ?? findTouch(ev.touches, pointer.identifier);
++      if (t) return { x: t.clientX, y: t.clientY };
++    } else if (isFiniteNumber(ev.clientX) && isFiniteNumber(ev.clientY)) {
++      return { x: ev.clientX, y: ev.clientY };
++    }
++  }
++  if (!scale || !scale.displayScale.x || !scale.displayScale.y) return { x: pointer.x, y: pointer.y };
++  // Inverse of Phaser's transformX/Y: x = (page - canvasBounds.left) * displayScale.x.
++  return {
++    x: pointer.x / scale.displayScale.x + scale.canvasBounds.left,
++    y: pointer.y / scale.displayScale.y + scale.canvasBounds.top,
++  };
++}
+diff --git a/app/src/core/input/pointer-adapter.test.ts b/app/src/core/input/pointer-adapter.test.ts
+new file mode 100644
+index 0000000..d4c79b5
+--- /dev/null
++++ b/app/src/core/input/pointer-adapter.test.ts
+@@ -0,0 +1,32 @@
++// Story 1.6: the pointer's raw client point (touch identifier matching, mouse, inverse fallback).
++import { describe, expect, it } from 'vitest';
++import { clientPoint } from './pointer-adapter';
++
++const touch = (identifier: number, clientX: number, clientY: number) => ({ identifier, clientX, clientY });
++
++describe('clientPoint', () => {
++  it('a touch event: the changedTouches entry with the pointer identifier', () => {
++    const event = { changedTouches: [touch(3, 1, 2), touch(7, 30, 40)], touches: [] };
++    expect(clientPoint({ x: 0, y: 0, identifier: 7, event })).toEqual({ x: 30, y: 40 });
++  });
++
++  it('falls back to touches when changedTouches lacks the identifier', () => {
++    const event = { changedTouches: [touch(3, 1, 2)], touches: [touch(3, 1, 2), touch(9, 50, 60)] };
++    expect(clientPoint({ x: 0, y: 0, identifier: 9, event })).toEqual({ x: 50, y: 60 });
++  });
++
++  it('a mouse / pointer event: clientX/Y', () => {
++    expect(clientPoint({ x: 0, y: 0, event: { clientX: 11, clientY: 22 } })).toEqual({ x: 11, y: 22 });
++  });
++
++  it('no usable event: inverts Phaser transformX/Y with the scale manager', () => {
++    const scale = { displayScale: { x: 0.5, y: 0.5 }, canvasBounds: { left: -10, top: 20 } };
++    expect(clientPoint({ x: 100, y: 50 }, scale)).toEqual({ x: 190, y: 120 });
++    // Touch event without the finger: also the fallback.
++    expect(clientPoint({ x: 100, y: 50, identifier: 1, event: { changedTouches: [], touches: [] } }, scale)).toEqual({ x: 190, y: 120 });
++  });
++
++  it('no event and no scale: the pointer point as is', () => {
++    expect(clientPoint({ x: 3, y: 4 })).toEqual({ x: 3, y: 4 });
++  });
++});
+diff --git a/app/src/core/input/guard.ts b/app/src/core/input/guard.ts
+new file mode 100644
+index 0000000..d541273
+--- /dev/null
++++ b/app/src/core/input/guard.ts
+@@ -0,0 +1,180 @@
++// InputGuard (Story 1.6, AD-4): one owner for every press across scenes.
++// - Every TapRouter forwards its scene-level pointerdown/up here. A press is keyed by Phaser's
++//   pointer slot (`id`) plus its `downTime`; the first forward decides it, later forwards of the
++//   same press (from other scenes) get the same verdict and do nothing.
++// - A press starting in the edge strip (plus safe-area inset) is `dead`: dropped before anything else.
++// - No live primary: the press becomes the primary. It resolves to the topmost enabled target over the
++//   active routers, layer overlay > hud > scene (later router / later target wins within a layer).
++//   Every active router's `anyTap` runs, then the hit target's `onPress`.
++// - A live primary: a press whose topmost hit is a `hud` target fires it (`extra-hud`) unless the
++//   primary drags; anything else is `ignored`. The primary is never cancelled by another finger.
++// - The primary ends on its pointerup/upoutside, or self-heals on the next query once its pointer
++//   reports `!isDown` or a new `downTime` (pause, scene switch, lost up).
++import { locate, type Located } from './space';
++import type { PointerPointLike, ScaleLike } from './pointer-adapter';
++import type { Point } from './polygon';
++
++export type Layer = 'scene' | 'hud' | 'overlay';
++export type Verdict = 'dead' | 'primary' | 'extra-hud' | 'ignored';
++
++/** Highest layer first. */
++export const LAYER_ORDER: readonly Layer[] = ['overlay', 'hud', 'scene'];
++
++/** The slice of `Phaser.Input.Pointer` the guard needs. */
++export interface GuardPointer extends PointerPointLike {
++  /** Phaser pointer slot. */
++  readonly id: number;
++  readonly downTime: number;
++  readonly isDown: boolean;
++}
++
++export interface GuardTarget {
++  contains(p: Point): boolean;
++  isEnabled(): boolean;
++  /** Fires on press (feedback starts here). */
++  onPress(p: Point): void;
++  /** Fires on the release of the primary press that hit this target, if released over it. */
++  onRelease?(p: Point): void;
++}
++
++export interface GuardRouter {
++  readonly layer: Layer;
++  /** False while the router's scene is paused, sleeping or stopped. */
++  isActive(): boolean;
++  /** Topmost enabled target containing `p`. */
++  hit(p: Point): GuardTarget | undefined;
++  /** Runs on every primary press, hit or miss. */
++  anyTap(p: Point): void;
++}
++
++export type Locator = (pointer: GuardPointer, scale?: ScaleLike) => Located;
++
++interface Primary {
++  readonly key: string;
++  readonly pointer: GuardPointer;
++  readonly downTime: number;
++  readonly target: GuardTarget | undefined;
++  dragging: boolean;
++}
++
++/** How many decided press keys are remembered (several pointers × several scenes per event). */
++const SEEN_MAX = 32;
++
++function keyOf(pointer: GuardPointer): string {
++  return `${pointer.id}:${pointer.downTime}`;
++}
++
++export class InputGuard {
++  private routers: GuardRouter[] = [];
++  private readonly seen = new Map<string, Verdict>();
++  private primary: Primary | undefined;
++  private readonly locator: Locator;
++
++  constructor(locator: Locator = (pointer, scale) => locate(pointer, scale)) {
++    this.locator = locator;
++  }
++
++  /** Registers a router; returns its removal function. */
++  register(router: GuardRouter): () => void {
++    this.routers.push(router);
++    return () => {
++      this.routers = this.routers.filter((r) => r !== router);
++    };
++  }
++
++  /** Decides a press (idempotent per press key). */
++  press(pointer: GuardPointer, scale?: ScaleLike): Verdict {
++    const key = keyOf(pointer);
++    const known = this.seen.get(key);
++    if (known !== undefined) return known;
++    const verdict = this.decide(key, pointer, scale);
++    this.seen.set(key, verdict);
++    if (this.seen.size > SEEN_MAX) {
++      const oldest = this.seen.keys().next().value;
++      if (oldest !== undefined) this.seen.delete(oldest);
++    }
++    return verdict;
++  }
++
++  /** A pointerup / pointerupoutside. Releases the primary (once) and fires its target's onRelease. */
++  release(pointer: GuardPointer, scale?: ScaleLike): void {
++    const primary = this.primary;
++    if (!primary || primary.key !== keyOf(pointer)) return;
++    this.primary = undefined;
++    const target = primary.target;
++    if (!target?.onRelease || !target.isEnabled()) return;
++    const p = this.locator(pointer, scale).design;
++    if (target.contains(p)) target.onRelease(p);
++  }
++
++  isPrimary(pointer: GuardPointer): boolean {
++    const primary = this.livePrimary();
++    return primary !== undefined && primary.key === keyOf(pointer);
++  }
++
++  /** Story 1.8 DragController: marks the primary as dragging (ignored for any other pointer). */
++  setDragging(pointer: GuardPointer, on: boolean): void {
++    const primary = this.livePrimary();
++    if (primary && primary.key === keyOf(pointer)) primary.dragging = on;
++  }
++
++  isDragging(): boolean {
++    return this.livePrimary()?.dragging ?? false;
++  }
++
++  /** Forgets every press and the primary (tests, hot reload). Routers stay registered. */
++  reset(): void {
++    this.seen.clear();
++    this.primary = undefined;
++  }
++
++  private livePrimary(): Primary | undefined {
++    const primary = this.primary;
++    if (primary && (!primary.pointer.isDown || primary.pointer.downTime !== primary.downTime)) {
++      this.primary = undefined;
++      return undefined;
++    }
++    return primary;
++  }
++
++  private activeRouters(): GuardRouter[] {
++    const active = this.routers.filter((r) => r.isActive());
++    const out: GuardRouter[] = [];
++    for (const layer of LAYER_ORDER) {
++      for (let i = active.length - 1; i >= 0; i--) {
++        if (active[i]!.layer === layer) out.push(active[i]!);
++      }
++    }
++    return out;
++  }
++
++  private resolve(routers: readonly GuardRouter[], p: Point): { router: GuardRouter; target: GuardTarget } | undefined {
++    for (const router of routers) {
++      const target = router.hit(p);
++      if (target) return { router, target };
++    }
++    return undefined;
++  }
++
++  private decide(key: string, pointer: GuardPointer, scale: ScaleLike | undefined): Verdict {
++    const where = this.locator(pointer, scale);
++    if (where.dead) return 'dead';
++    const p = where.design;
++    const routers = this.activeRouters();
++    const hit = this.resolve(routers, p);
++    if (this.livePrimary()) {
++      if (hit && hit.router.layer === 'hud' && !this.isDragging()) {
++        hit.target.onPress(p);
++        return 'extra-hud';
++      }
++      return 'ignored';
++    }
++    this.primary = { key, pointer, downTime: pointer.downTime, target: hit?.target, dragging: false };
++    for (const router of routers) router.anyTap(p);
++    hit?.target.onPress(p);
++    return 'primary';
++  }
++}
++
++/** The app-wide guard every TapRouter forwards to. */
++export const inputGuard = new InputGuard();
+diff --git a/app/src/core/input/guard.test.ts b/app/src/core/input/guard.test.ts
+new file mode 100644
+index 0000000..2eae75c
+--- /dev/null
++++ b/app/src/core/input/guard.test.ts
+@@ -0,0 +1,181 @@
++// Story 1.6: InputGuard (I/O matrix guard rows) with fake scenes and pointers through real routers.
++import { describe, expect, it, vi } from 'vitest';
++import { fakeScene, press } from './fakes';
++import { InputGuard, type Layer } from './guard';
++import { locate, NO_INSETS } from './space';
++import { createTapRouter } from './tap-router';
++import { createTapTarget } from './tap-target';
++
++const VIEW = { w: 1024, h: 768, rotated: false, insets: NO_INSETS };
++
++function world() {
++  const guard = new InputGuard((p) => locate(p, undefined, VIEW));
++  const make = (layer: Layer) => {
++    const scene = fakeScene();
++    const router = createTapRouter(scene, { guard, layer });
++    const any = vi.fn();
++    router.onAnyTap = any;
++    return { scene, router, any };
++  };
++  return { guard, make };
++}
++
++const STATION = { x: 400, y: 400, r: 60 };
++const SPEAKER = { x: 960, y: 192, r: 68 };
++
++describe('InputGuard', () => {
++  it('dead press: no target, no onAnyTap, and the next finger can be primary', () => {
++    const { guard, make } = world();
++    const map = make('scene');
++    const onPress = vi.fn();
++    createTapTarget(map.router, { circle: { x: 30, y: 400, r: 60 }, onPress });
++    const thumb = press(10, 400, 1);
++    expect(guard.press(thumb)).toBe('dead');
++    expect(onPress).not.toHaveBeenCalled();
++    expect(map.any).not.toHaveBeenCalled();
++    // The thumb stays down; a tap a moment later still works.
++    expect(guard.press(press(60, 400, 2))).toBe('primary');
++    expect(onPress).toHaveBeenCalledTimes(1);
++    expect(map.any).toHaveBeenCalledTimes(1);
++  });
++
++  it('first finger: primary, onAnyTap then onPress', () => {
++    const { guard, make } = world();
++    const map = make('scene');
++    const order: string[] = [];
++    map.any.mockImplementation(() => order.push('any'));
++    createTapTarget(map.router, { circle: STATION, onPress: () => order.push('press') });
++    expect(guard.press(press(400, 400))).toBe('primary');
++    expect(order).toEqual(['any', 'press']);
++  });
++
++  it('extra finger on the scene is ignored; the primary keeps working and its release fires', () => {
++    const { guard, make } = world();
++    const map = make('scene');
++    const onPress = vi.fn();
++    const onRelease = vi.fn();
++    const other = vi.fn();
++    createTapTarget(map.router, { circle: STATION, onPress, onRelease });
++    createTapTarget(map.router, { circle: { x: 700, y: 400, r: 60 }, onPress: other });
++    const first = press(400, 400, 1);
++    map.scene.down(first);
++    const second = press(700, 400, 2);
++    expect(guard.press(second)).toBe('ignored');
++    expect(other).not.toHaveBeenCalled();
++    expect(map.any).toHaveBeenCalledTimes(1);
++    map.scene.up(second);
++    expect(guard.isPrimary(first)).toBe(true);
++    map.scene.up(first);
++    expect(onRelease).toHaveBeenCalledTimes(1);
++    expect(guard.isPrimary(first)).toBe(false);
++  });
++
++  it('extra finger on a hud target fires it without touching the primary', () => {
++    const { guard, make } = world();
++    const map = make('scene');
++    const hud = make('hud');
++    const speaker = vi.fn();
++    createTapTarget(hud.router, { circle: SPEAKER, onPress: speaker });
++    const first = press(400, 400, 1);
++    map.scene.down(first);
++    expect(guard.press(press(960, 192, 2))).toBe('extra-hud');
++    expect(speaker).toHaveBeenCalledTimes(1);
++    expect(map.any).toHaveBeenCalledTimes(1);
++    expect(guard.isPrimary(first)).toBe(true);
++  });
++
++  it('extra finger on the hud while the primary drags is ignored', () => {
++    const { guard, make } = world();
++    make('scene');
++    const hud = make('hud');
++    const speaker = vi.fn();
++    createTapTarget(hud.router, { circle: SPEAKER, onPress: speaker });
++    const first = press(400, 400, 1);
++    guard.press(first);
++    const second = press(960, 192, 2);
++    guard.setDragging(second, true); // not the primary: ignored
++    expect(guard.isDragging()).toBe(false);
++    guard.setDragging(first, true);
++    expect(guard.isDragging()).toBe(true);
++    expect(guard.press(second)).toBe('ignored');
++    expect(speaker).not.toHaveBeenCalled();
++    guard.release(first);
++    expect(guard.isDragging()).toBe(false);
++  });
++
++  it('the same press forwarded by several scenes is decided once', () => {
++    const { guard, make } = world();
++    const map = make('scene');
++    const hud = make('hud');
++    const onPress = vi.fn();
++    createTapTarget(map.router, { circle: STATION, onPress });
++    const p = press(400, 400);
++    hud.scene.down(p);
++    map.scene.down(p);
++    expect(onPress).toHaveBeenCalledTimes(1);
++    expect(map.any).toHaveBeenCalledTimes(1);
++    expect(hud.any).toHaveBeenCalledTimes(1);
++    expect(guard.press(p)).toBe('primary');
++  });
++
++  it('a lost up self-heals: the primary is released once its pointer is no longer down', () => {
++    const { guard, make } = world();
++    const map = make('scene');
++    const onPress = vi.fn();
++    createTapTarget(map.router, { circle: STATION, onPress });
++    const first = press(400, 400, 1);
++    guard.press(first);
++    first.isDown = false; // the up never reached us
++    expect(guard.press(press(400, 400, 2))).toBe('primary');
++    expect(onPress).toHaveBeenCalledTimes(2);
++    // The same slot reused with a new downTime also ends the old primary.
++    const again = press(400, 400, 3);
++    guard.press(again);
++    again.downTime += 1000;
++    expect(guard.isPrimary(again)).toBe(false);
++  });
++
++  it('overlapping layers: only the highest layer target fires', () => {
++    const { guard, make } = world();
++    const map = make('scene');
++    const hud = make('hud');
++    const mapHit = vi.fn();
++    const hudHit = vi.fn();
++    createTapTarget(map.router, { circle: SPEAKER, onPress: mapHit });
++    createTapTarget(hud.router, { circle: SPEAKER, onPress: hudHit });
++    map.scene.down(press(960, 192));
++    expect(hudHit).toHaveBeenCalledTimes(1);
++    expect(mapHit).not.toHaveBeenCalled();
++    void guard;
++  });
++
++  it('overlay beats hud and scene; inactive routers are skipped', () => {
++    const { make } = world();
++    const map = make('scene');
++    const overlay = make('overlay');
++    const mapHit = vi.fn();
++    const overlayHit = vi.fn();
++    createTapTarget(map.router, { circle: STATION, onPress: mapHit });
++    createTapTarget(overlay.router, { circle: STATION, onPress: overlayHit });
++    map.scene.tap(400, 400);
++    expect(overlayHit).toHaveBeenCalledTimes(1);
++    expect(mapHit).not.toHaveBeenCalled();
++    overlay.scene.state.active = false; // asleep
++    map.scene.tap(400, 400);
++    expect(mapHit).toHaveBeenCalledTimes(1);
++    expect(overlay.any).toHaveBeenCalledTimes(1);
++  });
++
++  it('a primary that misses every target still blocks other fingers until released', () => {
++    const { guard, make } = world();
++    const map = make('scene');
++    const onPress = vi.fn();
++    createTapTarget(map.router, { circle: STATION, onPress });
++    const first = press(800, 600, 1);
++    map.scene.down(first);
++    expect(guard.press(press(400, 400, 2))).toBe('ignored');
++    map.scene.up(first);
++    expect(guard.press(press(400, 400, 2))).toBe('primary');
++    expect(onPress).toHaveBeenCalledTimes(1);
++  });
++});
+diff --git a/app/src/core/input/tap-router.ts b/app/src/core/input/tap-router.ts
+new file mode 100644
+index 0000000..42fd34d
+--- /dev/null
++++ b/app/src/core/input/tap-router.ts
+@@ -0,0 +1,108 @@
++// Tap routing (Story 1.5; Story 1.6 adds layers, InputGuard registration and up events).
++// One router per scene: it listens to the scene-level pointerdown / pointerup / pointerupoutside and
++// forwards each to the global InputGuard, which decides every press once across scenes (dead zones,
++// first finger, layers overlay > hud > scene) and calls back into the routers. Within a router the
++// topmost enabled target containing the design point — the last one registered — wins.
++// This folder is the only place that touches pointer events (ESLint enforces it).
++import { inputGuard, type GuardPointer, type GuardRouter, type GuardTarget, type InputGuard, type Layer } from './guard';
++import type { ScaleLike } from './pointer-adapter';
++import type { Point } from './polygon';
++
++export type { Layer };
++export type PointerLike = GuardPointer;
++
++/** Slice of `Phaser.Scene` the router needs (fakeable in node tests). */
++export interface RouterSceneLike {
++  readonly input: {
++    on(event: string, fn: (pointer: PointerLike) => void): unknown;
++    off(event: string, fn: (pointer: PointerLike) => void): unknown;
++  };
++  readonly events: {
++    once(event: string, fn: () => void): unknown;
++  };
++  readonly sys: { isActive(): boolean };
++  readonly scale?: ScaleLike;
++}
++
++export type RouterTarget = GuardTarget;
++
++export interface TapRouter {
++  readonly layer: Layer;
++  /** Registers a target on top of the earlier ones; returns its removal function. */
++  add(target: RouterTarget): () => void;
++  /** Called on every primary press, hit or miss, before the target's onPress (Map: reset idle). */
++  onAnyTap: ((p: Point) => void) | undefined;
++  /** Removes the listeners, the guard registration and every target (also runs on shutdown/destroy). */
++  destroy(): void;
++}
++
++export interface TapRouterOptions {
++  readonly layer?: Layer;
++  /** The guard to forward to (tests); default the app-wide `inputGuard`. */
++  readonly guard?: InputGuard;
++}
++
++export const POINTER_DOWN = 'pointerdown';
++export const POINTER_UP = 'pointerup';
++export const POINTER_UP_OUTSIDE = 'pointerupoutside';
++const SHUTDOWN = 'shutdown';
++const DESTROY = 'destroy';
++
++export function createTapRouter(scene: RouterSceneLike, opts: TapRouterOptions = {}): TapRouter {
++  const guard = opts.guard ?? inputGuard;
++  const layer = opts.layer ?? 'scene';
++  let targets: RouterTarget[] = [];
++  let live = true;
++
++  const guardRouter: GuardRouter = {
++    layer,
++    isActive: () => live && scene.sys.isActive(),
++    hit(p) {
++      for (let i = targets.length - 1; i >= 0; i--) {
++        const t = targets[i]!;
++        if (t.isEnabled() && t.contains(p)) return t;
++      }
++      return undefined;
++    },
++    anyTap(p) {
++      router.onAnyTap?.(p);
++    },
++  };
++
++  const onDown = (pointer: PointerLike): void => {
++    guard.press(pointer, scene.scale);
++  };
++  const onUp = (pointer: PointerLike): void => {
++    guard.release(pointer, scene.scale);
++  };
++
++  const unregister = guard.register(guardRouter);
++
++  const router: TapRouter = {
++    layer,
++    onAnyTap: undefined,
++    add(target) {
++      targets.push(target);
++      return () => {
++        targets = targets.filter((t) => t !== target);
++      };
++    },
++    destroy() {
++      if (!live) return;
++      live = false;
++      scene.input.off(POINTER_DOWN, onDown);
++      scene.input.off(POINTER_UP, onUp);
++      scene.input.off(POINTER_UP_OUTSIDE, onUp);
++      unregister();
++      targets = [];
++      router.onAnyTap = undefined;
++    },
++  };
++
++  scene.input.on(POINTER_DOWN, onDown);
++  scene.input.on(POINTER_UP, onUp);
++  scene.input.on(POINTER_UP_OUTSIDE, onUp);
++  scene.events.once(SHUTDOWN, () => router.destroy());
++  scene.events.once(DESTROY, () => router.destroy());
++  return router;
++}
+diff --git a/app/src/core/input/tap-target.ts b/app/src/core/input/tap-target.ts
+new file mode 100644
+index 0000000..47c654f
+--- /dev/null
++++ b/app/src/core/input/tap-target.ts
+@@ -0,0 +1,59 @@
++// A circular tap area on a TapRouter (Story 1.6): Hud buttons, Start's ▶, the unlock overlay's ▶.
++import type { Point } from './polygon';
++import type { TapRouter } from './tap-router';
++
++export interface Circle {
++  readonly x: number;
++  readonly y: number;
++  readonly r: number;
++}
++
++export interface TapTargetOptions {
++  /** Hit circle in design px. */
++  readonly circle: Circle;
++  readonly onPress: (p: Point) => void;
++  /** Release of the primary press that hit this target, over the target. */
++  readonly onRelease?: (p: Point) => void;
++}
++
++export interface TapTarget {
++  setCircle(circle: Circle): TapTarget;
++  setEnabled(enabled: boolean): TapTarget;
++  isEnabled(): boolean;
++  /** Unregisters the target; it never fires again. */
++  destroy(): void;
++}
++
++export function inCircle(p: Point, c: Circle): boolean {
++  return (p.x - c.x) ** 2 + (p.y - c.y) ** 2 <= c.r * c.r;
++}
++
++export function createTapTarget(router: TapRouter, opts: TapTargetOptions): TapTarget {
++  let circle: Circle = { ...opts.circle };
++  let enabled = true;
++  let alive = true;
++  const onRelease = opts.onRelease;
++  const remove = router.add({
++    contains: (p) => inCircle(p, circle),
++    isEnabled: () => alive && enabled,
++    onPress: (p) => opts.onPress(p),
++    ...(onRelease ? { onRelease: (p: Point) => onRelease(p) } : {}),
++  });
++  const target: TapTarget = {
++    setCircle(c) {
++      circle = { ...c };
++      return target;
++    },
++    setEnabled(on) {
++      enabled = on;
++      return target;
++    },
++    isEnabled: () => alive && enabled,
++    destroy() {
++      if (!alive) return;
++      alive = false;
++      remove();
++    },
++  };
++  return target;
++}
+diff --git a/app/src/core/input/hotspot-polygon.ts b/app/src/core/input/hotspot-polygon.ts
+new file mode 100644
+index 0000000..0bfec49
+--- /dev/null
++++ b/app/src/core/input/hotspot-polygon.ts
+@@ -0,0 +1,34 @@
++// A polygon tap area registered on a TapRouter (Story 1.5; fires on press through InputGuard, 1.6). The polygon is used exactly as given
++// (layout hit polygons are already padded; no extra padding here).
++import { pointInPolygon, type Point } from './polygon';
++import type { TapRouter } from './tap-router';
++
++export class HotspotPolygon {
++  private enabledFlag = true;
++  private readonly remove: () => void;
++  private readonly points: readonly Point[];
++
++  constructor(router: TapRouter, points: readonly Point[], onTap: (p: Point) => void) {
++    this.points = points.map((p) => ({ x: p.x, y: p.y }));
++    this.remove = router.add({
++      contains: (p) => pointInPolygon(p, this.points),
++      isEnabled: () => this.enabledFlag,
++      onPress: onTap,
++    });
++  }
++
++  get enabled(): boolean {
++    return this.enabledFlag;
++  }
++
++  setEnabled(enabled: boolean): this {
++    this.enabledFlag = enabled;
++    return this;
++  }
++
++  /** Unregisters the hotspot; it never fires again. */
++  destroy(): void {
++    this.enabledFlag = false;
++    this.remove();
++  }
++}
+diff --git a/app/src/core/input/fakes.ts b/app/src/core/input/fakes.ts
+new file mode 100644
+index 0000000..435dd84
+--- /dev/null
++++ b/app/src/core/input/fakes.ts
+@@ -0,0 +1,61 @@
++// Test fakes for core/input (Story 1.6): a scene with a fake input plugin and Phaser-like pointers.
++// Imported only by *.test.ts files.
++import { vi } from 'vitest';
++import type { GuardPointer } from './guard';
++
++export interface FakePointer extends GuardPointer {
++  isDown: boolean;
++  downTime: number;
++  x: number;
++  y: number;
++  event?: unknown;
++}
++
++let clock = 0;
++
++/** A fresh pressed pointer in slot `id` at (x, y) (no DOM event: the point is used as is). */
++export function press(x: number, y: number, id = 1): FakePointer {
++  clock += 1;
++  return { id, x, y, downTime: clock, isDown: true };
++}
++
++export function fakeScene() {
++  const listeners = new Map<string, Set<(p: GuardPointer) => void>>();
++  const once = new Map<string, () => void>();
++  const state = { active: true };
++  const emit = (ev: string, p: GuardPointer): void => {
++    for (const fn of [...(listeners.get(ev) ?? [])]) fn(p);
++  };
++  return {
++    state,
++    sys: { isActive: () => state.active },
++    input: {
++      on: vi.fn((ev: string, fn: (p: GuardPointer) => void) => {
++        let set = listeners.get(ev);
++        if (!set) listeners.set(ev, (set = new Set()));
++        set.add(fn);
++      }),
++      off: vi.fn((ev: string, fn: (p: GuardPointer) => void) => {
++        listeners.get(ev)?.delete(fn);
++      }),
++    },
++    events: { once: (ev: string, fn: () => void) => once.set(ev, fn) },
++    down: (p: GuardPointer) => emit('pointerdown', p),
++    up: (p: FakePointer) => {
++      p.isDown = false;
++      emit('pointerup', p);
++    },
++    /** Press and release at (x, y); returns the pointer. */
++    tap(x: number, y: number, id = 1): FakePointer {
++      const p = press(x, y, id);
++      emit('pointerdown', p);
++      p.isDown = false;
++      emit('pointerup', p);
++      return p;
++    },
++    listenerCount: () => [...listeners.values()].reduce((n, s) => n + s.size, 0),
++    shutdown: () => once.get('shutdown')?.(),
++  };
++}
++
++export type FakeScene = ReturnType<typeof fakeScene>;
+diff --git a/app/src/core/input/input.test.ts b/app/src/core/input/input.test.ts
+new file mode 100644
+index 0000000..a3e6e21
+--- /dev/null
++++ b/app/src/core/input/input.test.ts
+@@ -0,0 +1,190 @@
++// Story 1.5/1.6: point-in-polygon, topmost-wins tap routing, hotspot enable/destroy, TapTarget.
++import { describe, expect, it, vi } from 'vitest';
++import { HotspotPolygon } from './hotspot-polygon';
++import { boundingBox, boxPolygon, padBox, pointInPolygon } from './polygon';
++import { fakeScene, press } from './fakes';
++import { InputGuard } from './guard';
++import { createTapRouter } from './tap-router';
++import { createTapTarget, inCircle } from './tap-target';
++
++const square = [
++  { x: 0, y: 0 },
++  { x: 10, y: 0 },
++  { x: 10, y: 10 },
++  { x: 0, y: 10 },
++];
++// Concave "U": the notch (4..6, 0..6) is outside.
++const u = [
++  { x: 0, y: 0 },
++  { x: 4, y: 0 },
++  { x: 4, y: 6 },
++  { x: 6, y: 6 },
++  { x: 6, y: 0 },
++  { x: 10, y: 0 },
++  { x: 10, y: 10 },
++  { x: 0, y: 10 },
++];
++
++describe('pointInPolygon', () => {
++  it('inside and outside a square', () => {
++    expect(pointInPolygon({ x: 5, y: 5 }, square)).toBe(true);
++    expect(pointInPolygon({ x: 11, y: 5 }, square)).toBe(false);
++    expect(pointInPolygon({ x: -0.01, y: 5 }, square)).toBe(false);
++  });
++
++  it('edges and vertices count as inside', () => {
++    expect(pointInPolygon({ x: 0, y: 5 }, square)).toBe(true);
++    expect(pointInPolygon({ x: 10, y: 10 }, square)).toBe(true);
++    expect(pointInPolygon({ x: 5, y: 0 }, square)).toBe(true);
++  });
++
++  it('concave: the notch is outside, the arms are inside', () => {
++    expect(pointInPolygon({ x: 5, y: 3 }, u)).toBe(false);
++    expect(pointInPolygon({ x: 2, y: 3 }, u)).toBe(true);
++    expect(pointInPolygon({ x: 8, y: 3 }, u)).toBe(true);
++    expect(pointInPolygon({ x: 5, y: 8 }, u)).toBe(true);
++    // A ray through the notch's vertex row.
++    expect(pointInPolygon({ x: 2, y: 6 }, u)).toBe(true);
++    expect(pointInPolygon({ x: 5, y: 6 }, u)).toBe(true);
++  });
++
++  it('degenerate polygons contain nothing', () => {
++    expect(pointInPolygon({ x: 0, y: 0 }, square.slice(0, 2))).toBe(false);
++  });
++
++  it('box helpers', () => {
++    expect(boundingBox(u)).toEqual({ x: 0, y: 0, width: 10, height: 10 });
++    expect(boxPolygon(padBox({ x: 10, y: 20, width: 30, height: 40 }, 24))).toEqual([
++      { x: -14, y: -4 },
++      { x: 64, y: -4 },
++      { x: 64, y: 84 },
++      { x: -14, y: 84 },
++    ]);
++  });
++});
++
++describe('createTapRouter + HotspotPolygon', () => {
++  const setup = () => {
++    const guard = new InputGuard();
++    const scene = fakeScene();
++    const router = createTapRouter(scene, { guard });
++    return { guard, scene, router };
++  };
++
++  it('registers down/up/upoutside listeners and the guard; removes all on shutdown', () => {
++    const { scene, router } = setup();
++    expect(scene.listenerCount()).toBe(3);
++    expect(router.layer).toBe('scene');
++    const hit = vi.fn();
++    new HotspotPolygon(router, square, hit);
++    scene.shutdown();
++    expect(scene.listenerCount()).toBe(0);
++    scene.tap(5, 5);
++    expect(hit).not.toHaveBeenCalled();
++  });
++
++  it('the topmost (last registered) target wins an overlap', () => {
++    const { scene, router } = setup();
++    const a = vi.fn();
++    const b = vi.fn();
++    new HotspotPolygon(router, square, a);
++    new HotspotPolygon(router, square.map((p) => ({ x: p.x + 5, y: p.y })), b);
++    scene.tap(7, 5);
++    expect(b).toHaveBeenCalledWith({ x: 7, y: 5 });
++    expect(a).not.toHaveBeenCalled();
++    scene.tap(2, 5);
++    expect(a).toHaveBeenCalledTimes(1);
++  });
++
++  it('onAnyTap runs first on every tap, hit or miss; a miss does nothing else', () => {
++    const { scene, router } = setup();
++    const order: string[] = [];
++    router.onAnyTap = () => order.push('any');
++    new HotspotPolygon(router, square, () => order.push('hit'));
++    scene.tap(5, 5);
++    scene.tap(50, 50);
++    expect(order).toEqual(['any', 'hit', 'any']);
++  });
++
++  it('a disabled hotspot is skipped (the one below gets the tap); destroy removes it', () => {
++    const { scene, router } = setup();
++    const below = vi.fn();
++    const top = vi.fn();
++    new HotspotPolygon(router, square, below);
++    const h = new HotspotPolygon(router, square, top);
++    h.setEnabled(false);
++    scene.tap(5, 5);
++    expect(below).toHaveBeenCalledTimes(1);
++    h.setEnabled(true);
++    scene.tap(5, 5);
++    expect(top).toHaveBeenCalledTimes(1);
++    h.destroy();
++    h.setEnabled(true);
++    scene.tap(5, 5);
++    expect(top).toHaveBeenCalledTimes(1);
++    expect(below).toHaveBeenCalledTimes(2);
++  });
++
++  it('a hotspot copies its points (later edits of the source do not move it)', () => {
++    const { scene, router } = setup();
++    const pts = square.map((p) => ({ ...p }));
++    const hit = vi.fn();
++    new HotspotPolygon(router, pts, hit);
++    pts[1]!.x = 100;
++    pts[2]!.x = 100;
++    scene.tap(50, 5);
++    expect(hit).not.toHaveBeenCalled();
++  });
++
++  it('an inactive (paused/sleeping) scene gets nothing', () => {
++    const { scene, router } = setup();
++    const hit = vi.fn();
++    const any = vi.fn();
++    router.onAnyTap = any;
++    new HotspotPolygon(router, square, hit);
++    scene.state.active = false;
++    scene.tap(5, 5);
++    expect(hit).not.toHaveBeenCalled();
++    expect(any).not.toHaveBeenCalled();
++  });
++});
++
++describe('createTapTarget', () => {
++  it('circle hit (edge inclusive), onPress on down, onRelease on up over the target', () => {
++    const guard = new InputGuard();
++    const scene = fakeScene();
++    const router = createTapRouter(scene, { guard });
++    const onPress = vi.fn();
++    const onRelease = vi.fn();
++    const t = createTapTarget(router, { circle: { x: 100, y: 100, r: 10 }, onPress, onRelease });
++    expect(inCircle({ x: 110, y: 100 }, { x: 100, y: 100, r: 10 })).toBe(true);
++    const p = press(105, 100);
++    scene.down(p);
++    expect(onPress).toHaveBeenCalledWith({ x: 105, y: 100 });
++    expect(onRelease).not.toHaveBeenCalled();
++    scene.up(p);
++    expect(onRelease).toHaveBeenCalledTimes(1);
++    // Release away from the target: no onRelease.
++    const q = press(100, 100);
++    scene.down(q);
++    q.x = 300;
++    scene.up(q);
++    expect(onPress).toHaveBeenCalledTimes(2);
++    expect(onRelease).toHaveBeenCalledTimes(1);
++    // setCircle moves it, setEnabled(false) and destroy silence it.
++    t.setCircle({ x: 300, y: 300, r: 10 });
++    scene.tap(100, 100);
++    expect(onPress).toHaveBeenCalledTimes(2);
++    scene.tap(300, 300);
++    expect(onPress).toHaveBeenCalledTimes(3);
++    t.setEnabled(false);
++    scene.tap(300, 300);
++    expect(onPress).toHaveBeenCalledTimes(3);
++    t.setEnabled(true);
++    t.destroy();
++    t.setEnabled(true);
++    scene.tap(300, 300);
++    expect(onPress).toHaveBeenCalledTimes(3);
++    expect(t.isEnabled()).toBe(false);
++  });
++});
+diff --git a/app/src/core/hud.ts b/app/src/core/hud.ts
+new file mode 100644
+index 0000000..7d5034d
+--- /dev/null
++++ b/app/src/core/hud.ts
+@@ -0,0 +1,137 @@
++// Hud logic (Story 1.6): layout, Speaker wave and the button controller. Pure (no Phaser), so the
++// Hud scene only wires Graphics, TapTargets, tweens and Bus subscriptions to it.
++import type { HudMode } from './hud-mode';
++import type { Insets } from './input/space';
++import type { Circle } from './input/tap-target';
++import { amplitude } from './reduced-motion';
++import type { Rect } from './safe-rect';
++import { Tokens } from './tokens';
++
++export const SFX_POP = 'sfx.shell.pop';
++export const VO_HOME = 'vo.shell.home';
++const MS_PER_S = 1000;
++
++export interface HudLayout {
++  /** Button centres plus the hit radius (size/2 + hitPad), design px. */
++  readonly home: Circle;
++  readonly speaker: Circle;
++  /** Button diameter, design px. */
++  readonly size: number;
++}
++
++/**
++ * Home sits top-left, Speaker top-right, measured from the visible design rect plus the safe-area
++ * insets (already in design px).
++ */
++export function hudLayout(visible: Rect, insets: Insets): HudLayout {
++  const sp = Tokens.spacing;
++  const size = Tokens.components.buttonRound.size;
++  const half = size / 2;
++  const r = half + sp.hitPad;
++  return {
++    size,
++    home: { x: visible.x + sp.edgeInset + insets.left + half, y: visible.y + sp.buttonTop + insets.top + half, r },
++    speaker: {
++      x: visible.x + visible.w - sp.edgeInset - insets.right - half,
++      y: visible.y + sp.speakerTop + insets.top + half,
++      r,
++    },
++  };
++}
++
++export interface WaveRing {
++  readonly scale: number;
++  readonly alpha: number;
++}
++
++/** One wave period (1000/hz ms). */
++export function wavePeriodMs(): number {
++  return MS_PER_S / Tokens.components.buttonSpeaker.wave.hz;
++}
++
++/**
++ * The Speaker wave at time `tMs` since it started: `rings` rings, each scaling 1 → speakerWaveScale
++ * while fading from the token alpha to 0 over one period, phase-shifted evenly.
++ */
++export function waveFrame(tMs: number, reduced: boolean): WaveRing[] {
++  const wave = Tokens.components.buttonSpeaker.wave;
++  const period = wavePeriodMs();
++  const peak = amplitude(Tokens.ui.speakerWaveScale, reduced);
++  const rings: WaveRing[] = [];
++  for (let i = 0; i < wave.rings; i++) {
++    const raw = Math.max(0, tMs) / period + i / wave.rings;
++    const phase = raw - Math.floor(raw);
++    rings.push({ scale: 1 + (peak - 1) * phase, alpha: wave.color.alpha * (1 - phase) });
++  }
++  return rings;
++}
++
++export interface HudView {
++  /** Press visual (0.9× and spring back). */
++  pressSpeaker(): void;
++  pressHome(): void;
++  /** Starts (true) or stops (false) the Speaker wave. */
++  showWave(on: boolean): void;
++  /** Home visible and enabled. */
++  showHome(on: boolean): void;
++}
++
++export interface HudDeps {
++  /** Replays the current prompt; returns its voice token, or undefined when there is none. */
++  replay(): number | undefined;
++  say(id: string): number;
++  sfx(id: string): void;
++  emitHome(): void;
++  view: HudView;
++}
++
++export class HudController {
++  private mode: HudMode = 'map';
++  private waveToken: number | undefined;
++
++  private readonly deps: HudDeps;
++
++  constructor(deps: HudDeps) {
++    this.deps = deps;
++  }
++
++  get currentMode(): HudMode {
++    return this.mode;
++  }
++
++  /** The token the wave follows (undefined: no wave). */
++  get waveFor(): number | undefined {
++    return this.waveToken;
++  }
++
++  setMode(mode: HudMode): void {
++    this.mode = mode;
++    this.deps.view.showHome(mode === 'game');
++  }
++
++  /** Speaker onPress: press + pop at once, then replay; the wave follows the new token. */
++  speaker(): void {
++    this.deps.view.pressSpeaker();
++    this.deps.sfx(SFX_POP);
++    const token = this.deps.replay();
++    if (token === undefined) return;
++    this.waveToken = token;
++    this.deps.view.showWave(true);
++  }
++
++  /** Home onPress: press + pop; in 'game' mode also the line and `hud:home`. */
++  home(): void {
++    this.deps.view.pressHome();
++    this.deps.sfx(SFX_POP);
++    if (this.mode !== 'game') return;
++    this.deps.say(VO_HOME);
++    this.deps.emitHome();
++  }
++
++  /** `speech:ended`: stops the wave only for the token it follows. */
++  speechEnded(token: number): void {
++    if (this.waveToken === undefined || token !== this.waveToken) return;
++    this.waveToken = undefined;
++    this.deps.view.showWave(false);
++  }
++}
+diff --git a/app/src/core/hud.test.ts b/app/src/core/hud.test.ts
+new file mode 100644
+index 0000000..1f97890
+--- /dev/null
++++ b/app/src/core/hud.test.ts
+@@ -0,0 +1,132 @@
++// Story 1.6: Hud layout, Speaker wave, Speaker / Home controller and the Hud mode.
++import { describe, expect, it, vi } from 'vitest';
++import { Bus } from './bus';
++import { HudController, hudLayout, SFX_POP, VO_HOME, waveFrame, wavePeriodMs, type HudView } from './hud';
++import { getHudMode, setHudMode } from './hud-mode';
++import { NO_INSETS, visibleDesignRect } from './input/space';
++import { Tokens } from './tokens';
++
++describe('hudLayout', () => {
++  it('1180x820, no insets: Home (64, 112.2), Speaker (960, 192.2), hit r = 44 + hitPad', () => {
++    const vis = visibleDesignRect({ w: 1180, h: 820, rotated: false, insets: NO_INSETS });
++    const l = hudLayout(vis, NO_INSETS);
++    expect(l.home.x).toBeCloseTo(64, 6);
++    expect(Math.abs(l.home.y - 112.2)).toBeLessThan(0.1);
++    expect(l.speaker.x).toBeCloseTo(960, 6);
++    expect(Math.abs(l.speaker.y - 192.2)).toBeLessThan(0.1);
++    expect(l.size).toBe(88);
++    expect(l.speaker.r).toBe(44 + Tokens.spacing.hitPad);
++  });
++
++  it('insets push the buttons inward', () => {
++    const l = hudLayout({ x: 0, y: 0, w: 1024, h: 768 }, { top: 10, right: 5, bottom: 0, left: 7 });
++    expect(l.home).toMatchObject({ x: 20 + 7 + 44, y: 40 + 10 + 44 });
++    expect(l.speaker).toMatchObject({ x: 1024 - 20 - 5 - 44, y: 120 + 10 + 44 });
++  });
++});
++
++describe('waveFrame', () => {
++  it('2 rings at 1 Hz, half a period apart, scale 1 -> 1.6 while alpha 0.4 -> 0', () => {
++    expect(wavePeriodMs()).toBe(1000);
++    const f0 = waveFrame(0, false);
++    expect(f0).toHaveLength(2);
++    expect(f0[0]).toEqual({ scale: 1, alpha: 0.4 });
++    expect(f0[1]!.scale).toBeCloseTo(1.3, 9);
++    expect(f0[1]!.alpha).toBeCloseTo(0.2, 9);
++    const f = waveFrame(250, false);
++    expect(f[0]!.scale).toBeCloseTo(1.15, 9);
++    expect(f[0]!.alpha).toBeCloseTo(0.3, 9);
++    // Periodic: no on/off blinking, just the phase.
++    expect(waveFrame(1250, false)[0]!.scale).toBeCloseTo(1.15, 9);
++    expect(waveFrame(999.999, false)[0]!.scale).toBeLessThanOrEqual(Tokens.ui.speakerWaveScale);
++  });
++
++  it('reduced motion scales the amplitude', () => {
++    expect(waveFrame(500, true)[0]!.scale).toBeCloseTo(1 + 0.6 * 0.5 * 0.5, 9);
++  });
++});
++
++function controller(replay: () => number | undefined) {
++  const calls: string[] = [];
++  const view: HudView = {
++    pressSpeaker: () => calls.push('press:speaker'),
++    pressHome: () => calls.push('press:home'),
++    showWave: (on) => calls.push(`wave:${on}`),
++    showHome: (on) => calls.push(`home:${on}`),
++  };
++  const deps = {
++    replay: vi.fn(replay),
++    say: vi.fn((id: string) => {
++      calls.push(`say:${id}`);
++      return 1;
++    }),
++    sfx: vi.fn((id: string) => calls.push(`sfx:${id}`)),
++    emitHome: vi.fn(() => calls.push('emit:hud:home')),
++    view,
++  };
++  return { c: new HudController(deps), calls, deps };
++}
++
++describe('HudController', () => {
++  it('Speaker with a prompt: press + pop, replay, wave until speech:ended for that token', () => {
++    const { c, calls } = controller(() => 7);
++    c.speaker();
++    expect(calls).toEqual(['press:speaker', `sfx:${SFX_POP}`, 'wave:true']);
++    expect(c.waveFor).toBe(7);
++    c.speechEnded(6);
++    expect(calls).not.toContain('wave:false');
++    c.speechEnded(7);
++    expect(calls.at(-1)).toBe('wave:false');
++    expect(c.waveFor).toBeUndefined();
++  });
++
++  it('Speaker re-tap: the wave follows the new token; the old ended is ignored', () => {
++    let next = 7;
++    const { c, calls } = controller(() => next++);
++    c.speaker();
++    c.speaker();
++    expect(c.waveFor).toBe(8);
++    c.speechEnded(7);
++    expect(calls).not.toContain('wave:false');
++    c.speechEnded(8);
++    expect(calls.at(-1)).toBe('wave:false');
++  });
++
++  it('Speaker with no prompt: only press + pop', () => {
++    const { c, calls } = controller(() => undefined);
++    c.speaker();
++    expect(calls).toEqual(['press:speaker', `sfx:${SFX_POP}`]);
++  });
++
++  it('Home: only in game mode it says the line and emits hud:home', () => {
++    const { c, calls, deps } = controller(() => undefined);
++    c.setMode('map');
++    expect(calls).toEqual(['home:false']);
++    c.home();
++    expect(deps.emitHome).not.toHaveBeenCalled();
++    expect(deps.say).not.toHaveBeenCalled();
++    c.setMode('game');
++    calls.length = 0;
++    c.home();
++    expect(calls).toEqual(['press:home', `sfx:${SFX_POP}`, `say:${VO_HOME}`, 'emit:hud:home']);
++  });
++});
++
++describe('hud-mode', () => {
++  it('stores the mode and emits hud:mode', () => {
++    const bus = new Bus();
++    const seen: string[] = [];
++    bus.on('hud:mode', ({ mode }) => seen.push(mode));
++    setHudMode('game', bus);
++    expect(getHudMode()).toBe('game');
++    setHudMode('map', bus);
++    expect(getHudMode()).toBe('map');
++    expect(seen).toEqual(['game', 'map']);
++  });
++
++  it('hud:home with no subscriber is a no-op', () => {
++    const bus = new Bus();
++    expect(() => bus.emit('hud:home')).not.toThrow();
++    expect(bus.listenerCount('hud:home')).toBe(0);
++  });
++});
+diff --git a/app/src/core/hud-mode.ts b/app/src/core/hud-mode.ts
+new file mode 100644
+index 0000000..b874c32
+--- /dev/null
++++ b/app/src/core/hud-mode.ts
+@@ -0,0 +1,18 @@
++// Hud mode (Story 1.6): 'map' shows only the Speaker; 'game' adds Home. Map sets 'map' on create,
++// Story 1.7's MiniGameBase sets 'game'. The Hud scene reads the stored mode on create and then
++// follows the `hud:mode` Bus event.
++import { bus as appBus, type Bus } from './bus';
++
++export type HudMode = 'map' | 'game';
++
++let mode: HudMode = 'map';
++
++export function getHudMode(): HudMode {
++  return mode;
++}
++
++/** Stores `next` and emits `hud:mode` (also when unchanged, so a late Hud catches up). */
++export function setHudMode(next: HudMode, bus: Bus = appBus): void {
++  mode = next;
++  bus.emit('hud:mode', { mode: next });
++}
+diff --git a/app/src/core/bus.ts b/app/src/core/bus.ts
+new file mode 100644
+index 0000000..49e87b9
+--- /dev/null
++++ b/app/src/core/bus.ts
+@@ -0,0 +1,125 @@
++// Typed Bus with scene-scoped subscriptions (AD-11).
++// Emitting or subscribing to an event outside `EventMap`, or with the wrong payload, is a type error.
++// Scenes subscribe ONLY via `bus.scoped(this)`; global `bus.on` is for core services subscribed at boot.
++import type { GameId, HintLevel, RoundOutcome, Snapshot } from '../content/types';
++import type { HudMode } from './hud-mode';
++
++/** Event names follow `noun:verb`. `undefined` payload = event carries no data. */
++export interface EventMap {
++  'round:complete': RoundOutcome;
++  'round:abandon': { gameId: GameId; snapshot: Snapshot };
++  'reward:earned': { gameId: GameId };
++  'reward:granted': { gameId: GameId; decorationId: string };
++  'hint:level': { gameId: GameId; level: HintLevel };
++  'hud:home': undefined;
++  /** core/hud-mode: the Hud shows Home only in 'game' mode (Story 1.6; MiniGameBase sets 'game' in 1.7). */
++  'hud:mode': { mode: HudMode };
++  'overlay:close': undefined;
++  /** AudioDirector: page visible again but the AudioContext stayed suspended (after the first unlock). */
++  'audio:suspended': undefined;
++  /** AudioUnlockOverlay: the child tapped, audio is unlocked and the paused scenes resumed. */
++  'audio:resumed': undefined;
++  /**
++   * AudioDirector: a voice token ended — exactly once per token (AR16 speechEnded, renamed for noun:verb).
++   * completed is false when the line was stopped, interrupted, dropped or unknown.
++   */
++  'speech:ended': { token: number; completed: boolean };
++}
++
++export type EventName = keyof EventMap;
++export type Handler<K extends EventName> = (payload: EventMap[K]) => void;
++type EmitArgs<K extends EventName> = EventMap[K] extends undefined ? [] : [payload: EventMap[K]];
++
++/** Phaser scene lifecycle event names (`Phaser.Scenes.Events.SHUTDOWN` / `.DESTROY`). */
++export const SCENE_SHUTDOWN = 'shutdown';
++export const SCENE_DESTROY = 'destroy';
++
++/** The slice of `Phaser.Scene` the Bus needs; keeps this module testable without Phaser. */
++export interface SceneLike {
++  events: {
++    once(event: string, fn: () => void): unknown;
++    off(event: string, fn: () => void): unknown;
++  };
++}
++
++export interface ScopedBus {
++  /** Subscribe; returns this subscription's unsubscribe function. A no-op after the scope ended. */
++  on<K extends EventName>(event: K, handler: Handler<K>): () => void;
++  emit<K extends EventName>(event: K, ...args: EmitArgs<K>): void;
++}
++
++type Listener = (payload: unknown) => void;
++
++export class Bus {
++  private readonly handlers = new Map<EventName, Set<Listener>>();
++
++  /**
++   * Global subscription (core services only). Returns an unsubscribe function that removes
++   * exactly this subscription — subscribing the same function twice gives two independent entries.
++   */
++  on<K extends EventName>(event: K, handler: Handler<K>): () => void {
++    let set = this.handlers.get(event);
++    if (!set) {
++      set = new Set();
++      this.handlers.set(event, set);
++    }
++    const entry: Listener = (payload) => (handler as Listener)(payload);
++    set.add(entry);
++    return () => {
++      this.handlers.get(event)?.delete(entry);
++    };
++  }
++
++  emit<K extends EventName>(event: K, ...args: EmitArgs<K>): void {
++    const set = this.handlers.get(event);
++    if (!set) return;
++    const payload = args[0];
++    for (const fn of [...set]) {
++      // Unsubscribed by an earlier listener during this same emit → skip.
++      if (!set.has(fn)) continue;
++      try {
++        fn(payload);
++      } catch (error) {
++        // Never surface errors to the child; keep other listeners running.
++        console.warn(`bus: listener for "${event}" threw`, error);
++      }
++    }
++  }
++
++  listenerCount(event: EventName): number {
++    return this.handlers.get(event)?.size ?? 0;
++  }
++
++  /** Subscriptions tied to a scene: all removed on the scene's SHUTDOWN or DESTROY. */
++  scoped(scene: SceneLike): ScopedBus {
++    const offs: Array<() => void> = [];
++    let ended = false;
++    let warned = false;
++    const cleanup = (): void => {
++      ended = true;
++      for (const off of offs.splice(0)) off();
++      scene.events.off(SCENE_SHUTDOWN, cleanup);
++      scene.events.off(SCENE_DESTROY, cleanup);
++    };
++    scene.events.once(SCENE_SHUTDOWN, cleanup);
++    scene.events.once(SCENE_DESTROY, cleanup);
++    return {
++      on: (event, handler) => {
++        if (ended) {
++          if (!warned) {
++            warned = true;
++            console.warn(`bus: scoped.on("${event}") after the scene shut down — ignored; call bus.scoped(this) again`);
++          }
++          return () => undefined;
++        }
++        const off = this.on(event, handler);
++        offs.push(off);
++        return off;
++      },
++      emit: (event, ...args) => this.emit(event, ...args),
++    };
++  }
++}
++
++/** The app-wide Bus instance. */
++export const bus = new Bus();
+diff --git a/app/src/core/tokens.ts b/app/src/core/tokens.ts
+new file mode 100644
+index 0000000..dff3c77
+--- /dev/null
++++ b/app/src/core/tokens.ts
+@@ -0,0 +1,45 @@
++// The only way code reads design values (AD-7, AD-8): `Tokens.*` and `Tokens.Timing.*`.
++import { designTokens } from './tokens.generated.ts';
++import { Timing } from './timing.ts';
++import { computeSafeRect } from './safe-rect.ts';
++
++/** Design space: 1024×768 px (4:3) at 1× (AD-7). */
++const design = { width: 1024, height: 768 } as const;
++
++/**
++ * Supported iPad landscape aspect ratios (w/h). 4:3 (1024×768, 1366×1024) up to ≈1.46
++ * (1180×820 ≈ 1.439, 1210×834 ≈ 1.451) — see spec Design Notes.
++ */
++const supportedAspect = { min: 4 / 3, max: 1.46 } as const;
++
++/**
++ * UI motion values DESIGN.md does not define (Story 1.2 adds them in core, DESIGN.md unchanged).
++ * Source: epic UX › Base button (press to 0.9× and spring back) and EXPERIENCE button-play 'Nhún chậm'.
++ */
++const ui = {
++  /** button-round press scale. */
++  pressScale: 0.9,
++  /** button-play slow bob amplitude (px, design space). */
++  playBobPx: 10,
++  /** Map station tap bounce peak (Story 1.5: 1 → 1.1 → 1 over Timing.stationTapMs). */
++  stationTapScale: 1.1,
++  /** Map ambient station motion peak (1 → 1.04 → 1 over Timing.mapAmbientMoveMs). */
++  ambientScale: 1.04,
++  /** prefers-reduced-motion: every scale amplitude (scale − 1) is multiplied by this. */
++  reducedMotionAmplitude: 0.5,
++  /** Speaker wave ring peak scale (Story 1.6: each ring 1 → 1.6 while fading out, buttonSpeaker.wave). */
++  speakerWaveScale: 1.6,
++} as const;
++
++export const Tokens = {
++  ...designTokens,
++  design,
++  supportedAspect,
++  /** Design-space rect visible on every supported iPad ratio; interactive items must lie inside it. */
++  safeRect: computeSafeRect(design.width, design.height, supportedAspect.min, supportedAspect.max),
++  ui,
++  Timing,
++} as const;
++
++export type TokensType = typeof Tokens;
++export type { Rect } from './safe-rect.ts';
+diff --git a/app/src/core/ui/round-button.ts b/app/src/core/ui/round-button.ts
+new file mode 100644
+index 0000000..d091e39
+--- /dev/null
++++ b/app/src/core/ui/round-button.ts
+@@ -0,0 +1,104 @@
++// `button-round` visual (DESIGN components.button-round) drawn with Phaser Graphics until the
++// atlas art lands (Story 1.4): circle, top-left white highlight, solid 6 px base shadow
++// (first shadow layer), icon (▶ play, home, speaker) in `icon` ink. Press = 0.9× then spring back;
++// optional slow bob. The button is visual only: input goes through core/input's TapTarget (Story 1.6).
++import type { GameObjects, Scene, Tweens } from 'phaser';
++import { Tokens } from '../tokens';
++
++export interface ColorLike {
++  readonly value: number;
++  readonly alpha: number;
++}
++
++export interface RoundButtonOptions {
++  x: number;
++  y: number;
++  /** Diameter in design px (e.g. Tokens.components.buttonPlay.size). */
++  size: number;
++  fill: ColorLike;
++  /** Drawn icon (default 'play'). */
++  icon?: RoundButtonIcon;
++}
++
++export type RoundButtonIcon = 'play' | 'home' | 'speaker';
++
++// Proportions of the drawn highlight and ▶ icon, relative to the radius (visual only).
++const HIGHLIGHT = { x: -0.38, y: -0.45, w: 0.55, h: 0.3, alpha: 0.55 } as const;
++const ICON = { half: 0.36, back: -0.26, tip: 0.42 } as const;
++// Home: roof triangle + body. Speaker: box + cone + two sound arcs.
++const HOME = { roofTop: -0.44, roofBase: -0.04, roofHalf: 0.46, bodyHalf: 0.3, bodyBottom: 0.4 } as const;
++const SPEAKER = {
++  boxLeft: -0.42, boxHalf: 0.14, boxW: 0.2, coneTip: 0.1, coneHalf: 0.34,
++  arcX: 0.08, arcs: [0.22, 0.38], arcSpan: 0.8, arcWidth: 0.08,
++} as const;
++
++function drawIcon(g: GameObjects.Graphics, icon: RoundButtonIcon, r: number): void {
++  if (icon === 'home') {
++    g.fillTriangle(0, r * HOME.roofTop, -r * HOME.roofHalf, r * HOME.roofBase, r * HOME.roofHalf, r * HOME.roofBase);
++    g.fillRect(-r * HOME.bodyHalf, r * HOME.roofBase, 2 * r * HOME.bodyHalf, r * (HOME.bodyBottom - HOME.roofBase));
++    return;
++  }
++  if (icon === 'speaker') {
++    const left = r * SPEAKER.boxLeft;
++    const boxRight = left + r * SPEAKER.boxW;
++    g.fillRect(left, -r * SPEAKER.boxHalf, r * SPEAKER.boxW, 2 * r * SPEAKER.boxHalf);
++    g.fillTriangle(boxRight, -r * SPEAKER.boxHalf, r * SPEAKER.coneTip, -r * SPEAKER.coneHalf, r * SPEAKER.coneTip, r * SPEAKER.coneHalf);
++    g.fillTriangle(boxRight, r * SPEAKER.boxHalf, boxRight, -r * SPEAKER.boxHalf, r * SPEAKER.coneTip, r * SPEAKER.coneHalf);
++    for (const a of SPEAKER.arcs) {
++      g.beginPath();
++      g.arc(r * SPEAKER.arcX, 0, r * a, -SPEAKER.arcSpan, SPEAKER.arcSpan);
++      g.strokePath();
++    }
++    return;
++  }
++  g.fillTriangle(r * ICON.back, -r * ICON.half, r * ICON.back, r * ICON.half, r * ICON.tip, 0);
++}
++
++/** Builds a round button as a (non-interactive) Container centred on (x, y). */
++export function createRoundButton(scene: Scene, opts: RoundButtonOptions): GameObjects.Container {
++  const r = opts.size / 2;
++  const base = Tokens.components.buttonRound;
++  const solidShadow = base.shadow[0];
++  const g = scene.add.graphics();
++
++  g.fillStyle(solidShadow.color.value, solidShadow.color.alpha);
++  g.fillCircle(solidShadow.x, solidShadow.y, r);
++
++  g.fillStyle(opts.fill.value, opts.fill.alpha);
++  g.fillCircle(0, 0, r);
++
++  g.fillStyle(base.highlight.value, base.highlight.alpha * HIGHLIGHT.alpha);
++  g.fillEllipse(r * HIGHLIGHT.x, r * HIGHLIGHT.y, r * HIGHLIGHT.w, r * HIGHLIGHT.h);
++
++  g.fillStyle(base.icon.value, base.icon.alpha);
++  g.lineStyle(r * SPEAKER.arcWidth, base.icon.value, base.icon.alpha);
++  drawIcon(g, opts.icon ?? 'play', r);
++
++  const button = scene.add.container(opts.x, opts.y, [g]);
++  button.setSize(opts.size, opts.size);
++  return button;
++}
++
++const pressTweens = new WeakMap<GameObjects.Container, Tweens.Tween>();
++
++/** Press feedback: snaps to 0.9× immediately (well inside the 100 ms budget) and springs back. */
++export function pressButton(scene: Scene, button: GameObjects.Container): void {
++  pressTweens.get(button)?.stop();
++  button.setScale(Tokens.ui.pressScale);
++  pressTweens.set(
++    button,
++    scene.tweens.add({ targets: button, scale: 1, duration: Tokens.Timing.buttonPressMs, ease: 'Back.easeOut' }),
++  );
++}
++
++/** Slow endless bob (button-play "Nhún chậm"). */
++export function startBob(scene: Scene, target: GameObjects.Container): Tweens.Tween {
++  return scene.tweens.add({
++    targets: target,
++    y: target.y - Tokens.ui.playBobPx,
++    duration: Tokens.Timing.playBobMs,
++    ease: 'Sine.easeInOut',
++    yoyo: true,
++    repeat: -1,
++  });
++}
+diff --git a/app/src/content/voice-lines.ts b/app/src/content/voice-lines.ts
+new file mode 100644
+index 0000000..a8bc7c3
+--- /dev/null
++++ b/app/src/content/voice-lines.ts
+@@ -0,0 +1,80 @@
++// Voice lines (AD-6, Story 1.3). Every spoken request is a pre-generated warm Vietnamese female
++// line (edge-tts vi-VN-HoaiMyNeural, built by `npm run content:export && npm run tts`).
++// Code plays them ONLY by id through core/audio-director (`audio.say(id)`); there is no runtime
++// text concatenation, so every combination is enumerated here as its own line.
++//
++// Rules (checked by content/validate.ts + tools/lint/validate-content.ts):
++// - id `vo.<scope>.<intent>[.<subjectId>][.<n>]`, scope = `shell` or a GameId, kebab-case segments;
++// - at most 8 words; `|` marks the pause before the keyword (no empty segment around it) and
++//   then needs `keywordPauseMs` (and vice versa);
++// Authoring guidance not checked by code: one request per sentence, keyword last.
++// - no near-homophone pair (dâu/đâu, cá/cà, ba/bà, bóng/bông, cam/cầm) in one sentence;
++// - `public/<voicePath(id)>` and its `.hash` exist and match `lineHash(line)`.
++// A parent approves a line after listening by copying its `.hash` content into `approved.textHash`.
++// Type-only imports keep this file runnable by Node type stripping (tools/).
++import type { GameId } from './types';
++
++export interface VoiceLine {
++  readonly id: string;
++  /** Spoken text (NFC). `|` = silence of `keywordPauseMs` inserted by ffmpeg (not spoken). */
++  readonly text: string;
++  readonly keywordPauseMs?: number;
++  /** Speaking rate factor (default VOICE_DEFAULTS.rate). */
++  readonly rate?: number;
++  /** Set by a human after listening: the `.hash` content of the approved render. */
++  readonly approved?: { readonly textHash: string };
++}
++
++/** TTS settings shared by every line (Technical Decisions › Asset pipeline). */
++export const VOICE_DEFAULTS = {
++  voice: 'vi-VN-HoaiMyNeural',
++  rate: 0.85,
++} as const;
++
++/** Voice scopes: the shell or a mini-game. */
++export type VoiceScope = 'shell' | GameId;
++
++export const VOICE_LINES = [
++  /** Start: played once after the first tap unlocks audio (Story 1.3). Not yet approved. */
++  { id: 'vo.shell.greeting', text: 'Bé ơi, mình cùng | chơi nào!', keywordPauseMs: 300 },
++  // Map (Story 1.5). Station names = STATIONS[i].label (content/stations.ts). Not yet approved.
++  { id: 'vo.shell.station-name.ice-cream', text: 'Xe kem' },
++  { id: 'vo.shell.station-name.pizza', text: 'Tiệm pizza' },
++  { id: 'vo.shell.station-name.race', text: 'Đường đua' },
++  { id: 'vo.shell.station-name.fishing', text: 'Hồ cá' },
++  { id: 'vo.shell.station-name.touch-talk', text: 'Chạm là nói' },
++  { id: 'vo.shell.station-name.dino-puzzle', text: 'Công viên khủng long' },
++  { id: 'vo.shell.station-name.shadow-match', text: 'Hang tìm bóng' },
++  /** Map invitation of an awake station (EXPERIENCE › Mời chơi), followed by its name line. */
++  { id: 'vo.shell.invite.ice-cream', text: 'Bé ơi, mình đi ăn | kem nhé!', keywordPauseMs: 300 },
++  /** Hud Home tap inside a game (Story 1.6). Not yet approved. */
++  { id: 'vo.shell.home', text: 'Về đảo nào!' },
++] as const satisfies readonly VoiceLine[];
++
++export type VoiceLineId = (typeof VOICE_LINES)[number]['id'];
++
++const VOICE_IDS: ReadonlySet<string> = new Set(VOICE_LINES.map((line) => line.id));
++
++export function isVoiceLineId(id: string): id is VoiceLineId {
++  return VOICE_IDS.has(id);
++}
++
++/** The line that names a station (Map tap on an awake station, after an invitation). */
++export function stationNameLine(stationId: string): string {
++  return `vo.shell.station-name.${stationId}`;
++}
++
++/** The Map invitation line of an awake station. */
++export function inviteLine(stationId: string): string {
++  return `vo.shell.invite.${stationId}`;
++}
++
++/** Shipped file of a line, relative to the app base (`base: './'`). */
++export function voicePath(id: string): string {
++  return `assets/audio/vo/${id}.m4a`;
++}
++
++/** The `.hash` file next to a line's `.m4a`. */
++export function voiceHashPath(id: string): string {
++  return `assets/audio/vo/${id}.hash`;
++}
+diff --git a/app/public/assets/audio/vo/vo.shell.home.hash b/app/public/assets/audio/vo/vo.shell.home.hash
+new file mode 100644
+index 0000000..1c2eb73
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.home.hash
+@@ -0,0 +1 @@
++8fc59b8121b2b183129cb2796c7c366b3eec4419d506a64d94353326e2d70609
+diff --git a/app/src/scenes/Hud.ts b/app/src/scenes/Hud.ts
+new file mode 100644
+index 0000000..30a706a
+--- /dev/null
++++ b/app/src/scenes/Hud.ts
+@@ -0,0 +1,123 @@
++// Hud (Story 1.6): a parallel scene above Map and the games. Speaker (top-right, every mode) replays
++// the current prompt with a two-ring wave until that line ends; Home (top-left, 'game' mode only)
++// says "Về đảo nào!" and emits `hud:home`. Launched once by Map, never on Start. Wiring only: the
++// layout, wave maths and tap logic live in core/hud.ts; taps go through InputGuard on the `hud` layer.
++import { Scene, type GameObjects, type Tweens } from 'phaser';
++import { audio } from '../core/audio-director';
++import { bus } from '../core/bus';
++import { HudController, hudLayout, waveFrame, wavePeriodMs, type HudLayout } from '../core/hud';
++import { getHudMode } from '../core/hud-mode';
++import { createTapRouter } from '../core/input/tap-router';
++import { createTapTarget } from '../core/input/tap-target';
++import { currentView, designInsets, NO_INSETS, visibleDesignRect } from '../core/input/space';
++import { prefersReducedMotion } from '../core/reduced-motion';
++import { Tokens } from '../core/tokens';
++import { createRoundButton, pressButton } from '../core/ui/round-button';
++
++const RESIZE = 'resize';
++
++function currentLayout(): HudLayout {
++  const view = currentView();
++  const { width, height } = Tokens.design;
++  if (!view) return hudLayout({ x: 0, y: 0, w: width, h: height }, NO_INSETS);
++  return hudLayout(visibleDesignRect(view), designInsets(view));
++}
++
++export class Hud extends Scene {
++  private waveTween: Tweens.Tween | undefined;
++
++  constructor() {
++    super('Hud');
++  }
++
++  create(): void {
++    const reduced = prefersReducedMotion(window);
++    const layout = currentLayout();
++    const speakerSpec = Tokens.components.buttonSpeaker;
++    const wave = speakerSpec.wave;
++
++    const rings: GameObjects.Arc[] = [];
++    for (let i = 0; i < wave.rings; i++) {
++      rings.push(this.add.circle(layout.speaker.x, layout.speaker.y, layout.size / 2, wave.color.value, 1).setVisible(false));
++    }
++    const speaker = createRoundButton(this, {
++      x: layout.speaker.x,
++      y: layout.speaker.y,
++      size: layout.size,
++      fill: speakerSpec.background,
++      icon: 'speaker',
++    });
++    const home = createRoundButton(this, {
++      x: layout.home.x,
++      y: layout.home.y,
++      size: layout.size,
++      fill: Tokens.components.buttonHome.background,
++      icon: 'home',
++    });
++
++    const applyWave = (tMs: number): void => {
++      const frame = waveFrame(tMs, reduced);
++      rings.forEach((ring, i) => {
++        const f = frame[i];
++        if (f) ring.setScale(f.scale).setAlpha(f.alpha);
++      });
++    };
++    const stopWave = (): void => {
++      this.waveTween?.stop();
++      this.waveTween = undefined;
++      for (const ring of rings) ring.setVisible(false);
++    };
++    const startWave = (): void => {
++      stopWave();
++      const period = wavePeriodMs();
++      applyWave(0);
++      for (const ring of rings) ring.setVisible(true);
++      this.waveTween = this.tweens.addCounter({
++        from: 0,
++        to: period,
++        duration: period,
++        repeat: -1,
++        onUpdate: (t) => applyWave(t.getValue() ?? 0),
++      });
++    };
++
++    const router = createTapRouter(this, { layer: 'hud' });
++    const controller = new HudController({
++      replay: () => audio.replayPrompt(),
++      say: (id) => audio.say(id),
++      sfx: (id) => audio.sfx(id),
++      emitHome: () => bus.emit('hud:home'),
++      view: {
++        pressSpeaker: () => pressButton(this, speaker),
++        pressHome: () => pressButton(this, home),
++        showWave: (on) => (on ? startWave() : stopWave()),
++        showHome: (on) => {
++          home.setVisible(on);
++          // Only called from setMode below, after homeTarget exists.
++          homeTarget.setEnabled(on);
++        },
++      },
++    });
++    const speakerTarget = createTapTarget(router, { circle: layout.speaker, onPress: () => controller.speaker() });
++    const homeTarget = createTapTarget(router, { circle: layout.home, onPress: () => controller.home() });
++    controller.setMode(getHudMode());
++
++    const relayout = (): void => {
++      const next = currentLayout();
++      speaker.setPosition(next.speaker.x, next.speaker.y);
++      for (const ring of rings) ring.setPosition(next.speaker.x, next.speaker.y);
++      home.setPosition(next.home.x, next.home.y);
++      speakerTarget.setCircle(next.speaker);
++      homeTarget.setCircle(next.home);
++    };
++    this.scale.on(RESIZE, relayout);
++
++    const scoped = bus.scoped(this);
++    scoped.on('hud:mode', ({ mode }) => controller.setMode(mode));
++    scoped.on('speech:ended', ({ token }) => controller.speechEnded(token));
++    this.events.once('shutdown', () => {
++      this.scale.off(RESIZE, relayout);
++      stopWave();
++    });
++  }
++}
+diff --git a/app/src/scenes/Start.ts b/app/src/scenes/Start.ts
+new file mode 100644
+index 0000000..1edea58
+--- /dev/null
++++ b/app/src/scenes/Start.ts
+@@ -0,0 +1,47 @@
++// Start (Story 1.2): sky + one bobbing yellow ▶ `button-play`, centred in Tokens.safeRect. No text.
++// Tap (core/input TapTarget, layer scene): press visual on press; on release over the button → "pụp", music loop, AudioDirector unlock (wraps
++// Phaser's unlock), the vo.shell.greeting line (held until unlocked), ProgressStore.init() once, then the (placeholder) Map. A second tap during the
++// transition is ignored. The tap logic lives in core/shell-flow.ts (tested in node).
++import { Scene } from 'phaser';
++import { audio } from '../core/audio-director';
++import { ProgressStore } from '../core/progress-store';
++import { createTapRouter } from '../core/input/tap-router';
++import { createTapTarget } from '../core/input/tap-target';
++import { createStartTap } from '../core/shell-flow';
++import { Tokens } from '../core/tokens';
++import { createRoundButton, pressButton, startBob } from '../core/ui/round-button';
++
++export class Start extends Scene {
++  constructor() {
++    super('Start');
++  }
++
++  create(): void {
++    this.cameras.main.setBackgroundColor(Tokens.colors.sky.css);
++    const area = Tokens.safeRect;
++    const play = Tokens.components.buttonPlay;
++    const button = createRoundButton(this, {
++      x: area.x + area.w / 2,
++      y: area.y + area.h / 2,
++      size: play.size,
++      fill: play.background,
++    });
++    startBob(this, button);
++    const router = createTapRouter(this);
++    const tap = createStartTap({
++      audio,
++      initStore: () => ProgressStore.init(),
++      leave: () => {
++        target.setEnabled(false); // runs on release, after target exists
++        // Let the press spring finish before leaving.
++        this.time.delayedCall(Tokens.Timing.buttonPressMs, () => this.scene.start('Map'));
++      },
++    });
++    const target = createTapTarget(router, {
++      circle: { x: button.x, y: button.y, r: play.size / 2 + Tokens.spacing.hitPad },
++      onPress: () => pressButton(this, button),
++      // Release keeps the audio unlock inside a user-gesture touchend (spec-1-2).
++      onRelease: tap,
++    });
++  }
++}
+diff --git a/app/src/scenes/AudioUnlockOverlay.ts b/app/src/scenes/AudioUnlockOverlay.ts
+new file mode 100644
+index 0000000..ec60bd4
+--- /dev/null
++++ b/app/src/scenes/AudioUnlockOverlay.ts
+@@ -0,0 +1,62 @@
++// AudioUnlockOverlay (Story 1.2, AR7): launched once by Boot, then asleep. On `audio:suspended`
++// it pauses every other active scene (scene.pause() is the only pause mechanism, so scene time —
++// and later the hint clocks — stop too), wakes on top with a light dim + `button-play`. The full-
++// screen backdrop is visual only: the paused scenes' routers are inactive, so nothing else gets taps. Button tap → audio.unlock() → when audio runs
++// again, resumes exactly the scenes it paused, sleeps again and emits `audio:resumed` (otherwise it
++// stays up for another tap). No text. The bookkeeping lives in core/shell-flow.ts (tested in node).
++import { Scene } from 'phaser';
++import { audio } from '../core/audio-director';
++import { bus } from '../core/bus';
++import { createTapRouter } from '../core/input/tap-router';
++import { createTapTarget } from '../core/input/tap-target';
++import { SuspendOverlayController } from '../core/shell-flow';
++import { Tokens } from '../core/tokens';
++import { createRoundButton, pressButton, startBob } from '../core/ui/round-button';
++
++export class AudioUnlockOverlay extends Scene {
++  constructor() {
++    super('AudioUnlockOverlay');
++  }
++
++  create(): void {
++    const { width, height } = Tokens.design;
++    const dim = Tokens.components.playAgainOverlay.backdrop;
++    // Backdrop: dims the paused scenes (visual only; their routers are inactive while paused).
++    this.add.rectangle(0, 0, width, height, dim.value, dim.alpha).setOrigin(0);
++
++    const area = Tokens.safeRect;
++    const play = Tokens.components.buttonPlay;
++    const button = createRoundButton(this, {
++      x: area.x + area.w / 2,
++      y: area.y + area.h / 2,
++      size: play.size,
++      fill: play.background,
++    });
++    startBob(this, button);
++
++    const own = this.scene.key;
++    const overlay = new SuspendOverlayController({
++      host: {
++        otherActiveKeys: () => this.scene.manager.getScenes(true).map((s) => s.scene.key).filter((k) => k !== own),
++        pause: (key) => this.scene.pause(key),
++        resume: (key) => this.scene.resume(key),
++        show: () => {
++          this.scene.wake();
++          this.scene.bringToTop();
++        },
++        hide: () => this.scene.sleep(),
++      },
++      unlock: () => audio.unlock(),
++      emitResumed: () => bus.emit('audio:resumed'),
++    });
++    createTapTarget(createTapRouter(this, { layer: 'overlay' }), {
++      circle: { x: button.x, y: button.y, r: play.size / 2 + Tokens.spacing.hitPad },
++      onPress: () => pressButton(this, button),
++      // Release keeps audio.unlock() inside a user-gesture touchend (spec-1-2).
++      onRelease: () => void overlay.tap(),
++    });
++
++    bus.scoped(this).on('audio:suspended', () => overlay.cover());
++    this.scene.sleep();
++  }
++}
+diff --git a/app/src/scenes/Map.ts b/app/src/scenes/Map.ts
+new file mode 100644
+index 0000000..a6ee689
+--- /dev/null
++++ b/app/src/scenes/Map.ts
+@@ -0,0 +1,231 @@
++// Map (Story 1.5): the island. Draws the plate `bg.map`, the 7 station sprites from `atlas.map`
++// (full-frame on their ground pivots, spec-1-4 contract), a static parent-facing label under each
++// station and the kart as the map's tappable prop. Taps go through core/input (one router per scene):
++// awake station → bounce + name line (prompt), sleeping station → bounce + happy sound, kart →
++// prop bounce + small sound; every tap resets idle. Idle: core/map-idle drives the ambient motion
++// and up to 3 invitations (hint ring + bob + invite and name lines). Planning, idle, geometry and
++// routing are pure core code; this scene only wires Phaser. No navigation yet (Story 1.7).
++import { Scene, type GameObjects } from 'phaser';
++import { ATLASES, BACKGROUNDS } from '../content/assets';
++import { LAYOUTS } from '../content/layouts';
++import { STATIONS } from '../content/stations';
++import { inviteLine, stationNameLine } from '../content/voice-lines';
++import { audio } from '../core/audio-director';
++import { createHintRing, type HintRing } from '../core/hint-visuals';
++import { setHudMode } from '../core/hud-mode';
++import { HotspotPolygon } from '../core/input/hotspot-polygon';
++import { boundingBox } from '../core/input/polygon';
++import { createTapRouter } from '../core/input/tap-router';
++import { createMapIdle, type MapIdle, type MapIdleEvent } from '../core/map-idle';
++import { planMap, type MapPlan, type PlannedStation } from '../core/map-plan';
++import { amplitude, prefersReducedMotion } from '../core/reduced-motion';
++import { Tokens } from '../core/tokens';
++import { createMapProp } from '../core/ui/map-prop';
++import { bob, bounce, isMoving, stopMotion } from '../core/ui/scale-motion';
++
++const SFX_HAPPY = 'sfx.shell.happy';
++const SFX_PROP = 'sfx.shell.prop';
++const HUD_KEY = 'Hud';
++
++interface StationView {
++  readonly plan: PlannedStation;
++  readonly image: GameObjects.Image | undefined;
++}
++
++interface FrameData {
++  readonly spriteSourceSize?: { x: number; y: number; w: number; h: number };
++}
++
++export class MapScene extends Scene {
++  private idle: MapIdle | undefined;
++  private views = new Map<string, StationView>();
++  private ring: HintRing | undefined;
++  private reduced = false;
++  private plan: MapPlan | undefined;
++
++  constructor() {
++    super('Map');
++  }
++
++  create(): void {
++    this.cameras.main.setBackgroundColor(Tokens.colors.sky.css);
++    this.reduced = prefersReducedMotion(window);
++    this.views = new Map();
++    this.ring = undefined;
++
++    const layout = LAYOUTS.map;
++    const atlasKey = ATLASES.map.key;
++    const hasAtlas = this.textures.exists(atlasKey);
++    const labels = new Map<string, GameObjects.Text>();
++    const label = (text: string): GameObjects.Text => {
++      let t = labels.get(text);
++      if (!t) {
++        t = this.addLabel(text);
++        labels.set(text, t);
++      }
++      return t;
++    };
++
++    const plan = planMap(
++      layout,
++      STATIONS,
++      (frame) => hasAtlas && this.textures.get(atlasKey).has(frame),
++      (frame) => {
++        const data = this.textures.get(atlasKey).get(frame).customData as FrameData | undefined;
++        const ss = data?.spriteSourceSize;
++        return ss ? { x: ss.x, y: ss.y, width: ss.w, height: ss.h } : undefined;
++      },
++      {
++        atlasKey,
++        measureLabel: (text) => {
++          const t = label(text);
++          return { w: t.width, h: t.height };
++        },
++      },
++    );
++    this.plan = plan;
++    for (const w of plan.warnings) console.warn(w);
++
++    const bgKey = BACKGROUNDS.map.key;
++    if (this.textures.exists(bgKey)) {
++      this.add.image(plan.bg.x, plan.bg.y, bgKey).setOrigin(0).setScale(plan.bg.scale).setDepth(plan.bg.depth);
++    } else {
++      console.warn(`map: texture "${bgKey}" is missing — plate skipped`);
++    }
++
++    const router = createTapRouter(this);
++    router.onAnyTap = () => this.handle(this.idle?.tap() ?? []);
++
++    // Hotspots register back to front (by depth), so the frontmost target wins an overlap.
++    const kart = plan.kart;
++    let kartAdded = false;
++    const addKart = (): void => {
++      if (!kart || kartAdded) return;
++      kartAdded = true;
++      createMapProp(this, router, {
++        texture: atlasKey,
++        frame: kart.image,
++        rect: kart.hit,
++        depth: kart.depth,
++        reduced: this.reduced,
++        onTap: () => audio.sfx(SFX_PROP),
++      });
++    };
++    for (const s of plan.stations) {
++      if (kart && kart.depth < s.depth) addKart();
++      const image = s.image
++        ? this.add.image(s.image.x, s.image.y, atlasKey, s.image.frame).setOrigin(s.image.originX, s.image.originY).setScale(s.image.scale).setDepth(s.depth)
++        : undefined;
++      this.views.set(s.id, { plan: s, image });
++      new HotspotPolygon(router, s.hit, () => this.tapStation(s.id));
++      label(s.label).setPosition(s.labelPos.x, s.labelPos.y).setDepth(plan.labelDepth);
++    }
++    addKart();
++
++    this.idle = createMapIdle({
++      stations: plan.stations.map((s) => s.id),
++      awake: plan.stations.filter((s) => s.awake).map((s) => s.id),
++      timing: {
++        ambientMinMs: Tokens.Timing.mapAmbientMinMs,
++        ambientMaxMs: Tokens.Timing.mapAmbientMaxMs,
++        inviteFirstMs: Tokens.Timing.mapInviteFirstMs,
++        inviteGapMs: Tokens.Timing.mapInviteGapMs,
++        inviteMaxCount: Tokens.Timing.mapInviteMaxCount,
++        inviteHoldMs: Tokens.Timing.mapInviteHoldMs,
++      },
++    });
++    // Hud runs in parallel above Map and the games; launched once, never on Start.
++    if (!this.scene.isActive(HUD_KEY) && !this.scene.isPaused(HUD_KEY) && !this.scene.isSleeping(HUD_KEY)) {
++      this.scene.launch(HUD_KEY);
++    }
++    setHudMode('map');
++
++    this.events.once('shutdown', () => {
++      this.ring?.destroy();
++      this.ring = undefined;
++      this.idle = undefined;
++    });
++  }
++
++  override update(_time: number, delta: number): void {
++    if (this.idle) this.handle(this.idle.tick(delta));
++  }
++
++  private handle(events: readonly MapIdleEvent[]): void {
++    for (const ev of events) {
++      if (ev.kind === 'ambient') this.ambient(ev.id);
++      else if (ev.kind === 'invite') this.invite(ev.id);
++      else this.endInvite(ev.id);
++    }
++  }
++
++  private addLabel(text: string): GameObjects.Text {
++    const spec = Tokens.components.stationLabel;
++    const type = spec.typography;
++    return this.add
++      .text(0, 0, text, {
++        fontFamily: type.fontFamily,
++        fontSize: `${type.fontSize}px`,
++        fontStyle: String(type.fontWeight),
++        color: spec.color.css,
++        stroke: spec.outline.color.css,
++        strokeThickness: spec.outline.width,
++        align: 'center',
++      })
++      .setOrigin(0.5, 0)
++      .setAlpha(spec.opacity);
++  }
++
++  /** Feedback starts in this pointerdown handler (≤ Timing.feedbackMaxMs). */
++  private tapStation(id: string): void {
++    const view = this.views.get(id);
++    if (!view) return;
++    if (view.image) {
++      bounce(this, view.image, view.plan.image?.scale ?? 1, amplitude(Tokens.ui.stationTapScale, this.reduced), Tokens.Timing.stationTapMs);
++    }
++    if (view.plan.awake) {
++      const line = stationNameLine(id);
++      audio.say(line);
++      audio.setPrompt(line);
++    } else {
++      audio.sfx(SFX_HAPPY);
++    }
++  }
++
++  private ambient(id: string): void {
++    const view = this.views.get(id);
++    if (!view?.image || isMoving(view.image)) return;
++    bounce(this, view.image, view.plan.image?.scale ?? 1, amplitude(Tokens.ui.ambientScale, this.reduced), Tokens.Timing.mapAmbientMoveMs);
++  }
++
++  private invite(id: string): void {
++    const view = this.views.get(id);
++    if (!view) return;
++    // One prominent motion at a time: settle any ambient bounce still running on another station.
++    for (const other of this.views.values()) {
++      if (other.image) stopMotion(other.image, other.plan.image?.scale ?? 1);
++    }
++    this.ring = createHintRing(this, boundingBox(view.plan.hit), { reduced: this.reduced, depth: this.plan?.ringDepth });
++    if (view.image) {
++      const pulse = Tokens.components.stationHotspot.pulse;
++      bob(
++        this,
++        view.image,
++        view.plan.image?.scale ?? 1,
++        amplitude(pulse.from, this.reduced),
++        amplitude(pulse.to, this.reduced),
++        pulse.durationMs,
++      );
++    }
++    const line = inviteLine(id);
++    audio.sayChain([line, stationNameLine(id)]);
++    audio.setPrompt(line);
++  }
++
++  private endInvite(id: string): void {
++    this.ring?.destroy();
++    this.ring = undefined;
++    const view = this.views.get(id);
++    if (view?.image) stopMotion(view.image, view.plan.image?.scale ?? 1);
++  }
++}
+diff --git a/app/src/main.ts b/app/src/main.ts
+new file mode 100644
+index 0000000..8c793a5
+--- /dev/null
++++ b/app/src/main.ts
+@@ -0,0 +1,43 @@
++import './styles/stage.css';
++import { AUTO, Game, Scale, type Types } from 'phaser';
++import { Tokens } from './core/tokens';
++import { installPageGuards, installRotationSafeScaleManager } from './core/stage';
++import { audio, type SoundLike } from './core/audio-director';
++import { AudioUnlockOverlay } from './scenes/AudioUnlockOverlay';
++import { Boot } from './scenes/Boot';
++import { Hud } from './scenes/Hud';
++import { MapScene } from './scenes/Map';
++import { Start } from './scenes/Start';
++
++/**
++ * Touch pointers Phaser tracks. More than one so a second finger (thumb holding the iPad,
++ * a parent pointing) is seen and can be *ignored* by InputGuard (first finger wins, AD-4)
++ * instead of being silently dropped, and so Hud can accept a second pointer when allowed.
++ */
++const ACTIVE_POINTERS = 3;
++
++const config: Types.Core.GameConfig = {
++  type: AUTO,
++  parent: 'game-container',
++  width: Tokens.design.width,
++  height: Tokens.design.height,
++  backgroundColor: Tokens.colors.sky.css,
++  scale: {
++    mode: Scale.ENVELOP,
++    autoCenter: Scale.CENTER_BOTH,
++  },
++  input: {
++    activePointers: ACTIVE_POINTERS,
++  },
++  // Hud above Map and the games; AudioUnlockOverlay last so it renders above the shell scenes (it also bringToTop()s on wake).
++  scene: [Boot, Start, MapScene, Hud, AudioUnlockOverlay],
++};
++
++installPageGuards();
++installRotationSafeScaleManager();
++document.body.style.backgroundColor = Tokens.colors.sky.css;
++
++const game = new Game(config);
++// The only place outside core/ that touches the sound manager: hand it to AudioDirector, which
++// wraps Phaser's unlock and the visibility handling. WebAudioSoundManager satisfies SoundLike.
++audio.attach(game.sound satisfies SoundLike, document);
+diff --git a/app/src/core/stage.dom.test.ts b/app/src/core/stage.dom.test.ts
+new file mode 100644
+index 0000000..0423253
+--- /dev/null
++++ b/app/src/core/stage.dom.test.ts
+@@ -0,0 +1,100 @@
++// @vitest-environment happy-dom
++// Deferred from spec-1-1 (Story 1.6): the ScaleManager rotation patch on real HTMLElements whose
++// layout sizes are stubbed under `transform: rotate(90deg)` (getBoundingClientRect = rotated box).
++import { beforeAll, describe, expect, it, vi } from 'vitest';
++
++const Center = { NO_CENTER: 0, CENTER_BOTH: 1, CENTER_HORIZONTALLY: 2, CENTER_VERTICALLY: 3 };
++const originalParentBounds = vi.fn(() => false);
++const originalUpdateCenter = vi.fn();
++
++class FakeScaleManager {}
++Object.assign(FakeScaleManager.prototype, { getParentBounds: originalParentBounds, updateCenter: originalUpdateCenter });
++
++vi.mock('phaser', () => ({ Scale: { ScaleManager: FakeScaleManager, Center } }));
++
++const { installRotationSafeScaleManager } = await import('./stage');
++
++interface PatchedLike {
++  getParentBounds(): boolean;
++  updateCenter(): void;
++}
++
++function sized<T extends HTMLElement>(el: T, layout: { w: number; h: number }, rect: { x: number; y: number; w: number; h: number }): T {
++  for (const [k, v] of Object.entries({ clientWidth: layout.w, clientHeight: layout.h, offsetWidth: layout.w, offsetHeight: layout.h })) {
++    Object.defineProperty(el, k, { configurable: true, get: () => v });
++  }
++  el.getBoundingClientRect = () => ({ x: rect.x, y: rect.y, left: rect.x, top: rect.y, width: rect.w, height: rect.h, right: rect.x + rect.w, bottom: rect.y + rect.h, toJSON: () => ({}) }) as DOMRect;
++  return el;
++}
++
++/** A ScaleManager-like instance on the patched prototype: parent = rotated #stage (portrait 820x1180 screen). */
++function manager(opts: { canvasLayout: { w: number; h: number }; autoCenter?: number; parentIsWindow?: boolean }) {
++  const stage = document.createElement('div');
++  stage.style.transform = 'rotate(90deg)';
++  sized(stage, { w: 1180, h: 820 }, { x: 0, y: 0, w: 820, h: 1180 });
++  const canvas = sized(document.createElement('canvas'), opts.canvasLayout, { x: 0, y: 0, w: 1180, h: 1259 });
++  stage.appendChild(canvas);
++  const parentSize = {
++    width: 0,
++    height: 0,
++    setSize(w: number, h: number) {
++      this.width = w;
++      this.height = h;
++    },
++  };
++  const sm = Object.assign(Object.create(FakeScaleManager.prototype) as PatchedLike, {
++    parent: stage,
++    parentIsWindow: opts.parentIsWindow ?? false,
++    parentSize,
++    canvas,
++    canvasBounds: { x: 0, y: 0 },
++    autoCenter: opts.autoCenter ?? Center.CENTER_BOTH,
++  });
++  return { sm, parentSize, canvas };
++}
++
++describe('installRotationSafeScaleManager (happy-dom)', () => {
++  beforeAll(() => installRotationSafeScaleManager());
++
++  it('getParentBounds measures the layout size (landscape 1180x820), not the rotated box', () => {
++    const { sm, parentSize } = manager({ canvasLayout: { w: 1180, h: 885 } });
++    expect(sm.getParentBounds()).toBe(true);
++    expect([parentSize.width, parentSize.height]).toEqual([1180, 820]);
++    // Same size and same canvas position: nothing changed.
++    expect(sm.getParentBounds()).toBe(false);
++    expect(originalParentBounds).not.toHaveBeenCalled();
++  });
++
++  it('getParentBounds reports a moved canvas', () => {
++    const { sm, canvas } = manager({ canvasLayout: { w: 1180, h: 885 } });
++    sm.getParentBounds();
++    canvas.getBoundingClientRect = () => ({ x: 5, y: 0 }) as DOMRect;
++    expect(sm.getParentBounds()).toBe(true);
++  });
++
++  it('a window parent falls back to Phaser', () => {
++    const { sm } = manager({ canvasLayout: { w: 1180, h: 885 }, parentIsWindow: true });
++    sm.getParentBounds();
++    expect(originalParentBounds).toHaveBeenCalledTimes(1);
++  });
++
++  it('updateCenter centres the ENVELOP canvas with layout sizes (crop top/bottom)', () => {
++    const { sm, canvas } = manager({ canvasLayout: { w: 1180, h: 885 } });
++    sm.getParentBounds();
++    sm.updateCenter();
++    expect(canvas.style.marginLeft).toBe('0px');
++    expect(canvas.style.marginTop).toBe(`${Math.floor((820 - 885) / 2)}px`);
++    expect(originalUpdateCenter).not.toHaveBeenCalled();
++  });
++
++  it('updateCenter honours horizontal-only and no-centre modes', () => {
++    const h = manager({ canvasLayout: { w: 1200, h: 885 }, autoCenter: Center.CENTER_HORIZONTALLY });
++    h.sm.getParentBounds();
++    h.sm.updateCenter();
++    expect([h.canvas.style.marginLeft, h.canvas.style.marginTop]).toEqual(['-10px', '0px']);
++    const none = manager({ canvasLayout: { w: 1200, h: 885 }, autoCenter: Center.NO_CENTER });
++    none.sm.getParentBounds();
++    none.sm.updateCenter();
++    expect(none.canvas.style.marginLeft).toBe('');
++  });
++});
+diff --git a/app/src/core/stage-phaser-api.test.ts b/app/src/core/stage-phaser-api.test.ts
+new file mode 100644
+index 0000000..5ed7dca
+--- /dev/null
++++ b/app/src/core/stage-phaser-api.test.ts
+@@ -0,0 +1,20 @@
++// Deferred from spec-1-1 (Story 1.6): core/stage.ts patches Phaser's ScaleManager and core/input
++// inverts its transform. Fail loudly if a Phaser upgrade renames what they rely on.
++import { readFileSync } from 'node:fs';
++import { dirname, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { describe, expect, it } from 'vitest';
++
++const file = resolve(dirname(fileURLToPath(import.meta.url)), '../../node_modules/phaser/src/scale/ScaleManager.js');
++const src = readFileSync(file, 'utf8');
++
++describe('Phaser ScaleManager API used by core/stage.ts and core/input', () => {
++  it.each(['getParentBounds', 'updateCenter', 'transformX', 'transformY'])('has the method %s', (name) => {
++    expect(src).toMatch(new RegExp(`\\b${name}: function\\s*\\(`));
++  });
++
++  it('has canvasBounds and displayScale', () => {
++    expect(src).toMatch(/this\.canvasBounds\s*=/);
++    expect(src).toMatch(/this\.displayScale\s*=/);
++  });
++});
+diff --git a/app/README.md b/app/README.md
+new file mode 100644
+index 0000000..8a48842
+--- /dev/null
++++ b/app/README.md
+@@ -0,0 +1,269 @@
++# Bé Học Chơi — app
++
++Offline toddler learning games for iPad Safari (landscape, Home-Screen PWA), built with
++Phaser 4 + Vite + TypeScript. Scaffolded from `phaserjs/template-vite-ts` 1.4.0. The starter's
++`log.js` telemetry, `vite/` configs and template scenes have been removed.
++
++Architecture: `../_bmad-output/planning-artifacts/architecture/architecture-be-hoc-choi-2026-10-08/ARCHITECTURE-SPINE.md`.
++
++## Requirements
++
++- Node.js 24 (`.nvmrc`; `engines: ">=24 <25"`). Tools under `tools/` run as `.ts` directly via
++  Node 24 type stripping, so there is no build step for them.
++- Only to (re)generate audio (not needed for `npm run check` or to run the app):
++  - **ffmpeg** on PATH (`winget install Gyan.FFmpeg`), or `FFMPEG_BIN` set to the full path of `ffmpeg.exe`.
++  - **edge-tts 7.2.8** (Python 3.12+: `pipx install edge-tts==7.2.8`) on PATH, or `EDGE_TTS_BIN` set to the
++    full path of `edge-tts.exe`. It calls Microsoft's online TTS service, so `npm run tts` needs the
++    network **at build time only**; the app never does.
++  - Each tool resolves its binaries before any work (env var, then PATH, probed with
++    `--version` / `-version`) and exits 1 naming the missing one, without writing any file.
++  - **Fallback** if edge-tts stops working: render the lines with Azure AI Speech or Google Cloud
++    Text-to-Speech (a vi-VN female neural voice) using the same recipe (segments split on `|`, silence
++    trimmed, `keywordPauseMs` of silence before the keyword, two-pass loudnorm to −16 LUFS, AAC mono
++    44.1 kHz 64k) and write the same `<id>.m4a` + `<id>.hash` pair (`lineHash` in
++    `tools/tts/line-hash.ts`; bump its `v` when the recipe changes).
++
++- Only to (re)build the images (not needed for `npm run check` or to run the app):
++  - **Blender 5.2.2 LTS** (blender.org) with `blender` on PATH, or `BLENDER_BIN` set to the full path of
++    `blender.exe` (e.g. `C:/Program Files/Blender Foundation/Blender 5.2/blender.exe`). Any other version
++    than 5.2.x is refused ("needs Blender 5.2 (found X)").
++  - `npm run doctor` reports Blender, ffmpeg and edge-tts together and exits 1 if one is missing.
++
++## Commands
++
++| Command | What it does |
++| --- | --- |
++| `npm install` | Install dependencies (the only step that uses the network) |
++| `npm run dev` | Dev server at <http://localhost:8080> (no outbound requests) |
++| `npm run build` | Production build into `dist/` (relative `base: './'`) |
++| `npm run tokens` | Regenerate `src/core/tokens.generated.ts` from the DESIGN.md YAML front matter |
++| `npm run audio:placeholders` | Re-synthesize the placeholder SFX/music `.m4a` files with ffmpeg (see *Assets and provenance*) |
++| `npm run audio:normalize -- <src> <audioId>` | Master a real SFX/music file into its catalog path (two-pass loudnorm: music −30 LUFS; SFX −20 LUFS with a 50 ms fade-in) |
++| `npm run content:export` | Write the voice lines to `.generated/voice-lines.json` (gitignored) for the TTS tool |
++| `npm run tts [-- --force]` | Render new or changed voice lines to `public/assets/audio/vo/<id>.m4a` + `.hash` (see *Voice lines*) |
++| `npm run doctor` | Report the build-time tools (Blender 5.2, ffmpeg, edge-tts); exit 1 if any is missing |
++| `npm run art:build -- map` | Build `../art/map.blend` from the vendored reference `../art/src/map-v2.blend` (see *Image pipeline*) |
++| `npm run render -- map` | Render `../art/map.blend` → `.generated/render/map/` + `src/content/generated/map.layout.json` |
++| `npm run atlas -- map` | Pack the rendered frames → `public/assets/atlases/map.{png,json}` and copy the plate → `public/assets/bg/map.png` |
++| `npm run check` | **The gate.** `tsc --noEmit` → ESLint → Vitest (`src/core/**`, `src/content/**`, `tools/**` tests) → tokens diff → content validator |
++
++Vitest also runs the tools tests: `tools/tokens/parse.test.ts` (token parser fails closed),
++`tools/lint/rules.test.ts` (each ESLint layer/literal/audio rule, plus the GameId list kept in sync),
++`tools/audio/*.test.ts` (ffmpeg arguments), `tools/shared/binaries.test.ts` (missing-tool errors),
++`tools/tts/generate.test.ts` (TTS arguments, skip rules, loudnorm parsing and missing tools, with
++fake binaries) and `tools/lint/validate-content.test.ts` (the validator against temp `public/` trees).
++The content validator checks the audio catalog (id grammar, path convention, each file exists) and
++the voice lines (see *Voice lines*).
++
++`npm run tokens` and the tokens-diff step read DESIGN.md from
++`../_bmad-output/planning-artifacts/ux-designs/ux-be-hoc-choi-2026-10-08/DESIGN.md`, outside `app/`.
++`app/` alone (without that folder next to it) cannot pass `npm run check`.
++
++**Every story must pass `npm run check` before it is done.** Later stories add more
++content checks and the precache check (after `vite build`) to the same command.
++
++## Run on the PC with iPad emulation (primary dev loop)
++
++1. `npm run dev`, then open <http://localhost:8080> in Chrome or Edge.
++2. Open DevTools (F12) and toggle the device toolbar (Ctrl+Shift+M).
++3. Pick **iPad** (or a custom 1024×768 device), set it to **landscape**, and keep touch emulation on.
++4. Check the other iPad sizes too: 1180×820 (iPad Air) and 1366×1024 (iPad Pro 12.9").
++   The canvas must fill the screen with no bars. On wider screens the top and bottom are cropped
++   slightly, but `Tokens.safeRect` stays visible.
++5. Use the rotate button to switch to portrait. The whole stage turns 90° and stays landscape;
++   there is no "rotate your device" screen. **Only the picture is correct in portrait so far:**
++   taps are not mapped to the right game coordinates until Story 1.6 adds `core/input/space.ts`.
++
++`localhost` is a secure context, so service worker and offline behaviour can be tested here too
++(Story 1.11). Real-device checks happen on the iPad through an HTTPS preview deploy.
++
++## Layout and rules
++
++```text
++src/
++  main.ts          Phaser config: 1024×768, Scale.ENVELOP + CENTER_BOTH, input.activePointers
++  styles/stage.css NFR6 page guards (touch-action, user-select, callout, overscroll) + portrait rotation
++  core/            services: tokens(.generated), timing, bus, stage …   (core → content)
++  content/         typed data; imports only types from other layers
++  scenes/          shell scenes: Boot, Start, Map (placeholder), AudioUnlockOverlay  (scenes → games/core/content)
++  games/<GameId>/  one MiniGame scene per folder                    (games → core/content)
++tools/
++  tokens/          DESIGN.md YAML → src/core/tokens.generated.ts (`--check` = diff gate)
++  lint/            content validators (GameIds, audio catalog, voice lines)
++  audio/           make-placeholders.ts (synthesized placeholder SFX/music), normalize.ts (master real SFX/music)
++  content/         export-voice-lines.ts: voice lines → .generated/voice-lines.json
++  tts/             generate.ts (edge-tts + ffmpeg → .m4a + .hash), line-hash.ts
++  shared/          binaries.ts: env-override/PATH resolution of ffmpeg, edge-tts and Blender (5.2 check)
++  layout/          geometry, raw → layout conversion and the layout/asset rules (pure, shared by render and check)
++  render/          build.ts (art:build), render.ts, blender/*.py (run inside Blender)
++  atlas/           pack.ts (free-tex-packer-core)
++  doctor/          doctor.ts
++```
++
++- **Layers** are enforced by ESLint `@typescript-eslint/no-restricted-imports`.
++- **Design values** come only from `Tokens.*`. Behaviour durations come only from
++  `Tokens.Timing.*`, defined in `src/core/timing.ts` from EXPERIENCE.md.
++- `src/core/tokens.generated.ts` is generated and checked in, so never edit it by hand.
++- In `scenes/` and `games/`, ESLint rejects hex/`rgba(` colour literals and magic numbers. Only
++  `-1, 0, 1, 2, 0.5` are allowed.
++- **Cross-scene events** go through the typed `bus` (`src/core/bus.ts`). Scenes subscribe with
++  `bus.scoped(this)`, which unsubscribes them on scene SHUTDOWN or DESTROY.
++- **Sound** goes only through `audio` (`src/core/audio-director.ts`), by catalog id from
++  `src/content/audio-catalog.ts` or voice-line id from `src/content/voice-lines.ts`. In `scenes/` and `games/`, ESLint rejects `this.sound` and
++  `.m4a` / `assets/audio` strings.
++
++## Start flow (Story 1.2)
++
++`Boot` shows only the loading-strip (a kart on a short road) while it loads the audio and waits
++for the readiness gate: the service worker is ready (skipped in dev or with no registration) and
++the vendored Baloo 2 font has loaded. If a load fails, the kart slows down and the load retries on
++`online` or every `Tokens.Timing.loadRetryMs`. Errors go only to `console.warn`.
++
++`Start` shows the bobbing yellow ▶. A tap plays the pop, starts the music loop, unlocks audio,
++plays the `vo.shell.greeting` voice line once (over the ducked music), calls `ProgressStore.init()` and opens the placeholder `Map`. If the app comes back from the
++background with a suspended AudioContext, `AudioUnlockOverlay` pauses the scene under a light dim
++and a ▶. A tap on the ▶ resumes it once audio runs again; otherwise the overlay stays up for
++another tap. The tap and overlay logic lives in `src/core/shell-flow.ts` (tested in node).
++
++To see the failure path in DevTools, set Network to *Offline* while the kart drives, then go back
++online.
++
++## Voice lines (Story 1.3)
++
++Every spoken line is data in `src/content/voice-lines.ts`: `{ id, text, keywordPauseMs?, rate?, approved? }`.
++Code plays it by id with `audio.say(id)` / `audio.sayChain(ids)`. There is one voice channel, and the
++music ducks by 20 dB while a line plays. `npm run check` enforces these rules and names the id of
++every failure:
++
++- the id is `vo.<shell|GameId>.<intent>[.<subjectId>][.<n>]` in kebab-case, and the file is
++  `public/assets/audio/vo/<id>.m4a`;
++- at most 8 words; `|` marks the pause before the keyword (no empty segment around it)
++  and needs `keywordPauseMs` (about 300), and vice versa;
++- never dâu/đâu, cá/cà, ba/bà, bóng/bông or cam/cầm in one sentence. No praise, never "sai";
++- the `.m4a` and `.hash` exist, the `.hash` matches the line, and no stray file is left in `vo/`.
++
++**Add or change a line:** edit `voice-lines.ts`, run `npm run content:export && npm run tts`, and
++commit both files. `tts` skips lines whose `.hash` is current (`--force` re-renders them) and
++**never** overwrites an approved line. When you remove a line, delete its two files by hand.
++edge-tts sometimes answers "No audio was received" for valid text; `tts` retries each segment up
++to 5 times.
++
++**Approve a line (a parent):** listen to the `.m4a`. It should be a warm, slow female voice with a
++short pause before the keyword. If it is right, copy the content of its `.hash` into the line as
++`approved: { textHash: '<hash>' }`. If the text is edited later, `npm run check` fails until the
++line is regenerated and approved again. `vo.shell.greeting` is not approved yet.
++
++## Assets and provenance
++
++| File | Source | Licence |
++| --- | --- | --- |
++| `public/assets/fonts/Baloo2-wght.woff2` | Baloo 2 by The Baloo 2 Project Authors, github.com/google/fonts `ofl/baloo2`, subset (see below) | SIL OFL 1.1 (`OFL.txt`) |
++| `public/assets/audio/sfx/sfx.shell.pop.m4a` | Synthesized in-house by `tools/audio/make-placeholders.ts` (ffmpeg) | Project's own (MIT) |
++| `public/assets/audio/music/music.island.m4a` | Synthesized in-house by `tools/audio/make-placeholders.ts` (ffmpeg) | Project's own (MIT) |
++| `public/assets/audio/vo/vo.shell.greeting.m4a` (+ `.hash`) | Generated by `npm run tts`: Microsoft Edge online TTS via edge-tts 7.2.8, voice vi-VN-HoaiMyNeural, processed with ffmpeg | Our own text; generated speech, subject to Microsoft's service terms |
++
++| `public/assets/atlases/map.{png,json}`, `public/assets/bg/map.png` | Rendered by `npm run render`/`atlas` from `../art/map.blend` (built from the approved reference scene) | Project's own render of the CC0 models below |
++
++3D source models and textures used by `../art/` (all CC0 1.0, no attribution required):
++
++| Source | Packs | Licence |
++| --- | --- | --- |
++| Kenney (kenney.nl) | car-kit, city-kit-commercial 2.1, city-kit-roads, food-kit | CC0 (`License.txt` in each pack under `../assets/kenney/`) |
++| Quaternius (quaternius.com) | animals, cars, cutefish, dinosaurs, food | CC0 |
++| Poly Haven (polyhaven.com) | HDRI `meadow_2` (1k, packed in the .blend) | CC0 |
++
++Add a row for every new audio, font or image file. Real SFX and music go through `npm run audio:normalize`.
++
++- **Font:** `public/assets/fonts/Baloo2-wght.woff2` is the Baloo 2 variable font (wght 400–800),
++  © The Baloo 2 Project Authors, under the SIL Open Font License 1.1 (`public/assets/fonts/OFL.txt`).
++  Source: `Baloo2[wght].ttf` and `OFL.txt` from github.com/google/fonts `ofl/baloo2`, fetched once
++  on 2026-10-08. It was subset to Latin + Vietnamese and converted to woff2 with:
++
++  ```sh
++  uvx --from "fonttools[woff]" pyftsubset "Baloo2[wght].ttf" --layout-features='*' --flavor=woff2 \
++    --output-file=Baloo2-wght.woff2 \
++    --unicodes="U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+1EA0-1EF9,U+2000-206F,U+20AB,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
++  ```
++
++  The app registers it with `FontFace` and a relative URL (no CDN `<link>`), so it works offline.
++- **Placeholder audio:** `tools/audio/make-placeholders.ts` synthesizes both files as mono AAC
++  44.1 kHz 64 kb/s:
++  - `public/assets/audio/sfx/sfx.shell.pop.m4a`: a 140 ms sine sweep 700→1100 Hz with a 50 ms
++    fade-in, peak about −20 dBFS.
++  - `public/assets/audio/music/music.island.m4a`: a 12 s seamless C–E–G pad and arpeggio,
++    normalised to −30 LUFS.
++
++  Regenerate them with `npm run audio:placeholders`. ffmpeg comes from `FFMPEG_BIN` (full path) or
++  PATH, and the tool fails with a clear message if neither works. winget's `Gyan.FFmpeg` installs to
++  `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg_*\ffmpeg-*\bin\ffmpeg.exe` without adding it
++  to PATH, so point `FFMPEG_BIN` there. Check loudness with `ffmpeg -i <file> -af ebur128 -f null -`.
++  To replace a placeholder with real audio, keep its id and path.
++
++## Image pipeline (Story 1.4)
++
++Screens are low-poly Blender scenes rendered to images; nothing on screen is drawn from hand-typed
++coordinates (AD-10). The pipeline for the island map:
++
++```sh
++npm run art:build -- map   # art/src/map-v2.blend → art/map.blend (tools/render/blender/build_map.py)
++npm run render -- map      # art/map.blend → .generated/render/map/ + src/content/generated/map.layout.json
++npm run atlas -- map       # frames → public/assets/atlases/map.{png,json} (atlas.map), plate → public/assets/bg/map.png (bg.map)
++```
++
++- Blender always runs as `blender -b --factory-startup <blend> --python-exit-code 1 --python <script> -- …`,
++  in a temp dir. Outputs are replaced only after Blender exits 0 and every check passes; a failure
++  (missing Blender, wrong version, a Python error, a broken rule) exits 1 and leaves every existing
++  output untouched.
++- `art:build` opens the vendored reference scene, removes the Tiệm kem preview, groups each station
++  into a `sprite.<id>` collection, recolours the creatures from `Tokens.colors.creature*`, and adds the
++  layout objects. Its constants (station table, road centreline, the few rule fixes) are Blender
++  world units read off the reference; it fails if any object has a subdivision modifier.
++- `render` renders a 2048×1536 plate (`bg.png`, sprites hidden from the camera but still casting
++  shadows) and one full-frame transparent frame per sprite collection (`frames/<object>/idle/00.png`), so
++  an untrimmed frame lines up pixel-for-pixel with the plate. It projects the layout objects into
++  `raw.json`, converts them to design px (`tools/layout/to-layout.ts`), validates them
++  (`tools/layout/rules.ts`) and draws `.generated/render/map/preview.png` (hit polygons, anchors, slots,
++  road) for a human alignment check. Re-rendering the same `.blend` gives a byte-identical layout JSON.
++- `atlas` packs with free-tex-packer-core 0.3.9 (JSON hash, max 2048², trim on, no rotation, padding 2).
++  It fails with no write on a second page, a page over 2048, a file over 8 MiB or a bad frame name.
++- **Naming contract** (in the `.blend`): layout objects live in a `layout` collection (hide_render) and
++  are named `<kind>.<id>` with kind `anchor`, `hit`, `slot` or `path` and a kebab-case id
++  (`hit.pizza`, `anchor.pizza-stop`, `slot.pizza-1`, `path.road`, `anchor.kart-start`). A Blender
++  duplicate suffix (`.001`), upper case or an unknown kind fails the render. Sprite groups are collections
++  named `sprite.<object>` → atlas frames `<object>/<state>/<nn>`.
++- Hit polygons are the convex hull of the station's projected vertices padded by `Tokens.spacing.hitPad`.
++  Where perspective makes two padded hulls closer than `stationGap` (tall props reaching into the station
++  behind), both are clipped either side of their best separating line. The stored polygon is the final
++  tap area.
++- `npm run check` (`validate:content`) re-checks the layout (stations = GameIds; hit, anchor, `-stop`
++  and slots present; vertices inside `safeRect` minus the edge dead zones; width ≥ 80; stations ≥ 40 apart;
++  stops on the road) and the assets (atlas pages ≤ 2048, required frames, bg 2048×1536, every file under
++  `public/assets/` ≤ 8 MiB).
++- `../assets/` (source models) and `../art/` (scenes) are not shipped; only `public/` is.
++
++## Input and Hud (Story 1.6)
++
++- Every tap goes through `src/core/input`: one `TapRouter` per scene forwards each press to the global
++  `InputGuard`. It drops presses in the edge strip (24 px sides, 32 px top, 40 px bottom, plus the
++  safe-area inset), lets only the first finger play (a second finger may still tap the Hud's Speaker),
++  and resolves the press to the topmost target over the layers overlay > hud > scene.
++- `src/core/input/space.ts` is the only screen ↔ design transform; it also handles the portrait CSS rotation.
++- ESLint bans raw pointer events (`pointerdown`, `gameobjectup`, `POINTER_DOWN`, …) and `clientX/Y`,
++  `pageX/Y` outside `src/core/input/`.
++- The Hud scene runs above Map and the games: Speaker (top-right) replays the last prompt; Home
++  (top-left) shows only inside a game.
++
++## Device checklist (Story 1.11)
++
++1. **Portrait tap mapping:** hold the iPad in portrait (the stage rotates) and tap the ice-cream
++   station; it reacts exactly as in landscape. The Speaker also responds where it is drawn.
++2. **Thumb in the edge strip plus a child's tap:** rest a thumb on the screen edge (within about
++   2 cm of the bezel) and tap a station with another finger; the station reacts. The thumb alone
++   triggers nothing.
++3. **Speaker while a finger rests on the Map:** keep one finger on the island, then tap the
++   Speaker with another; the last line replays. A tap on a station with the second finger does nothing.
++
++## Tip for parents
++
++Turn on **Guided Access** (Settings › Accessibility › Guided Access) and turn off multitasking
++gestures, so the child can't leave the app by accident.
+diff --git a/_bmad-output/implementation-artifacts/spec-1-6-nut-nha-va-loa-chong-cham-nham.md b/_bmad-output/implementation-artifacts/spec-1-6-nut-nha-va-loa-chong-cham-nham.md
+new file mode 100644
+index 0000000..4c5b5e3
+--- /dev/null
++++ b/_bmad-output/implementation-artifacts/spec-1-6-nut-nha-va-loa-chong-cham-nham.md
+@@ -0,0 +1,287 @@
++---
++title: 'Story 1.6 — Nút Nhà và Loa, chống chạm nhầm'
++type: 'feature'
++created: '2026-10-08'
++status: 'in-review'
++baseline_revision: 'NO_VCS'
++baseline_commit: 'NO_VCS'
++review_loop_iteration: 0
++followup_review_recommended: false
++context:
++  - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-5-man-con-duong-7-tram-nhan-loi-moi-tram-ngu.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-4-pipeline-hinh-render-blender-atlas-layout.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-3-be-nghe-giong-doc-tieng-viet.md'
++warnings: ['oversized']
++deferred: []
++---
++
++<intent-contract>
++
++## Intent
++
++**Problem:** The app has no HUD. A child on the Map cannot hear the last line again, and later games will have no way home. Input is also fragile:
++- every tap is taken at face value, so a thumb holding the iPad or a parent's pointing finger can hijack or cancel play;
++- touches in the screen edge strip still count;
++- in portrait, where CSS rotates the stage 90°, Phaser's pointer coordinates are wrong (deferred from spec-1-1).
++
++**Approach:**
++- Grow spec-1-5's minimal `core/input` into InputGuard:
++  - `space.ts` is the one screen↔design transform, covering the ENVELOP crop, the CSS rotation and safe-area insets;
++  - one global guard dedupes each press across scenes and applies the dead zones and the first-finger rule, then resolves the press to the topmost target across the layers overlay > hud > scene;
++  - `TapTarget` (a circle) joins `HotspotPolygon`.
++- Add a parallel `Hud` scene with the Speaker button (Map, games and overlays) and the Home button (games only).
++- An ESLint rule bans raw pointer events and `clientX/Y` outside `core/input`. Start and AudioUnlockOverlay migrate onto `TapTarget`.
++- Add DOM-level tests for the ScaleManager rotation patch.
++
++## Boundaries & Constraints
++
++**Always:**
++- **`core/input/space.ts`, the only coordinate transform.** Its pure core:
++  - `View = { w, h, rotated, insets:{top,right,bottom,left} }`. `w`/`h` are the stage's layout size in CSS px (`#stage.clientWidth/Height`, which ignores transforms). `rotated` is `matchMedia('(orientation: portrait)')`, the same query stage.css uses.
++  - `toLocal(client, view)`: client CSS px → stage-local CSS px. Landscape is the identity. Rotated (`rotate(90deg)`, origin top-left, `left:100dvw`): `u = y`, `v = view.h − x`.
++  - `localToDesign(local, view)` / `designToLocal`: ENVELOP with `s = max(w/1024, h/768)` and centred offsets `ox = (w − 1024s)/2`, `oy = (h − 768s)/2`. `toDesign(pointer)` composes `readView()`, the pointer's client point and these two steps.
++  - Insets are read from CSS custom properties `--sai-top|right|bottom|left` set from `env(safe-area-inset-*, 0px)` on `:root` in stage.css. Rotated, they map to the local frame as local top = screen right, local right = screen bottom, local bottom = screen left and local left = screen top (pure `localInsets`).
++  - `visibleDesignRect(view)` gives the design rect of the whole stage.
++- **Client point** (`pointer-adapter.ts`, the only file that reads `clientX/Y`): taken from `pointer.event`. For a TouchEvent, use the `changedTouches` entry whose `identifier === pointer.identifier`, falling back to `touches`. For a mouse or PointerEvent, use `clientX/Y`. With no event coordinates, recover the point by inverting Phaser's transform (`pointer.x / scale.displayScale.x + scale.canvasBounds.left`, and the same for y).
++- **Dead zones:** a press is dead when its stage-local start point lies within `spacing.edgeDeadSide` (24) of the left/right edge, `edgeDeadTop` (32) of the top or `edgeDeadBottom` (40) of the bottom, each plus the local inset, all in CSS px. A dead press is dropped before anything else: it hits no target, does not run `onAnyTap`, never becomes the primary and never blocks another finger.
++- **The guard** (`core/input/guard.ts`, a pure `InputGuard` class plus the singleton `inputGuard`):
++  - The press key is `pointer.id` (Phaser's pointer slot) plus `pointer.downTime`. Every router's scene-level `pointerdown` forwards to `guard.press(pointer)`. The first forward of a key decides the press; later forwards of the same key (from other scenes) are no-ops. Verdicts are `dead`, `primary`, `extra-hud` or `ignored`.
++  - **No live primary:** the press becomes the primary. It resolves against the active routers from the highest layer down, and within a layer to the topmost (last-registered) target. Every active router's `onAnyTap` runs, then the hit target's `onPress`.
++  - **A live primary exists:** if the press hits a `hud`-layer target and `!guard.isDragging()`, that target fires (`extra-hud`) without becoming the primary and without touching it. Otherwise the press is `ignored`: no target, no `onAnyTap`, and the primary is never cancelled.
++  - The primary is released on its `pointerup`/`pointerupoutside`. It is also released on the next guard query once the stored Phaser pointer reports `!isDown` or a different `downTime`, which self-heals after a pause or a scene switch.
++  - `onRelease` (optional on a target) fires only for the primary press that hit it.
++  - API for Story 1.8's DragController: `isPrimary(pointer)`, `setDragging(pointer, on)` (ignored unless the pointer is the primary) and `isDragging()`. A drag ends when the primary releases.
++  - A router is active only while its scene `sys.isActive()`, so paused and sleeping scenes get nothing.
++- **Router and targets** (extending spec-1-5):
++  - `createTapRouter(scene, { layer = 'scene' })` registers with the guard on create and unregisters on SHUTDOWN/DESTROY. It listens to `pointerdown`, `pointerup` and `pointerupoutside`.
++  - `pointerPoint` is deleted. Hit tests use `toDesign`.
++  - `createTapTarget(router, { circle:{x,y,r}, onPress, onRelease? })` exposes `setCircle`, `setEnabled` and `destroy`.
++  - `HotspotPolygon` keeps its 1.5 signature.
++  - Map code is unchanged except that imports compile.
++- **Hud scene** (`scenes/Hud.ts`, wiring only; logic in `core/hud.ts`):
++  - Map's `create` launches Hud once (`scene.launch` if it is not running) and calls `setHudMode('map')`. Hud is never launched on Start.
++  - `core/hud-mode.ts` stores the current `HudMode = 'map' | 'game'` and emits the new Bus event `'hud:mode': { mode }`. Hud reads the stored mode on create, then follows the event. Story 1.7's MiniGameBase sets `'game'`.
++  - **Buttons:** `createRoundButton` gains `icon: 'play' | 'home' | 'speaker'`, drawn with Graphics in `icon` ink.
++    - Speaker uses `buttonSpeaker.background`. Home uses `buttonHome.background`. Both are `buttonRound.size` (88) design px.
++    - Each hit area is a circle of radius `size/2 + spacing.hitPad`.
++  - **Layout:** pure `hudLayout(visible, insetsDesign)`. The inputs are `visibleDesignRect(view)` and the local insets divided by `s`.
++    - Home centre = `(vis.x + edgeInset + insL + 44, vis.y + buttonTop + insT + 44)`.
++    - Speaker centre = `(vis.right − edgeInset − insR − 44, vis.y + speakerTop + insT + 44)`.
++    - Hud re-lays out on the ScaleManager `resize` event.
++  - **Visibility:** Speaker is visible and enabled in every mode. Home is visible and enabled only in `'game'`. There is no other HUD element.
++  - **Speaker tap** (`onPress`):
++    - `pressButton` (0.9×) and `audio.sfx('sfx.shell.pop')` in the same handler.
++    - Then `token = deps.replay()`, where the default is `audio.replayPrompt()`. Story 1.9 swaps in the HintDirector-aware replay.
++    - If a token comes back, the wave shows until `speech:ended` for exactly that token. A new tap restarts the line (AudioDirector already stops it, so lines never overlap) and moves the wave to the new token.
++    - With no prompt (`undefined`), only the button effect plays.
++  - **Wave:** `buttonSpeaker.wave` defines 2 rings, white at 40%, at 1 Hz. Each ring scales from 1 to `Tokens.ui.speakerWaveScale` while its alpha fades from 0.4 to 0, over a period of `1000/hz` ms. The second ring is phase-shifted by half a period. There is no on/off blinking. Under reduced motion the scale amplitude is multiplied by `reducedMotionAmplitude`.
++  - **Home tap:** press and pop, then only in `'game'` mode `audio.say('vo.shell.home')` and `bus.emit('hud:home')`. The shell never subscribes to `hud:home` in this story, so the event is a no-op without a running MiniGame. Story 1.7's game handles it.
++- **Lint** (eslint.config.js, `src/**/*.ts` minus `src/core/input/**` and `**/*.test.ts`):
++  - It bans calls to `on`, `once`, `addListener` or `addEventListener` whose first argument is a string matching `^(pointer|gameobject)(down|move|up|upoutside)$`.
++  - It bans the members `POINTER_DOWN`, `POINTER_MOVE` and `POINTER_UP`.
++  - It bans reading the members `clientX`, `clientY`, `pageX` and `pageY`.
++- **Feedback:** all tap feedback starts in the `pointerdown` handler, within `Timing.feedbackMaxMs`.
++
++**Never:**
++- No kart drive, MiniGameBase, registry or game scene (Story 1.7). No DragController, drop targets or `setPickable`/`setSnapScale` (Story 1.8). No HintDirector (Story 1.9).
++- No menu, ⭐, settings or any other HUD control. No text.
++- No `setTimeout` for the wave. No `this.sound`.
++- No second coordinate transform anywhere, and no patch of Phaser's `transformPointer`.
++- No git, and no writing files that contain backslashes through a shell heredoc.
++
++**Decisions (auto-run defaults):**
++- **Units:**
++  - Dead zones are CSS px of the stage-local frame, as the AC says.
++  - Button sizes and edge offsets are design px, measured from the visible edge. Safe-area insets (CSS px) are converted with `÷ s`.
++  - On a 1024×768 iPad (`s = 1`), the outer 4 px of Home lies in the 24 px side strip. That part does not respond, and the rest of the button does.
++- **Hud accepts a second finger only through the guard's `extra-hud` rule.** Dead-zone presses never count as the first finger, so a thumb resting on the bezel cannot block the child.
++- **Taps fire on press**, for Hud and game targets alike. Start and AudioUnlockOverlay keep their release semantics from spec-1-2 through `onRelease`, which keeps the audio unlock on a user-gesture `touchend`. Both scenes migrate to `createTapTarget` with layers `scene` and `overlay`. The overlay's full-screen backdrop becomes visual only, because paused scenes' routers are inactive.
++- **New values:**
++  - `Tokens.ui.speakerWaveScale: 1.6`.
++  - New Bus event `'hud:mode'`.
++  - The voice line `vo.shell.home` = "Về đảo nào!" (no pause, unapproved).
++- **Device checklist:** `app/README.md` gains a "Device checklist (Story 1.11)" section with three checks: portrait tap mapping, a thumb in the edge strip plus a child's tap, and Speaker while a finger rests on the Map.
++- **Deferred item (spec-1-1), DOM-level tests:**
++  - `core/stage.dom.test.ts` runs under `// @vitest-environment happy-dom`, with `happy-dom` pinned exactly (20.14.5 at planning time).
++  - It mocks `phaser` with a fake `Scale.ScaleManager` prototype and `Center`, and calls the patched `getParentBounds` and `updateCenter` on real `HTMLElement`s whose layout sizes are stubbed under `transform: rotate(90deg)`.
++  - A node test reads `node_modules/phaser/src/scale/ScaleManager.js` and asserts that `getParentBounds`, `updateCenter`, `transformX`, `transformY` and `canvasBounds` still exist.
++
++## I/O & Edge-Case Matrix
++
++| Scenario | Input / State | Expected Output / Behavior | Error Handling |
++|----------|--------------|---------------------------|----------------|
++| Landscape 4:3 | view 1024×768, client (512,384) | design (512,384) | — |
++| 1180×820 | client (0,0) | design (0, 28.2±1); `designToLocal(safeRect top-left)` is on screen | — |
++| 1366×1024 | client (683,512) | design (512,384)±1 | — |
++| Portrait rotated | screen 820×1180, view w 1180 h 820 rotated, client (820,0) | local (0,0) → design (0, 28.2±1) | — |
++| Rotated insets | screen insets top 24 | local left 24 | — |
++| Dead press | local (10,400) | `dead`; no target, no onAnyTap; next finger can be primary | — |
++| First finger | no primary, hits station | `primary`; onAnyTap + onPress | — |
++| Extra finger | primary down on Map, second taps station | `ignored`; primary keeps working; its release fires its onRelease | — |
++| Extra on Hud | primary down (no drag), second hits Speaker | `extra-hud`; Speaker fires | — |
++| Extra on Hud while dragging | `setDragging(primary,true)` | `ignored` | — |
++| Same press twice | Hud and Map both forward one key | decided once | — |
++| Lost up | primary pointer `isDown` false | released on next query | — |
++| Overlap layers | point hits Hud and Map targets | only Hud fires | — |
++| Speaker, prompt set | `replay()` → token 7 | press + pop; wave until `speech:ended{token:7}` | — |
++| Speaker re-tap | wave on token 7, tap | new token 8; wave follows 8; ended 7 is ignored | — |
++| Speaker, no prompt | `replay()` → undefined | press + pop only | — |
++| Home in map mode | tap (Home hidden or disabled) | nothing | — |
++| `hud:home` without a game | emit on Map | nothing; no scene change | — |
++| Layout 1180×820 | vis.y 28.2, no insets | Home (64, 112.2), Speaker (960, 192.2) | — |
++| Lint | `scene.input.on('pointerdown')`, `e.clientX` in a scene | ESLint error; same code in `core/input/` passes | — |
++
++</intent-contract>
++
++## Code Map
++
++- `app/src/core/input/{polygon,tap-router,hotspot-polygon}.ts` -- planned in spec-1-5. The router gains a layer option, guard registration, up listeners and `toDesign`.
++- `app/src/core/stage.ts` -- `installRotationSafeScaleManager` (the deferred tests target it). `app/src/styles/stage.css` holds the portrait rotation and gets the `--sai-*` vars.
++- `app/src/core/safe-rect.ts` -- `visibleRect` (reuse its maths idea). `Tokens.safeRect` = y 34 at ratio 1.46.
++- `app/src/core/ui/round-button.ts` -- `createRoundButton` (currently `setInteractive`), `pressButton`. Add icons and drop the `setInteractive`.
++- `app/src/scenes/Start.ts`, `app/src/scenes/AudioUnlockOverlay.ts` -- `button.on('pointerdown'|'pointerup')`. These migrate to `createTapTarget`.
++- `app/src/scenes/Map.ts` -- planned in spec-1-5. Add the Hud launch and `setHudMode('map')`.
++- `app/src/main.ts` -- add `Hud` to the scene list after `MapScene`, before `AudioUnlockOverlay`.
++- `app/src/core/audio-director.ts` -- `replayPrompt(): number | undefined`, `sfx`, `say`. `app/src/core/bus.ts` -- the `EventMap` (`hud:home` exists).
++- `app/src/core/tokens.generated.ts` -- `spacing.edgeDead*`, `edgeInset`, `buttonTop`, `speakerTop`, `hitPad`; `components.buttonHome`, `buttonSpeaker.wave`. `app/src/core/tokens.ts` -- `ui`.
++- `app/src/core/reduced-motion.ts` -- planned in spec-1-5 (`amplitude`).
++- `app/eslint.config.js`, `app/tools/lint/rules.test.ts` -- the new rule and its cases.
++- `app/vite.config.ts` -- the test include already covers `src/core/**`.
++
++## Tasks & Acceptance
++
++**Execution:**
++- `app/src/styles/stage.css` -- add `:root { --sai-top: env(safe-area-inset-top, 0px); … }`.
++- `app/src/core/input/space.ts` (+ test) -- `View`, `readView(doc, win)`, `toLocal`, `localInsets`, `localToDesign`, `designToLocal`, `visibleDesignRect`, `isDeadZone(local, view)`, `toDesign(pointer)`. Cover the space rows of the matrix, round-trips and the safeRect corners at every ratio.
++- `app/src/core/input/pointer-adapter.ts` (+ test) -- `clientPoint(pointer, scale)`: touch identifier matching, mouse events and the inverse fallback.
++- `app/src/core/input/guard.ts` (+ test) -- `InputGuard` and `inputGuard`. Cover the guard rows of the matrix with fake routers and pointers.
++- `app/src/core/input/tap-router.ts`, `tap-target.ts`, `hotspot-polygon.ts` (+ tests) -- layers, registration, `onRelease`, `createTapTarget`; remove `pointerPoint`.
++- `app/src/core/hud-mode.ts`, `app/src/core/bus.ts` (+ tests) -- `HudMode`, `setHudMode`, `getHudMode`, and the `'hud:mode'` event.
++- `app/src/core/hud.ts` (+ test) -- pure `hudLayout`, `waveFrame(tMs, reduced)` and `HudController({replay, say, emitHome, sfx})`, covering the Speaker, wave-token and Home rows.
++- `app/src/core/tokens.ts` -- `ui.speakerWaveScale`.
++- `app/src/content/voice-lines.ts` -- `vo.shell.home`. Generate it with `npm run tts`.
++- `app/src/core/ui/round-button.ts` -- add `icon`; remove `setInteractive`.
++- `app/src/scenes/Hud.ts` -- wiring: buttons, targets on the `hud` layer, the relayout, the wave tweens, and scoped `speech:ended` / `hud:mode` subscriptions.
++- `app/src/scenes/Start.ts`, `app/src/scenes/AudioUnlockOverlay.ts`, `app/src/scenes/Map.ts`, `app/src/main.ts` -- the migration, the Hud launch and registration.
++- `app/eslint.config.js`, `app/tools/lint/rules.test.ts` -- the pointer and clientX ban, plus allow cases inside `core/input/`.
++- `app/package.json`, `app/src/core/stage.dom.test.ts`, `app/src/core/stage-phaser-api.test.ts` -- add `happy-dom` and the deferred tests.
++- `app/README.md` -- the device checklist section.
++
++**Acceptance Criteria:**
++- Given `npm run dev` at 1180×820 touch emulation, when the child taps Chơi and the Map opens, then a blue speaker button sits at the right edge about 120 px down and no Home button shows. Start shows neither button.
++- Given the Map after an invitation has played, when the child taps the Speaker, then the button dips and pops at once, the invitation replays from the start, and two soft white rings ripple once per second until it ends. A second tap mid-line restarts it with no overlap.
++- Given a fresh Map with no prompt yet, when the child taps the Speaker, then only the dip and pop happen.
++- Given DevTools in portrait 820×1180, when the child taps the ice-cream station, then it reacts exactly like the landscape tap on the same station.
++- Given a press starting 10 px from the left edge over a station, when it lifts, then nothing reacts. A tap on the station a moment later still reacts.
++- Given a temporary `this.input.on('pointerdown', …)` in `scenes/Map.ts`, when running `npm run lint`, then it fails.
++
++## Spec Change Log
++
++- **2026-10-08: `happy-dom` pinned to 20.14.5** as planned. It was published on 2026-09-12 (26 days ago) and is still the latest release.
++- **2026-10-08: `onRelease` fires only when the primary is released over its target** (and the target is still enabled). This keeps spec-1-2's "pointerup on the button" semantics for Start and the unlock overlay: sliding off the ▶ before lifting cancels, as before.
++- **2026-10-08: the Start and overlay ▶ hit circles are `size/2 + spacing.hitPad`**, the same rule as the Hud buttons. Before, the hit circle was the drawn circle only.
++- **2026-10-08: small API shapes chosen while building.**
++  - The guard takes a locator `(pointer, scale) => { local, design, dead }`; the default is `space.ts › locate`, which reads the live view. Tests pass a fixed view. Without a DOM (node), `locate` uses the pointer's x/y as design px and nothing is dead.
++  - `createTapRouter(scene, { layer, guard })`: the optional `guard` lets tests use their own `InputGuard`. `RouterSceneLike` gains `sys.isActive()` and an optional `scale` (for the inverse fallback). A router target now has `onPress`/`onRelease?` instead of 1.5's `onTap`; `HotspotPolygon` keeps its constructor and maps its callback to `onPress`.
++  - `space.ts` also exports `toClient`, `envelop`, `designInsets`, `currentView` and `locate`. `hud.ts` exports `wavePeriodMs` so the scene has no literal 1000.
++  - `src/core/input/fakes.ts` holds the fake scene and pointers shared by the input tests (imported only by tests).
++- **2026-10-08: the lint ban is two blocks with one shared selector list** (per spec-cross-notes). The scenes/games `no-restricted-syntax` block now also spreads `NO_RAW_POINTER`. A new block applies `NO_RAW_POINTER` alone to the rest of `src/**/*.ts`, ignoring `src/core/input/**`, tests, scenes and games, so neither block overrides the other. The ban also covers destructured `{ clientX }` and bare `on('pointerdown')` calls.
++- **2026-10-08: the wave rings are filled white discs behind the Speaker**, scaled and faded per `waveFrame`. This avoids a stroke-width value that no token defines.
++
++## Review Triage Log
++
++## Design Notes
++
++**Why a global guard with per-scene forwarding:** Phaser delivers a scene-level `pointerdown` to every active scene's input plugin, and the order depends on the scene list. If each scene decided alone, a tap on Speaker could also select the station under it. Deciding once per press key, across layers, makes the result independent of that order and gives the first-finger rule one owner:
++
++```ts
++press(p): Verdict {
++  if (this.seen(p)) return this.last;      // other scenes' forward of the same press
++  const local = toLocal(clientPoint(p), view);
++  if (isDeadZone(local, view)) return 'dead';
++  if (this.livePrimary()) return this.tryHud(p) ? 'extra-hud' : 'ignored';
++  ...
++}
++```
++
++**Why read raw client coordinates:** under the CSS rotation, Phaser's `canvasBounds` is the rotated box. `pointer.x/y` therefore mixes the axes, and only the raw point plus `View` maps correctly. The inverse fallback keeps synthetic or test pointers working.
++
++## Verification
++
++**Commands:**
++- `cd app && npm install` -- expected: `happy-dom` is added at an exact version.
++- `cd app && npm run tts` -- expected: `vo.shell.home` is written; a second run skips it.
++- `cd app && npm run check` -- expected: exit 0. Vitest covers every matrix row, including the happy-dom stage tests. The lint rule tests pass.
++- `cd app && npm run build` -- expected: exit 0.
++
++**Manual checks:**
++- DevTools touch emulation at 1024×768, 1180×820, 1366×1024 and 820×1180 portrait: the Speaker sits at the right edge, the taps land where expected, and nothing is cut off.
++- Multi-touch (on a device or with DevTools multi-touch): hold one finger on the map and tap a station with another, and nothing happens. Tap the Speaker with another, and it replays.
++
++## Auto Run Result
++
++**Status:** in-review. `cd app && npm run check` exits 0: 33 test files, 405 tests. `validate:content` reports "7 game ids, 4 audio ids, 10 voice lines, 1 layout(s) with 7 stations, 1 atlas(es), 29 asset files".
++
++**Summary:**
++- `core/input` is now InputGuard:
++  - `space.ts` is the one screen ↔ design transform (ENVELOP, the portrait rotation, `--sai-*` insets, dead zones);
++  - `pointer-adapter.ts` is the only reader of `clientX/Y`;
++  - `guard.ts` decides each press once across scenes (dead, first finger, `extra-hud`, layers overlay > hud > scene, self-healing primary, drag API for 1.8);
++  - routers register with the guard and forward down/up/upoutside;
++  - `createTapTarget` adds circle targets.
++- The new `Hud` scene sits above Map: a blue Speaker (top-right) and a yellow Home (top-left, `'game'` mode only), drawn by `createRoundButton` with the new `icon` option.
++  - Speaker: press + pop, then `audio.replayPrompt()`. A two-ring wave runs until `speech:ended` for that token.
++  - Home: press + pop, then in game mode `vo.shell.home` and `hud:home`.
++  - Layout follows the visible rect and insets, and is redone on ScaleManager `resize`.
++- Map launches Hud once and sets `'map'` mode. Start and AudioUnlockOverlay moved to `createTapTarget` (press feedback, release action), and the overlay backdrop is visual only.
++- ESLint bans raw pointer events, `POINTER_*` members and `clientX/Y`/`pageX/Y` outside `core/input` and tests.
++- The deferred spec-1-1 stage tests now exist (happy-dom DOM test and a Phaser source API test).
++
++**Files changed:**
++- `app/package.json` (+ lock): `happy-dom` 20.14.5 (dev).
++- `app/eslint.config.js`: `NO_RAW_POINTER`, merged into the scenes/games block plus one block for the rest of `src/`.
++- `app/tools/lint/rules.test.ts`: ban and allow cases for the pointer/client rule.
++- `app/src/styles/stage.css`: `--sai-*` custom properties.
++- `app/src/core/input/space.ts` (+ `space.test.ts`): the transform, insets, dead zones, `readView`, `locate`, `toDesign`.
++- `app/src/core/input/pointer-adapter.ts` (+ test): `clientPoint`.
++- `app/src/core/input/guard.ts` (+ `guard.test.ts`): `InputGuard`, `inputGuard`.
++- `app/src/core/input/tap-router.ts`: layers, guard registration, up listeners; `pointerPoint` removed.
++- `app/src/core/input/tap-target.ts`: `createTapTarget`, `inCircle`.
++- `app/src/core/input/hotspot-polygon.ts`: fires through `onPress`.
++- `app/src/core/input/fakes.ts`: test fakes; `app/src/core/input/input.test.ts`: router tests on the guard plus TapTarget tests.
++- `app/src/core/hud.ts` (+ `hud.test.ts`): `hudLayout`, `waveFrame`, `wavePeriodMs`, `HudController`.
++- `app/src/core/hud-mode.ts`: `HudMode`, `getHudMode`, `setHudMode`.
++- `app/src/core/bus.ts`: the `'hud:mode'` event.
++- `app/src/core/tokens.ts`: `ui.speakerWaveScale` 1.6.
++- `app/src/core/ui/round-button.ts`: `icon` (play, home, speaker); no `setInteractive`.
++- `app/src/content/voice-lines.ts`: `vo.shell.home` "Về đảo nào!" (unapproved).
++- `app/public/assets/audio/vo/vo.shell.home.{m4a,hash}`: the generated line.
++- `app/src/scenes/Hud.ts`: the Hud scene.
++- `app/src/scenes/Start.ts`, `AudioUnlockOverlay.ts`: moved to `createTapTarget`.
++- `app/src/scenes/Map.ts`: launches Hud and sets `'map'` mode.
++- `app/src/main.ts`: `Hud` in the scene list after `MapScene`.
++- `app/src/core/stage.dom.test.ts`, `app/src/core/stage-phaser-api.test.ts`: the deferred stage tests.
++- `app/README.md`: the *Input and Hud* section and the *Device checklist (Story 1.11)*.
++
++**Verification:**
++- `npm install --save-dev --save-exact happy-dom@20.14.5`: added at the exact version.
++- `npm run tts` wrote `vo.shell.home` (1 written, 9 skipped). A second run printed "0 written, 10 skipped".
++- `npm run check` exits 0 (405 tests, including every guard, space, Hud and lint matrix row and the happy-dom stage tests).
++- `npm run build` exits 0.
++- Smoke test in headless Chrome against `vite preview`, using CDP touch emulation and a script kept outside the project:
++  - At 1180×820, after the tap on Chơi, the Map shows the blue Speaker at the right edge (client y ≈ 189) and no Home button.
++  - Switched to portrait 820×1180, a touch on the ice-cream station at its rotated screen point set the prompt. A touch on the Speaker then showed the two white wave rings, which were gone about 3 s later, after the line ended.
++  - No exceptions were logged.
++
++**Residual risks:**
++- Real multi-touch was not exercised (CDP single touch only). The guard rules are covered by unit tests with fake pointers.
++- `readView` reads `#stage.clientWidth/Height` and the `--sai-*` values on each press. If iOS reports the `env()` insets late after a rotation, the dead zones may lag by one press.
++- On a 1024×768 iPad, the outer 4 px of Home lie in the side dead strip, as accepted in the spec.
++- A primary whose pointerup is lost while its pointer still reports `isDown` (for example a page hide in mid-press) blocks other fingers until that slot is pressed again. Phaser normally resets pointers on blur.
++
++**Manual checks still due:**
++- DevTools touch emulation at 1024×768, 1180×820, 1366×1024 and 820×1180 portrait: the Speaker sits at the right edge, taps land where expected, and nothing is cut off.
++- Multi-touch on a device: with one finger held on the map, a tap on a station does nothing and a tap on the Speaker replays.
++- Listen to `vo.shell.home` and approve it.
++- The device checklist in `app/README.md` (Story 1.11).

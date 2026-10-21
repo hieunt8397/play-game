@@ -1,0 +1,1995 @@
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/README.md b/app/README.md
+index 10195a8..455b55a 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/README.md
++++ b/app/README.md
+@@ -35,7 +35,10 @@ Architecture: `../_bmad-output/planning-artifacts/architecture/architecture-be-h
+ | --- | --- |
+ | `npm install` | Install dependencies (the only step that uses the network) |
+ | `npm run dev` | Dev server at <http://localhost:8080> (no outbound requests) |
+-| `npm run build` | Production build into `dist/` (relative `base: './'`) |
++| `npm run build` | Production build into `dist/` (relative `base: './'`), including the PWA files `sw.js`, `workbox-*.js` and `manifest.webmanifest` |
++| `npm run preview` | Serve the built `dist/` at <http://localhost:4173> (service worker active; test offline here) |
++| `npm run pwa:icons` | Re-draw the PWA / Home-Screen icons into `public/icons/` (deterministic, no network) |
++| `npm run precache:check` | Check `dist/` after a build: every runtime file under `public/` is precached, no file > 8 MiB, no `http(s)://` in the worker/manifest/HTML (see *Offline, install and preview deploy*) |
+ | `npm run tokens` | Regenerate `src/core/tokens.generated.ts` from the DESIGN.md YAML front matter |
+ | `npm run audio:placeholders` | Re-synthesize the placeholder SFX/music `.m4a` files with ffmpeg (see *Assets and provenance*) |
+ | `npm run audio:normalize -- <src> <audioId>` | Master a real SFX/music file into its catalog path (two-pass loudnorm: music −30 LUFS; SFX −20 LUFS with a 50 ms fade-in) |
+@@ -45,7 +48,7 @@ Architecture: `../_bmad-output/planning-artifacts/architecture/architecture-be-h
+ | `npm run art:build -- map` | Build `../art/map.blend` from the vendored reference `../art/src/map-v2.blend` (see *Image pipeline*) |
+ | `npm run render -- map` | Render `../art/map.blend` → `.generated/render/map/` + `src/content/generated/map.layout.json` |
+ | `npm run atlas -- map` | Pack the rendered frames → `public/assets/atlases/map.{png,json}` and copy the plate → `public/assets/bg/map.png` |
+-| `npm run check` | **The gate.** `tsc --noEmit` → ESLint → Vitest (`src/core/**`, `src/content/**`, `tools/**` tests) → tokens diff → content validator |
++| `npm run check` | **The gate.** `tsc --noEmit` → ESLint → Vitest (`src/core/**`, `src/content/**`, `tools/**` tests) → tokens diff → content validator → `vite build` → precache check |
+ 
+ Vitest also runs the tools tests: `tools/tokens/parse.test.ts` (token parser fails closed),
+ `tools/lint/rules.test.ts` (each ESLint layer/literal/audio rule, plus the GameId list kept in sync),
+@@ -59,8 +62,8 @@ the voice lines (see *Voice lines*).
+ `../_bmad-output/planning-artifacts/ux-designs/ux-be-hoc-choi-2026-10-08/DESIGN.md`, outside `app/`.
+ `app/` alone (without that folder next to it) cannot pass `npm run check`.
+ 
+-**Every story must pass `npm run check` before it is done.** Later stories add more
+-content checks and the precache check (after `vite build`) to the same command.
++**Every story must pass `npm run check` before it is done.** Since Story 1.11 it ends with
++`npm run build && npm run precache:check`; its last line is the precache summary.
+ 
+ ## Run on the PC with iPad emulation (primary dev loop)
+ 
+@@ -74,8 +77,9 @@ content checks and the precache check (after `vite build`) to the same command.
+    there is no "rotate your device" screen. **Only the picture is correct in portrait so far:**
+    taps are not mapped to the right game coordinates until Story 1.6 adds `core/input/space.ts`.
+ 
+-`localhost` is a secure context, so service worker and offline behaviour can be tested here too
+-(Story 1.11). Real-device checks happen on the iPad through an HTTPS preview deploy.
++`npm run dev` registers no service worker. `localhost` is a secure context, so the service worker
++and offline behaviour are tested on the PC with `npm run build && npm run preview` (see *Offline,
++install and preview deploy*). Real-device checks happen on the iPad through an HTTPS preview deploy.
+ 
+ ## Layout and rules
+ 
+@@ -115,8 +119,10 @@ tools/
+ ## Start flow (Story 1.2)
+ 
+ `Boot` shows only the loading-strip (a kart on a short road) while it loads the audio and waits
+-for the readiness gate: the service worker is ready (skipped in dev or with no registration) and
+-the vendored Baloo 2 font has loaded. If a load fails, the kart slows down and the load retries on
++for the readiness gate: the first service-worker precache has finished (skipped in dev, with no
++registration or an already active worker; after `Tokens.Timing.swPrecacheTimeoutMs` = 20 s it warns
++and continues online — Story 1.11) and the vendored Baloo 2 font has loaded. The load loop lives in
++`src/core/boot-load.ts › createBootLoader` (tested in node); `Boot` is its Phaser adapter. If a load fails, the kart slows down and the load retries on
+ `online` or every `Tokens.Timing.loadRetryMs`. Errors go only to `console.warn`.
+ 
+ `Start` shows the bobbing yellow ▶. A tap plays the pop, starts the music loop, unlocks audio,
+@@ -256,17 +262,94 @@ npm run atlas -- map       # frames → public/assets/atlases/map.{png,json} (at
+ - The Hud scene runs above Map and the games: Speaker (top-right) replays the last prompt; Home
+   (top-left) shows only inside a game.
+ 
+-## Device checklist (Story 1.11)
+-
+-1. **Portrait tap mapping:** hold the iPad in portrait (the stage rotates) and tap the ice-cream
+-   station; it reacts exactly as in landscape. The Speaker also responds where it is drawn.
+-2. **Thumb in the edge strip plus a child's tap:** rest a thumb on the screen edge (within about
+-   2 cm of the bezel) and tap a station with another finger; the station reacts. The thumb alone
+-   triggers nothing.
+-3. **Speaker while a finger rests on the Map:** keep one finger on the island, then tap the
+-   Speaker with another; the last line replays. A tap on a station with the second finger does nothing.
++## Offline, install and preview deploy (Story 1.11)
++
++**Offline behaviour.** The build is a PWA (`vite-plugin-pwa` 2.0.0, Workbox 7.4.1, `generateSW`). The
++service worker precaches every runtime file (`js, css, html, png, webp, json, m4a, woff2, svg, ico,
++webmanifest`; at most 8 MiB each) on the first online open. After that the app runs with no network at
++all: there is no runtime caching, CDN, analytics, remote font or remote TTS. The app registers
++`./sw.js` itself (`src/core/sw.ts`); nothing is registered in `npm run dev`.
++
++**Updates apply only on a cold open.** When a new build is deployed, the new worker installs in the
++background and then *waits*. Nothing calls `update()`, `skipWaiting()` or reloads the page, so a child
++playing is never interrupted. The new version starts the next time the app is fully closed (swiped
++away in the app switcher) and opened again.
++
++**On the first open** Boot waits for the precache before it shows ▶, for at most 20 s
++(`Tokens.Timing.swPrecacheTimeoutMs`). If the precache is slower or fails, the app still starts
++online, and offline works from the next successful open.
++
++**Test locally (PC):**
++1. `npm run build && npm run preview`, then open <http://localhost:4173> in Chrome or Edge.
++2. Wait for ▶ (the first open precaches everything). DevTools › Application › Service workers shows
++   `sw.js` *activated and running*; Application › Manifest shows the name, the 3 icons and no errors.
++3. DevTools › Network: tick *Offline* and reload. Start → Map → Tiệm kem must play with voice and
++   music, every request must show *(ServiceWorker)*, and no request may go to another origin.
++4. Update check: with the page open on the Map, change something visible, run `npm run build` again
++   (keep `preview` running or restart it), and click *Update* in Application › Service workers. The new
++   worker shows *waiting to activate*, and the page does not reload. It becomes active only after every
++   tab of the app is closed and the page is opened again.
++
++### Preview deploy (host still to be decided)
++
++Any static HTTPS host works, because `base: './'` makes every URL relative. Nothing is deployed by
++the tools in this repo; these are manual steps.
++
++- **Option A — Cloudflare Pages (no git needed).** Run `npm run build`. Then, in the Cloudflare
++  dashboard, go to Workers & Pages › Create › Pages › *Upload assets*, and drag in the `dist/` folder.
++  Alternatively, run `npx wrangler pages deploy dist` (it asks you to log in once). You get a
++  `https://<project>.pages.dev` URL. Upload a new `dist/` to update it.
++- **Option B — GitHub Pages.** Create a repository and publish `dist/` either from a `gh-pages` branch
++  (push the contents of `dist/` to that branch and choose it in Settings › Pages) or with a GitHub
++  Actions workflow that uploads `dist/` as the Pages artifact. The app is served under
++  `https://<user>.github.io/<repo>/`, which works because all paths are relative.
++
++### Install on the iPad (Home Screen)
++
++1. Open the HTTPS preview URL in **Safari** while online.
++2. Tap **Share** › **Thêm vào MH chính** (Add to Home Screen) › **Thêm**.
++3. Open **Bé Học Chơi** from the Home Screen **once while online**, and wait until the yellow ▶
++   (Chơi) button appears: the whole app is now stored on the iPad.
++4. From then on it works in airplane mode.
++
++**Supported devices:** a regular iPad, iPad Air or iPad Pro, landscape, **installed to the Home
++Screen**. The iPad mini and Safari tabs are not supported: the visible area must have an aspect ratio of
++at most 1.46 for `Tokens.safeRect` to fit, and the iPad mini screen, or Safari's toolbars, are narrower
++than that.
+ 
+ ## Tip for parents
+ 
+-Turn on **Guided Access** (Settings › Accessibility › Guided Access) and turn off multitasking
+-gestures, so the child can't leave the app by accident.
++- Turn on **Guided Access** (Settings › Accessibility › Guided Access, then triple-click the top
++  button inside the app) so the child cannot leave the app.
++- Turn off the multitasking gestures: Settings › Multitasking & Gestures (on iPadOS 16: Settings ›
++  Home Screen & Multitasking › **Cử chỉ** / Gestures) and switch the gestures off.
++- If iOS ever clears the website data (for example after a long time without use, or when storage is
++  low), open the app again **while online**: it downloads itself again, and the island starts empty.
++
++## Device checklist (Story 1.11)
++
++Run this on the real iPad with the app installed from the HTTPS preview before the Epic 1 retro.
++Fill in *Kết quả* (`đạt` / `không đạt` / `không đo được`) and *Ngày/máy* (date, iPad model, iPadOS
++version). Every failed item is added to `_bmad-output/implementation-artifacts/deferred-work.md` as a
++fix before the epic closes.
++
++| # | Item | Cách làm | Kỳ vọng | Kết quả | Ngày/máy |
++|---|---|---|---|---|---|
++| 1 | Real-finger taps | Tap ▶, each awake/asleep station, the kart, the Speaker and (in Tiệm kem) Home with a fingertip, as a child would. | Each tap reacts within ~100 ms; nothing needs a second tap. | chưa chạy | |
++| 2 | Palm and multi-touch | Hold the iPad as a child does and let a palm rest on the island, then tap a station with one finger; also put the palm down *after* a finger is already on a station. Measure with Safari Web Inspector (Mac › Safari › Develop › the iPad › the app): paste the snippet below, touch with a fingertip, then with a palm. | A palm landing after the finger never cancels it (first finger wins). Note whether a palm resting *first* blocks the child in normal holding. Record fingertip vs palm `radiusX/Y`, or `không đo được` without a Mac (first-finger-wins stays, UX-DR65). | chưa chạy | |
++| 3 | Safari audio unlock and the silent switch | Turn the side silent switch (or Control Center's mute) **on**, open the app and tap ▶. | The pop, the music and the greeting play although the iPad is muted (`navigator.audioSession.type = 'playback'`). | chưa chạy | |
++| 4 | Return from background | On the Map, press Home (or switch apps), wait 10 s, come back. Repeat during a voice line and after a phone call / Siri if possible. | Voice and music stopped while away; on return the music resumes, or the dimmed ▶ appears and one tap resumes exactly where play stopped. The overlay never traps the child. | chưa chạy | |
++| 5 | Home-Screen install | Install per *Install on the iPad*, open from the icon. In Web Inspector run `[innerWidth, innerHeight]`. | Fullscreen with no Safari bars and a transparent status bar; the icon is the yellow ▶ on sky; no part of the play area is cropped (the Speaker is fully visible at the top-right, the stations are not cut). Record the device model and `innerWidth × innerHeight` (ratio ≤ 1.46). | chưa chạy | |
++| 6 | Airplane-mode run | After one online open, turn on airplane mode, close the app from the app switcher and open it again. Play Start → Map → Tiệm kem one full round. | Everything works with voice and music; no missing image or sound. | chưa chạy | |
++| 7 | Portrait CSS rotation and `toDesign` | Hold the iPad in portrait (the stage turns 90°). Tap the ice-cream station; tap the Speaker where it is drawn. | The station reacts exactly as in landscape and the Speaker responds where it is drawn (taps land on the right design coordinates). | chưa chạy | |
++| 8 | Thumb in the edge strip plus a child's tap (spec-1-6) | Rest a thumb on the screen edge (within about 2 cm of the bezel) and tap a station with another finger. | The station reacts. The thumb alone triggers nothing. | chưa chạy | |
++| 9 | Speaker while a finger rests on the Map (spec-1-6) | Keep one finger on the island, then tap the Speaker with another; then tap a station with the second finger. | The last line replays; the station tap does nothing. | chưa chạy | |
++| 10 | SW update | With the app open on the Map, deploy a visibly changed build (e.g. a different greeting or icon) to the same URL. Keep playing for a minute, then close the app from the app switcher and open it again (twice if needed: the first open fetches the new worker). | No reload or interruption mid-session; the change appears only after a cold open from the app switcher. | chưa chạy | |
++
++**Palm-size snippet** for item 2 (paste into the Web Inspector console, then touch the screen):
++
++```js
++addEventListener('touchstart', (e) => {
++  for (const t of e.changedTouches) console.log('touch', t.identifier, 'radiusX', t.radiusX, 'radiusY', t.radiusY, 'force', t.force);
++}, { passive: true, capture: true });
++```
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/index.html b/app/index.html
+index 6ab569d..e95420c 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/index.html
++++ b/app/index.html
+@@ -4,7 +4,15 @@
+     <meta charset="UTF-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
+     <meta name="format-detection" content="telephone=no" />
++    <!-- Story 1.11: Home-Screen app, full bleed (black-translucent + viewport-fit=cover keeps the
++         whole screen for the stage, so safeRect is not cropped by the status bar). -->
++    <meta name="apple-mobile-web-app-capable" content="yes" />
++    <meta name="mobile-web-app-capable" content="yes" />
++    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
++    <meta name="apple-mobile-web-app-title" content="Bé Học Chơi" />
++    <meta name="theme-color" content="#A9D3F0" />
+     <link rel="icon" type="image/png" href="favicon.png" />
++    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
+     <title>Bé Học Chơi</title>
+ </head>
+ 
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/package.json b/app/package.json
+index 230feb8..6e8f3bc 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/package.json
++++ b/app/package.json
+@@ -22,7 +22,9 @@
+     "lint": "eslint .",
+     "test": "vitest run",
+     "validate:content": "node tools/lint/validate-content.ts",
+-    "check": "npm run typecheck && npm run lint && npm run test && npm run tokens:check && npm run validate:content",
++    "pwa:icons": "node tools/pwa/make-icons.ts",
++    "precache:check": "node tools/lint/check-precache.ts",
++    "check": "npm run typecheck && npm run lint && npm run test && npm run tokens:check && npm run validate:content && npm run build && npm run precache:check",
+     "art:build": "node tools/render/build.ts",
+     "render": "node tools/render/render.ts",
+     "atlas": "node tools/atlas/pack.ts",
+@@ -41,6 +43,7 @@
+     "typescript": "~5.9.3",
+     "typescript-eslint": "8.71.1",
+     "vite": "8.3.3",
++    "vite-plugin-pwa": "2.0.0",
+     "vitest": "5.0.3",
+     "yaml": "2.9.1"
+   }
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/core/audio-director.test.ts b/app/src/core/audio-director.test.ts
+index 34ef9a3..503673b 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/core/audio-director.test.ts
++++ b/app/src/core/audio-director.test.ts
+@@ -1,11 +1,13 @@
+-// I/O matrix audio rows (Story 1.2; Story 1.3 voice channel, prompts, ducking), with fakes for Phaser's sound manager, AudioContext and document.
++// I/O matrix audio rows (Story 1.2; Story 1.3 voice channel, prompts, ducking), with fakes for Phaser's sound manager, AudioContext and document. Story 1.11: audioSession.
+ import { createRequire } from "node:module";
+ import { fileURLToPath } from "node:url";
+ import { afterEach, describe, expect, it, vi } from "vitest";
+ import {
++  AUDIO_SESSION_PLAYBACK,
+   AudioDirector,
+   MUSIC_DUCK_DB,
+   rampVolume,
++  setPlaybackSession,
+   SOUND_COMPLETE,
+   SOUND_UNLOCKED,
+   VISIBILITY_CHANGE,
+@@ -792,3 +794,56 @@ describe("rampVolume (default, WebAudio gain param)", () => {
+     expect(inst.volume).toBe(0.1);
+   });
+ });
++
++// I/O matrix (Story 1.11): audioSession present / absent / setter throws.
++describe("attach: navigator.audioSession (silent switch)", () => {
++  afterEach(() => {
++    vi.restoreAllMocks();
++  });
++
++  it("present: sets type to 'playback'", () => {
++    const director = new AudioDirector({ bus: new Bus() });
++    const nav = { audioSession: { type: "auto" } };
++    director.attach(fakeSound(true), fakeDoc(), nav);
++    expect(nav.audioSession.type).toBe(AUDIO_SESSION_PLAYBACK);
++    expect(AUDIO_SESSION_PLAYBACK).toBe("playback");
++  });
++
++  it("absent (or no navigator): no-op, no warning", () => {
++    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
++    new AudioDirector({ bus: new Bus() }).attach(fakeSound(true), fakeDoc(), {});
++    new AudioDirector({ bus: new Bus() }).attach(fakeSound(true), fakeDoc());
++    expect(warn).not.toHaveBeenCalled();
++  });
++
++  it("setter throws: warns once and attach continues (visibility handling still wired)", () => {
++    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
++    const nav = {
++      audioSession: {
++        get type(): string {
++          return "auto";
++        },
++        set type(_v: string) {
++          throw new Error("NotSupportedError");
++        },
++      },
++    };
++    const director = new AudioDirector({ bus: new Bus() });
++    const doc = fakeDoc();
++    const listen = vi.spyOn(doc, "addEventListener");
++    director.attach(fakeSound(true), doc, nav);
++    expect(warn).toHaveBeenCalledTimes(1);
++    expect(listen).toHaveBeenCalledWith(VISIBILITY_CHANGE, expect.any(Function));
++  });
++
++  it("setPlaybackSession: a throwing getter is also caught", () => {
++    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
++    const nav = {
++      get audioSession(): { type: string } {
++        throw new Error("boom");
++      },
++    };
++    expect(() => setPlaybackSession(nav)).not.toThrow();
++    expect(warn).toHaveBeenCalledTimes(1);
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/core/audio-director.ts b/app/src/core/audio-director.ts
+index 8747975..f0d6c4a 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/core/audio-director.ts
++++ b/app/src/core/audio-director.ts
+@@ -103,6 +103,28 @@ export interface DocLike {
+   addEventListener(type: string, fn: () => void): void;
+ }
+ 
++/**
++ * `navigator` (or a fake). Only `navigator.audioSession` (Audio Session API, Safari 16.4+) is read;
++ * the DOM lib does not type it yet, hence `object` and an `in` check.
++ */
++export type NavigatorLike = object;
++
++/** `navigator.audioSession.type` that keeps playing with the silent switch on. */
++export const AUDIO_SESSION_PLAYBACK = "playback";
++
++/** Sets the audio session type to `'playback'` when the API exists; a throw warns once and is ignored. */
++export function setPlaybackSession(nav: NavigatorLike | undefined): void {
++  try {
++    if (!nav || !("audioSession" in nav)) return;
++    const session = nav.audioSession;
++    if (typeof session === "object" && session !== null) {
++      (session as { type: string }).type = AUDIO_SESSION_PLAYBACK;
++    }
++  } catch (error) {
++    console.warn("audio: navigator.audioSession.type = 'playback' failed", error);
++  }
++}
++
+ /** Ramps `instance`'s volume to `target` over `ms`, starting `delayMs` from now. */
+ export type RampVolume = (
+   instance: SoundInstanceLike,
+@@ -189,13 +211,18 @@ export class AudioDirector {
+     this.ramp = deps.rampVolume ?? rampVolume;
+   }
+ 
+-  /** Called once from main.ts right after `new Game` with `game.sound` and `document`. */
+-  attach(sound: SoundLike, doc: DocLike): void {
++  /**
++   * Called once from main.ts right after `new Game` with `game.sound`, `document` and `navigator`.
++   * When `nav.audioSession` exists (Safari 16.4+), its type becomes `'playback'` so the iPad's silent
++   * switch does not mute the app (Story 1.11).
++   */
++  attach(sound: SoundLike, doc: DocLike, nav?: NavigatorLike): void {
+     if (this.sound) {
+       console.warn("audio: attach() called twice — ignored");
+       return;
+     }
+     this.sound = sound;
++    setPlaybackSession(nav);
+     if (sound.locked) sound.once(SOUND_UNLOCKED, () => this.onUnlocked());
+     doc.addEventListener(VISIBILITY_CHANGE, () => {
+       if (doc.visibilityState === VISIBLE) void this.onVisible();
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/core/boot-load.test.ts b/app/src/core/boot-load.test.ts
+index e63bcba..e923255 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/core/boot-load.test.ts
++++ b/app/src/core/boot-load.test.ts
+@@ -1,10 +1,15 @@
+-// I/O matrix (Story 1.2): "Load fails" and "Gate dev" rows.
+-import { describe, expect, it, vi } from 'vitest';
++// I/O matrix (Story 1.2): "Load fails" and "Gate dev" rows. Story 1.11: the gate rows (Dev /
++// Unsupported, First install, Already active, Install stuck) and "Loader error → online" (createBootLoader).
++import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { AUDIO_CATALOG, AUDIO_IDS } from '../content/audio-catalog';
+ import {
+   bootAudio,
+   isBootAudioId,
+   bootTextures,
++  createBootLoader,
++  createReadinessGate,
++  type FailedFile,
++  type BootLoaderAdapter,
+   FONT_FAMILY,
+   FONT_PROBE,
+   FONT_URL,
+@@ -49,24 +54,29 @@ describe('nextLoadState', () => {
+   });
+ });
+ 
+-function fakes(opts: { fontOk?: boolean; probeFaces?: number; registration?: unknown } = {}) {
++function fakes(opts: { fontOk?: boolean; probeFaces?: number; registration?: { active: unknown } } = {}) {
+   const { fontOk = true, probeFaces = 1, registration = undefined } = opts;
+   const faces: Array<{ family: string; source: string; descriptors: { weight: string }; load: () => Promise<unknown> }> = [];
+   let resolveReady: (v: unknown) => void = () => undefined;
+-  const sw = {
+-    getRegistration: vi.fn(async () => registration),
+-    ready: new Promise((r) => {
+-      resolveReady = r;
+-    }),
+-  };
++  let resolveSleep: () => void = () => undefined;
++  const ready = new Promise((r) => {
++    resolveReady = r;
++  });
++  const sleep = vi.fn(
++    (_ms: number) =>
++      new Promise<void>((r) => {
++        resolveSleep = r;
++      }),
++  );
+   const fonts = {
+     add: vi.fn(),
+     delete: vi.fn(),
+     load: vi.fn(async (_font: string) => Array.from({ length: probeFaces }, () => ({}))),
+   };
+   const deps: ReadyDeps = {
+-    isDev: false,
+-    sw,
++    registration: Promise.resolve(registration),
++    ready,
++    sleep,
+     fonts,
+     fontFace: (family, source, descriptors) => {
+       const face = { family, source, descriptors, load: () => (fontOk ? Promise.resolve(face) : Promise.reject(new Error('NetworkError'))) };
+@@ -74,10 +84,18 @@ function fakes(opts: { fontOk?: boolean; probeFaces?: number; registration?: unk
+       return face;
+     },
+   };
+-  return { deps, sw, fonts, faces, resolveReady: (v: unknown) => resolveReady(v) };
++  return { deps, sleep, fonts, faces, resolveReady: (v: unknown) => resolveReady(v), resolveSleep: () => resolveSleep() };
++}
++
++async function flush(): Promise<void> {
++  for (let i = 0; i < 10; i++) await Promise.resolve();
+ }
+ 
+ describe('waitForReady', () => {
++  afterEach(() => {
++    vi.restoreAllMocks();
++  });
++
+   it('registers the vendored Baloo 2 with a relative URL and awaits the 600 18px probe', async () => {
+     const f = fakes();
+     await waitForReady(f.deps);
+@@ -90,34 +108,56 @@ describe('waitForReady', () => {
+     expect(FONT_PROBE).toBe("600 18px 'Baloo 2'");
+   });
+ 
+-  it('gate dev: skips the SW step in DEV even with a registration', async () => {
+-    const f = fakes({ registration: {} });
+-    await waitForReady({ ...f.deps, isDev: true });
+-    expect(f.sw.getRegistration).not.toHaveBeenCalled();
+-    expect(f.fonts.load).toHaveBeenCalled();
++  it('dev / unsupported / register rejected (registration undefined): the SW step is skipped', async () => {
++    const f = fakes();
++    await waitForReady(f.deps);
++    expect(f.sleep).not.toHaveBeenCalled();
++    expect(f.fonts.load).toHaveBeenCalledTimes(1);
+   });
+ 
+-  it('skips the SW step when there is no registration or no SW support', async () => {
++  it('a rejecting registration promise counts as no registration', async () => {
+     const f = fakes();
++    await waitForReady({ ...f.deps, registration: Promise.reject(new Error('SecurityError')) });
++    expect(f.sleep).not.toHaveBeenCalled();
++    expect(f.fonts.load).toHaveBeenCalledTimes(1);
++  });
++
++  it('already active (an update may be waiting): no wait for ready', async () => {
++    const f = fakes({ registration: { active: {} } });
+     await waitForReady(f.deps);
+-    expect(f.sw.getRegistration).toHaveBeenCalled();
+-    await waitForReady({ ...f.deps, sw: undefined });
+-    expect(f.fonts.load).toHaveBeenCalledTimes(2);
++    expect(f.sleep).not.toHaveBeenCalled();
++    expect(f.fonts.load).toHaveBeenCalledTimes(1);
+   });
+ 
+-  it('with a registration, waits for serviceWorker.ready before the font', async () => {
+-    const f = fakes({ registration: {} });
++  it('first install: waits for serviceWorker.ready, then the font', async () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const f = fakes({ registration: { active: null } });
+     let done = false;
+     const p = waitForReady(f.deps).then(() => {
+       done = true;
+     });
+-    await Promise.resolve();
+-    await Promise.resolve();
++    await flush();
+     expect(done).toBe(false);
+     expect(f.fonts.load).not.toHaveBeenCalled();
++    expect(f.sleep).toHaveBeenCalledWith(Timing.swPrecacheTimeoutMs);
+     f.resolveReady({});
+     await p;
+     expect(done).toBe(true);
++    expect(f.fonts.load).toHaveBeenCalledTimes(1);
++    expect(warn).not.toHaveBeenCalled();
++  });
++
++  it('install stuck: after swPrecacheTimeoutMs it warns once and continues to the font (never rejects)', async () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const f = fakes({ registration: { active: null } });
++    const p = waitForReady(f.deps);
++    await flush();
++    expect(f.fonts.load).not.toHaveBeenCalled();
++    f.resolveSleep();
++    await expect(p).resolves.toBeUndefined();
++    expect(warn).toHaveBeenCalledTimes(1);
++    expect(f.fonts.load).toHaveBeenCalledTimes(1);
++    expect(Timing.swPrecacheTimeoutMs).toBe(20000);
+   });
+ 
+   it('rejects when the font fails, removing the failed face so a retry starts fresh', async () => {
+@@ -132,6 +172,146 @@ describe('waitForReady', () => {
+   });
+ });
+ 
++describe('createReadinessGate', () => {
++  afterEach(() => {
++    vi.restoreAllMocks();
++  });
++
++  it('runs the SW wait at most once: a retry after a font failure does not sleep or warn again', async () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const f = fakes({ fontOk: false, registration: { active: null } });
++    const gate = createReadinessGate(f.deps);
++    const first = gate();
++    await flush();
++    f.resolveSleep();
++    await expect(first).rejects.toThrow('NetworkError');
++    expect(f.sleep).toHaveBeenCalledTimes(1);
++    expect(warn).toHaveBeenCalledTimes(1);
++    await expect(gate()).rejects.toThrow('NetworkError');
++    expect(f.sleep).toHaveBeenCalledTimes(1);
++    expect(warn).toHaveBeenCalledTimes(1);
++    expect(f.faces).toHaveLength(2);
++  });
++});
++
++/** A fake Phaser adapter: a cache of loaded keys, scripted file failures and a scripted gate. */
++function fakeAdapter(items: readonly string[]) {
++  const cache = new Set<string>();
++  const failNext = new Set<string>();
++  const gateResults: Array<'ok' | 'fail'> = [];
++  const calls: string[] = [];
++  let lastDone: ((failed: readonly FailedFile[]) => void) | undefined;
++  let lastList: readonly string[] = [];
++  const adapter: BootLoaderAdapter<string> = {
++    missing: () => items.filter((k) => !cache.has(k)),
++    loadAll: (list, done) => {
++      calls.push(`load:${list.join(',')}`);
++      lastList = list;
++      lastDone = done;
++    },
++    gate: () => {
++      calls.push('gate');
++      return gateResults.shift() === 'fail' ? Promise.reject(new Error('font')) : Promise.resolve();
++    },
++    setTimeScale: (s) => calls.push(`scale:${s}`),
++    onReady: () => {
++      calls.push('overlay');
++      calls.push('Start');
++    },
++  };
++  /** Finishes the pending loadAll: keys in failNext fail once, the rest enter the cache. */
++  const finishLoad = (): void => {
++    const failed = lastList.filter((k) => failNext.has(k));
++    for (const k of lastList) if (!failNext.has(k)) cache.add(k);
++    failNext.clear();
++    lastDone?.(failed.map((key) => ({ key, src: `assets/${key}.m4a` })));
++  };
++  return { adapter, calls, failNext, gateResults, finishLoad };
++}
++
++describe('createBootLoader (Story 1.11: Boot dispatch/attempt/gate moved to core)', () => {
++  afterEach(() => {
++    vi.restoreAllMocks();
++  });
++
++  it('happy path: load, gate, ready → overlay launched then Start, once', async () => {
++    const f = fakeAdapter(['a', 'b']);
++    const loader = createBootLoader(f.adapter);
++    loader.start();
++    expect(f.calls).toEqual(['load:a,b']);
++    f.finishLoad();
++    await flush();
++    expect(loader.state).toBe('ready');
++    expect(f.calls).toEqual(['load:a,b', 'gate', 'scale:1', 'overlay', 'Start']);
++    loader.dispatch('online');
++    loader.dispatch('retryTick');
++    loader.dispatch('complete');
++    expect(f.calls.filter((c) => c === 'Start')).toHaveLength(1);
++  });
++
++  it('nothing missing goes straight to the gate', async () => {
++    const f = fakeAdapter([]);
++    const loader = createBootLoader(f.adapter);
++    loader.start();
++    await flush();
++    expect(f.calls).toEqual(['gate', 'scale:1', 'overlay', 'Start']);
++    expect(loader.state).toBe('ready');
++  });
++
++  it('loader error → waiting, kart slows, warn per file; online → retries only the missing files; complete → Start once', async () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const f = fakeAdapter(['a', 'b', 'c']);
++    const loader = createBootLoader(f.adapter);
++    f.failNext.add('b');
++    f.failNext.add('c');
++    loader.start();
++    f.finishLoad();
++    expect(loader.state).toBe('waiting');
++    expect(f.calls).toContain(`scale:${Timing.loadingKartWaitTimeScale}`);
++    expect(warn).toHaveBeenCalledTimes(2);
++    expect(String(warn.mock.calls[0]?.[0])).toContain('"b"');
++    expect(String(warn.mock.calls[1]?.[0])).toContain('"c"');
++    expect(warn.mock.calls[0]?.[1]).toBe('assets/b.m4a');
++    expect(warn.mock.calls[1]?.[1]).toBe('assets/c.m4a');
++    loader.dispatch('error');
++    expect(loader.state).toBe('waiting');
++    loader.dispatch('online');
++    expect(loader.state).toBe('loading');
++    expect(f.calls.at(-2)).toBe('scale:1');
++    expect(f.calls.at(-1)).toBe('load:b,c');
++    f.finishLoad();
++    await flush();
++    expect(loader.state).toBe('ready');
++    expect(f.calls.slice(-2)).toEqual(['overlay', 'Start']);
++    expect(f.calls.filter((c) => c === 'Start')).toHaveLength(1);
++  });
++
++  it('gate rejection → waiting with one warn; retryTick → a new gate attempt → ready', async () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const f = fakeAdapter([]);
++    f.gateResults.push('fail');
++    const loader = createBootLoader(f.adapter);
++    loader.start();
++    await flush();
++    expect(loader.state).toBe('waiting');
++    expect(warn).toHaveBeenCalledTimes(1);
++    loader.dispatch('retryTick');
++    await flush();
++    expect(loader.state).toBe('ready');
++    expect(f.calls.filter((c) => c === 'gate')).toHaveLength(2);
++    expect(f.calls.filter((c) => c === 'Start')).toHaveLength(1);
++  });
++
++  it('online or retryTick while still loading does not start a second attempt', () => {
++    const f = fakeAdapter(['a']);
++    const loader = createBootLoader(f.adapter);
++    loader.start();
++    loader.dispatch('online');
++    loader.dispatch('retryTick');
++    expect(f.calls).toEqual(['load:a']);
++  });
++});
++
+ describe('bootAudio', () => {
+   it('loads the shell SFX, the music and the shell voice lines keyed by id', () => {
+     const list = bootAudio();
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/core/boot-load.ts b/app/src/core/boot-load.ts
+index 56215cf..2fe0225 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/core/boot-load.ts
++++ b/app/src/core/boot-load.ts
+@@ -1,11 +1,13 @@
+ // Boot loading logic (Story 1.2), pure so it is testable in node. Story 1.5 adds `bootTextures`.
+ // - `nextLoadState`: loading → (error) waiting → (online | retryTick) loading → (complete) ready.
+ // - `kartTimeScale`: loading-strip kart speed per state (slows while waiting).
+-// - `waitForReady`: readiness gate = service worker ready (skipped in DEV or with no registration;
+-//   Story 1.11 adds precache completion) + the self-hosted Baloo 2 font.
++// - `waitForReady`: readiness gate = first SW precache (skipped in DEV, with no registration or an
++//   active worker; bounded by Timing.swPrecacheTimeoutMs, Story 1.11) + the self-hosted Baloo 2 font.
++// - `createBootLoader`: the load loop (dispatch / attempt / gate) over a Phaser adapter (Story 1.11).
+ import { AUDIO_CATALOG, AUDIO_IDS } from "../content/audio-catalog";
+ import { ATLASES, BACKGROUNDS } from "../content/assets";
+ import { VOICE_LINES, voicePath } from "../content/voice-lines";
++import type { SwRegistrationLike } from "./sw";
+ import { Timing } from "./timing";
+ 
+ /** Shell voice lines (greeting, …) load with the catalog; game lines load with their game. */
+@@ -78,15 +80,13 @@ export interface FontSetLike {
+   load(font: string): Promise<readonly unknown[]>;
+ }
+ 
+-export interface ServiceWorkerLike {
+-  getRegistration(): Promise<unknown>;
+-  readonly ready: Promise<unknown>;
+-}
+-
+ export interface ReadyDeps {
+-  isDev: boolean;
+-  /** `navigator.serviceWorker` (undefined when unsupported). */
+-  sw: ServiceWorkerLike | undefined;
++  /** `swRegistration()` from core/sw.ts: `undefined` in DEV, unsupported or when registration failed. */
++  registration: Promise<SwRegistrationLike | undefined>;
++  /** `navigator.serviceWorker.ready`: resolves once a worker is active (its precache finished). */
++  ready: Promise<unknown>;
++  /** Resolves after `ms` (Boot: scene clock `time.delayedCall`). */
++  sleep: (ms: number) => Promise<void>;
+   /** `document.fonts`. */
+   fonts: FontSetLike;
+   /** `(family, source, descriptors) => new FontFace(...)`. */
+@@ -97,11 +97,29 @@ export interface ReadyDeps {
+   ) => FontFaceLike;
+ }
+ 
+-/** Resolves when the app may show `button-play`; rejects (caller retries) when the font fails. */
+-export async function waitForReady(deps: ReadyDeps): Promise<void> {
+-  if (!deps.isDev && deps.sw) {
+-    const registration = await deps.sw.getRegistration();
+-    if (registration) await deps.sw.ready;
++/**
++ * Resolves when the app may show `button-play`; rejects (caller retries) when the font fails.
++ * SW step (Story 1.11): with no registration, or an already active worker (precache done, possibly
++ * an update installing in the background), it is skipped. Otherwise it waits for the first precache
++ * (`ready`) at most `Timing.swPrecacheTimeoutMs`, then warns once and continues online. It never
++ * rejects for the service worker. `skipSw` skips the SW step (see `createReadinessGate`).
++ */
++export async function waitForReady(
++  deps: ReadyDeps,
++  options: { skipSw?: boolean } = {},
++): Promise<void> {
++  const reg = options.skipSw ? undefined : await deps.registration.catch(() => undefined);
++  if (reg && !reg.active) {
++    const result = await Promise.race([
++      deps.ready.then(
++        () => "ok" as const,
++        () => "ok" as const,
++      ),
++      deps.sleep(Timing.swPrecacheTimeoutMs).then(() => "timeout" as const),
++    ]);
++    if (result === "timeout") {
++      console.warn("boot: precache not finished — continuing online");
++    }
+   }
+   // A failed FontFace stays failed, so every attempt registers a fresh one.
+   const face = deps.fontFace(FONT_FAMILY, `url(${FONT_URL})`, {
+@@ -117,3 +135,93 @@ export async function waitForReady(deps: ReadyDeps): Promise<void> {
+     throw error;
+   }
+ }
++
++/**
++ * Boot's gate: `waitForReady` whose SW step runs at most once per Boot. A retry (e.g. after a font
++ * failure) goes straight to the font, so a stuck first install costs one timeout and one warn.
++ */
++export function createReadinessGate(deps: ReadyDeps): () => Promise<void> {
++  let swStepDone = false;
++  return () => {
++    const skipSw = swStepDone;
++    swStepDone = true;
++    return waitForReady(deps, { skipSw });
++  };
++}
++
++/** A file the loader could not load: its cache key and URL. */
++export interface FailedFile {
++  readonly key: string;
++  readonly src?: string;
++}
++
++/** Phaser side of the Boot load loop (Story 1.11: spec-1-2's Boot.dispatch/attempt/gate moved to core). */
++export interface BootLoaderAdapter<T> {
++  /** Items of the load list not yet in the caches. */
++  missing(): readonly T[];
++  /** Queues and starts the loads; `done` gets the files that failed (empty = all loaded). */
++  loadAll(list: readonly T[], done: (failed: readonly FailedFile[]) => void): void;
++  /** The readiness gate (`waitForReady`). */
++  gate(): Promise<void>;
++  /** Loading-strip kart speed (`kartTimeScale`). */
++  setTimeScale(scale: number): void;
++  /** Called once, when the state reaches `ready` (Boot: launch AudioUnlockOverlay, then start Start). */
++  onReady(): void;
++}
++
++export interface BootLoader {
++  readonly state: LoadState;
++  dispatch(event: LoadEvent): void;
++  /** The first attempt (Boot `create`). */
++  start(): void;
++}
++
++/**
++ * The Boot load loop: `nextLoadState` drives it; every entry into `loading` runs one attempt (load the
++ * missing items, then the gate). A failed file or gate → `waiting` (kart slows); `online`/`retryTick`
++ * → a new attempt; the gate resolving → `ready` → `onReady()` once. Errors go only to console.warn.
++ */
++export function createBootLoader<T>(adapter: BootLoaderAdapter<T>): BootLoader {
++  let state: LoadState = "loading";
++
++  const gate = (): void => {
++    adapter.gate().then(
++      () => dispatch("complete"),
++      (error: unknown) => {
++        console.warn("boot: readiness gate failed — retrying", error);
++        dispatch("error");
++      },
++    );
++  };
++
++  const attempt = (): void => {
++    const missing = adapter.missing();
++    if (missing.length === 0) {
++      gate();
++      return;
++    }
++    adapter.loadAll(missing, (failed) => {
++      for (const file of failed) console.warn(`boot: failed to load "${file.key}"`, file.src);
++      if (failed.length > 0) dispatch("error");
++      else gate();
++    });
++  };
++
++  const dispatch = (event: LoadEvent): void => {
++    const prev = state;
++    const next = nextLoadState(prev, event);
++    if (next === prev) return;
++    state = next;
++    adapter.setTimeScale(kartTimeScale(next));
++    if (next === "ready") adapter.onReady();
++    else if (next === "loading") attempt();
++  };
++
++  return {
++    get state() {
++      return state;
++    },
++    dispatch,
++    start: attempt,
++  };
++}
+diff --git a/app/src/core/sw.test.ts b/app/src/core/sw.test.ts
+new file mode 100644
+index 0000000..1eac2e2
+--- /dev/null
++++ b/app/src/core/sw.test.ts
+@@ -0,0 +1,54 @@
++// I/O matrix (Story 1.11): Dev, Unsupported and Register rejects rows.
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import { registerServiceWorker, swRegistration, SW_SCOPE, SW_URL, type SwContainerLike } from './sw';
++
++afterEach(() => {
++  vi.restoreAllMocks();
++});
++
++function container(result: () => Promise<{ active: unknown }>): SwContainerLike & { register: ReturnType<typeof vi.fn> } {
++  return { register: vi.fn((_url: string, _opts: { scope: string }) => result()) };
++}
++
++describe('registerServiceWorker', () => {
++  it('registers the relative ./sw.js with scope ./ and stores the promise', async () => {
++    const reg = { active: null };
++    const c = container(async () => reg);
++    const p = registerServiceWorker(c, false);
++    expect(c.register).toHaveBeenCalledWith(SW_URL, { scope: SW_SCOPE });
++    expect(SW_URL).toBe('./sw.js');
++    expect(SW_SCOPE).toBe('./');
++    await expect(p).resolves.toBe(reg);
++    expect(swRegistration()).toBe(p);
++  });
++
++  it('dev: does not register and resolves undefined', async () => {
++    const c = container(async () => ({ active: {} }));
++    await expect(registerServiceWorker(c, true)).resolves.toBeUndefined();
++    expect(c.register).not.toHaveBeenCalled();
++    await expect(swRegistration()).resolves.toBeUndefined();
++  });
++
++  it('unsupported: no container resolves undefined', async () => {
++    await expect(registerServiceWorker(undefined, false)).resolves.toBeUndefined();
++    await expect(swRegistration()).resolves.toBeUndefined();
++  });
++
++  it('register rejects: one console.warn, resolves undefined', async () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const c = container(() => Promise.reject(new Error('SecurityError')));
++    await expect(registerServiceWorker(c, false)).resolves.toBeUndefined();
++    expect(warn).toHaveBeenCalledTimes(1);
++  });
++
++  it('register throwing synchronously is treated like a rejection', async () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const c: SwContainerLike = {
++      register: () => {
++        throw new Error('SecurityError');
++      },
++    };
++    await expect(registerServiceWorker(c, false)).resolves.toBeUndefined();
++    expect(warn).toHaveBeenCalledTimes(1);
++  });
++});
+diff --git a/app/src/core/sw.ts b/app/src/core/sw.ts
+new file mode 100644
+index 0000000..ebfab2d
+--- /dev/null
++++ b/app/src/core/sw.ts
+@@ -0,0 +1,57 @@
++// Service-worker registration (Story 1.11, AR33/AR34). The app registers the Workbox worker that
++// vite-plugin-pwa generates (`generateSW`, `injectRegister: false`) itself, once, from main.ts
++// before `new Game`. Boot's readiness gate reads the same promise through `swRegistration()`.
++//
++// Update policy: nothing here (or anywhere) calls `update()`, `skipWaiting` or `location.reload`,
++// and nothing listens for `controllerchange`. A new worker waits and applies at the next cold open,
++// so a deploy never reloads the app mid-play.
++
++/** The worker file vite-plugin-pwa writes next to index.html. Relative, so `base: './'` hosts work. */
++export const SW_URL = "./sw.js";
++/** Scope of the worker: the folder the app is served from. */
++export const SW_SCOPE = "./";
++
++/** Slice of `ServiceWorkerRegistration`. `active` is set once a worker finished its install (precache). */
++export interface SwRegistrationLike {
++  readonly active: unknown;
++}
++
++/** Slice of `ServiceWorkerContainer` (`navigator.serviceWorker`). */
++export interface SwContainerLike {
++  register(url: string, options: { scope: string }): Promise<SwRegistrationLike>;
++}
++
++let registration: Promise<SwRegistrationLike | undefined> = Promise.resolve(undefined);
++
++/**
++ * Registers `SW_URL`. Resolves `undefined` in DEV, without SW support, or when the registration
++ * rejects (one `console.warn`, e.g. a SecurityError in a locked-down profile); never rejects.
++ */
++export function registerServiceWorker(
++  container: SwContainerLike | undefined,
++  isDev: boolean,
++): Promise<SwRegistrationLike | undefined> {
++  if (isDev || !container) {
++    registration = Promise.resolve(undefined);
++    return registration;
++  }
++  let pending: Promise<SwRegistrationLike>;
++  try {
++    pending = container.register(SW_URL, { scope: SW_SCOPE });
++  } catch (error) {
++    pending = Promise.reject(error);
++  }
++  registration = pending.then(
++    (reg) => reg,
++    (error: unknown) => {
++      console.warn("sw: registration failed — running online only", error);
++      return undefined;
++    },
++  );
++  return registration;
++}
++
++/** The promise stored by the last `registerServiceWorker` call (`undefined` before any call). */
++export function swRegistration(): Promise<SwRegistrationLike | undefined> {
++  return registration;
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/core/timing.ts b/app/src/core/timing.ts
+index b8e6903..2e5eaf9 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/core/timing.ts
++++ b/app/src/core/timing.ts
+@@ -19,6 +19,12 @@ export const Timing = {
+   playBobMs: 1400,
+   /** button-round press: spring back from 0.9× (epic UX › Base button 'presses to 0.9× and springs back'); well inside feedbackMaxMs for the visual start. */
+   buttonPressMs: 180,
++  /**
++   * Technical, not an EXPERIENCE value (Story 1.11): how long Boot's readiness gate waits for the
++   * first service-worker precache before it continues online. The child is never blocked; offline
++   * then works from the next successful open.
++   */
++  swPrecacheTimeoutMs: 20000,
+ 
+   // --- Map (State "Mời chơi", station-hotspot, kart) ---
+   /** One station gently moves every 4–6 s while idle. */
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/main.ts b/app/src/main.ts
+index 960fdcd..6137fc3 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/main.ts
++++ b/app/src/main.ts
+@@ -3,6 +3,7 @@ import { AUTO, Game, Scale, type Types } from 'phaser';
+ import { Tokens } from './core/tokens';
+ import { installPageGuards, installRotationSafeScaleManager } from './core/stage';
+ import { audio, type SoundLike } from './core/audio-director';
++import { registerServiceWorker } from './core/sw';
+ import { GAME_SCENES } from './games/registry';
+ import { AudioUnlockOverlay } from './scenes/AudioUnlockOverlay';
+ import { Boot } from './scenes/Boot';
+@@ -39,7 +40,12 @@ installPageGuards();
+ installRotationSafeScaleManager();
+ document.body.style.backgroundColor = Tokens.colors.sky.css;
+ 
++// Story 1.11: register the precaching service worker once, before the game boots (Boot's readiness
++// gate reads the same promise). Skipped in dev; an update waits for the next cold open (no reload).
++registerServiceWorker('serviceWorker' in navigator ? navigator.serviceWorker : undefined, import.meta.env.DEV);
++
+ const game = new Game(config);
+ // The only place outside core/ that touches the sound manager: hand it to AudioDirector, which
+ // wraps Phaser's unlock and the visibility handling. WebAudioSoundManager satisfies SoundLike.
+-audio.attach(game.sound satisfies SoundLike, document);
++// `navigator` lets it set audioSession.type = 'playback' (the silent switch must not mute the app).
++audio.attach(game.sound satisfies SoundLike, document, navigator);
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/scenes/Boot.ts b/app/src/scenes/Boot.ts
+index fc46c27..79f7942 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/src/scenes/Boot.ts
++++ b/app/src/scenes/Boot.ts
+@@ -1,19 +1,23 @@
+ // Boot (Story 1.2): sky + loading-strip only (no text, no bar, no button). Loads the shared/map
+ // assets (the SFX/music catalog, every vo.shell.* voice line, and since Story 1.5 the map atlas and
+-// plate), then waits for the readiness gate (SW + self-hosted Baloo 2).
+-// On a loader error or gate rejection the kart slows and waits; the load retries on window
+-// `online` or every Tokens.Timing.loadRetryMs. Errors go only to console.warn.
+-// When ready: launches AudioUnlockOverlay (it sleeps itself) and starts Start.
++// plate), then waits for the readiness gate (first SW precache, bounded — Story 1.11 — and the
++// self-hosted Baloo 2).
++// Since Story 1.11 the load loop (dispatch / attempt / gate) lives in core/boot-load.ts
++// (`createBootLoader`); this scene is the Phaser adapter: the loading-strip, the timers, the `online`
++// listener and the `this.load` calls. On a loader error or gate rejection the kart slows and waits;
++// the load retries on window `online` or every Tokens.Timing.loadRetryMs. Errors go only to
++// console.warn. When ready: launches AudioUnlockOverlay (it sleeps itself) and starts Start.
+ import { Scene } from "phaser";
+ import {
+   bootAudio,
+   bootTextures,
+-  kartTimeScale,
+-  nextLoadState,
+-  waitForReady,
+-  type LoadEvent,
+-  type LoadState,
++  createBootLoader,
++  createReadinessGate,
++  type BootLoader,
++  type FailedFile,
++  type TextureLoad,
+ } from "../core/boot-load";
++import { swRegistration } from "../core/sw";
+ import { Tokens } from "../core/tokens";
+ import {
+   createLoadingStrip,
+@@ -23,25 +27,56 @@ import {
+ const LOADER_ERROR = "loaderror";
+ const LOADER_COMPLETE = "complete";
+ const ONLINE = "online";
+-/** Audio cache key → URL of everything Boot loads. */
+-const BOOT_AUDIO = bootAudio();
+-/** Textures Boot loads (Story 1.5: atlas.map + bg.map). */
+-const BOOT_TEXTURES = bootTextures();
++
++/** One entry of Boot's load list: an audio file (`bootAudio()`) or a texture (`bootTextures()`). */
++type BootItem =
++  | { readonly kind: "audio"; readonly key: string; readonly url: string }
++  | TextureLoad;
++
++/** Everything Boot loads. Story 1.4/1.5 textures and the `bootAudio()` list are its inputs. */
++const BOOT_ITEMS: readonly BootItem[] = [
++  ...bootAudio().map(([key, url]) => ({ kind: "audio" as const, key, url })),
++  ...bootTextures(),
++];
++
++/** Never settles: `ready` stand-in without SW support (the gate skips the SW step then anyway). */
++const NEVER = new Promise<unknown>(() => undefined);
+ 
+ export class Boot extends Scene {
+-  private state: LoadState = "loading";
+   private strip: LoadingStrip | undefined;
+-  private readonly onOnline = (): void => this.dispatch("online");
++  private loader: BootLoader | undefined;
++  private readonly onOnline = (): void => this.loader?.dispatch("online");
+ 
+   constructor() {
+     super("Boot");
+   }
+ 
+   create(): void {
+-    this.state = "loading";
+     this.cameras.main.setBackgroundColor(Tokens.colors.sky.css);
+     this.strip = createLoadingStrip(this, Tokens.safeRect);
+ 
++    this.loader = createBootLoader<BootItem>({
++      missing: () => BOOT_ITEMS.filter((item) => !this.isCached(item)),
++      loadAll: (list, done) => this.loadAll(list, done),
++      // The SW wait runs at most once per Boot; retries only re-check the font.
++      gate: createReadinessGate({
++        registration: swRegistration(),
++        ready: "serviceWorker" in navigator ? navigator.serviceWorker.ready : NEVER,
++        sleep: (ms) =>
++          new Promise<void>((resolve) => {
++            this.time.delayedCall(ms, resolve);
++          }),
++        fonts: document.fonts,
++        fontFace: (family, source, descriptors) =>
++          new FontFace(family, source, descriptors),
++      }),
++      setTimeScale: (scale) => this.strip?.setTimeScale(scale),
++      onReady: () => {
++        this.scene.launch("AudioUnlockOverlay");
++        this.scene.start("Start");
++      },
++    });
++
+     window.addEventListener(ONLINE, this.onOnline);
+     this.events.once("shutdown", () =>
+       window.removeEventListener(ONLINE, this.onOnline),
+@@ -49,66 +84,37 @@ export class Boot extends Scene {
+     this.time.addEvent({
+       delay: Tokens.Timing.loadRetryMs,
+       loop: true,
+-      callback: () => this.dispatch("retryTick"),
++      callback: () => this.loader?.dispatch("retryTick"),
+     });
+ 
+-    this.attempt();
++    this.loader.start();
+   }
+ 
+-  private dispatch(event: LoadEvent): void {
+-    const prev = this.state;
+-    const next = nextLoadState(prev, event);
+-    if (next === prev) return;
+-    this.state = next;
+-    this.strip?.setTimeScale(kartTimeScale(next));
+-    if (next === "ready") {
+-      this.scene.launch("AudioUnlockOverlay");
+-      this.scene.start("Start");
+-    } else if (next === "loading") {
+-      this.attempt();
+-    }
++  private isCached(item: BootItem): boolean {
++    return item.kind === "audio"
++      ? this.cache.audio.exists(item.key)
++      : this.textures.exists(item.key);
+   }
+ 
+-  /** One load attempt: queue the assets not yet cached, then the readiness gate. */
+-  private attempt(): void {
+-    const missing = BOOT_AUDIO.filter(([key]) => !this.cache.audio.exists(key));
+-    const missingTextures = BOOT_TEXTURES.filter((t) => !this.textures.exists(t.key));
+-    if (missing.length === 0 && missingTextures.length === 0) {
+-      this.gate();
+-      return;
+-    }
+-    let failed = false;
++  /** Queues `list` on the Phaser loader; `done` gets the files that failed (key + URL). */
++  private loadAll(
++    list: readonly BootItem[],
++    done: (failed: readonly FailedFile[]) => void,
++  ): void {
++    const failed: FailedFile[] = [];
+     const onError = (file: { key: string; src?: string }): void => {
+-      failed = true;
+-      console.warn(`boot: failed to load "${file.key}"`, file.src);
++      failed.push(file.src === undefined ? { key: file.key } : { key: file.key, src: file.src });
+     };
+     this.load.on(LOADER_ERROR, onError);
+     this.load.once(LOADER_COMPLETE, () => {
+       this.load.off(LOADER_ERROR, onError);
+-      if (failed) this.dispatch("error");
+-      else this.gate();
++      done(failed);
+     });
+-    for (const [key, url] of missing) this.load.audio(key, url);
+-    for (const tex of missingTextures) {
+-      if (tex.kind === "atlas") this.load.atlas(tex.key, tex.png, tex.json);
+-      else this.load.image(tex.key, tex.path);
++    for (const item of list) {
++      if (item.kind === "audio") this.load.audio(item.key, item.url);
++      else if (item.kind === "atlas") this.load.atlas(item.key, item.png, item.json);
++      else this.load.image(item.key, item.path);
+     }
+     this.load.start();
+   }
+-
+-  private gate(): void {
+-    waitForReady({
+-      isDev: import.meta.env.DEV,
+-      sw: "serviceWorker" in navigator ? navigator.serviceWorker : undefined,
+-      fonts: document.fonts,
+-      fontFace: (family, source, descriptors) =>
+-        new FontFace(family, source, descriptors),
+-    }).then(
+-      () => this.dispatch("complete"),
+-      (error: unknown) => {
+-        console.warn("boot: readiness gate failed — retrying", error);
+-        this.dispatch("error");
+-      },
+-    );
+-  }
+ }
+diff --git a/app/tools/lint/check-precache.test.ts b/app/tools/lint/check-precache.test.ts
+new file mode 100644
+index 0000000..979f069
+--- /dev/null
++++ b/app/tools/lint/check-precache.test.ts
+@@ -0,0 +1,176 @@
++// tools/lint/check-precache.ts (Story 1.11, AR36): every failing kind of the rules, the manifest
++// regex on a real-format sample, and run(appDir) against temp public/ + dist/ trees.
++import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { dirname, join } from 'node:path';
++import { afterEach, describe, expect, it } from 'vitest';
++import { checkPrecache, MAX_FILE_BYTES, parseManifestUrls, run, type PrecacheInput } from './check-precache.ts';
++
++/** Minified generateSW output shape (vite-plugin-pwa 2.0.0 / Workbox 7.4.1). */
++const SW_SAMPLE =
++  'define(["./workbox-9c191d2f"],function(e){"use strict";e.clientsClaim(),e.precacheAndRoute([' +
++  '{url:"manifest.webmanifest",revision:"03c5"},{url:"index.html",revision:"759c2465"},{url:"assets/x.m4a",revision:"0a1b"},{url:"assets/index-B.js",revision:null},' +
++  '{url:"icons/icon-192.png",revision:"fe83"}],{}),e.cleanupOutdatedCaches(),' +
++  'e.registerRoute(new e.NavigationRoute(e.createHandlerBoundToURL("index.html")))});';
++
++function input(over: Partial<PrecacheInput> = {}): PrecacheInput {
++  return {
++    publicFiles: ['assets/x.m4a', 'assets/x.hash', 'assets/fonts/OFL.txt', 'icons/icon-192.png'],
++    distFiles: [
++      { path: 'index.html', bytes: 1000 },
++      { path: 'assets/x.m4a', bytes: 2000 },
++    ],
++    manifestUrls: parseManifestUrls(SW_SAMPLE),
++    textFiles: [
++      { path: 'index.html', text: '<link rel="manifest" href="./manifest.webmanifest">' },
++      { path: 'sw.js', text: SW_SAMPLE },
++      { path: 'workbox-9c191d2f.js', text: 'console.warn("Learn more at the Workbox documentation")' },
++    ],
++    ...over,
++  };
++}
++
++describe('parseManifestUrls', () => {
++  it('collects every url:"…" of a real-format manifest', () => {
++    expect(parseManifestUrls(SW_SAMPLE)).toEqual(['manifest.webmanifest', 'index.html', 'assets/x.m4a', 'assets/index-B.js', 'icons/icon-192.png']);
++    expect(parseManifestUrls('[{"url":"a.png","revision":"1"}]')).toEqual(['a.png']);
++  });
++});
++
++describe('checkPrecache', () => {
++  it('ok: every runtime file precached → no problems, runtime count', () => {
++    expect(checkPrecache(input())).toEqual({ problems: [], runtimeCount: 2 });
++  });
++
++  it('a runtime public file missing from the manifest fails naming it', () => {
++    const r = checkPrecache(input({ publicFiles: [...input().publicFiles, 'assets/atlases/new.png'] }));
++    expect(r.problems).toEqual(['public/assets/atlases/new.png is not precached by dist/sw.js']);
++  });
++
++  it('a file of unknown type (.mp3) fails naming it', () => {
++    const r = checkPrecache(input({ publicFiles: ['assets/x.m4a', 'icons/icon-192.png', 'assets/audio/sfx/boom.mp3'] }));
++    expect(r.problems).toHaveLength(1);
++    expect(r.problems[0]).toMatch(/^public\/assets\/audio\/sfx\/boom\.mp3: extension "\.mp3"/);
++  });
++
++  it('a dist file over 8 MiB fails naming it; exactly 8 MiB passes', () => {
++    const r = checkPrecache(
++      input({
++        distFiles: [
++          { path: 'assets/bg/huge.bin', bytes: MAX_FILE_BYTES + 1 },
++          { path: 'assets/bg/edge.bin', bytes: MAX_FILE_BYTES },
++        ],
++      }),
++    );
++    expect(r.problems).toEqual([`dist/assets/bg/huge.bin is ${MAX_FILE_BYTES + 1} bytes (> 8388608)`]);
++  });
++
++  it('an absolute URL in sw.js, workbox-*.js, index.html or the manifest fails naming the file', () => {
++    for (const path of ['sw.js', 'workbox-abc.js', 'index.html', 'manifest.webmanifest']) {
++      const r = checkPrecache(input({ textFiles: [{ path, text: 'x("https://cdn.example.com/a.js")' }] }));
++      expect(r.problems).toEqual([`dist/${path} contains an absolute http(s):// URL`]);
++    }
++    const http = checkPrecache(input({ textFiles: [{ path: 'index.html', text: '<script src="http://x/y.js">' }] }));
++    expect(http.problems).toHaveLength(1);
++  });
++
++  it('importScripts of a non-relative URL fails; a relative one or a variable passes', () => {
++    const bad = checkPrecache(input({ textFiles: [{ path: 'sw.js', text: 'importScripts("//cdn.example.com/wb.js")' }] }));
++    expect(bad.problems).toEqual(['dist/sw.js: importScripts("//cdn.example.com/wb.js") is not a relative URL']);
++    const ok = checkPrecache(input({ textFiles: [{ path: 'sw.js', text: 'importScripts("./workbox-1.js");importScripts(s)' }] }));
++    expect(ok.problems).toEqual([]);
++  });
++
++  it('sw.js calling skipWaiting() fails', () => {
++    const r = checkPrecache(input({ textFiles: [{ path: 'sw.js', text: 'self.skipWaiting()' }] }));
++    expect(r.problems).toEqual(['dist/sw.js calls skipWaiting() (updates must wait for the next cold open)']);
++  });
++
++  it('a missing dist/sw.js fails with "run vite build"', () => {
++    const r = checkPrecache(input({ manifestUrls: undefined }));
++    expect(r.problems).toEqual(['dist/sw.js is missing (run vite build)']);
++  });
++
++  it('a Vite-emitted dist/ file missing from the manifest fails naming it (sw.js / workbox-*.js exempt)', () => {
++    const r = checkPrecache(
++      input({
++        manifestUrls: ['index.html', 'assets/x.m4a', 'icons/icon-192.png'],
++        distFiles: [
++          { path: 'index.html', bytes: 1 },
++          { path: 'assets/index-B.js', bytes: 1 },
++          { path: 'sw.js', bytes: 1 },
++          { path: 'workbox-9c191d2f.js', bytes: 1 },
++        ],
++      }),
++    );
++    expect(r.problems).toEqual(['dist/assets/index-B.js is not precached by dist/sw.js']);
++  });
++
++  it('index.html missing from the manifest fails', () => {
++    const r = checkPrecache(input({ manifestUrls: ['assets/x.m4a', 'icons/icon-192.png'] }));
++    expect(r.problems).toEqual(['dist/index.html is not precached by dist/sw.js']);
++  });
++});
++
++describe('run(appDir)', () => {
++  const dirs: string[] = [];
++  afterEach(() => {
++    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
++  });
++
++  function put(root: string, rel: string, content: string | Buffer): void {
++    const file = join(root, rel);
++    mkdirSync(dirname(file), { recursive: true });
++    writeFileSync(file, content);
++  }
++
++  /** A good app tree: public/ runtime + metadata files, dist/ with a real-format sw.js. */
++  function goodApp(): string {
++    const app = mkdtempSync(join(tmpdir(), 'bhc-precache-'));
++    dirs.push(app);
++    for (const rel of ['assets/x.m4a', 'icons/icon-192.png']) {
++      put(app, `public/${rel}`, 'data');
++      put(app, `dist/${rel}`, 'data');
++    }
++    put(app, 'public/assets/x.hash', 'abc');
++    put(app, 'dist/assets/index-B.js', 'console.log(1)');
++    put(app, 'dist/index.html', '<html></html>');
++    put(app, 'dist/manifest.webmanifest', '{"start_url":"./"}');
++    put(app, 'dist/sw.js', SW_SAMPLE);
++    put(app, 'dist/workbox-9c191d2f.js', 'self.x=1');
++    return app;
++  }
++
++  it('passes on a good tree and reports counts', () => {
++    const r = run(goodApp());
++    expect(r.problems).toEqual([]);
++    expect(r.runtimeCount).toBe(2);
++    expect(r.manifestCount).toBe(5);
++  });
++
++  it('fails naming a runtime asset added to public/ but not precached', () => {
++    const app = goodApp();
++    put(app, 'public/assets/bg/new.png', 'png');
++    expect(run(app).problems).toEqual(['public/assets/bg/new.png is not precached by dist/sw.js']);
++  });
++
++  it('fails naming an oversized dist file', () => {
++    const app = goodApp();
++    put(app, 'dist/assets/bg/huge.png', Buffer.alloc(MAX_FILE_BYTES + 1));
++    expect(run(app).problems).toContain(`dist/assets/bg/huge.png is ${MAX_FILE_BYTES + 1} bytes (> 8388608)`);
++  });
++
++  it('scans workbox-*.js for absolute URLs', () => {
++    const app = goodApp();
++    put(app, 'dist/workbox-9c191d2f.js', 'importScripts("https://storage.googleapis.com/workbox-cdn/x.js")');
++    const problems = run(app).problems;
++    expect(problems).toContain('dist/workbox-9c191d2f.js contains an absolute http(s):// URL');
++    expect(problems).toContain('dist/workbox-9c191d2f.js: importScripts("https://storage.googleapis.com/workbox-cdn/x.js") is not a relative URL');
++  });
++
++  it('fails with "run vite build" when dist/ has no sw.js', () => {
++    const app = goodApp();
++    rmSync(join(app, 'dist', 'sw.js'));
++    expect(run(app).problems).toEqual(['dist/sw.js is missing (run vite build)']);
++  });
++});
+diff --git a/app/tools/lint/check-precache.ts b/app/tools/lint/check-precache.ts
+new file mode 100644
+index 0000000..720ec27
+--- /dev/null
++++ b/app/tools/lint/check-precache.ts
+@@ -0,0 +1,168 @@
++// `npm run precache:check` (Story 1.11, AR36) — runs after `vite build` in `npm run check`. Pure rules
++// in `checkPrecache()`; `run(appDir)` wires the real public/ and dist/ trees. It fails, naming the
++// path, when:
++//   - a file under public/ with a runtime extension (the Workbox glob list) is missing from the
++//     dist/sw.js precache manifest, and so is every dist/ file of those types (index.html, Vite's
++//     assets/index-*.js and *.css …) except sw.js and workbox-*.js;
++//   - a file under public/ has an extension that is neither a runtime type nor metadata (.hash, .txt);
++//   - any file in dist/ is larger than 8 388 608 bytes;
++//   - dist/index.html, dist/manifest.webmanifest, dist/sw.js or dist/workbox-*.js contains http:// or
++//     https://, or calls importScripts() with a non-relative URL; sw.js calls skipWaiting();
++//   - dist/sw.js (or index.html / manifest.webmanifest) is missing ("run vite build").
++import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
++import { dirname, join, relative, resolve, sep } from 'node:path';
++import { fileURLToPath } from 'node:url';
++
++/** File types the app fetches at runtime — must match `RUNTIME_GLOB` in vite.config.ts. */
++export const RUNTIME_EXTENSIONS = ['js', 'css', 'html', 'png', 'webp', 'json', 'm4a', 'woff2', 'svg', 'ico', 'webmanifest'] as const;
++/** Metadata shipped next to assets but never fetched (voice `.hash`, licence `.txt`). */
++export const METADATA_EXTENSIONS = ['hash', 'txt'] as const;
++/** AR34: every shipped file ≤ 8 MiB (also the Workbox `maximumFileSizeToCacheInBytes`). */
++export const MAX_FILE_BYTES = 8388608;
++
++export const SW_FILE = 'sw.js';
++/** dist/ files scanned for absolute URLs (besides `workbox-*.js`). */
++export const REQUIRED_DIST_FILES = ['index.html', 'manifest.webmanifest', SW_FILE] as const;
++const WORKBOX_RUNTIME = /^workbox-[\w-]+\.js$/;
++
++export interface PrecacheInput {
++  /** Paths under public/, relative, `/`-separated. */
++  publicFiles: readonly string[];
++  /** Every file under dist/ with its size. */
++  distFiles: ReadonlyArray<{ path: string; bytes: number }>;
++  /** URLs of the sw.js precache manifest; `undefined` when dist/sw.js is missing. */
++  manifestUrls: readonly string[] | undefined;
++  /** Contents of the dist/ files that must hold no absolute URL (index.html, manifest, sw.js, workbox-*.js). */
++  textFiles: ReadonlyArray<{ path: string; text: string }>;
++}
++
++export interface PrecacheResult {
++  problems: string[];
++  /** public/ files with a runtime extension (all of them must be precached). */
++  runtimeCount: number;
++}
++
++const extensionOf = (path: string): string => {
++  const base = path.slice(path.lastIndexOf('/') + 1);
++  const dot = base.lastIndexOf('.');
++  return dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
++};
++
++const normalizeUrl = (url: string): string => {
++  let u = url;
++  try {
++    u = decodeURIComponent(u);
++  } catch {
++    // keep as is
++  }
++  return u.replace(/^\.\//, '').replace(/^\//, '');
++};
++
++/** Every `url:"…"` (or `"url":"…"`) of the Workbox precache manifest in sw.js. */
++export function parseManifestUrls(swJs: string): string[] {
++  const urls: string[] = [];
++  for (const m of swJs.matchAll(/["']?url["']?\s*:\s*["']([^"']+)["']/g)) {
++    if (m[1] !== undefined) urls.push(m[1]);
++  }
++  return urls;
++}
++
++const ABSOLUTE_URL = /https?:\/\//i;
++const IMPORT_SCRIPTS_LITERAL = /importScripts\(\s*([^)]*)\)/g;
++const STRING_LITERAL = /["'`]([^"'`]*)["'`]/g;
++const isRelative = (url: string): boolean => !/^([a-z][a-z0-9+.-]*:|\/\/|\/)/i.test(url);
++
++/** The pure rules (see the header). */
++export function checkPrecache(input: PrecacheInput): PrecacheResult {
++  const problems: string[] = [];
++  const runtime = new Set<string>(RUNTIME_EXTENSIONS);
++  const metadata = new Set<string>(METADATA_EXTENSIONS);
++  let runtimeCount = 0;
++
++  if (input.manifestUrls === undefined) {
++    problems.push(`dist/${SW_FILE} is missing (run vite build)`);
++  }
++  const precached = new Set((input.manifestUrls ?? []).map(normalizeUrl));
++
++  for (const path of input.publicFiles) {
++    const ext = extensionOf(path);
++    if (runtime.has(ext)) {
++      runtimeCount++;
++      if (input.manifestUrls !== undefined && !precached.has(path)) {
++        problems.push(`public/${path} is not precached by dist/${SW_FILE}`);
++      }
++    } else if (!metadata.has(ext)) {
++      problems.push(`public/${path}: extension ".${ext}" is neither a runtime type (${RUNTIME_EXTENSIONS.join(', ')}) nor metadata (${METADATA_EXTENSIONS.join(', ')})`);
++    }
++  }
++  for (const file of input.distFiles) {
++    if (file.bytes > MAX_FILE_BYTES) problems.push(`dist/${file.path} is ${file.bytes} bytes (> ${MAX_FILE_BYTES})`);
++    // Vite-emitted files (assets/index-*.js, *.css, …) must be precached too; the worker files are not.
++    const workerFile = file.path === SW_FILE || WORKBOX_RUNTIME.test(file.path);
++    if (input.manifestUrls !== undefined && !workerFile && runtime.has(extensionOf(file.path)) && !precached.has(file.path)) {
++      problems.push(`dist/${file.path} is not precached by dist/${SW_FILE}`);
++    }
++  }
++
++  for (const { path, text } of input.textFiles) {
++    if (ABSOLUTE_URL.test(text)) problems.push(`dist/${path} contains an absolute http(s):// URL`);
++    for (const call of text.matchAll(IMPORT_SCRIPTS_LITERAL)) {
++      for (const lit of (call[1] ?? '').matchAll(STRING_LITERAL)) {
++        const url = lit[1] ?? '';
++        if (!isRelative(url)) problems.push(`dist/${path}: importScripts("${url}") is not a relative URL`);
++      }
++    }
++    if (path === SW_FILE && text.includes('skipWaiting(')) {
++      problems.push(`dist/${SW_FILE} calls skipWaiting() (updates must wait for the next cold open)`);
++    }
++  }
++  return { problems, runtimeCount };
++}
++
++function listFiles(dir: string): string[] {
++  if (!existsSync(dir)) return [];
++  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? listFiles(join(dir, e.name)) : [join(dir, e.name)]));
++}
++
++const rel = (root: string, file: string): string => relative(root, file).split(sep).join('/');
++
++/** Runs the rules on `<appDir>/public` and `<appDir>/dist`. */
++export function run(appDir: string): PrecacheResult & { manifestCount: number } {
++  const publicDir = join(appDir, 'public');
++  const distDir = join(appDir, 'dist');
++  const swPath = join(distDir, SW_FILE);
++  const manifestUrls = existsSync(swPath) ? parseManifestUrls(readFileSync(swPath, 'utf8')) : undefined;
++  const distFiles = listFiles(distDir).map((f) => ({ path: rel(distDir, f), bytes: statSync(f).size }));
++  const textNames = [
++    ...REQUIRED_DIST_FILES,
++    ...(existsSync(distDir) ? readdirSync(distDir).filter((n) => WORKBOX_RUNTIME.test(n)).sort() : []),
++  ];
++  const textFiles = textNames.filter((n) => existsSync(join(distDir, n))).map((n) => ({ path: n, text: readFileSync(join(distDir, n), 'utf8') }));
++  const result = checkPrecache({
++    publicFiles: listFiles(publicDir).map((f) => rel(publicDir, f)),
++    distFiles,
++    manifestUrls,
++    textFiles,
++  });
++  if (manifestUrls !== undefined) {
++    for (const name of REQUIRED_DIST_FILES) {
++      if (!existsSync(join(distDir, name))) result.problems.push(`dist/${name} is missing (run vite build)`);
++    }
++  }
++  return { ...result, manifestCount: manifestUrls?.length ?? 0 };
++}
++
++function main(): void {
++  const appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
++  const result = run(appDir);
++  if (result.problems.length > 0) {
++    for (const p of result.problems) console.error(`precache: ${p}`);
++    console.error(`precache: ${result.problems.length} problem(s)`);
++    process.exit(1);
++  }
++  console.log(
++    `precache: OK (${result.runtimeCount} runtime files under public/ all precached; ${result.manifestCount} precache entries; 0 problems)`,
++  );
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+diff --git a/app/tools/pwa/index-html.test.ts b/app/tools/pwa/index-html.test.ts
+new file mode 100644
+index 0000000..ce7ce88
+--- /dev/null
++++ b/app/tools/pwa/index-html.test.ts
+@@ -0,0 +1,35 @@
++// app/index.html (Story 1.11): the iOS Home-Screen meta and touch icon, relative paths only, and a
++// theme-color that matches the manifest (designTokens.colors.sky).
++import { existsSync, readFileSync } from 'node:fs';
++import { dirname, join, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { describe, expect, it } from 'vitest';
++import { designTokens } from '../../src/core/tokens.generated.ts';
++
++const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
++const html = readFileSync(join(APP_DIR, 'index.html'), 'utf8');
++
++const meta = (name: string): string | undefined => new RegExp(`<meta name="${name}" content="([^"]*)"`).exec(html)?.[1];
++
++describe('index.html', () => {
++  it('declares the standalone, full-bleed Home-Screen app', () => {
++    expect(meta('apple-mobile-web-app-capable')).toBe('yes');
++    expect(meta('apple-mobile-web-app-status-bar-style')).toBe('black-translucent');
++    expect(meta('viewport')).toContain('viewport-fit=cover');
++  });
++
++  it('theme-color equals the manifest colour (sky token)', () => {
++    expect(meta('theme-color')?.toUpperCase()).toBe(designTokens.colors.sky.css.toUpperCase());
++  });
++
++  it('links the 180² apple-touch-icon by a relative path that exists in public/', () => {
++    const href = /<link rel="apple-touch-icon"[^>]*href="([^"]+)"/.exec(html)?.[1];
++    expect(href).toBe('icons/apple-touch-icon.png');
++    expect(existsSync(join(APP_DIR, 'public', href ?? ''))).toBe(true);
++  });
++
++  it('has no absolute or external URL', () => {
++    expect(html).not.toMatch(/(href|src)="(https?:)?\/\//);
++    expect(html).not.toMatch(/https?:\/\//);
++  });
++});
+diff --git a/app/tools/pwa/make-icons.test.ts b/app/tools/pwa/make-icons.test.ts
+new file mode 100644
+index 0000000..cb907c1
+--- /dev/null
++++ b/app/tools/pwa/make-icons.test.ts
+@@ -0,0 +1,73 @@
++// tools/pwa/make-icons.ts (Story 1.11): manifest icons with no network — valid PNG signature, IHDR
++// size, decodable pixels and identical bytes across two runs.
++import { inflateSync } from 'node:zlib';
++import { describe, expect, it } from 'vitest';
++import { designTokens } from '../../src/core/tokens.generated.ts';
++import { buildIcons, encodePng, ICONS, paintIcon } from './make-icons.ts';
++
++const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
++
++function ihdr(png: Buffer): { width: number; height: number; depth: number; colour: number } {
++  expect(png.toString('ascii', 12, 16)).toBe('IHDR');
++  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20), depth: png[24] ?? -1, colour: png[25] ?? -1 };
++}
++
++/** Pixel (x, y) of an RGBA PNG written by encodePng (single IDAT, filter 0 rows). */
++function pixel(png: Buffer, x: number, y: number): number[] {
++  const { width } = ihdr(png);
++  const idatLen = png.readUInt32BE(33);
++  expect(png.toString('ascii', 37, 41)).toBe('IDAT');
++  const raw = inflateSync(png.subarray(41, 41 + idatLen));
++  const at = y * (width * 4 + 1) + 1 + x * 4;
++  return [...raw.subarray(at, at + 4)];
++}
++
++describe('encodePng', () => {
++  it('writes the PNG signature, an RGBA IHDR of the given size and IEND', () => {
++    const png = encodePng(3, 2, new Uint8Array(3 * 2 * 4).fill(0x80));
++    expect([...png.subarray(0, 8)]).toEqual(SIGNATURE);
++    expect(ihdr(png)).toEqual({ width: 3, height: 2, depth: 8, colour: 6 });
++    expect(png.toString('ascii', png.length - 8, png.length - 4)).toBe('IEND');
++    expect(pixel(png, 2, 1)).toEqual([0x80, 0x80, 0x80, 0x80]);
++  });
++
++  it('rejects a buffer of the wrong length', () => {
++    expect(() => encodePng(2, 2, new Uint8Array(3))).toThrow(/expected 16 bytes/);
++  });
++});
++
++describe('icons', () => {
++  it('has the four files the manifest and index.html reference, at their sizes', () => {
++    expect(ICONS.map((i) => [i.file, i.size, i.purpose])).toEqual([
++      ['icon-192.png', 192, 'any'],
++      ['icon-512.png', 512, 'any'],
++      ['icon-maskable-512.png', 512, 'maskable'],
++      ['apple-touch-icon.png', 180, 'any'],
++    ]);
++    for (const { file, png } of buildIcons()) {
++      const size = ICONS.find((i) => i.file === file)?.size;
++      expect([...png.subarray(0, 8)]).toEqual(SIGNATURE);
++      expect(ihdr(png)).toMatchObject({ width: size, height: size });
++    }
++  });
++
++  it('is byte-identical across two runs', () => {
++    const a = buildIcons();
++    const b = buildIcons();
++    expect(a.map((i) => i.png.equals(b.find((j) => j.file === i.file)?.png ?? Buffer.alloc(0)))).toEqual([true, true, true, true]);
++  });
++
++  it('paints a sky corner, a yellow disc and a white ▶ in the centre; the maskable disc stays in the 80 % safe zone', () => {
++    const sky = designTokens.colors.sky.value;
++    const play = designTokens.colors.buttonPlay.value;
++    const toRgb = (v: number) => [(v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff, 0xff];
++    const png = encodePng(512, 512, paintIcon(512, 'any'));
++    expect(pixel(png, 0, 0)).toEqual(toRgb(sky));
++    expect(pixel(png, 256, 256)).toEqual([0xff, 0xff, 0xff, 0xff]);
++    expect(pixel(png, 256, 256 - 160)).toEqual(toRgb(play));
++    const mask = encodePng(512, 512, paintIcon(512, 'maskable'));
++    // Safe zone = circle of radius 40 % (204.8 px): everything past ~0.3·512 from the centre is background.
++    expect(pixel(mask, 256, 256 - 170)).toEqual(toRgb(sky));
++    expect(pixel(mask, 256, 256 - 140)).toEqual(toRgb(play));
++  });
++});
+diff --git a/app/tools/pwa/make-icons.ts b/app/tools/pwa/make-icons.ts
+new file mode 100644
+index 0000000..cbd470e
+--- /dev/null
++++ b/app/tools/pwa/make-icons.ts
+@@ -0,0 +1,141 @@
++// `npm run pwa:icons` (Story 1.11) — writes the PWA / Home-Screen icons to public/icons/ with no
++// network and no image library: a sky background, a yellow `button-play` disc and a white ▶,
++// painted with 4×4 supersampling and encoded by a tiny PNG encoder (node:zlib deflate + crc32).
++// Output is deterministic (byte-identical on rerun). The icons are committed and can be replaced
++// later by real artwork with the same file names and sizes.
++//   icon-192.png, icon-512.png       manifest icons (purpose "any")
++//   icon-maskable-512.png            manifest icon (purpose "maskable"): content inside the 80 % safe zone
++//   apple-touch-icon.png (180²)      <link rel="apple-touch-icon"> for iPadOS Home Screen
++import { mkdirSync, writeFileSync } from 'node:fs';
++import { dirname, join, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { crc32, deflateSync } from 'node:zlib';
++import { designTokens } from '../../src/core/tokens.generated.ts';
++
++const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
++export const ICON_DIR = join(APP_DIR, 'public', 'icons');
++
++const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
++/** IHDR: 8-bit depth, colour type 6 (RGBA), deflate, filter method 0, no interlace; each row is unfiltered (filter type 0). */
++const BIT_DEPTH = 8;
++const COLOR_RGBA = 6;
++const FILTER_NONE = 0;
++const ZLIB_LEVEL = 9;
++
++function chunk(type: string, data: Buffer): Buffer {
++  const head = Buffer.alloc(8);
++  head.writeUInt32BE(data.length, 0);
++  head.write(type, 4, 'ascii');
++  const crc = Buffer.alloc(4);
++  crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])) >>> 0, 0);
++  return Buffer.concat([head, data, crc]);
++}
++
++/** Encodes `rgba` (w·h·4 bytes, row-major) as a PNG. */
++export function encodePng(width: number, height: number, rgba: Uint8Array): Buffer {
++  if (rgba.length !== width * height * 4) throw new Error(`encodePng: expected ${width * height * 4} bytes, got ${rgba.length}`);
++  const ihdr = Buffer.alloc(13);
++  ihdr.writeUInt32BE(width, 0);
++  ihdr.writeUInt32BE(height, 4);
++  ihdr[8] = BIT_DEPTH;
++  ihdr[9] = COLOR_RGBA;
++  // [10] compression 0, [11] filter method 0, [12] interlace 0
++  const stride = width * 4;
++  const raw = Buffer.alloc((stride + 1) * height);
++  for (let y = 0; y < height; y++) {
++    raw[y * (stride + 1)] = FILTER_NONE;
++    Buffer.from(rgba.buffer, rgba.byteOffset + y * stride, stride).copy(raw, y * (stride + 1) + 1);
++  }
++  return Buffer.concat([
++    PNG_SIGNATURE,
++    chunk('IHDR', ihdr),
++    chunk('IDAT', deflateSync(raw, { level: ZLIB_LEVEL })),
++    chunk('IEND', Buffer.alloc(0)),
++  ]);
++}
++
++type Rgb = readonly [number, number, number];
++
++const rgb = (value: number): Rgb => [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
++
++const SKY = rgb(designTokens.colors.sky.value);
++const PLAY = rgb(designTokens.colors.buttonPlay.value);
++const WHITE: Rgb = [0xff, 0xff, 0xff];
++
++/** Disc radius as a fraction of the icon size: "any" icons fill more; maskable stays in the 40 %-radius safe circle. */
++const DISC_RADIUS = { any: 0.4, maskable: 0.3 } as const;
++/** ▶ size relative to the disc radius: half-height and the centroid shift right so it looks centred. */
++const TRIANGLE_HALF_HEIGHT = 0.5;
++const TRIANGLE_WIDTH = 0.866 * 2 * TRIANGLE_HALF_HEIGHT;
++const SUPERSAMPLE = 4;
++
++export type IconPurpose = keyof typeof DISC_RADIUS;
++
++/** Inside the ▶ whose centroid is (cx, cy), pointing right, of half-height h and width w. */
++function inTriangle(x: number, y: number, cx: number, cy: number, h: number, w: number): boolean {
++  const left = cx - w / 3;
++  const right = cx + (2 * w) / 3;
++  if (x < left || x > right) return false;
++  const halfAt = h * ((right - x) / w);
++  return Math.abs(y - cy) <= halfAt;
++}
++
++function colourAt(x: number, y: number, size: number, purpose: IconPurpose): Rgb {
++  const c = size / 2;
++  const r = size * DISC_RADIUS[purpose];
++  const dx = x - c;
++  const dy = y - c;
++  if (dx * dx + dy * dy > r * r) return SKY;
++  if (inTriangle(x, y, c, c, r * TRIANGLE_HALF_HEIGHT, r * TRIANGLE_WIDTH)) return WHITE;
++  return PLAY;
++}
++
++/** Paints one square icon as RGBA (opaque; iOS fills transparent touch-icon pixels with black). */
++export function paintIcon(size: number, purpose: IconPurpose): Uint8Array {
++  const out = new Uint8Array(size * size * 4);
++  const n = SUPERSAMPLE * SUPERSAMPLE;
++  for (let py = 0; py < size; py++) {
++    for (let px = 0; px < size; px++) {
++      let r = 0;
++      let g = 0;
++      let b = 0;
++      for (let sy = 0; sy < SUPERSAMPLE; sy++) {
++        for (let sx = 0; sx < SUPERSAMPLE; sx++) {
++          const [cr, cg, cb] = colourAt(px + (sx + 0.5) / SUPERSAMPLE, py + (sy + 0.5) / SUPERSAMPLE, size, purpose);
++          r += cr;
++          g += cg;
++          b += cb;
++        }
++      }
++      const i = (py * size + px) * 4;
++      out[i] = Math.round(r / n);
++      out[i + 1] = Math.round(g / n);
++      out[i + 2] = Math.round(b / n);
++      out[i + 3] = 0xff;
++    }
++  }
++  return out;
++}
++
++/** The icon set: file name → size and purpose. Paths match the manifest in vite.config.ts and index.html. */
++export const ICONS = [
++  { file: 'icon-192.png', size: 192, purpose: 'any' },
++  { file: 'icon-512.png', size: 512, purpose: 'any' },
++  { file: 'icon-maskable-512.png', size: 512, purpose: 'maskable' },
++  { file: 'apple-touch-icon.png', size: 180, purpose: 'any' },
++] as const satisfies ReadonlyArray<{ file: string; size: number; purpose: IconPurpose }>;
++
++/** PNG bytes of every icon, by file name. */
++export function buildIcons(): Array<{ file: string; png: Buffer }> {
++  return ICONS.map(({ file, size, purpose }) => ({ file, png: encodePng(size, size, paintIcon(size, purpose)) }));
++}
++
++function main(): void {
++  mkdirSync(ICON_DIR, { recursive: true });
++  for (const { file, png } of buildIcons()) {
++    writeFileSync(join(ICON_DIR, file), png);
++    console.log(`pwa:icons: wrote public/icons/${file} (${png.length} bytes)`);
++  }
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+diff --git a/app/tools/pwa/post-process.test.ts b/app/tools/pwa/post-process.test.ts
+new file mode 100644
+index 0000000..e285063
+--- /dev/null
++++ b/app/tools/pwa/post-process.test.ts
+@@ -0,0 +1,57 @@
++// tools/pwa/post-process.ts (Story 1.11): the SKIP_WAITING listener and Workbox doc links are removed
++// from the generated worker files, on the real minified shapes.
++import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { describe, expect, it } from 'vitest';
++import { DOC_URL_REPLACEMENT, postProcessDist, stripSkipWaitingListener, stripWorkboxDocUrls } from './post-process.ts';
++
++/** Shape vite-plugin-pwa 2.0.0 (Workbox 7.4.1, skipWaiting: false) writes, minified. */
++const SW =
++  'define(["./workbox-9c191d2f"],function(e){"use strict";self.addEventListener("message",e=>{e.data&&"SKIP_WAITING"===e.data.type&&self.skipWaiting()}),e.clientsClaim(),e.precacheAndRoute([{url:"index.html",revision:"1"}],{})});';
++
++describe('stripSkipWaitingListener', () => {
++  it('removes the minified listener and its separator', () => {
++    expect(stripSkipWaitingListener(SW)).toBe(
++      'define(["./workbox-9c191d2f"],function(e){"use strict";e.clientsClaim(),e.precacheAndRoute([{url:"index.html",revision:"1"}],{})});',
++    );
++  });
++
++  it('fails loudly on the unminified template form', () => {
++    const src = "self.addEventListener('message', (event) => {\n  if (event.data && event.data.type === 'SKIP_WAITING') {\n    self.skipWaiting();\n  }\n});\nclientsClaim();";
++    // The template's nested `if { }` block is not matched by the minified-shape regex: the guard throws.
++    expect(() => stripSkipWaitingListener(src)).toThrow(/still calls skipWaiting/);
++  });
++
++  it('throws when any skipWaiting( call would remain', () => {
++    expect(() => stripSkipWaitingListener('self.skipWaiting();')).toThrow(/still calls skipWaiting/);
++  });
++
++  it('leaves a worker without the listener unchanged', () => {
++    expect(stripSkipWaitingListener('e.clientsClaim()')).toBe('e.clientsClaim()');
++  });
++});
++
++describe('stripWorkboxDocUrls', () => {
++  it('replaces Workbox doc links in messages, leaves other URLs for the precache check', () => {
++    const js = 'const t=`…NOT safe. Learn more at https://bit.ly/wb-precache`;fetch("https://cdn.example.com/a")';
++    expect(stripWorkboxDocUrls(js)).toBe(`const t=\`…NOT safe. Learn more at ${DOC_URL_REPLACEMENT}\`;fetch("https://cdn.example.com/a")`);
++  });
++});
++
++describe('postProcessDist', () => {
++  it('rewrites dist/sw.js and dist/workbox-*.js in place', () => {
++    const dir = mkdtempSync(join(tmpdir(), 'bhc-pwa-post-'));
++    try {
++      writeFileSync(join(dir, 'sw.js'), SW);
++      writeFileSync(join(dir, 'workbox-9c191d2f.js'), 'console.warn("see https://bit.ly/wb-precache")');
++      writeFileSync(join(dir, 'other.js'), 'https://bit.ly/keep');
++      postProcessDist(dir);
++      expect(readFileSync(join(dir, 'sw.js'), 'utf8')).not.toContain('skipWaiting(');
++      expect(readFileSync(join(dir, 'workbox-9c191d2f.js'), 'utf8')).toBe(`console.warn("see ${DOC_URL_REPLACEMENT}")`);
++      expect(readFileSync(join(dir, 'other.js'), 'utf8')).toBe('https://bit.ly/keep');
++    } finally {
++      rmSync(dir, { recursive: true, force: true });
++    }
++  });
++});
+diff --git a/app/tools/pwa/post-process.ts b/app/tools/pwa/post-process.ts
+new file mode 100644
+index 0000000..aace324
+--- /dev/null
++++ b/app/tools/pwa/post-process.ts
+@@ -0,0 +1,46 @@
++// Post-processing of the Workbox output that vite-plugin-pwa (generateSW) writes to dist/ (Story 1.11).
++// Run by the `bhc:pwa-post-process` plugin in vite.config.ts after VitePWA's closeBundle.
++//
++// 1. Workbox's sw-template always emits a `skipWaiting()`: with `skipWaiting: false` it becomes a
++//    `message` listener that skips waiting on `{type:'SKIP_WAITING'}` (what `updateSW()` posts). This
++//    app never applies an update mid-session (no updateSW, no reload), so the listener is removed and
++//    sw.js contains no `skipWaiting()` call at all; a waiting worker applies at the next cold open.
++// 2. The Workbox runtime (workbox-*.js) carries documentation links inside console messages (e.g.
++//    "Learn more at https://bit.ly/wb-precache"). They are never fetched, but the precache check bans
++//    every absolute URL in the shipped worker files, so those doc links are replaced by plain text.
++//    Any other absolute URL is left alone and fails `npm run precache:check`.
++import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
++import { join } from 'node:path';
++
++/** `self.addEventListener("message", e => { … "SKIP_WAITING" … self.skipWaiting() … })` plus its separator. */
++const SKIP_WAITING_LISTENER =
++  /self\.addEventListener\(\s*["']message["']\s*,\s*(?:\(\s*\w*\s*\)|\w+)\s*=>\s*\{[^{}]*["']SKIP_WAITING["'][^{}]*\}\s*\)\s*[,;]?/g;
++
++/** Documentation links Workbox prints in its console messages. */
++const WORKBOX_DOC_URL = /https?:\/\/(?:bit\.ly|goo\.gl|developer\.chrome\.com|developers\.google\.com)\/[^\s"'`)]*/g;
++export const DOC_URL_REPLACEMENT = 'the Workbox documentation';
++
++/** Removes the SKIP_WAITING message listener; throws when a `skipWaiting(` call would remain. */
++export function stripSkipWaitingListener(swJs: string): string {
++  const out = swJs.replace(SKIP_WAITING_LISTENER, '');
++  if (out.includes('skipWaiting(')) {
++    throw new Error('pwa post-process: sw.js still calls skipWaiting() — the Workbox template changed; update tools/pwa/post-process.ts');
++  }
++  return out;
++}
++
++/** Replaces Workbox documentation links in console messages with plain text. */
++export function stripWorkboxDocUrls(js: string): string {
++  return js.replace(WORKBOX_DOC_URL, DOC_URL_REPLACEMENT);
++}
++
++/** Applies both steps to `<distDir>/sw.js` and `<distDir>/workbox-*.js` in place. */
++export function postProcessDist(distDir: string): void {
++  const swPath = join(distDir, 'sw.js');
++  writeFileSync(swPath, stripWorkboxDocUrls(stripSkipWaitingListener(readFileSync(swPath, 'utf8'))));
++  for (const name of readdirSync(distDir)) {
++    if (!/^workbox-[\w-]+\.js$/.test(name)) continue;
++    const file = join(distDir, name);
++    writeFileSync(file, stripWorkboxDocUrls(readFileSync(file, 'utf8')));
++  }
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/vite.config.ts b/app/vite.config.ts
+index 50abb25..e80ae89 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline/app/vite.config.ts
++++ b/app/vite.config.ts
+@@ -1,5 +1,42 @@
+ /// <reference types="vitest/config" />
+-import { defineConfig } from 'vite';
++import { resolve } from 'node:path';
++import { defineConfig, type Plugin } from 'vite';
++import { VitePWA } from 'vite-plugin-pwa';
++import { designTokens } from './src/core/tokens.generated.ts';
++import { postProcessDist } from './tools/pwa/post-process.ts';
++
++/** Every file type the app fetches at runtime: all of it is precached (AR33). */
++const RUNTIME_GLOB = '**/*.{js,css,html,png,webp,json,m4a,woff2,svg,ico,webmanifest}';
++/** Per-file cap (NFR / AR34): 8 MiB. tools/lint/check-precache.ts enforces the same cap on dist/. */
++const MAX_PRECACHE_FILE_BYTES = 8388608;
++
++/**
++ * Removes the SKIP_WAITING listener and Workbox doc links from dist/sw.js + workbox-*.js
++ * (tools/pwa/post-process.ts). Both closeBundle hooks are sequential and this one is ordered 'post',
++ * so it runs after VitePWA's handler has written the worker. Like VitePWA's handler it does nothing
++ * after a build error or in an SSR build (no worker is written then).
++ */
++function pwaPostProcess(): Plugin {
++    let outDir = 'dist';
++    let ssr = false;
++    return {
++        name: 'bhc:pwa-post-process',
++        apply: 'build',
++        enforce: 'post',
++        configResolved(config) {
++            outDir = resolve(config.root, config.build.outDir);
++            ssr = Boolean(config.build.ssr);
++        },
++        closeBundle: {
++            order: 'post',
++            sequential: true,
++            handler(error?: Error) {
++                if (error || ssr) return;
++                postProcessDist(outDir);
++            }
++        }
++    };
++}
+ 
+ // Single Vite config (AD-12 / Stack). No object `manualChunks`, no terser (Oxc minifier default).
+ // Dev and build make no outbound network calls (the starter's log.js telemetry is removed).
+@@ -13,6 +50,47 @@ export default defineConfig({
+         // Phaser alone is ~1.2 MB minified; one chunk is expected and precached offline.
+         chunkSizeWarningLimit: 2048
+     },
++    plugins: [
++        // Story 1.11 (AR33/AR34): offline PWA. The app registers ./sw.js itself (core/sw.ts), so no
++        // injected script and no `virtual:pwa-register` (no updateSW, no reload). `registerType:
++        // 'prompt'` + `skipWaiting: false`: a new worker waits and applies at the next cold open.
++        // devOptions stay disabled: `npm run dev` has no service worker.
++        VitePWA({
++            strategies: 'generateSW',
++            registerType: 'prompt',
++            injectRegister: false,
++            manifest: {
++                id: './',
++                name: 'Bé Học Chơi',
++                short_name: 'Bé Học Chơi',
++                lang: 'vi',
++                start_url: './',
++                scope: './',
++                display: 'standalone',
++                orientation: 'landscape',
++                background_color: designTokens.colors.sky.css,
++                theme_color: designTokens.colors.sky.css,
++                icons: [
++                    { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
++                    { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
++                    { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
++                ]
++            },
++            workbox: {
++                globPatterns: [RUNTIME_GLOB],
++                maximumFileSizeToCacheInBytes: MAX_PRECACHE_FILE_BYTES,
++                skipWaiting: false,
++                clientsClaim: true,
++                cleanupOutdatedCaches: true,
++                navigateFallback: 'index.html',
++                runtimeCaching: []
++            },
++            devOptions: {
++                enabled: false
++            }
++        }),
++        pwaPostProcess()
++    ],
+     test: {
+         environment: 'node',
+         include: ['src/core/**/*.test.ts', 'src/content/**/*.test.ts', 'src/games/**/*.test.ts', 'tools/**/*.test.ts'],

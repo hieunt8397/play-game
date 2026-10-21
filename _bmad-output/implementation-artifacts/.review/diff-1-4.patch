@@ -1,0 +1,3745 @@
+diff --git a/app/package.json b/app/package.json
+new file mode 100644
+index 0000000..867ec1c
+--- /dev/null
++++ b/app/package.json
+@@ -0,0 +1,46 @@
++{
++  "name": "be-hoc-choi",
++  "private": true,
++  "version": "0.1.0",
++  "description": "Bé Học Chơi — offline toddler learning games for iPad (Phaser 4 + Vite). Scaffolded from phaserjs/template-vite-ts 1.4.0.",
++  "type": "module",
++  "license": "MIT",
++  "engines": {
++    "node": ">=24 <25"
++  },
++  "scripts": {
++    "dev": "vite",
++    "build": "vite build",
++    "preview": "vite preview",
++    "tokens": "node tools/tokens/generate.ts",
++    "tokens:check": "node tools/tokens/generate.ts --check",
++    "audio:placeholders": "node tools/audio/make-placeholders.ts",
++    "audio:normalize": "node tools/audio/normalize.ts",
++    "content:export": "node tools/content/export-voice-lines.ts",
++    "tts": "npm run content:export && node tools/tts/generate.ts",
++    "typecheck": "tsc --noEmit",
++    "lint": "eslint .",
++    "test": "vitest run",
++    "validate:content": "node tools/lint/validate-content.ts",
++    "check": "npm run typecheck && npm run lint && npm run test && npm run tokens:check && npm run validate:content",
++    "art:build": "node tools/render/build.ts",
++    "render": "node tools/render/render.ts",
++    "atlas": "node tools/atlas/pack.ts",
++    "doctor": "node tools/doctor/doctor.ts"
++  },
++  "dependencies": {
++    "phaser": "4.2.1"
++  },
++  "devDependencies": {
++    "@eslint/js": "10.0.1",
++    "@types/node": "24.19.1",
++    "eslint": "10.12.0",
++    "free-tex-packer-core": "0.3.9",
++    "sharp": "0.35.4",
++    "typescript": "~5.9.3",
++    "typescript-eslint": "8.71.1",
++    "vite": "8.3.3",
++    "vitest": "5.0.3",
++    "yaml": "2.9.1"
++  }
++}
+diff --git a/app/README.md b/app/README.md
+new file mode 100644
+index 0000000..c2d61ff
+--- /dev/null
++++ b/app/README.md
+@@ -0,0 +1,247 @@
++# Bé Học Chơi — app
++
++Offline toddler learning games for iPad Safari (landscape, Home-Screen PWA), built with
++Phaser 4 + Vite + TypeScript. Scaffolded from `phaserjs/template-vite-ts` 1.4.0. The starter's
++`log.js` telemetry, `vite/` configs and template scenes have been removed.
++
++Architecture: `../_bmad-output/planning-artifacts/architecture/architecture-be-hoc-choi-2026-10-08/ARCHITECTURE-SPINE.md`.
++
++## Requirements
++
++- Node.js 24 (`.nvmrc`; `engines: ">=24 <25"`). Tools under `tools/` run as `.ts` directly via
++  Node 24 type stripping, so there is no build step for them.
++- Only to (re)generate audio (not needed for `npm run check` or to run the app):
++  - **ffmpeg** on PATH (`winget install Gyan.FFmpeg`), or `FFMPEG_BIN` set to the full path of `ffmpeg.exe`.
++  - **edge-tts 7.2.8** (Python 3.12+: `pipx install edge-tts==7.2.8`) on PATH, or `EDGE_TTS_BIN` set to the
++    full path of `edge-tts.exe`. It calls Microsoft's online TTS service, so `npm run tts` needs the
++    network **at build time only**; the app never does.
++  - Each tool resolves its binaries before any work (env var, then PATH, probed with
++    `--version` / `-version`) and exits 1 naming the missing one, without writing any file.
++  - **Fallback** if edge-tts stops working: render the lines with Azure AI Speech or Google Cloud
++    Text-to-Speech (a vi-VN female neural voice) using the same recipe (segments split on `|`, silence
++    trimmed, `keywordPauseMs` of silence before the keyword, two-pass loudnorm to −16 LUFS, AAC mono
++    44.1 kHz 64k) and write the same `<id>.m4a` + `<id>.hash` pair (`lineHash` in
++    `tools/tts/line-hash.ts`; bump its `v` when the recipe changes).
++
++- Only to (re)build the images (not needed for `npm run check` or to run the app):
++  - **Blender 5.2.2 LTS** (blender.org) with `blender` on PATH, or `BLENDER_BIN` set to the full path of
++    `blender.exe` (e.g. `C:/Program Files/Blender Foundation/Blender 5.2/blender.exe`). Any other version
++    than 5.2.x is refused ("needs Blender 5.2 (found X)").
++  - `npm run doctor` reports Blender, ffmpeg and edge-tts together and exits 1 if one is missing.
++
++## Commands
++
++| Command | What it does |
++| --- | --- |
++| `npm install` | Install dependencies (the only step that uses the network) |
++| `npm run dev` | Dev server at <http://localhost:8080> (no outbound requests) |
++| `npm run build` | Production build into `dist/` (relative `base: './'`) |
++| `npm run tokens` | Regenerate `src/core/tokens.generated.ts` from the DESIGN.md YAML front matter |
++| `npm run audio:placeholders` | Re-synthesize the placeholder SFX/music `.m4a` files with ffmpeg (see *Assets and provenance*) |
++| `npm run audio:normalize -- <src> <audioId>` | Master a real SFX/music file into its catalog path (two-pass loudnorm: music −30 LUFS; SFX −20 LUFS with a 50 ms fade-in) |
++| `npm run content:export` | Write the voice lines to `.generated/voice-lines.json` (gitignored) for the TTS tool |
++| `npm run tts [-- --force]` | Render new or changed voice lines to `public/assets/audio/vo/<id>.m4a` + `.hash` (see *Voice lines*) |
++| `npm run doctor` | Report the build-time tools (Blender 5.2, ffmpeg, edge-tts); exit 1 if any is missing |
++| `npm run art:build -- map` | Build `../art/map.blend` from the vendored reference `../art/src/map-v2.blend` (see *Image pipeline*) |
++| `npm run render -- map` | Render `../art/map.blend` → `.generated/render/map/` + `src/content/generated/map.layout.json` |
++| `npm run atlas -- map` | Pack the rendered frames → `public/assets/atlases/map.{png,json}` and copy the plate → `public/assets/bg/map.png` |
++| `npm run check` | **The gate.** `tsc --noEmit` → ESLint → Vitest (`src/core/**`, `src/content/**`, `tools/**` tests) → tokens diff → content validator |
++
++Vitest also runs the tools tests: `tools/tokens/parse.test.ts` (token parser fails closed),
++`tools/lint/rules.test.ts` (each ESLint layer/literal/audio rule, plus the GameId list kept in sync),
++`tools/audio/*.test.ts` (ffmpeg arguments), `tools/shared/binaries.test.ts` (missing-tool errors),
++`tools/tts/generate.test.ts` (TTS arguments, skip rules, loudnorm parsing and missing tools, with
++fake binaries) and `tools/lint/validate-content.test.ts` (the validator against temp `public/` trees).
++The content validator checks the audio catalog (id grammar, path convention, each file exists) and
++the voice lines (see *Voice lines*).
++
++`npm run tokens` and the tokens-diff step read DESIGN.md from
++`../_bmad-output/planning-artifacts/ux-designs/ux-be-hoc-choi-2026-10-08/DESIGN.md`, outside `app/`.
++`app/` alone (without that folder next to it) cannot pass `npm run check`.
++
++**Every story must pass `npm run check` before it is done.** Later stories add more
++content checks and the precache check (after `vite build`) to the same command.
++
++## Run on the PC with iPad emulation (primary dev loop)
++
++1. `npm run dev`, then open <http://localhost:8080> in Chrome or Edge.
++2. Open DevTools (F12) and toggle the device toolbar (Ctrl+Shift+M).
++3. Pick **iPad** (or a custom 1024×768 device), set it to **landscape**, and keep touch emulation on.
++4. Check the other iPad sizes too: 1180×820 (iPad Air) and 1366×1024 (iPad Pro 12.9").
++   The canvas must fill the screen with no bars. On wider screens the top and bottom are cropped
++   slightly, but `Tokens.safeRect` stays visible.
++5. Use the rotate button to switch to portrait. The whole stage turns 90° and stays landscape;
++   there is no "rotate your device" screen. **Only the picture is correct in portrait so far:**
++   taps are not mapped to the right game coordinates until Story 1.6 adds `core/input/space.ts`.
++
++`localhost` is a secure context, so service worker and offline behaviour can be tested here too
++(Story 1.11). Real-device checks happen on the iPad through an HTTPS preview deploy.
++
++## Layout and rules
++
++```text
++src/
++  main.ts          Phaser config: 1024×768, Scale.ENVELOP + CENTER_BOTH, input.activePointers
++  styles/stage.css NFR6 page guards (touch-action, user-select, callout, overscroll) + portrait rotation
++  core/            services: tokens(.generated), timing, bus, stage …   (core → content)
++  content/         typed data; imports only types from other layers
++  scenes/          shell scenes: Boot, Start, Map (placeholder), AudioUnlockOverlay  (scenes → games/core/content)
++  games/<GameId>/  one MiniGame scene per folder                    (games → core/content)
++tools/
++  tokens/          DESIGN.md YAML → src/core/tokens.generated.ts (`--check` = diff gate)
++  lint/            content validators (GameIds, audio catalog, voice lines)
++  audio/           make-placeholders.ts (synthesized placeholder SFX/music), normalize.ts (master real SFX/music)
++  content/         export-voice-lines.ts: voice lines → .generated/voice-lines.json
++  tts/             generate.ts (edge-tts + ffmpeg → .m4a + .hash), line-hash.ts
++  shared/          binaries.ts: env-override/PATH resolution of ffmpeg, edge-tts and Blender (5.2 check)
++  layout/          geometry, raw → layout conversion and the layout/asset rules (pure, shared by render and check)
++  render/          build.ts (art:build), render.ts, blender/*.py (run inside Blender)
++  atlas/           pack.ts (free-tex-packer-core)
++  doctor/          doctor.ts
++```
++
++- **Layers** are enforced by ESLint `@typescript-eslint/no-restricted-imports`.
++- **Design values** come only from `Tokens.*`. Behaviour durations come only from
++  `Tokens.Timing.*`, defined in `src/core/timing.ts` from EXPERIENCE.md.
++- `src/core/tokens.generated.ts` is generated and checked in, so never edit it by hand.
++- In `scenes/` and `games/`, ESLint rejects hex/`rgba(` colour literals and magic numbers. Only
++  `-1, 0, 1, 2, 0.5` are allowed.
++- **Cross-scene events** go through the typed `bus` (`src/core/bus.ts`). Scenes subscribe with
++  `bus.scoped(this)`, which unsubscribes them on scene SHUTDOWN or DESTROY.
++- **Sound** goes only through `audio` (`src/core/audio-director.ts`), by catalog id from
++  `src/content/audio-catalog.ts` or voice-line id from `src/content/voice-lines.ts`. In `scenes/` and `games/`, ESLint rejects `this.sound` and
++  `.m4a` / `assets/audio` strings.
++
++## Start flow (Story 1.2)
++
++`Boot` shows only the loading-strip (a kart on a short road) while it loads the audio and waits
++for the readiness gate: the service worker is ready (skipped in dev or with no registration) and
++the vendored Baloo 2 font has loaded. If a load fails, the kart slows down and the load retries on
++`online` or every `Tokens.Timing.loadRetryMs`. Errors go only to `console.warn`.
++
++`Start` shows the bobbing yellow ▶. A tap plays the pop, starts the music loop, unlocks audio,
++plays the `vo.shell.greeting` voice line once (over the ducked music), calls `ProgressStore.init()` and opens the placeholder `Map`. If the app comes back from the
++background with a suspended AudioContext, `AudioUnlockOverlay` pauses the scene under a light dim
++and a ▶. A tap on the ▶ resumes it once audio runs again; otherwise the overlay stays up for
++another tap. The tap and overlay logic lives in `src/core/shell-flow.ts` (tested in node).
++
++To see the failure path in DevTools, set Network to *Offline* while the kart drives, then go back
++online.
++
++## Voice lines (Story 1.3)
++
++Every spoken line is data in `src/content/voice-lines.ts`: `{ id, text, keywordPauseMs?, rate?, approved? }`.
++Code plays it by id with `audio.say(id)` / `audio.sayChain(ids)`. There is one voice channel, and the
++music ducks by 20 dB while a line plays. `npm run check` enforces these rules and names the id of
++every failure:
++
++- the id is `vo.<shell|GameId>.<intent>[.<subjectId>][.<n>]` in kebab-case, and the file is
++  `public/assets/audio/vo/<id>.m4a`;
++- at most 8 words; `|` marks the pause before the keyword (no empty segment around it)
++  and needs `keywordPauseMs` (about 300), and vice versa;
++- never dâu/đâu, cá/cà, ba/bà, bóng/bông or cam/cầm in one sentence. No praise, never "sai";
++- the `.m4a` and `.hash` exist, the `.hash` matches the line, and no stray file is left in `vo/`.
++
++**Add or change a line:** edit `voice-lines.ts`, run `npm run content:export && npm run tts`, and
++commit both files. `tts` skips lines whose `.hash` is current (`--force` re-renders them) and
++**never** overwrites an approved line. When you remove a line, delete its two files by hand.
++edge-tts sometimes answers "No audio was received" for valid text; `tts` retries each segment up
++to 5 times.
++
++**Approve a line (a parent):** listen to the `.m4a`. It should be a warm, slow female voice with a
++short pause before the keyword. If it is right, copy the content of its `.hash` into the line as
++`approved: { textHash: '<hash>' }`. If the text is edited later, `npm run check` fails until the
++line is regenerated and approved again. `vo.shell.greeting` is not approved yet.
++
++## Assets and provenance
++
++| File | Source | Licence |
++| --- | --- | --- |
++| `public/assets/fonts/Baloo2-wght.woff2` | Baloo 2 by The Baloo 2 Project Authors, github.com/google/fonts `ofl/baloo2`, subset (see below) | SIL OFL 1.1 (`OFL.txt`) |
++| `public/assets/audio/sfx/sfx.shell.pop.m4a` | Synthesized in-house by `tools/audio/make-placeholders.ts` (ffmpeg) | Project's own (MIT) |
++| `public/assets/audio/music/music.island.m4a` | Synthesized in-house by `tools/audio/make-placeholders.ts` (ffmpeg) | Project's own (MIT) |
++| `public/assets/audio/vo/vo.shell.greeting.m4a` (+ `.hash`) | Generated by `npm run tts`: Microsoft Edge online TTS via edge-tts 7.2.8, voice vi-VN-HoaiMyNeural, processed with ffmpeg | Our own text; generated speech, subject to Microsoft's service terms |
++
++| `public/assets/atlases/map.{png,json}`, `public/assets/bg/map.png` | Rendered by `npm run render`/`atlas` from `../art/map.blend` (built from the approved reference scene) | Project's own render of the CC0 models below |
++
++3D source models and textures used by `../art/` (all CC0 1.0, no attribution required):
++
++| Source | Packs | Licence |
++| --- | --- | --- |
++| Kenney (kenney.nl) | car-kit, city-kit-commercial 2.1, city-kit-roads, food-kit | CC0 (`License.txt` in each pack under `../assets/kenney/`) |
++| Quaternius (quaternius.com) | animals, cars, cutefish, dinosaurs, food | CC0 |
++| Poly Haven (polyhaven.com) | HDRI `meadow_2` (1k, packed in the .blend) | CC0 |
++
++Add a row for every new audio, font or image file. Real SFX and music go through `npm run audio:normalize`.
++
++- **Font:** `public/assets/fonts/Baloo2-wght.woff2` is the Baloo 2 variable font (wght 400–800),
++  © The Baloo 2 Project Authors, under the SIL Open Font License 1.1 (`public/assets/fonts/OFL.txt`).
++  Source: `Baloo2[wght].ttf` and `OFL.txt` from github.com/google/fonts `ofl/baloo2`, fetched once
++  on 2026-10-08. It was subset to Latin + Vietnamese and converted to woff2 with:
++
++  ```sh
++  uvx --from "fonttools[woff]" pyftsubset "Baloo2[wght].ttf" --layout-features='*' --flavor=woff2 \
++    --output-file=Baloo2-wght.woff2 \
++    --unicodes="U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+1EA0-1EF9,U+2000-206F,U+20AB,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD"
++  ```
++
++  The app registers it with `FontFace` and a relative URL (no CDN `<link>`), so it works offline.
++- **Placeholder audio:** `tools/audio/make-placeholders.ts` synthesizes both files as mono AAC
++  44.1 kHz 64 kb/s:
++  - `public/assets/audio/sfx/sfx.shell.pop.m4a`: a 140 ms sine sweep 700→1100 Hz with a 50 ms
++    fade-in, peak about −20 dBFS.
++  - `public/assets/audio/music/music.island.m4a`: a 12 s seamless C–E–G pad and arpeggio,
++    normalised to −30 LUFS.
++
++  Regenerate them with `npm run audio:placeholders`. ffmpeg comes from `FFMPEG_BIN` (full path) or
++  PATH, and the tool fails with a clear message if neither works. winget's `Gyan.FFmpeg` installs to
++  `%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg_*\ffmpeg-*\bin\ffmpeg.exe` without adding it
++  to PATH, so point `FFMPEG_BIN` there. Check loudness with `ffmpeg -i <file> -af ebur128 -f null -`.
++  To replace a placeholder with real audio, keep its id and path.
++
++## Image pipeline (Story 1.4)
++
++Screens are low-poly Blender scenes rendered to images; nothing on screen is drawn from hand-typed
++coordinates (AD-10). The pipeline for the island map:
++
++```sh
++npm run art:build -- map   # art/src/map-v2.blend → art/map.blend (tools/render/blender/build_map.py)
++npm run render -- map      # art/map.blend → .generated/render/map/ + src/content/generated/map.layout.json
++npm run atlas -- map       # frames → public/assets/atlases/map.{png,json} (atlas.map), plate → public/assets/bg/map.png (bg.map)
++```
++
++- Blender always runs as `blender -b --factory-startup <blend> --python-exit-code 1 --python <script> -- …`,
++  in a temp dir. Outputs are replaced only after Blender exits 0 and every check passes; a failure
++  (missing Blender, wrong version, a Python error, a broken rule) exits 1 and leaves every existing
++  output untouched.
++- `art:build` opens the vendored reference scene, removes the Tiệm kem preview, groups each station
++  into a `sprite.<id>` collection, recolours the creatures from `Tokens.colors.creature*`, and adds the
++  layout objects. Its constants (station table, road centreline, the few rule fixes) are Blender
++  world units read off the reference; it fails if any object has a subdivision modifier.
++- `render` renders a 2048×1536 plate (`bg.png`, sprites hidden from the camera but still casting
++  shadows) and one full-frame transparent frame per sprite collection (`frames/<object>/idle/00.png`), so
++  an untrimmed frame lines up pixel-for-pixel with the plate. It projects the layout objects into
++  `raw.json`, converts them to design px (`tools/layout/to-layout.ts`), validates them
++  (`tools/layout/rules.ts`) and draws `.generated/render/map/preview.png` (hit polygons, anchors, slots,
++  road) for a human alignment check. Re-rendering the same `.blend` gives a byte-identical layout JSON.
++- `atlas` packs with free-tex-packer-core 0.3.9 (JSON hash, max 2048², trim on, no rotation, padding 2).
++  It fails with no write on a second page, a page over 2048, a file over 8 MiB or a bad frame name.
++- **Naming contract** (in the `.blend`): layout objects live in a `layout` collection (hide_render) and
++  are named `<kind>.<id>` with kind `anchor`, `hit`, `slot` or `path` and a kebab-case id
++  (`hit.pizza`, `anchor.pizza-stop`, `slot.pizza-1`, `path.road`, `anchor.kart-start`). A Blender
++  duplicate suffix (`.001`), upper case or an unknown kind fails the render. Sprite groups are collections
++  named `sprite.<object>` → atlas frames `<object>/<state>/<nn>`.
++- Hit polygons are the convex hull of the station's projected vertices padded by `Tokens.spacing.hitPad`.
++  Where perspective makes two padded hulls closer than `stationGap` (tall props reaching into the station
++  behind), both are clipped either side of their best separating line. The stored polygon is the final
++  tap area.
++- `npm run check` (`validate:content`) re-checks the layout (stations = GameIds; hit, anchor, `-stop`
++  and slots present; vertices inside `safeRect` minus the edge dead zones; width ≥ 80; stations ≥ 40 apart;
++  stops on the road) and the assets (atlas pages ≤ 2048, required frames, bg 2048×1536, every file under
++  `public/assets/` ≤ 8 MiB).
++- `../assets/` (source models) and `../art/` (scenes) are not shipped; only `public/` is.
++
++## Tip for parents
++
++Turn on **Guided Access** (Settings › Accessibility › Guided Access) and turn off multitasking
++gestures, so the child can't leave the app by accident.
+diff --git a/app/src/core/tokens.ts b/app/src/core/tokens.ts
+new file mode 100644
+index 0000000..d414c35
+--- /dev/null
++++ b/app/src/core/tokens.ts
+@@ -0,0 +1,37 @@
++// The only way code reads design values (AD-7, AD-8): `Tokens.*` and `Tokens.Timing.*`.
++import { designTokens } from './tokens.generated.ts';
++import { Timing } from './timing.ts';
++import { computeSafeRect } from './safe-rect.ts';
++
++/** Design space: 1024×768 px (4:3) at 1× (AD-7). */
++const design = { width: 1024, height: 768 } as const;
++
++/**
++ * Supported iPad landscape aspect ratios (w/h). 4:3 (1024×768, 1366×1024) up to ≈1.46
++ * (1180×820 ≈ 1.439, 1210×834 ≈ 1.451) — see spec Design Notes.
++ */
++const supportedAspect = { min: 4 / 3, max: 1.46 } as const;
++
++/**
++ * UI motion values DESIGN.md does not define (Story 1.2 adds them in core, DESIGN.md unchanged).
++ * Source: epic UX › Base button (press to 0.9× and spring back) and EXPERIENCE button-play 'Nhún chậm'.
++ */
++const ui = {
++  /** button-round press scale. */
++  pressScale: 0.9,
++  /** button-play slow bob amplitude (px, design space). */
++  playBobPx: 10,
++} as const;
++
++export const Tokens = {
++  ...designTokens,
++  design,
++  supportedAspect,
++  /** Design-space rect visible on every supported iPad ratio; interactive items must lie inside it. */
++  safeRect: computeSafeRect(design.width, design.height, supportedAspect.min, supportedAspect.max),
++  ui,
++  Timing,
++} as const;
++
++export type TokensType = typeof Tokens;
++export type { Rect } from './safe-rect.ts';
+diff --git a/app/src/content/layout-types.ts b/app/src/content/layout-types.ts
+new file mode 100644
+index 0000000..b910883
+--- /dev/null
++++ b/app/src/content/layout-types.ts
+@@ -0,0 +1,25 @@
++// Screen layout types (Story 1.4, AD-10). Every coordinate comes from a Blender render
++// (`npm run render -- <screen>` → src/content/generated/<screen>.layout.json); none is hand-typed.
++
++/** A design-space point (1× px, origin top-left, y down). */
++export interface Point {
++  readonly x: number;
++  readonly y: number;
++}
++
++/**
++ * `<screen>.layout.json` v1. Ids follow the Blender object names `<kind>.<id>`
++ * (`anchor.pizza` → `anchors.pizza`). Hit polygons are the final tap areas (already padded by
++ * `Tokens.spacing.hitPad`); runtime adds no further padding.
++ */
++export interface ScreenLayout {
++  readonly v: 1;
++  readonly screenId: string;
++  readonly design: { readonly width: number; readonly height: number };
++  /** Render px per design px (the images are rendered at 2×). */
++  readonly renderScale: number;
++  readonly anchors: Readonly<Record<string, Point>>;
++  readonly hits: Readonly<Record<string, readonly Point[]>>;
++  readonly slots: Readonly<Record<string, Point>>;
++  readonly paths: Readonly<Record<string, readonly Point[]>>;
++}
+diff --git a/app/src/content/stations.ts b/app/src/content/stations.ts
+new file mode 100644
+index 0000000..e2c5bea
+--- /dev/null
++++ b/app/src/content/stations.ts
+@@ -0,0 +1,29 @@
++// The Map's stations (Story 1.4). Layout ids on the map (spec 1.4 › Reserved ids):
++//   anchors[id] ground pivot, anchors[`${id}-stop`] kart parking point, hits[id] hit polygon,
++//   slots[...] decoration slots listed here. `npm run check` validates them against map.layout.json.
++import type { GameId } from './types.ts';
++
++export interface Station {
++  readonly id: GameId;
++  /** Decoration slot ids on the map (`slot.<id>` objects in art/map.blend). */
++  readonly slots: readonly string[];
++}
++
++const station = (id: GameId): Station => ({ id, slots: [`${id}-1`, `${id}-2`] });
++
++export const STATIONS: readonly Station[] = [
++  station('ice-cream'),
++  station('pizza'),
++  station('race'),
++  station('fishing'),
++  station('touch-talk'),
++  station('dino-puzzle'),
++  station('shadow-match'),
++];
++
++/** Where the kart starts on the map (`anchor.kart-start`). */
++export const KART_START_ANCHOR = 'kart-start';
++/** The drivable road centreline (`path.road`). */
++export const ROAD_PATH = 'road';
++/** The kart parking anchor of a station. */
++export const stopAnchor = (id: GameId): string => `${id}-stop`;
+diff --git a/app/src/content/assets.ts b/app/src/content/assets.ts
+new file mode 100644
+index 0000000..57f59eb
+--- /dev/null
++++ b/app/src/content/assets.ts
+@@ -0,0 +1,34 @@
++// Image assets per screen (Story 1.4). Paths are relative to the app base (public/). Produced by
++// `npm run render -- <screen>` + `npm run atlas -- <screen>`; checked by `npm run check`.
++
++export const SCREEN_IDS = ['map'] as const;
++export type ScreenId = (typeof SCREEN_IDS)[number];
++
++export interface AtlasRef {
++  /** Phaser texture key, `atlas.<screen>`. */
++  readonly key: string;
++  readonly png: string;
++  /** JSON hash (free-tex-packer `JsonHash`). */
++  readonly json: string;
++}
++
++export interface BackgroundRef {
++  /** Phaser texture key, `bg.<screen>`. */
++  readonly key: string;
++  readonly path: string;
++}
++
++const atlas = (id: ScreenId): AtlasRef => ({
++  key: `atlas.${id}`,
++  png: `assets/atlases/${id}.png`,
++  json: `assets/atlases/${id}.json`,
++});
++
++const background = (id: ScreenId): BackgroundRef => ({ key: `bg.${id}`, path: `assets/bg/${id}.png` });
++
++export const ATLASES: Readonly<Record<ScreenId, AtlasRef>> = { map: atlas('map') };
++
++export const BACKGROUNDS: Readonly<Record<ScreenId, BackgroundRef>> = { map: background('map') };
++
++/** Frames every atlas must hold: `<object>/<state>/<nn>`. */
++export const FRAME_NAME = /^[a-z0-9]+(-[a-z0-9]+)*\/[a-z0-9]+(-[a-z0-9]+)*\/\d{2}$/;
+diff --git a/app/src/content/layouts.ts b/app/src/content/layouts.ts
+new file mode 100644
+index 0000000..5bc7c09
+--- /dev/null
++++ b/app/src/content/layouts.ts
+@@ -0,0 +1,8 @@
++// Runtime access to the generated screen layouts (Vite JSON import). Tools read the JSON with fs.
++import mapLayout from './generated/map.layout.json';
++import type { ScreenId } from './assets.ts';
++import type { ScreenLayout } from './layout-types.ts';
++
++export const LAYOUTS: Readonly<Record<ScreenId, ScreenLayout>> = {
++  map: mapLayout as ScreenLayout,
++};
+diff --git a/app/src/content/generated/map.layout.json b/app/src/content/generated/map.layout.json
+new file mode 100644
+index 0000000..76a1dbb
+--- /dev/null
++++ b/app/src/content/generated/map.layout.json
+@@ -0,0 +1,288 @@
++{
++  "anchors": {
++    "dino-puzzle": { "x": 378.9, "y": 200.7 },
++    "dino-puzzle-stop": { "x": 369.2, "y": 244.6 },
++    "fishing": { "x": 392.3, "y": 308.7 },
++    "fishing-stop": { "x": 411.6, "y": 348.7 },
++    "ice-cream": { "x": 223.1, "y": 442.4 },
++    "ice-cream-stop": { "x": 268.5, "y": 364.7 },
++    "kart-start": { "x": 455.6, "y": 489.6 },
++    "pizza": { "x": 605.6, "y": 452.8 },
++    "pizza-stop": { "x": 611.2, "y": 522.5 },
++    "race": { "x": 876.9, "y": 441.6 },
++    "race-stop": { "x": 863.5, "y": 433.3 },
++    "shadow-match": { "x": 768.1, "y": 247.4 },
++    "shadow-match-stop": { "x": 714.3, "y": 239.9 },
++    "touch-talk": { "x": 665.3, "y": 301.1 },
++    "touch-talk-stop": { "x": 689.4, "y": 339.4 }
++  },
++  "design": {
++    "height": 768,
++    "width": 1024
++  },
++  "hits": {
++    "dino-puzzle": [
++      { "x": 240.7, "y": 208.6 },
++      { "x": 245.6, "y": 196.6 },
++      { "x": 255.6, "y": 179.4 },
++      { "x": 260.9, "y": 171.4 },
++      { "x": 392.3, "y": 80.3 },
++      { "x": 400.3, "y": 75 },
++      { "x": 400.4, "y": 74.9 },
++      { "x": 409.8, "y": 73.1 },
++      { "x": 419.1, "y": 74.9 },
++      { "x": 419.7, "y": 75.1 },
++      { "x": 420.2, "y": 75.2 },
++      { "x": 428.1, "y": 80.5 },
++      { "x": 433.4, "y": 88.4 },
++      { "x": 504.3, "y": 198.6 },
++      { "x": 506.1, "y": 208 },
++      { "x": 506.2, "y": 208.6 }
++    ],
++    "fishing": [
++      { "x": 270.7, "y": 286 },
++      { "x": 271.6, "y": 282.4 },
++      { "x": 280, "y": 269.5 },
++      { "x": 285.3, "y": 261.6 },
++      { "x": 301.1, "y": 249.1 },
++      { "x": 440.7, "y": 249.1 },
++      { "x": 459.2, "y": 264 },
++      { "x": 464.5, "y": 272 },
++      { "x": 468.7, "y": 285 },
++      { "x": 475.8, "y": 313.1 },
++      { "x": 477.6, "y": 322.4 },
++      { "x": 478.8, "y": 329.4 },
++      { "x": 478.7, "y": 330.3 },
++      { "x": 476.9, "y": 339.7 },
++      { "x": 471.6, "y": 347.6 },
++      { "x": 470.8, "y": 348.6 },
++      { "x": 462.9, "y": 353.9 },
++      { "x": 444.3, "y": 361.2 },
++      { "x": 434.9, "y": 363 },
++      { "x": 360.5, "y": 362.8 },
++      { "x": 353.8, "y": 362 }
++    ],
++    "ice-cream": [
++      { "x": 97.7, "y": 423.4 },
++      { "x": 99.5, "y": 414 },
++      { "x": 109.6, "y": 387.8 },
++      { "x": 114.9, "y": 379.9 },
++      { "x": 122.9, "y": 374.6 },
++      { "x": 229.9, "y": 320.2 },
++      { "x": 239.3, "y": 318.3 },
++      { "x": 247.1, "y": 319.3 },
++      { "x": 315.6, "y": 382 },
++      { "x": 305.4, "y": 471.4 },
++      { "x": 303.6, "y": 480.8 },
++      { "x": 298.3, "y": 488.7 },
++      { "x": 290.3, "y": 494 },
++      { "x": 287.8, "y": 494.8 },
++      { "x": 274.3, "y": 497.5 },
++      { "x": 264.9, "y": 499.4 },
++      { "x": 262.3, "y": 499.6 },
++      { "x": 231.4, "y": 497.1 },
++      { "x": 222.1, "y": 495.7 },
++      { "x": 162.5, "y": 484.8 },
++      { "x": 153.1, "y": 482.9 },
++      { "x": 135.6, "y": 476.6 },
++      { "x": 127.6, "y": 471.3 },
++      { "x": 107.5, "y": 446.6 },
++      { "x": 102.2, "y": 438.7 },
++      { "x": 99.5, "y": 432.8 }
++    ],
++    "pizza": [
++      { "x": 521.6, "y": 424.2 },
++      { "x": 523.4, "y": 378.3 },
++      { "x": 524.5, "y": 370.6 },
++      { "x": 526.3, "y": 361.2 },
++      { "x": 526.8, "y": 360.1 },
++      { "x": 669.7, "y": 360.1 },
++      { "x": 691, "y": 465.7 },
++      { "x": 692.9, "y": 475.1 },
++      { "x": 696.2, "y": 497.7 },
++      { "x": 694.4, "y": 507 },
++      { "x": 694, "y": 508.8 },
++      { "x": 688.7, "y": 516.7 },
++      { "x": 688.1, "y": 517.2 },
++      { "x": 680.2, "y": 522.5 },
++      { "x": 670.8, "y": 524.4 },
++      { "x": 642.5, "y": 524.4 },
++      { "x": 554.9, "y": 516.4 },
++      { "x": 545.6, "y": 514.5 },
++      { "x": 537.6, "y": 509.2 },
++      { "x": 535.4, "y": 507.5 },
++      { "x": 530.1, "y": 499.6 },
++      { "x": 528.2, "y": 490.2 }
++    ],
++    "race": [
++      { "x": 780.2, "y": 407.6 },
++      { "x": 781.7, "y": 399.8 },
++      { "x": 820.8, "y": 309.8 },
++      { "x": 824.6, "y": 304 },
++      { "x": 825.5, "y": 303 },
++      { "x": 826.5, "y": 301.9 },
++      { "x": 827.6, "y": 301.1 },
++      { "x": 828.7, "y": 300.3 },
++      { "x": 832.1, "y": 298.1 },
++      { "x": 855.6, "y": 292 },
++      { "x": 956.8, "y": 292.5 },
++      { "x": 958.2, "y": 292.6 },
++      { "x": 958.9, "y": 292.7 },
++      { "x": 960, "y": 292.9 },
++      { "x": 969.4, "y": 294.8 },
++      { "x": 970.5, "y": 295.1 },
++      { "x": 971.6, "y": 295.6 },
++      { "x": 972.6, "y": 296.2 },
++      { "x": 973.1, "y": 296.5 },
++      { "x": 981.1, "y": 301.8 },
++      { "x": 982.1, "y": 302.7 },
++      { "x": 983, "y": 303.6 },
++      { "x": 988.3, "y": 311.5 },
++      { "x": 988.9, "y": 312.4 },
++      { "x": 989.6, "y": 313.6 },
++      { "x": 990, "y": 314.7 },
++      { "x": 990.4, "y": 316.1 },
++      { "x": 992.2, "y": 325.4 },
++      { "x": 992.3, "y": 326.6 },
++      { "x": 992.3, "y": 328.2 },
++      { "x": 990.4, "y": 337.5 },
++      { "x": 963.6, "y": 468.7 },
++      { "x": 962.2, "y": 471.4 },
++      { "x": 956.9, "y": 479.3 },
++      { "x": 949, "y": 484.6 },
++      { "x": 935.9, "y": 489.3 },
++      { "x": 934, "y": 489.8 },
++      { "x": 924.6, "y": 491.6 },
++      { "x": 838.7, "y": 506.2 },
++      { "x": 827.9, "y": 506.2 },
++      { "x": 818.5, "y": 504.4 },
++      { "x": 816.7, "y": 503.2 },
++      { "x": 808.8, "y": 497.9 },
++      { "x": 803.5, "y": 490 },
++      { "x": 782, "y": 417 }
++    ],
++    "shadow-match": [
++      { "x": 680.2, "y": 183 },
++      { "x": 685.5, "y": 175.1 },
++      { "x": 712.2, "y": 148.9 },
++      { "x": 720.1, "y": 143.6 },
++      { "x": 777.9, "y": 130.9 },
++      { "x": 787.2, "y": 129 },
++      { "x": 796.6, "y": 130.9 },
++      { "x": 848.5, "y": 157.7 },
++      { "x": 856.4, "y": 163 },
++      { "x": 867.7, "y": 172.6 },
++      { "x": 873, "y": 180.5 },
++      { "x": 874.8, "y": 189.9 },
++      { "x": 873, "y": 199.2 },
++      { "x": 864, "y": 231.3 },
++      { "x": 858.7, "y": 239.2 },
++      { "x": 839.2, "y": 253.2 },
++      { "x": 836.5, "y": 255.1 },
++      { "x": 801.6, "y": 264.2 }
++    ],
++    "touch-talk": [
++      { "x": 566.2, "y": 293.4 },
++      { "x": 569.4, "y": 253.1 },
++      { "x": 570.1, "y": 248.8 },
++      { "x": 571.9, "y": 239.4 },
++      { "x": 574.1, "y": 233.8 },
++      { "x": 579.4, "y": 225.9 },
++      { "x": 587.4, "y": 220.6 },
++      { "x": 593.3, "y": 216.7 },
++      { "x": 629, "y": 207.9 },
++      { "x": 638.4, "y": 206.1 },
++      { "x": 641, "y": 205.6 },
++      { "x": 777.4, "y": 296.7 },
++      { "x": 777.7, "y": 298.3 },
++      { "x": 775.9, "y": 307.7 },
++      { "x": 773.7, "y": 316.5 },
++      { "x": 772.4, "y": 319.6 },
++      { "x": 569.4, "y": 319.6 },
++      { "x": 566.3, "y": 298.2 }
++    ]
++  },
++  "paths": {
++    "road": [
++      { "x": 26.5, "y": 556.8 },
++      { "x": 150, "y": 548.4 },
++      { "x": 215.8, "y": 539.2 },
++      { "x": 252.4, "y": 529.3 },
++      { "x": 348, "y": 493.1 },
++      { "x": 392.6, "y": 482.4 },
++      { "x": 414.4, "y": 481.6 },
++      { "x": 445.6, "y": 486.3 },
++      { "x": 520.6, "y": 510.9 },
++      { "x": 554.9, "y": 519.6 },
++      { "x": 578.5, "y": 522.2 },
++      { "x": 616.4, "y": 522.6 },
++      { "x": 683.4, "y": 518.4 },
++      { "x": 734.2, "y": 510.1 },
++      { "x": 777.2, "y": 497.5 },
++      { "x": 814, "y": 478.9 },
++      { "x": 844.8, "y": 455.4 },
++      { "x": 861.7, "y": 437.1 },
++      { "x": 870.1, "y": 419.5 },
++      { "x": 868.5, "y": 403.5 },
++      { "x": 855.7, "y": 386.7 },
++      { "x": 827, "y": 363.9 },
++      { "x": 792, "y": 345.1 },
++      { "x": 774.6, "y": 338.3 },
++      { "x": 758.4, "y": 333.7 },
++      { "x": 742.3, "y": 331.9 },
++      { "x": 725.4, "y": 332.5 },
++      { "x": 640.7, "y": 348.7 },
++      { "x": 611.6, "y": 351.4 },
++      { "x": 573.4, "y": 349.6 },
++      { "x": 498.3, "y": 340.4 },
++      { "x": 460.7, "y": 339.5 },
++      { "x": 422.9, "y": 345.7 },
++      { "x": 343.9, "y": 366.7 },
++      { "x": 324, "y": 369.5 },
++      { "x": 304.5, "y": 369.8 },
++      { "x": 284.3, "y": 367.6 },
++      { "x": 251.2, "y": 361.4 },
++      { "x": 219, "y": 352.3 },
++      { "x": 200.2, "y": 345.1 },
++      { "x": 184.4, "y": 337.4 },
++      { "x": 173.5, "y": 329.9 },
++      { "x": 167.9, "y": 322.2 },
++      { "x": 168.1, "y": 314.1 },
++      { "x": 172.9, "y": 304.8 },
++      { "x": 182, "y": 294.8 },
++      { "x": 193.3, "y": 285.1 },
++      { "x": 214.2, "y": 271 },
++      { "x": 236.9, "y": 259.8 },
++      { "x": 251.9, "y": 254.2 },
++      { "x": 267.8, "y": 250.4 },
++      { "x": 285.5, "y": 247.5 },
++      { "x": 336.3, "y": 244.2 },
++      { "x": 417.9, "y": 245.1 },
++      { "x": 446.5, "y": 248 },
++      { "x": 523.7, "y": 259.3 },
++      { "x": 562.9, "y": 261.5 },
++      { "x": 583.6, "y": 260.6 },
++      { "x": 616.4, "y": 256.9 },
++      { "x": 714.3, "y": 239.9 }
++    ]
++  },
++  "renderScale": 2,
++  "screenId": "map",
++  "slots": {
++    "dino-puzzle-1": { "x": 523.5, "y": 200.6 },
++    "dino-puzzle-2": { "x": 613.9, "y": 200.6 },
++    "fishing-1": { "x": 481.8, "y": 298.6 },
++    "fishing-2": { "x": 427.3, "y": 393.1 },
++    "ice-cream-1": { "x": 143, "y": 485.8 },
++    "ice-cream-2": { "x": 327.9, "y": 428.8 },
++    "pizza-1": { "x": 699.3, "y": 425.9 },
++    "pizza-2": { "x": 514.6, "y": 413.9 },
++    "race-1": { "x": 901.4, "y": 510.7 },
++    "race-2": { "x": 767.9, "y": 384.8 },
++    "shadow-match-1": { "x": 842.2, "y": 261.5 },
++    "shadow-match-2": { "x": 806, "y": 273.4 },
++    "touch-talk-1": { "x": 559.3, "y": 301.1 },
++    "touch-talk-2": { "x": 703.6, "y": 388.1 }
++  },
++  "v": 1
++}
+diff --git a/app/public/assets/atlases/map.json b/app/public/assets/atlases/map.json
+new file mode 100644
+index 0000000..a4a8364
+--- /dev/null
++++ b/app/public/assets/atlases/map.json
+@@ -0,0 +1,207 @@
++{
++  "frames": {
++    "dino-puzzle/idle/00": {
++      "frame": {
++        "x": 2,
++        "y": 2,
++        "w": 442,
++        "h": 265
++      },
++      "rotated": false,
++      "trimmed": true,
++      "spriteSourceSize": {
++        "x": 523,
++        "y": 194,
++        "w": 442,
++        "h": 265
++      },
++      "sourceSize": {
++        "w": 2048,
++        "h": 1536
++      },
++      "pivot": {
++        "x": 0.5,
++        "y": 0.5
++      }
++    },
++    "ice-cream/idle/00": {
++      "frame": {
++        "x": 448,
++        "y": 2,
++        "w": 341,
++        "h": 267
++      },
++      "rotated": false,
++      "trimmed": true,
++      "spriteSourceSize": {
++        "x": 243,
++        "y": 684,
++        "w": 341,
++        "h": 267
++      },
++      "sourceSize": {
++        "w": 2048,
++        "h": 1536
++      },
++      "pivot": {
++        "x": 0.5,
++        "y": 0.5
++      }
++    },
++    "race/idle/00": {
++      "frame": {
++        "x": 2,
++        "y": 271,
++        "w": 329,
++        "h": 325
++      },
++      "rotated": false,
++      "trimmed": true,
++      "spriteSourceSize": {
++        "x": 1608,
++        "y": 632,
++        "w": 329,
++        "h": 325
++      },
++      "sourceSize": {
++        "w": 2048,
++        "h": 1536
++      },
++      "pivot": {
++        "x": 0.5,
++        "y": 0.5
++      }
++    },
++    "kart/idle/00": {
++      "frame": {
++        "x": 335,
++        "y": 271,
++        "w": 109,
++        "h": 135
++      },
++      "rotated": false,
++      "trimmed": true,
++      "spriteSourceSize": {
++        "x": 857,
++        "y": 888,
++        "w": 109,
++        "h": 135
++      },
++      "sourceSize": {
++        "w": 2048,
++        "h": 1536
++      },
++      "pivot": {
++        "x": 0.5,
++        "y": 0.5
++      }
++    },
++    "touch-talk/idle/00": {
++      "frame": {
++        "x": 793,
++        "y": 2,
++        "w": 328,
++        "h": 206
++      },
++      "rotated": false,
++      "trimmed": true,
++      "spriteSourceSize": {
++        "x": 1180,
++        "y": 448,
++        "w": 328,
++        "h": 206
++      },
++      "sourceSize": {
++        "w": 2048,
++        "h": 1536
++      },
++      "pivot": {
++        "x": 0.5,
++        "y": 0.5
++      }
++    },
++    "shadow-match/idle/00": {
++      "frame": {
++        "x": 1125,
++        "y": 2,
++        "w": 307,
++        "h": 179
++      },
++      "rotated": false,
++      "trimmed": true,
++      "spriteSourceSize": {
++        "x": 1395,
++        "y": 306,
++        "w": 307,
++        "h": 179
++      },
++      "sourceSize": {
++        "w": 2048,
++        "h": 1536
++      },
++      "pivot": {
++        "x": 0.5,
++        "y": 0.5
++      }
++    },
++    "fishing/idle/00": {
++      "frame": {
++        "x": 1436,
++        "y": 2,
++        "w": 251,
++        "h": 222
++      },
++      "rotated": false,
++      "trimmed": true,
++      "spriteSourceSize": {
++        "x": 659,
++        "y": 453,
++        "w": 251,
++        "h": 222
++      },
++      "sourceSize": {
++        "w": 2048,
++        "h": 1536
++      },
++      "pivot": {
++        "x": 0.5,
++        "y": 0.5
++      }
++    },
++    "pizza/idle/00": {
++      "frame": {
++        "x": 1125,
++        "y": 185,
++        "w": 250,
++        "h": 293
++      },
++      "rotated": false,
++      "trimmed": true,
++      "spriteSourceSize": {
++        "x": 1091,
++        "y": 702,
++        "w": 250,
++        "h": 293
++      },
++      "sourceSize": {
++        "w": 2048,
++        "h": 1536
++      },
++      "pivot": {
++        "x": 0.5,
++        "y": 0.5
++      }
++    }
++  },
++  "meta": {
++    "app": "http://github.com/odrick/free-tex-packer-core",
++    "version": "0.3.9",
++    "image": "map.png",
++    "format": "RGBA8888",
++    "size": {
++      "w": 1689,
++      "h": 598
++    },
++    "scale": 1
++  }
++}
+diff --git a/app/tools/shared/binaries.ts b/app/tools/shared/binaries.ts
+new file mode 100644
+index 0000000..b7865eb
+--- /dev/null
++++ b/app/tools/shared/binaries.ts
+@@ -0,0 +1,95 @@
++// External-binary resolution shared by the build tools (audio:placeholders, audio:normalize, tts).
++// Each tool resolves every binary it needs BEFORE doing any work: env override (full path) first,
++// then the bare name on PATH, each probed by running `<bin> <versionArg>`. A missing binary throws
++// an error that names the tool, so the caller can exit 1 without writing any file.
++import { spawnSync } from 'node:child_process';
++
++/** True when `bin versionArg` runs and exits 0. */
++export type Probe = (bin: string, versionArg: string) => boolean;
++
++export const probeBinary: Probe = (bin, versionArg) => {
++  const r = spawnSync(bin, [versionArg], { stdio: 'ignore' });
++  return r.status === 0;
++};
++
++export interface BinarySpec {
++  /** Env var holding the full path, e.g. `FFMPEG_BIN`. */
++  envVar: string;
++  /** Name on PATH and in messages, e.g. `ffmpeg`. */
++  name: string;
++  /** Name on PATH when it differs from `name` (Blender → `blender`). */
++  pathName?: string;
++  /** `-version` (ffmpeg) or `--version` (edge-tts). */
++  versionArg: string;
++  /** How to install it, e.g. "install ffmpeg (e.g. `winget install Gyan.FFmpeg`)". */
++  installHint: string;
++}
++
++export const FFMPEG: BinarySpec = {
++  envVar: 'FFMPEG_BIN',
++  name: 'ffmpeg',
++  versionArg: '-version',
++  installHint: 'install ffmpeg (e.g. `winget install Gyan.FFmpeg`)',
++};
++
++export const EDGE_TTS: BinarySpec = {
++  envVar: 'EDGE_TTS_BIN',
++  name: 'edge-tts',
++  versionArg: '--version',
++  installHint: 'install edge-tts 7.2.8 (Python 3.12+: `pipx install edge-tts==7.2.8`)',
++};
++
++export type Env = Readonly<Record<string, string | undefined>>;
++
++/** Resolves a binary or throws `"<name> not found: …"`. */
++export function resolveBinary(spec: BinarySpec, env: Env, probe: Probe = probeBinary): string {
++  const fromEnv = env[spec.envVar]?.trim();
++  if (fromEnv) {
++    if (probe(fromEnv, spec.versionArg)) return fromEnv;
++    throw new Error(`${spec.name} not found: ${spec.envVar}="${fromEnv}" does not run. Fix the path or unset it to use PATH.`);
++  }
++  const pathName = spec.pathName ?? spec.name;
++  if (probe(pathName, spec.versionArg)) return pathName;
++  throw new Error(`${spec.name} not found: ${spec.installHint} or set ${spec.envVar} to its full path.`);
++}
++
++export const BLENDER: BinarySpec = {
++  envVar: 'BLENDER_BIN',
++  name: 'Blender',
++  pathName: 'blender',
++  versionArg: '--version',
++  installHint: 'install Blender 5.2.2 LTS (blender.org) and put `blender` on PATH,',
++};
++
++
++/** Parses `blender --version` output (`Blender 5.2.2 LTS` → `5.2.2`); undefined when absent. */
++export function blenderVersion(output: string): string | undefined {
++  return /^Blender (\d+\.\d+(?:\.\d+)?)/m.exec(output)?.[1];
++}
++
++/** The required Blender series: renders must not drift between versions. */
++export const BLENDER_SERIES = '5.2';
++
++/** Throws `needs Blender 5.2 (found X)` unless the version output reports 5.2.x. */
++export function checkBlenderVersion(output: string): string {
++  const found = blenderVersion(output);
++  if (found === undefined || (found !== BLENDER_SERIES && !found.startsWith(`${BLENDER_SERIES}.`))) {
++    throw new Error(`Blender: needs Blender ${BLENDER_SERIES} (found ${found ?? 'unknown version'}). Set BLENDER_BIN to a Blender ${BLENDER_SERIES} blender.exe.`);
++  }
++  return found;
++}
++
++/** Runs `blender --version` and returns its stdout ('' when it fails). */
++export type VersionReader = (bin: string) => string;
++
++export const readVersion: VersionReader = (bin) => {
++  const r = spawnSync(bin, ['--version'], { encoding: 'utf8' });
++  return r.status === 0 ? r.stdout : '';
++};
++
++/** Resolves Blender (BLENDER_BIN, then `blender` on PATH) and checks it is 5.2.x; throws naming Blender. */
++export function resolveBlender(env: Env, probe: Probe = probeBinary, read: VersionReader = readVersion): string {
++  const bin = resolveBinary(BLENDER, env, probe);
++  checkBlenderVersion(read(bin));
++  return bin;
++}
+diff --git a/app/tools/shared/binaries.test.ts b/app/tools/shared/binaries.test.ts
+new file mode 100644
+index 0000000..239c47a
+--- /dev/null
++++ b/app/tools/shared/binaries.test.ts
+@@ -0,0 +1,49 @@
++import { describe, expect, it, vi } from 'vitest';
++import { BLENDER, EDGE_TTS, FFMPEG, blenderVersion, checkBlenderVersion, resolveBinary, resolveBlender } from './binaries.ts';
++
++describe('resolveBinary', () => {
++  it('prefers the env override and probes it with the version arg', () => {
++    const probe = vi.fn(() => true);
++    expect(resolveBinary(EDGE_TTS, { EDGE_TTS_BIN: ' C:/x/edge-tts.exe ' }, probe)).toBe('C:/x/edge-tts.exe');
++    expect(probe).toHaveBeenCalledWith('C:/x/edge-tts.exe', '--version');
++  });
++
++  it('falls back to the name on PATH', () => {
++    const probe = vi.fn((bin: string) => bin === 'ffmpeg');
++    expect(resolveBinary(FFMPEG, {}, probe)).toBe('ffmpeg');
++    expect(probe).toHaveBeenCalledWith('ffmpeg', '-version');
++  });
++
++  it('names the tool when it is missing', () => {
++    expect(() => resolveBinary(EDGE_TTS, {}, () => false)).toThrow(/^edge-tts not found: install edge-tts .* EDGE_TTS_BIN/);
++    expect(() => resolveBinary(EDGE_TTS, { EDGE_TTS_BIN: 'bad' }, () => false)).toThrow(/^edge-tts not found: EDGE_TTS_BIN="bad" does not run/);
++  });
++});
++
++describe('Blender resolution', () => {
++  it('parses the version line', () => {
++    expect(blenderVersion('Blender 5.2.2 LTS\n\tbuild date: 2026-09-15\n')).toBe('5.2.2');
++    expect(blenderVersion('Blender 4.2.0\n')).toBe('4.2.0');
++    expect(blenderVersion('nothing here')).toBeUndefined();
++  });
++
++  it('accepts only 5.2.x', () => {
++    expect(checkBlenderVersion('Blender 5.2.2 LTS')).toBe('5.2.2');
++    expect(() => checkBlenderVersion('Blender 4.5.1 LTS')).toThrow(/needs Blender 5\.2 \(found 4\.5\.1\)/);
++    expect(() => checkBlenderVersion('Blender 5.20.0')).toThrow(/needs Blender 5\.2 \(found 5\.20\.0\)/);
++    expect(() => checkBlenderVersion('')).toThrow(/needs Blender 5\.2 \(found unknown version\)/);
++  });
++
++  it('prefers BLENDER_BIN, then `blender` on PATH', () => {
++    const probe = vi.fn((bin: string) => bin === 'blender');
++    expect(resolveBlender({}, probe, () => 'Blender 5.2.2 LTS')).toBe('blender');
++    expect(probe).toHaveBeenCalledWith('blender', '--version');
++    expect(resolveBlender({ BLENDER_BIN: 'C:/b/blender.exe' }, () => true, () => 'Blender 5.2.0')).toBe('C:/b/blender.exe');
++  });
++
++  it('names Blender and BLENDER_BIN when missing', () => {
++    expect(() => resolveBlender({}, () => false, () => '')).toThrow(/^Blender not found: .*BLENDER_BIN/);
++    expect(() => resolveBlender({ BLENDER_BIN: 'C:/nope' }, () => false, () => '')).toThrow(/^Blender not found: BLENDER_BIN="C:\/nope"/);
++    expect(resolveBinary(BLENDER, { BLENDER_BIN: 'x' }, () => true)).toBe('x');
++  });
++});
+diff --git a/app/tools/layout/geometry.ts b/app/tools/layout/geometry.ts
+new file mode 100644
+index 0000000..0785733
+--- /dev/null
++++ b/app/tools/layout/geometry.ts
+@@ -0,0 +1,167 @@
++// Pure 2D geometry for screen layouts (Story 1.4): hulls, padding, widths and distances in design px.
++// Shared by `npm run render` (it refuses to publish a bad layout) and `validate:content`.
++import type { Point } from '../../src/content/layout-types.ts';
++
++const cross = (o: Point, a: Point, b: Point): number => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
++
++/** Convex hull (Andrew's monotone chain), no collinear points. Counter-clockwise in y-up terms. */
++export function convexHull(points: readonly Point[]): Point[] {
++  const pts = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
++  const unique = pts.filter((p, i) => i === 0 || p.x !== pts[i - 1]!.x || p.y !== pts[i - 1]!.y);
++  if (unique.length < 3) return unique;
++  const lower: Point[] = [];
++  for (const p of unique) {
++    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, p) <= 0) lower.pop();
++    lower.push(p);
++  }
++  const upper: Point[] = [];
++  for (let i = unique.length - 1; i >= 0; i--) {
++    const p = unique[i]!;
++    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, p) <= 0) upper.pop();
++    upper.push(p);
++  }
++  return lower.slice(0, -1).concat(upper.slice(0, -1));
++}
++
++/** Corner arc resolution of `padHull`: a 16-gon per vertex. */
++const PAD_SEGMENTS = 16;
++
++/**
++ * Pads a convex polygon outward by `pad`: the hull of a circumscribed 16-gon of radius `pad` around
++ * every vertex, so every point within `pad` of the polygon is inside the result.
++ */
++export function padHull(hull: readonly Point[], pad: number): Point[] {
++  if (pad <= 0) return convexHull(hull);
++  const r = pad / Math.cos(Math.PI / PAD_SEGMENTS);
++  const pts: Point[] = [];
++  for (const v of hull) {
++    for (let k = 0; k < PAD_SEGMENTS; k++) {
++      const a = (2 * Math.PI * k) / PAD_SEGMENTS;
++      pts.push({ x: v.x + r * Math.cos(a), y: v.y + r * Math.sin(a) });
++    }
++  }
++  return convexHull(pts);
++}
++
++/** Distance from `p` to the line through `a` and `b`. */
++function lineDistance(p: Point, a: Point, b: Point): number {
++  const len = Math.hypot(b.x - a.x, b.y - a.y);
++  return len === 0 ? Math.hypot(p.x - a.x, p.y - a.y) : Math.abs(cross(a, b, p)) / len;
++}
++
++/** Minimum width of a polygon (rotating calipers on its hull: min over edges of the farthest vertex). */
++export function minWidth(polygon: readonly Point[]): number {
++  const hull = convexHull(polygon);
++  if (hull.length < 3) return 0;
++  let best = Infinity;
++  for (let i = 0; i < hull.length; i++) {
++    const a = hull[i]!;
++    const b = hull[(i + 1) % hull.length]!;
++    let far = 0;
++    for (const p of hull) far = Math.max(far, lineDistance(p, a, b));
++    best = Math.min(best, far);
++  }
++  return best;
++}
++
++/** Ray-casting point-in-polygon (boundary counts as either). */
++export function pointInPolygon(p: Point, polygon: readonly Point[]): boolean {
++  let inside = false;
++  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
++    const a = polygon[i]!;
++    const b = polygon[j]!;
++    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
++  }
++  return inside;
++}
++
++/** Distance from `p` to the segment `a`–`b`. */
++export function distToSegment(p: Point, a: Point, b: Point): number {
++  const dx = b.x - a.x;
++  const dy = b.y - a.y;
++  const len2 = dx * dx + dy * dy;
++  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
++  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
++}
++
++/** Distance from `p` to an open polyline (Infinity when it has no points). */
++export function distToPolyline(p: Point, line: readonly Point[]): number {
++  if (line.length === 1) return Math.hypot(p.x - line[0]!.x, p.y - line[0]!.y);
++  let best = Infinity;
++  for (let i = 0; i + 1 < line.length; i++) best = Math.min(best, distToSegment(p, line[i]!, line[i + 1]!));
++  return best;
++}
++
++function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
++  const d1 = cross(c, d, a);
++  const d2 = cross(c, d, b);
++  const d3 = cross(a, b, c);
++  const d4 = cross(a, b, d);
++  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
++}
++
++const edges = (poly: readonly Point[]): [Point, Point][] => poly.map((p, i) => [p, poly[(i + 1) % poly.length]!]);
++
++/** Distance between two polygons; 0 when they touch, intersect or one contains the other. */
++export function polygonDistance(a: readonly Point[], b: readonly Point[]): number {
++  if (a.length === 0 || b.length === 0) return Infinity;
++  if (pointInPolygon(a[0]!, b) || pointInPolygon(b[0]!, a)) return 0;
++  const ea = edges(a);
++  const eb = edges(b);
++  let best = Infinity;
++  for (const [p, q] of ea) {
++    for (const [r, s] of eb) {
++      if (segmentsIntersect(p, q, r, s)) return 0;
++      best = Math.min(best, distToSegment(p, r, s), distToSegment(q, r, s), distToSegment(r, p, q), distToSegment(s, p, q));
++    }
++  }
++  return best;
++}
++
++/** Keeps the part of a convex polygon where `n·p <= c` (Sutherland–Hodgman against one line). */
++export function clipHalfPlane(poly: readonly Point[], n: Point, c: number): Point[] {
++  const side = (p: Point): number => n.x * p.x + n.y * p.y - c;
++  const out: Point[] = [];
++  for (let i = 0; i < poly.length; i++) {
++    const a = poly[i]!;
++    const b = poly[(i + 1) % poly.length]!;
++    const sa = side(a);
++    const sb = side(b);
++    if (sa <= 0) out.push(a);
++    if ((sa < 0 && sb > 0) || (sa > 0 && sb < 0)) {
++      const t = sa / (sa - sb);
++      out.push({ x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) });
++    }
++  }
++  return out;
++}
++
++/**
++ * Separates two convex polygons by at least `gap`: picks the edge normal (of either polygon) along
++ * which they are best separated, and clips both with parallel lines `gap / 2` either side of the
++ * middle of their projections. Returns them unchanged when they are already `gap` apart.
++ */
++export function separatePair(a: readonly Point[], b: readonly Point[], gap: number): [Point[], Point[]] {
++  if (polygonDistance(a, b) >= gap) return [[...a], [...b]];
++  let best: { n: Point; mid: number; sep: number } | undefined;
++  for (const poly of [a, b]) {
++    for (const [p, q] of edges(poly)) {
++      const len = Math.hypot(q.x - p.x, q.y - p.y);
++      if (len === 0) continue;
++      for (const sign of [1, -1]) {
++        const n = { x: (sign * (q.y - p.y)) / len, y: (sign * -(q.x - p.x)) / len };
++        const pa = a.map((v) => n.x * v.x + n.y * v.y);
++        const pb = b.map((v) => n.x * v.x + n.y * v.y);
++        const maxA = Math.max(...pa);
++        const minB = Math.min(...pb);
++        const sep = minB - maxA;
++        if (!best || sep > best.sep) best = { n, mid: (maxA + minB) / 2, sep };
++      }
++    }
++  }
++  if (!best) return [[...a], [...b]];
++  const { n, mid } = best;
++  const clippedA = clipHalfPlane(a, n, mid - gap / 2);
++  const clippedB = clipHalfPlane(b, { x: -n.x, y: -n.y }, -(mid + gap / 2));
++  return [clippedA, clippedB];
++}
+diff --git a/app/tools/layout/geometry.test.ts b/app/tools/layout/geometry.test.ts
+new file mode 100644
+index 0000000..d0a39ae
+--- /dev/null
++++ b/app/tools/layout/geometry.test.ts
+@@ -0,0 +1,57 @@
++import { describe, expect, it } from 'vitest';
++import { clipHalfPlane, convexHull, distToPolyline, minWidth, padHull, pointInPolygon, polygonDistance, separatePair } from './geometry.ts';
++
++const sq = (x: number, y: number, s: number) => [
++  { x, y },
++  { x: x + s, y },
++  { x: x + s, y: y + s },
++  { x, y: y + s },
++];
++
++describe('geometry', () => {
++  it('convexHull drops interior and collinear points', () => {
++    const hull = convexHull([...sq(0, 0, 10), { x: 5, y: 5 }, { x: 5, y: 0 }, { x: 0, y: 0 }]);
++    expect(hull).toHaveLength(4);
++    expect(convexHull([{ x: 1, y: 1 }])).toHaveLength(1);
++  });
++
++  it('padHull grows a polygon by at least the pad everywhere', () => {
++    const padded = padHull(sq(0, 0, 100), 24);
++    expect(minWidth(padded)).toBeGreaterThanOrEqual(148);
++    expect(minWidth(padded)).toBeLessThan(150);
++    for (const p of [{ x: -23.9, y: 50 }, { x: 50, y: 123.9 }, { x: -16.9, y: -16.9 }]) expect(pointInPolygon(p, padded)).toBe(true);
++  });
++
++  it('minWidth is the calipers width', () => {
++    expect(minWidth(sq(0, 0, 80))).toBeCloseTo(80);
++    expect(minWidth([{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 100, y: 30 }])).toBeCloseTo(30);
++  });
++
++  it('polygonDistance is 0 when they intersect or contain', () => {
++    expect(polygonDistance(sq(0, 0, 10), sq(5, 5, 10))).toBe(0);
++    expect(polygonDistance(sq(0, 0, 100), sq(10, 10, 5))).toBe(0);
++    expect(polygonDistance(sq(0, 0, 10), sq(40, 0, 10))).toBeCloseTo(30);
++  });
++
++  it('pointInPolygon and distToPolyline', () => {
++    expect(pointInPolygon({ x: 5, y: 5 }, sq(0, 0, 10))).toBe(true);
++    expect(pointInPolygon({ x: 15, y: 5 }, sq(0, 0, 10))).toBe(false);
++    expect(distToPolyline({ x: 5, y: 3 }, [{ x: 0, y: 0 }, { x: 10, y: 0 }])).toBeCloseTo(3);
++    expect(distToPolyline({ x: 13, y: 4 }, [{ x: 0, y: 0 }, { x: 10, y: 0 }])).toBeCloseTo(5);
++  });
++
++  it('clipHalfPlane keeps one side of a line', () => {
++    const clipped = clipHalfPlane(sq(0, 0, 10), { x: 1, y: 0 }, 4);
++    expect(Math.max(...clipped.map((p) => p.x))).toBeCloseTo(4);
++    expect(minWidth(clipped)).toBeCloseTo(4);
++  });
++
++  it('separatePair leaves the gap between overlapping polygons', () => {
++    const [a, b] = separatePair(sq(0, 0, 100), sq(80, 0, 100), 40);
++    expect(polygonDistance(a, b)).toBeGreaterThanOrEqual(40 - 1e-9);
++    expect(minWidth(a)).toBeCloseTo(70);
++    expect(minWidth(b)).toBeCloseTo(70);
++    const far = separatePair(sq(0, 0, 10), sq(100, 0, 10), 40);
++    expect(far[0]).toEqual(sq(0, 0, 10));
++  });
++});
+diff --git a/app/tools/layout/to-layout.ts b/app/tools/layout/to-layout.ts
+new file mode 100644
+index 0000000..c044735
+--- /dev/null
++++ b/app/tools/layout/to-layout.ts
+@@ -0,0 +1,150 @@
++// raw.json (render_screen.py, render px) → ScreenLayout v1 (design px). Pure (Story 1.4).
++// Checks the naming contract `<kind>.<id>`, duplicates and out-of-frame points; divides by the
++// render scale; hulls and pads hit polygons; rounds to 0.1; serialises with sorted keys.
++import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
++import { convexHull, padHull, separatePair } from './geometry.ts';
++
++export interface RawObject {
++  name: string;
++  type: string;
++  /** [x, y, depth] in render px (top-left origin, y down); depth <= 0 is behind the camera. */
++  points: number[][];
++}
++
++export interface RawProjection {
++  screenId: string;
++  render: { width: number; height: number };
++  objects: RawObject[];
++  frames: string[];
++}
++
++export interface ToLayoutOptions {
++  design: { width: number; height: number };
++  /** Tokens.spacing.hitPad: hit polygons are padded outward by this (design px). */
++  hitPad: number;
++  /**
++   * Hit ids kept at least `gap` apart (the map's stations, `Tokens.spacing.stationGap`). Padded
++   * hulls closer than that are clipped by parallel lines either side of their best separating axis
++   * (perspective makes tall props reach into the station behind them; see spec 1.4 Spec Change Log).
++   */
++  separate?: { ids: readonly string[]; gap: number };
++}
++
++/** Extra separation so rounding to 0.1 never brings two hits under the gap. */
++const SEPARATION_MARGIN = 0.5;
++
++export const LAYOUT_KINDS = ['anchor', 'hit', 'slot', 'path'] as const;
++export type LayoutKind = (typeof LAYOUT_KINDS)[number];
++
++/** `<kind>.<id>`, id kebab-case: `hit.pizza`, `anchor.pizza-stop`. */
++export const LAYOUT_NAME = /^(anchor|hit|slot|path)\.([a-z0-9]+(-[a-z0-9]+)*)$/;
++
++export class LayoutError extends Error {
++  readonly problems: string[];
++  constructor(problems: string[]) {
++    super(problems.join('\n'));
++    this.problems = problems;
++  }
++}
++
++/** Rounds to 0.1 (no -0). */
++export const round1 = (v: number): number => Math.round(v * 10) / 10 + 0;
++
++const roundPoint = (p: Point): Point => ({ x: round1(p.x), y: round1(p.y) });
++
++function sortRecord<T>(rec: Record<string, T>): Record<string, T> {
++  return Object.fromEntries(Object.keys(rec).sort().map((k) => [k, rec[k]!]));
++}
++
++/** Converts a raw projection to a layout, or throws a LayoutError listing every problem. */
++export function toLayout(raw: RawProjection, opts: ToLayoutOptions): ScreenLayout {
++  const problems: string[] = [];
++  const { width: rw, height: rh } = raw.render;
++  const scale = rw / opts.design.width;
++  if (!(scale > 0) || Math.abs(rh / opts.design.height - scale) > 1e-9) {
++    throw new LayoutError([`render size ${rw}×${rh} is not a multiple of the ${opts.design.width}×${opts.design.height} design`]);
++  }
++  const anchors: Record<string, Point> = {};
++  const hits: Record<string, Point[]> = {};
++  const slots: Record<string, Point> = {};
++  const paths: Record<string, Point[]> = {};
++  const seen = new Set<string>();
++
++  for (const obj of raw.objects) {
++    const m = LAYOUT_NAME.exec(obj.name);
++    if (!m) {
++      problems.push(`layout object "${obj.name}": name must be <anchor|hit|slot|path>.<kebab-id> (no Blender .001 suffix, lower case)`);
++      continue;
++    }
++    if (seen.has(obj.name)) {
++      problems.push(`layout object "${obj.name}": duplicate id`);
++      continue;
++    }
++    seen.add(obj.name);
++    const kind = m[1] as LayoutKind;
++    const id = m[2]!;
++    const out = obj.points.filter((p) => !(p[2]! > 0 && p[0]! >= 0 && p[0]! <= rw && p[1]! >= 0 && p[1]! <= rh));
++    if (out.length > 0) {
++      problems.push(`layout object "${obj.name}": ${out.length} point(s) behind the camera or outside the ${rw}×${rh} render`);
++      continue;
++    }
++    const pts: Point[] = obj.points.map((p) => ({ x: p[0]! / scale, y: p[1]! / scale }));
++    if (kind === 'anchor' || kind === 'slot') {
++      if (pts.length !== 1) {
++        problems.push(`layout object "${obj.name}": an ${kind} needs exactly one point (got ${pts.length})`);
++        continue;
++      }
++      (kind === 'anchor' ? anchors : slots)[id] = roundPoint(pts[0]!);
++    } else if (kind === 'path') {
++      if (pts.length < 2) {
++        problems.push(`layout object "${obj.name}": a path needs at least 2 points (got ${pts.length})`);
++        continue;
++      }
++      paths[id] = pts.map(roundPoint);
++    } else {
++      const hull = convexHull(pts);
++      if (hull.length < 3) {
++        problems.push(`layout object "${obj.name}": a hit needs at least 3 non-collinear points`);
++        continue;
++      }
++      hits[id] = padHull(hull, opts.hitPad);
++    }
++  }
++  if (problems.length > 0) throw new LayoutError(problems);
++  if (opts.separate) {
++    const ids = [...opts.separate.ids].filter((id) => hits[id]).sort();
++    for (let i = 0; i < ids.length; i++) {
++      for (let j = i + 1; j < ids.length; j++) {
++        const [a, b] = separatePair(hits[ids[i]!]!, hits[ids[j]!]!, opts.separate.gap + SEPARATION_MARGIN);
++        hits[ids[i]!] = a;
++        hits[ids[j]!] = b;
++      }
++    }
++  }
++  for (const id of Object.keys(hits)) hits[id] = hits[id]!.map(roundPoint);
++  return {
++    v: 1,
++    screenId: raw.screenId,
++    design: { width: opts.design.width, height: opts.design.height },
++    renderScale: scale,
++    anchors: sortRecord(anchors),
++    hits: sortRecord(hits),
++    slots: sortRecord(slots),
++    paths: sortRecord(paths),
++  };
++}
++
++function sortDeep(value: unknown): unknown {
++  if (Array.isArray(value)) return value.map(sortDeep);
++  if (value !== null && typeof value === 'object') {
++    const rec = value as Record<string, unknown>;
++    return Object.fromEntries(Object.keys(rec).sort().map((k) => [k, sortDeep(rec[k])]));
++  }
++  return value;
++}
++
++/** Deterministic JSON: sorted keys, 2-space indent, one `{ "x": …, "y": … }` point per line. */
++export function formatLayout(layout: ScreenLayout): string {
++  const text = JSON.stringify(sortDeep(layout), null, 2);
++  return `${text.replace(/\{\n\s+"x": (-?[\d.e+-]+),\n\s+"y": (-?[\d.e+-]+)\n\s+\}/g, '{ "x": $1, "y": $2 }')}\n`;
++}
+diff --git a/app/tools/layout/to-layout.test.ts b/app/tools/layout/to-layout.test.ts
+new file mode 100644
+index 0000000..87c897d
+--- /dev/null
++++ b/app/tools/layout/to-layout.test.ts
+@@ -0,0 +1,88 @@
++import { describe, expect, it } from 'vitest';
++import { LayoutError, formatLayout, round1, toLayout, type RawObject, type RawProjection } from './to-layout.ts';
++import { minWidth, polygonDistance } from './geometry.ts';
++
++const design = { width: 1024, height: 768 };
++const opts = { design, hitPad: 24 };
++
++const raw = (objects: RawObject[]): RawProjection => ({ screenId: 'map', render: { width: 2048, height: 1536 }, objects, frames: [] });
++const pt = (x: number, y: number): number[] => [x, y, 10];
++const box = (name: string, x: number, y: number, s: number): RawObject => ({
++  name,
++  type: 'MESH',
++  points: [pt(x, y), pt(x + s, y), pt(x + s, y + s), pt(x, y + s), pt(x + s / 2, y + s / 2)],
++});
++
++function problems(r: RawProjection): string[] {
++  try {
++    toLayout(r, opts);
++    return [];
++  } catch (e) {
++    return (e as LayoutError).problems;
++  }
++}
++
++describe('toLayout', () => {
++  it('divides by the render scale, hulls + pads hits and sorts keys', () => {
++    const layout = toLayout(
++      raw([
++        { name: 'slot.b-1', type: 'EMPTY', points: [pt(201, 401)] },
++        { name: 'anchor.pizza', type: 'EMPTY', points: [pt(100.04, 200.16)] },
++        box('hit.pizza', 400, 400, 200),
++        { name: 'path.road', type: 'CURVE', points: [pt(0, 1000), pt(2000, 1000)] },
++      ]),
++      opts,
++    );
++    expect(layout.renderScale).toBe(2);
++    expect(layout.anchors).toEqual({ pizza: { x: 50, y: 100.1 } });
++    expect(layout.slots['b-1']).toEqual({ x: 100.5, y: 200.5 });
++    expect(layout.paths.road).toEqual([{ x: 0, y: 500 }, { x: 1000, y: 500 }]);
++    const w = minWidth(layout.hits.pizza!);
++    expect(w).toBeGreaterThanOrEqual(100 + 48 - 0.2);
++    expect(Object.keys(layout)).toEqual(['v', 'screenId', 'design', 'renderScale', 'anchors', 'hits', 'slots', 'paths']);
++  });
++
++  it('separates the listed hits by the gap', () => {
++    const r = raw([box('hit.a', 400, 400, 200), box('hit.b', 640, 400, 200)]);
++    const layout = toLayout(r, { ...opts, separate: { ids: ['a', 'b'], gap: 40 } });
++    expect(polygonDistance(layout.hits.a!, layout.hits.b!)).toBeGreaterThanOrEqual(40);
++    expect(polygonDistance(toLayout(r, opts).hits.a!, toLayout(r, opts).hits.b!)).toBe(0);
++  });
++
++  it.each([
++    ['hit.pizza.001', /"hit\.pizza\.001": name must be/],
++    ['Hit.X', /"Hit\.X": name must be/],
++    ['thing.pizza', /"thing\.pizza": name must be/],
++    ['anchor.Pizza', /"anchor\.Pizza": name must be/],
++  ])('rejects the name %s', (name, msg) => {
++    expect(problems(raw([{ name, type: 'EMPTY', points: [pt(1, 1)] }]))[0]).toMatch(msg);
++  });
++
++  it('rejects a duplicate id', () => {
++    const p = problems(raw([box('hit.pizza', 0, 0, 100), box('hit.pizza', 0, 0, 100)]));
++    expect(p).toEqual([expect.stringMatching(/"hit\.pizza": duplicate id/)]);
++  });
++
++  it('rejects points behind the camera or outside the render', () => {
++    expect(problems(raw([{ name: 'anchor.a', type: 'EMPTY', points: [[10, 10, -1]] }]))[0]).toMatch(/"anchor\.a": 1 point\(s\) behind the camera/);
++    expect(problems(raw([{ name: 'slot.a', type: 'EMPTY', points: [pt(2100, 10)] }]))[0]).toMatch(/"slot\.a": .*outside the 2048×1536/);
++  });
++
++  it('rejects too few points', () => {
++    expect(problems(raw([{ name: 'path.road', type: 'CURVE', points: [pt(1, 1)] }]))[0]).toMatch(/"path\.road": a path needs at least 2/);
++    expect(problems(raw([{ name: 'hit.a', type: 'MESH', points: [pt(1, 1), pt(2, 2), pt(3, 3)] }]))[0]).toMatch(/"hit\.a": a hit needs at least 3 non-collinear/);
++  });
++
++  it('rejects a render size that is not a multiple of the design', () => {
++    expect(() => toLayout({ ...raw([]), render: { width: 2048, height: 1500 } }, opts)).toThrow(/not a multiple/);
++  });
++
++  it('formats deterministically: sorted keys, one point per line, no -0', () => {
++    const layout = toLayout(raw([{ name: 'anchor.b', type: 'EMPTY', points: [pt(0.01, 4)] }, { name: 'anchor.a', type: 'EMPTY', points: [pt(2, 4)] }]), opts);
++    const text = formatLayout(layout);
++    expect(text).toContain('"a": { "x": 1, "y": 2 }');
++    expect(text.indexOf('"a"')).toBeLessThan(text.indexOf('"b"'));
++    expect(text).toBe(formatLayout(JSON.parse(text)));
++    expect(Object.is(round1(-0.01), -0)).toBe(false);
++  });
++});
+diff --git a/app/tools/layout/rules.ts b/app/tools/layout/rules.ts
+new file mode 100644
+index 0000000..892d353
+--- /dev/null
++++ b/app/tools/layout/rules.ts
+@@ -0,0 +1,209 @@
++// Layout and asset rules (Story 1.4). Pure: used by `npm run render` (before publishing) and by
++// `validate:content` (inside `npm run check`). Every message names the offending id or file.
++import type { Rect } from '../../src/core/safe-rect.ts';
++import { Tokens } from '../../src/core/tokens.ts';
++import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
++import type { Station } from '../../src/content/stations.ts';
++import { FRAME_NAME } from '../../src/content/assets.ts';
++import { distToPolyline, minWidth, pointInPolygon, polygonDistance } from './geometry.ts';
++
++export interface LayoutLimits {
++  /** Interactive rect: x∈[x0,x1], y∈[y0,y1] (design px). */
++  rect: { x0: number; y0: number; x1: number; y1: number };
++  /** Minimum hit polygon width (Tokens.spacing.targetMin). */
++  targetMin: number;
++  /** Minimum distance between station polygons (Tokens.spacing.stationGap). */
++  stationGap: number;
++  /** A `-stop` anchor or `kart-start` lies within this distance of the road (design px). */
++  roadTolerance: number;
++}
++
++/** A `-stop` anchor / kart start may sit this far (design px) from the road centreline. */
++export const ROAD_TOLERANCE = 4;
++
++/** `safeRect` inset by the edge dead zones (side 24, top 32, bottom 40). */
++export function interactiveRect(safe: Rect, dead: { side: number; top: number; bottom: number }): LayoutLimits['rect'] {
++  return { x0: safe.x + dead.side, y0: safe.y + dead.top, x1: safe.x + safe.w - dead.side, y1: safe.y + safe.h - dead.bottom };
++}
++
++/** The limits from Tokens: x∈[24,1000], y∈[66,694], 80 wide, 40 apart. */
++export function layoutLimits(): LayoutLimits {
++  const s = Tokens.spacing;
++  return {
++    rect: interactiveRect(Tokens.safeRect, { side: s.edgeDeadSide, top: s.edgeDeadTop, bottom: s.edgeDeadBottom }),
++    targetMin: s.targetMin,
++    stationGap: s.stationGap,
++    roadTolerance: ROAD_TOLERANCE,
++  };
++}
++
++export interface LayoutRuleInput {
++  stations: readonly Station[];
++  gameIds: readonly string[];
++  limits: LayoutLimits;
++  /** Anchor ids that must lie on the road besides each station's `-stop` (e.g. `kart-start`). */
++  roadAnchors?: readonly string[];
++  /** Path id of the road. */
++  road?: string;
++}
++
++const inRect = (p: Point, r: LayoutLimits['rect']): boolean => p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1;
++const fmt = (p: Point): string => `(${p.x}, ${p.y})`;
++const MIN_HIT_POINTS = 3;
++
++/** Validates the map layout against the stations and the touch rules; returns the problems. */
++export function validateLayout(layout: ScreenLayout, input: LayoutRuleInput): string[] {
++  const problems: string[] = [];
++  const { stations, gameIds, limits } = input;
++  const road = input.road ?? 'road';
++  const roadAnchors = input.roadAnchors ?? ['kart-start'];
++
++  // Station set === GAME_IDS, each once.
++  const ids = stations.map((s) => s.id as string);
++  for (const id of ids.filter((id, i) => ids.indexOf(id) !== i)) problems.push(`station "${id}": listed more than once`);
++  for (const id of ids.filter((id) => !gameIds.includes(id))) problems.push(`station "${id}": not a GameId`);
++  for (const id of gameIds.filter((id) => !ids.includes(id))) problems.push(`station "${id}": GameId has no station`);
++
++  const roadLine = layout.paths[road];
++  if (!roadLine || roadLine.length < 2) problems.push(`path "${road}": missing or has fewer than 2 points`);
++
++  const onRoad = (anchorId: string): void => {
++    const a = layout.anchors[anchorId];
++    if (!a) {
++      problems.push(`anchor "${anchorId}": missing`);
++      return;
++    }
++    if (roadLine && roadLine.length >= 2) {
++      const d = distToPolyline(a, roadLine);
++      if (d > limits.roadTolerance) problems.push(`anchor "${anchorId}": ${d.toFixed(1)} px from path "${road}" (max ${limits.roadTolerance})`);
++    }
++  };
++
++  const polys: [string, readonly Point[]][] = [];
++  for (const s of stations) {
++    const hit = layout.hits[s.id];
++    if (!hit || hit.length < MIN_HIT_POINTS) problems.push(`hit "${s.id}": missing or has fewer than 3 points`);
++    else {
++      polys.push([s.id, hit]);
++      const outside = hit.filter((p) => !inRect(p, limits.rect));
++      if (outside.length > 0) {
++        const r = limits.rect;
++        problems.push(`hit "${s.id}": ${outside.length} vertex(es) outside the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}], e.g. ${fmt(outside[0]!)}`);
++      }
++      const w = minWidth(hit);
++      if (w < limits.targetMin) problems.push(`hit "${s.id}": minimum width ${w.toFixed(1)} px is under ${limits.targetMin}`);
++    }
++    if (!layout.anchors[s.id]) problems.push(`anchor "${s.id}": missing`);
++    onRoad(`${s.id}-stop`);
++  }
++  for (const id of roadAnchors) onRoad(id);
++
++  for (let i = 0; i < polys.length; i++) {
++    for (let j = i + 1; j < polys.length; j++) {
++      const [a, pa] = polys[i]!;
++      const [b, pb] = polys[j]!;
++      const d = polygonDistance(pa, pb);
++      if (d === 0) problems.push(`hits "${a}" and "${b}": not separated (they overlap)`);
++      else if (d < limits.stationGap) problems.push(`hits "${a}" and "${b}": ${d.toFixed(1)} px apart (min ${limits.stationGap})`);
++    }
++  }
++
++  for (const s of stations) {
++    for (const slot of s.slots) {
++      const p = layout.slots[slot];
++      if (!p) {
++        problems.push(`slot "${slot}": missing`);
++        continue;
++      }
++      if (!inRect(p, limits.rect)) problems.push(`slot "${slot}": ${fmt(p)} is outside the interactive rect`);
++      for (const [id, poly] of polys) if (pointInPolygon(p, poly)) problems.push(`slot "${slot}": inside the hit polygon of "${id}"`);
++    }
++  }
++  return problems;
++}
++
++/** Render px per design px of every screen (images are rendered at 2×). */
++export const RENDER_SCALE = 2;
++
++// --- assets ----------------------------------------------------------------------------------
++
++/** Atlas pages and backgrounds are at most 2048 px on each side; every shipped file ≤ 8 MiB. */
++export const MAX_PAGE_SIDE = 2048;
++export const MAX_FILE_BYTES = 8 * 1024 * 1024;
++
++export interface AtlasCheck {
++  key: string;
++  png: string;
++  json: string;
++  /** Frame names the atlas must hold. */
++  frames: readonly string[];
++}
++
++export interface BackgroundCheck {
++  key: string;
++  path: string;
++  width: number;
++  height: number;
++}
++
++export interface AssetRuleInput {
++  atlases: readonly AtlasCheck[];
++  backgrounds: readonly BackgroundCheck[];
++  /** Every file under public/assets with its size (path relative to public/). */
++  files: readonly { path: string; bytes: number }[];
++  /** PNG IHDR size, undefined when the file is missing or not a PNG. */
++  pngSize: (path: string) => { width: number; height: number } | undefined;
++  /** Parsed JSON, undefined when the file is missing or invalid. */
++  readJson: (path: string) => unknown;
++}
++
++interface HashAtlasJson {
++  frames?: Record<string, unknown>;
++  meta?: { size?: { w?: number; h?: number } };
++}
++
++/** Validates the atlases, backgrounds and file size caps; returns the problems. */
++export function validateAssets(input: AssetRuleInput): string[] {
++  const problems: string[] = [];
++  for (const a of input.atlases) {
++    const size = input.pngSize(a.png);
++    if (!size) problems.push(`atlas "${a.key}": ${a.png} is missing or not a PNG`);
++    else if (size.width > MAX_PAGE_SIDE || size.height > MAX_PAGE_SIDE) {
++      problems.push(`atlas "${a.key}": ${a.png} is ${size.width}×${size.height} (max ${MAX_PAGE_SIDE}×${MAX_PAGE_SIDE})`);
++    }
++    const json = input.readJson(a.json) as HashAtlasJson | undefined;
++    if (!json || typeof json !== 'object' || !json.frames) {
++      problems.push(`atlas "${a.key}": ${a.json} is missing or not a JSON hash`);
++      continue;
++    }
++    const w = json.meta?.size?.w ?? Infinity;
++    const h = json.meta?.size?.h ?? Infinity;
++    if (w > MAX_PAGE_SIDE || h > MAX_PAGE_SIDE) problems.push(`atlas "${a.key}": ${a.json} page size ${w}×${h} exceeds ${MAX_PAGE_SIDE}`);
++    for (const name of Object.keys(json.frames)) {
++      if (!FRAME_NAME.test(name)) problems.push(`atlas "${a.key}": frame "${name}" is not <object>/<state>/<nn>`);
++    }
++    for (const f of a.frames) if (!(f in json.frames)) problems.push(`atlas "${a.key}": frame "${f}" is missing`);
++  }
++  for (const b of input.backgrounds) {
++    const size = input.pngSize(b.path);
++    if (!size) problems.push(`background "${b.key}": ${b.path} is missing or not a PNG`);
++    else if (size.width !== b.width || size.height !== b.height) {
++      problems.push(`background "${b.key}": ${b.path} is ${size.width}×${size.height} (must be ${b.width}×${b.height})`);
++    }
++  }
++  for (const f of input.files) {
++    if (f.bytes > MAX_FILE_BYTES) problems.push(`file ${f.path}: ${f.bytes} bytes exceeds 8 MiB (${MAX_FILE_BYTES})`);
++  }
++  return problems;
++}
++
++/** Width/height from a PNG's IHDR chunk; undefined when `buf` is not a PNG. */
++export function pngSizeOf(buf: Uint8Array): { width: number; height: number } | undefined {
++  const SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
++  const IHDR_END = 24;
++  if (buf.length < IHDR_END || SIG.some((b, i) => buf[i] !== b)) return undefined;
++  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
++  const WIDTH_AT = 16;
++  const HEIGHT_AT = 20;
++  return { width: view.getUint32(WIDTH_AT), height: view.getUint32(HEIGHT_AT) };
++}
+diff --git a/app/tools/layout/rules.test.ts b/app/tools/layout/rules.test.ts
+new file mode 100644
+index 0000000..919530e
+--- /dev/null
++++ b/app/tools/layout/rules.test.ts
+@@ -0,0 +1,194 @@
++import { describe, expect, it } from 'vitest';
++import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
++import { STATIONS } from '../../src/content/stations.ts';
++import { GAME_IDS } from '../../src/content/types.ts';
++import { layoutLimits, pngSizeOf, validateAssets, validateLayout, type AssetRuleInput } from './rules.ts';
++
++const sq = (x: number, y: number, s: number): Point[] => [
++  { x, y },
++  { x: x + s, y },
++  { x: x + s, y: y + s },
++  { x, y: y + s },
++];
++
++interface MutableLayout {
++  v: 1;
++  screenId: string;
++  design: { width: number; height: number };
++  renderScale: number;
++  anchors: Record<string, Point>;
++  hits: Record<string, Point[]>;
++  slots: Record<string, Point>;
++  paths: Record<string, Point[]>;
++}
++
++/** 7 stations of 100×100 in a row at y 400 (PITCH apart), the road at y 600, slots above them. */
++function goodLayout(): MutableLayout {
++  const anchors: Record<string, Point> = { 'kart-start': { x: 500, y: 600 } };
++  const hits: Record<string, Point[]> = {};
++  const slots: Record<string, Point> = {};
++  STATIONS.forEach((s, i) => {
++    const x = 30 + i * PITCH;
++    hits[s.id] = sq(x, 400, 100);
++    anchors[s.id] = { x: x + 50, y: 480 };
++    anchors[`${s.id}-stop`] = { x: x + 50, y: 601 };
++    slots[s.slots[0]!] = { x: x + 20, y: 200 };
++    slots[s.slots[1]!] = { x: x + 70, y: 250 };
++  });
++  return {
++    v: 1,
++    screenId: 'map',
++    design: { width: 1024, height: 768 },
++    renderScale: 2,
++    anchors,
++    hits,
++    slots,
++    paths: { road: [{ x: 24, y: 600 }, { x: 1000, y: 600 }] },
++  };
++}
++/** Station pitch: 100 wide + 40 gap. 30 + 6 × 140 + 100 = 970 ≤ 1000. */
++const PITCH = 140;
++
++const edit = (f: (l: MutableLayout) => void): ScreenLayout => {
++  const l = goodLayout();
++  f(l);
++  return l;
++};
++const check = (l: ScreenLayout, stations = STATIONS, gameIds: readonly string[] = GAME_IDS): string[] =>
++  validateLayout(l, { stations, gameIds, limits: layoutLimits() });
++
++describe('validateLayout', () => {
++  it('the limits come from Tokens: x∈[24,1000], y∈[66,694], 80, 40', () => {
++    expect(layoutLimits()).toEqual({ rect: { x0: 24, y0: 66, x1: 1000, y1: 694 }, targetMin: 80, stationGap: 40, roadTolerance: 4 });
++  });
++
++  it('a good layout passes', () => {
++    expect(check(goodLayout())).toEqual([]);
++  });
++
++  it('station ids must be exactly the GameIds, once each', () => {
++    expect(check(goodLayout(), [...STATIONS, STATIONS[0]!])).toContain('station "ice-cream": listed more than once');
++    expect(check(goodLayout(), STATIONS.slice(1))).toContain('station "ice-cream": GameId has no station');
++    expect(check(goodLayout(), STATIONS, GAME_IDS.slice(1))).toContain('station "ice-cream": not a GameId');
++  });
++
++  it('each station needs a hit, an anchor and a -stop anchor', () => {
++    const p = check(
++      edit((l) => {
++        delete l.hits.pizza;
++        delete l.anchors.race;
++        delete l.anchors['fishing-stop'];
++      }),
++    );
++    expect(p).toEqual(expect.arrayContaining(['hit "pizza": missing or has fewer than 3 points', 'anchor "race": missing', 'anchor "fishing-stop": missing']));
++  });
++
++  it('-stop anchors and kart-start lie within 4 px of the road; the road needs 2 points', () => {
++    expect(check(edit((l) => (l.anchors['pizza-stop'] = { x: 200, y: 610 })))).toEqual(['anchor "pizza-stop": 10.0 px from path "road" (max 4)']);
++    expect(check(edit((l) => (l.anchors['kart-start'] = { x: 200, y: 590 })))).toEqual(['anchor "kart-start": 10.0 px from path "road" (max 4)']);
++    expect(check(edit((l) => (l.paths.road = [{ x: 1, y: 1 }])))).toContain('path "road": missing or has fewer than 2 points');
++  });
++
++  it('every content slot exists, inside the rect and outside every station polygon', () => {
++    expect(check(edit((l) => delete l.slots['pizza-1']))).toEqual(['slot "pizza-1": missing']);
++    expect(check(edit((l) => (l.slots['pizza-1'] = { x: 10, y: 200 })))).toEqual(['slot "pizza-1": (10, 200) is outside the interactive rect']);
++    expect(check(edit((l) => (l.slots['pizza-1'] = { x: 80, y: 450 })))).toEqual(['slot "pizza-1": inside the hit polygon of "ice-cream"']);
++  });
++
++  it('hit vertices lie inside the interactive rect', () => {
++    expect(check(edit((l) => (l.hits['ice-cream'] = sq(20, 400, 100))))).toEqual([
++      'hit "ice-cream": 2 vertex(es) outside the interactive rect x∈[24,1000] y∈[66,694], e.g. (20, 400)',
++    ]);
++    expect(check(edit((l) => (l.hits['ice-cream'] = sq(30, 60, 100))))[0]).toMatch(/^hit "ice-cream": 2 vertex\(es\) outside/);
++    expect(check(edit((l) => (l.hits['ice-cream'] = sq(30, 600, 100))))[0]).toMatch(/^hit "ice-cream": 2 vertex\(es\) outside/);
++  });
++
++  it('hit polygons are at least 80 wide', () => {
++    const narrow = [{ x: 170, y: 400 }, { x: 270, y: 400 }, { x: 270, y: 470 }, { x: 170, y: 470 }];
++    expect(check(edit((l) => (l.hits.pizza = narrow)))).toEqual(['hit "pizza": minimum width 70.0 px is under 80']);
++  });
++
++  it('station polygons are at least 40 apart; intersecting pairs are "not separated"', () => {
++    const p = check(
++      edit((l) => {
++        l.hits.fishing = sq(30 + 5 * PITCH - 50, 400, 100); // over dino-puzzle, off its own neighbours
++        l.hits['touch-talk'] = sq(30 + 3 * PITCH, 150, 100);
++      }),
++    );
++    expect(p).toContain('hits "fishing" and "dino-puzzle": not separated (they overlap)');
++  });
++
++  it('touch-talk and shadow-match closer than 40 are named', () => {
++    const p = check(edit((l) => (l.hits['shadow-match'] = sq(30 + 4 * PITCH + 120, 400, 100))));
++    expect(p).toContain('hits "touch-talk" and "shadow-match": 20.0 px apart (min 40)');
++  });
++});
++
++// --- assets ----------------------------------------------------------------------------------
++
++function png(width: number, height: number): Uint8Array {
++  const b = new Uint8Array(33);
++  b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
++  const v = new DataView(b.buffer);
++  v.setUint32(16, width);
++  v.setUint32(20, height);
++  return b;
++}
++
++const goodJson = { frames: { 'pizza/idle/00': {}, 'kart/idle/00': {} }, meta: { size: { w: 1024, h: 900 } } };
++
++function assets(over: Partial<AssetRuleInput> = {}, sizes: Record<string, [number, number]> = {}, json: unknown = goodJson): AssetRuleInput {
++  const pngs: Record<string, [number, number]> = { 'a/map.png': [1024, 900], 'bg/map.png': [2048, 1536], ...sizes };
++  return {
++    atlases: [{ key: 'atlas.map', png: 'a/map.png', json: 'a/map.json', frames: ['pizza/idle/00', 'kart/idle/00'] }],
++    backgrounds: [{ key: 'bg.map', path: 'bg/map.png', width: 2048, height: 1536 }],
++    files: [{ path: 'assets/x.png', bytes: 100 }],
++    pngSize: (p) => {
++      const s = pngs[p];
++      return s ? pngSizeOf(png(s[0], s[1])) : undefined;
++    },
++    readJson: () => json,
++    ...over,
++  };
++}
++
++describe('validateAssets', () => {
++  it('good assets pass', () => {
++    expect(validateAssets(assets())).toEqual([]);
++  });
++
++  it('a page over 2048 fails (PNG and JSON)', () => {
++    expect(validateAssets(assets({}, { 'a/map.png': [4096, 100] }))).toEqual(['atlas "atlas.map": a/map.png is 4096×100 (max 2048×2048)']);
++    const j = { frames: goodJson.frames, meta: { size: { w: 2049, h: 10 } } };
++    expect(validateAssets(assets({}, {}, j))).toEqual(['atlas "atlas.map": a/map.json page size 2049×10 exceeds 2048']);
++  });
++
++  it('a missing atlas file, a missing frame and a bad frame name fail', () => {
++    expect(validateAssets(assets({ pngSize: (p) => (p === 'bg/map.png' ? { width: 2048, height: 1536 } : undefined) }))).toEqual([
++      'atlas "atlas.map": a/map.png is missing or not a PNG',
++    ]);
++    const j = { frames: { 'pizza/idle/00': {}, Kart: {} }, meta: { size: { w: 10, h: 10 } } };
++    expect(validateAssets(assets({}, {}, j))).toEqual([
++      'atlas "atlas.map": frame "Kart" is not <object>/<state>/<nn>',
++      'atlas "atlas.map": frame "kart/idle/00" is missing',
++    ]);
++    expect(validateAssets(assets({ readJson: () => undefined }))).toEqual(['atlas "atlas.map": a/map.json is missing or not a JSON hash']);
++  });
++
++  it('the background must be exactly 2048×1536', () => {
++    expect(validateAssets(assets({}, { 'bg/map.png': [1024, 768] }))).toEqual(['background "bg.map": bg/map.png is 1024×768 (must be 2048×1536)']);
++  });
++
++  it('a file over 8 MiB fails', () => {
++    const files = [
++      { path: 'assets/big.png', bytes: 8388609 },
++      { path: 'assets/ok.png', bytes: 8388608 },
++    ];
++    expect(validateAssets(assets({ files }))).toEqual(['file assets/big.png: 8388609 bytes exceeds 8 MiB (8388608)']);
++  });
++
++  it('pngSizeOf reads the IHDR and rejects non-PNGs', () => {
++    expect(pngSizeOf(png(7, 9))).toEqual({ width: 7, height: 9 });
++    expect(pngSizeOf(new Uint8Array(40))).toBeUndefined();
++  });
++});
+diff --git a/app/tools/render/blender.ts b/app/tools/render/blender.ts
+new file mode 100644
+index 0000000..91b6915
+--- /dev/null
++++ b/app/tools/render/blender.ts
+@@ -0,0 +1,69 @@
++// Shared by `art:build` and `render` (Story 1.4): paths, the screen registry, Blender arguments and
++// the Blender runner (injected in tests: they never spawn Blender).
++import { spawnSync } from 'node:child_process';
++import { dirname, join, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++
++export const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
++export const PROJECT_DIR = resolve(APP_DIR, '..');
++export const ART_DIR = join(PROJECT_DIR, 'art');
++export const BLENDER_SCRIPTS = join(APP_DIR, 'tools', 'render', 'blender');
++export const RENDER_DIR = join(APP_DIR, '.generated', 'render');
++export const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
++
++export interface ScreenSpec {
++  /** Vendored source scene (relative to the project root), opened by the builder. */
++  source: string;
++  /** Builder script in tools/render/blender/. */
++  builder: string;
++}
++
++/** Screens with a Blender scene. art/<screen>.blend is built from `source` by `builder`. */
++export const SCREENS: Readonly<Record<string, ScreenSpec>> = {
++  map: { source: 'art/src/map-v2.blend', builder: 'build_map.py' },
++};
++
++/** Throws listing the known screens when `screen` is not one. */
++export function screenSpec(screen: string | undefined): ScreenSpec & { id: string } {
++  const spec = screen === undefined ? undefined : SCREENS[screen];
++  if (screen === undefined || !spec) {
++    throw new Error(`unknown screen "${screen ?? ''}": known screens are ${Object.keys(SCREENS).join(', ')}`);
++  }
++  return { id: screen, ...spec };
++}
++
++export const blendPath = (screen: string): string => join(ART_DIR, `${screen}.blend`);
++
++/** `-b --factory-startup <blend> --python-exit-code 1 --python <script> -- <args>`. */
++export function blenderArgs(blend: string, script: string, args: readonly string[]): string[] {
++  return ['-b', '--factory-startup', blend, '--python-exit-code', '1', '--python', script, '--', ...args];
++}
++
++export interface RunResult {
++  status: number | null;
++  stdout: string;
++  stderr: string;
++}
++
++export type Runner = (bin: string, args: readonly string[]) => RunResult;
++
++export const runProcess: Runner = (bin, args) => {
++  const r = spawnSync(bin, args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
++  return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? (r.error ? String(r.error) : '') };
++};
++
++const TAIL_LINES = 25;
++
++/** Last lines of a process' output, for error messages. */
++export function tail(text: string, lines = TAIL_LINES): string {
++  return text.trimEnd().split(/\r?\n/).slice(-lines).join('\n');
++}
++
++/** Runs Blender; throws with the output tail unless it exits 0. */
++export function runBlender(run: Runner, bin: string, args: readonly string[]): RunResult {
++  const r = run(bin, args);
++  if (r.status !== 0) {
++    throw new Error(`Blender exited with ${r.status ?? 'no status'}:\n${tail(`${r.stdout}\n${r.stderr}`)}`);
++  }
++  return r;
++}
+diff --git a/app/tools/render/build.ts b/app/tools/render/build.ts
+new file mode 100644
+index 0000000..dbaa671
+--- /dev/null
++++ b/app/tools/render/build.ts
+@@ -0,0 +1,77 @@
++// `npm run art:build -- <screen>` (Story 1.4): builds art/<screen>.blend from its vendored source
++// scene with tools/render/blender/<builder>.py in Blender 5.2 (background mode).
++// Blender is resolved and its version checked before any work (BLENDER_BIN, then `blender` on PATH).
++// The builder writes into a temp dir; art/<screen>.blend is replaced only after Blender exits 0.
++import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
++import { join, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { Tokens } from '../../src/core/tokens.ts';
++import { RENDER_SCALE, layoutLimits } from '../layout/rules.ts';
++import { resolveBlender, type Env } from '../shared/binaries.ts';
++import { ART_DIR, BLENDER_SCRIPTS, PROJECT_DIR, blendPath, blenderArgs, runBlender, runProcess, screenSpec, type Runner } from './blender.ts';
++
++/** Values the builder needs from Tokens (it never hard-codes design values). */
++export interface BuildParams {
++  colours: Record<string, string>;
++  hitPad: number;
++  renderScale: number;
++  design: { width: number; height: number };
++  rect: { x0: number; y0: number; x1: number; y1: number };
++}
++
++export function buildParams(): BuildParams {
++  const colours: Record<string, string> = {};
++  for (const [name, c] of Object.entries(Tokens.colors)) if (name.startsWith('creature')) colours[name] = c.css;
++  return {
++    colours,
++    hitPad: Tokens.spacing.hitPad,
++    renderScale: RENDER_SCALE,
++    design: { width: Tokens.design.width, height: Tokens.design.height },
++    rect: layoutLimits().rect,
++  };
++}
++
++export interface BuildDeps {
++  env: Env;
++  run: Runner;
++  resolve: (env: Env) => string;
++  log: (msg: string) => void;
++}
++
++/** Builds art/<screen>.blend; throws on any failure (nothing replaced). */
++export function build(screenArg: string | undefined, deps: BuildDeps): string {
++  const bin = deps.resolve(deps.env);
++  const screen = screenSpec(screenArg);
++  const source = join(PROJECT_DIR, screen.source);
++  if (!existsSync(source)) throw new Error(`source scene ${screen.source} is missing`);
++  const tmp = mkdtempSync(join(ART_DIR, `.tmp-${screen.id}-`));
++  try {
++    const params = join(tmp, 'params.json');
++    writeFileSync(params, `${JSON.stringify(buildParams(), null, 2)}\n`);
++    const out = join(tmp, `${screen.id}.blend`);
++    deps.log(`art:build: building art/${screen.id}.blend with Blender (${bin})…`);
++    runBlender(deps.run, bin, blenderArgs(source, join(BLENDER_SCRIPTS, screen.builder), ['--out', out, '--params', params]));
++    if (!existsSync(out)) throw new Error(`the builder did not write ${screen.id}.blend`);
++    renameSync(out, blendPath(screen.id));
++    return blendPath(screen.id);
++  } finally {
++    rmSync(tmp, { recursive: true, force: true });
++  }
++}
++
++function main(): void {
++  try {
++    const path = build(process.argv[2], {
++      env: process.env,
++      run: runProcess,
++      resolve: (env) => resolveBlender(env),
++      log: (m) => console.log(m),
++    });
++    console.log(`art:build: wrote ${path}`);
++  } catch (e) {
++    console.error(`art:build: ${(e as Error).message}`);
++    process.exit(1);
++  }
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+diff --git a/app/tools/render/render.ts b/app/tools/render/render.ts
+new file mode 100644
+index 0000000..06472a5
+--- /dev/null
++++ b/app/tools/render/render.ts
+@@ -0,0 +1,150 @@
++// `npm run render -- <screen>` (Story 1.4): renders art/<screen>.blend with
++// tools/render/blender/render_screen.py into app/.generated/render/<screen>/ (bg.png,
++// frames/<object>/<state>/<nn>.png, raw.json, preview.png) and writes
++// src/content/generated/<screen>.layout.json.
++// Order: resolve Blender + check 5.2 → render into a temp dir → toLayout → validateLayout → draw the
++// preview → move everything into place. Any failure leaves every existing output untouched.
++import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
++import { join, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import sharp from 'sharp';
++
++import type { ScreenLayout } from '../../src/content/layout-types.ts';
++import { STATIONS } from '../../src/content/stations.ts';
++import { GAME_IDS } from '../../src/content/types.ts';
++import { Tokens } from '../../src/core/tokens.ts';
++import { layoutLimits, validateLayout } from '../layout/rules.ts';
++import { LayoutError, formatLayout, toLayout, type RawProjection, type ToLayoutOptions } from '../layout/to-layout.ts';
++import { resolveBlender, type Env } from '../shared/binaries.ts';
++import { BLENDER_SCRIPTS, LAYOUT_DIR, RENDER_DIR, blendPath, blenderArgs, runBlender, runProcess, screenSpec, type Runner } from './blender.ts';
++
++// sharp keeps input files open in its cache; Windows then refuses to move the render dir.
++sharp.cache(false);
++
++/** Per-screen layout rules (the map: stations, touch rules, road). */
++export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout) => string[]>> = {
++  map: (layout) => validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, limits: layoutLimits() }),
++};
++
++/** Hit ids kept `stationGap` apart per screen. */
++export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'separate'>>> = {
++  map: { separate: { ids: STATIONS.map((s) => s.id), gap: Tokens.spacing.stationGap } },
++};
++
++export const layoutPath = (screen: string): string => join(LAYOUT_DIR, `${screen}.layout.json`);
++
++/** Converts and validates a raw projection; throws a LayoutError listing every problem. */
++export function layoutFromRaw(screen: string, raw: RawProjection): ScreenLayout {
++  const layout = toLayout(raw, { design: { width: Tokens.design.width, height: Tokens.design.height }, hitPad: Tokens.spacing.hitPad, ...SCREEN_SEPARATE[screen] });
++  const problems = SCREEN_RULES[screen]?.(layout) ?? [];
++  if (problems.length > 0) throw new LayoutError(problems);
++  return layout;
++}
++
++const PREVIEW = { hit: '#ff00aa', anchor: '#ffffff', stop: '#ffe000', slot: '#00e0ff', path: '#ff6a00', ink: '#1f2433' };
++
++/** SVG overlay (render px) of hit polygons, anchors, slots and paths, for the human alignment check. */
++export function previewSvg(layout: ScreenLayout): string {
++  const s = layout.renderScale;
++  const w = layout.design.width * s;
++  const h = layout.design.height * s;
++  const pt = (p: { x: number; y: number }): string => `${(p.x * s).toFixed(1)},${(p.y * s).toFixed(1)}`;
++  const parts: string[] = [];
++  for (const line of Object.values(layout.paths)) {
++    parts.push(`<polyline points="${line.map(pt).join(' ')}" fill="none" stroke="${PREVIEW.path}" stroke-width="4" stroke-dasharray="16 10"/>`);
++  }
++  for (const [id, poly] of Object.entries(layout.hits)) {
++    parts.push(`<polygon points="${poly.map(pt).join(' ')}" fill="${PREVIEW.hit}" fill-opacity="0.12" stroke="${PREVIEW.hit}" stroke-width="5"/>`);
++    const c = poly.reduce((a, p) => ({ x: a.x + p.x / poly.length, y: a.y + p.y / poly.length }), { x: 0, y: 0 });
++    parts.push(`<text x="${(c.x * s).toFixed(1)}" y="${(c.y * s).toFixed(1)}" font-size="34" font-family="sans-serif" fill="#fff" stroke="${PREVIEW.ink}" stroke-width="2" text-anchor="middle">${id}</text>`);
++  }
++  for (const [id, a] of Object.entries(layout.anchors)) {
++    const colour = id.endsWith('-stop') || id === 'kart-start' ? PREVIEW.stop : PREVIEW.anchor;
++    parts.push(`<circle cx="${(a.x * s).toFixed(1)}" cy="${(a.y * s).toFixed(1)}" r="10" fill="${colour}" stroke="${PREVIEW.ink}" stroke-width="3"/>`);
++  }
++  for (const p of Object.values(layout.slots)) {
++    parts.push(`<rect x="${(p.x * s - 12).toFixed(1)}" y="${(p.y * s - 12).toFixed(1)}" width="24" height="24" fill="${PREVIEW.slot}" stroke="${PREVIEW.ink}" stroke-width="3"/>`);
++  }
++  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${parts.join('')}</svg>`;
++}
++
++/**
++ * Moves `src` to `dest`, replacing it. Windows may refuse a directory rename while a scanner holds
++ * a fresh file (EPERM/EBUSY); then the files are copied instead.
++ */
++function replaceDir(src: string, dest: string): void {
++  rmSync(dest, { recursive: true, force: true });
++  try {
++    renameSync(src, dest);
++  } catch (e) {
++    const code = (e as NodeJS.ErrnoException).code;
++    if (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES') throw e;
++    cpSync(src, dest, { recursive: true });
++  }
++}
++
++export interface RenderDeps {
++  env: Env;
++  run: Runner;
++  resolve: (env: Env) => string;
++  log: (msg: string) => void;
++}
++
++/** Renders a screen and publishes its outputs; throws on any failure (nothing replaced). */
++export async function render(screenArg: string | undefined, deps: RenderDeps): Promise<ScreenLayout> {
++  const bin = deps.resolve(deps.env);
++  const screen = screenSpec(screenArg).id;
++  const blend = blendPath(screen);
++  if (!existsSync(blend)) throw new Error(`art/${screen}.blend is missing: run npm run art:build -- ${screen}`);
++  mkdirSync(RENDER_DIR, { recursive: true });
++  const tmp = mkdtempSync(join(RENDER_DIR, `.tmp-${screen}-`));
++  try {
++    deps.log(`render: rendering art/${screen}.blend with Blender (${bin})…`);
++    runBlender(deps.run, bin, blenderArgs(blend, join(BLENDER_SCRIPTS, 'render_screen.py'), ['--out', tmp, '--screen', screen]));
++    const raw = JSON.parse(readFileSync(join(tmp, 'raw.json'), 'utf8')) as RawProjection;
++    let layout: ScreenLayout;
++    try {
++      layout = layoutFromRaw(screen, raw);
++    } catch (e) {
++      // Kept for diagnosis (gitignored); the published outputs stay untouched.
++      copyFileSync(join(tmp, 'raw.json'), join(RENDER_DIR, `${screen}.failed-raw.json`));
++      throw e;
++    }
++    for (const f of raw.frames) if (!existsSync(join(tmp, 'frames', `${f}.png`))) throw new Error(`frame ${f} was not rendered`);
++    await sharp(join(tmp, 'bg.png'))
++      .composite([{ input: Buffer.from(previewSvg(layout)) }])
++      .png()
++      .toFile(join(tmp, 'preview.png'));
++
++    // Publish only now that every check passed: the render dir, then the layout JSON (temp + rename).
++    mkdirSync(LAYOUT_DIR, { recursive: true });
++    const jsonTmp = `${layoutPath(screen)}.tmp`;
++    writeFileSync(jsonTmp, formatLayout(layout));
++    replaceDir(tmp, join(RENDER_DIR, screen));
++    renameSync(jsonTmp, layoutPath(screen));
++    return layout;
++  } finally {
++    rmSync(tmp, { recursive: true, force: true });
++  }
++}
++
++async function main(): Promise<void> {
++  try {
++    const layout = await render(process.argv[2], {
++      env: process.env,
++      run: runProcess,
++      resolve: (env) => resolveBlender(env),
++      log: (m) => console.log(m),
++    });
++    console.log(
++      `render: OK ${layout.screenId}: ${Object.keys(layout.hits).length} hits, ${Object.keys(layout.anchors).length} anchors, ${Object.keys(layout.slots).length} slots, ${Object.keys(layout.paths).length} paths`,
++    );
++  } catch (e) {
++    const err = e as Error;
++    if (err instanceof LayoutError) for (const p of err.problems) console.error(`render: ${p}`);
++    else console.error(`render: ${err.message}`);
++    process.exit(1);
++  }
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) void main();
+diff --git a/app/tools/render/render.test.ts b/app/tools/render/render.test.ts
+new file mode 100644
+index 0000000..6db3523
+--- /dev/null
++++ b/app/tools/render/render.test.ts
+@@ -0,0 +1,116 @@
++// render/art:build CLIs with injected resolver and runner: tests never spawn Blender.
++import { existsSync, readdirSync, statSync } from 'node:fs';
++import { join } from 'node:path';
++import { describe, expect, it, vi } from 'vitest';
++import { STATIONS } from '../../src/content/stations.ts';
++import { resolveBlender } from '../shared/binaries.ts';
++import { ART_DIR, RENDER_DIR, blenderArgs, runBlender, screenSpec, tail } from './blender.ts';
++import { build, buildParams } from './build.ts';
++import { layoutFromRaw, layoutPath, previewSvg, render } from './render.ts';
++import type { RawProjection } from '../layout/to-layout.ts';
++
++const noBlender = (): string => resolveBlender({ BLENDER_BIN: 'C:/nope' }, () => false, () => '');
++const deps = (resolve: () => string, run = vi.fn()) => ({ env: {}, run, resolve, log: () => {} });
++
++function snapshot(dir: string): string[] {
++  if (!existsSync(dir)) return [];
++  return readdirSync(dir).map((f) => `${f}:${statSync(join(dir, f)).mtimeMs}`);
++}
++
++describe('Blender arguments and runner', () => {
++  it('always passes -b --factory-startup <blend> --python-exit-code 1 --python <script> -- <args>', () => {
++    expect(blenderArgs('a.blend', 's.py', ['--out', 'o'])).toEqual(['-b', '--factory-startup', 'a.blend', '--python-exit-code', '1', '--python', 's.py', '--', '--out', 'o']);
++  });
++
++  it('a non-zero exit throws with the output tail', () => {
++    const run = () => ({ status: 1, stdout: 'line\n'.repeat(40), stderr: 'Traceback\nRuntimeError: boom' });
++    expect(() => runBlender(run, 'blender', [])).toThrow(/Blender exited with 1:[\s\S]*RuntimeError: boom/);
++    expect(tail('a\nb\nc', 2)).toBe('b\nc');
++  });
++
++  it('lists the known screens for a bad one', () => {
++    expect(() => screenSpec('foo')).toThrow('unknown screen "foo": known screens are map');
++    expect(screenSpec('map').builder).toBe('build_map.py');
++  });
++});
++
++describe('art:build', () => {
++  it('passes Token values to the builder', () => {
++    const p = buildParams();
++    expect(p.colours.creatureOrange).toBe('#FF9A3C');
++    expect(p).toMatchObject({ hitPad: 24, renderScale: 2, design: { width: 1024, height: 768 }, rect: { x0: 24, y0: 66, x1: 1000, y1: 694 } });
++  });
++
++  it('fails naming Blender before any work when it is missing', () => {
++    const before = snapshot(ART_DIR);
++    const run = vi.fn();
++    expect(() => build('map', deps(noBlender, run))).toThrow(/^Blender not found: BLENDER_BIN="C:\/nope"/);
++    expect(run).not.toHaveBeenCalled();
++    expect(snapshot(ART_DIR)).toEqual(before);
++  });
++
++  it('a failing builder leaves art/ untouched', () => {
++    const before = snapshot(ART_DIR);
++    const run = vi.fn(() => ({ status: 1, stdout: '', stderr: 'RuntimeError: build_map: object "X" has a subdivision modifier' }));
++    expect(() => build('map', deps(() => 'blender', run))).toThrow(/subdivision modifier/);
++    expect(run).toHaveBeenCalledOnce();
++    expect(snapshot(ART_DIR)).toEqual(before);
++  });
++});
++
++describe('render', () => {
++  it('fails naming Blender and BLENDER_BIN, writing nothing', async () => {
++    const before = [snapshot(RENDER_DIR), existsSync(layoutPath('map')) ? statSync(layoutPath('map')).mtimeMs : 0];
++    const run = vi.fn();
++    await expect(render('map', deps(noBlender, run))).rejects.toThrow(/Blender not found: BLENDER_BIN/);
++    expect(run).not.toHaveBeenCalled();
++    expect([snapshot(RENDER_DIR), existsSync(layoutPath('map')) ? statSync(layoutPath('map')).mtimeMs : 0]).toEqual(before);
++  });
++
++  it('a Blender failure leaves every output untouched', async () => {
++    const before = [snapshot(RENDER_DIR), existsSync(layoutPath('map')) ? statSync(layoutPath('map')).mtimeMs : 0];
++    const run = vi.fn(() => ({ status: 1, stdout: '', stderr: 'Python: Traceback' }));
++    await expect(render('map', deps(() => 'blender', run))).rejects.toThrow(/Blender exited with 1/);
++    expect([snapshot(RENDER_DIR), existsSync(layoutPath('map')) ? statSync(layoutPath('map')).mtimeMs : 0]).toEqual(before);
++  });
++
++  it('rejects an unknown screen', async () => {
++    await expect(render('foo', deps(() => 'blender'))).rejects.toThrow(/known screens are map/);
++  });
++
++  it('refuses a layout that breaks the rules, naming the ids', () => {
++    const raw: RawProjection = {
++      screenId: 'map',
++      render: { width: 2048, height: 1536 },
++      frames: [],
++      objects: [{ name: 'hit.pizza', type: 'MESH', points: [[100, 100, 5], [150, 100, 5], [100, 150, 5]] }],
++    };
++    let problems: string[] = [];
++    try {
++      layoutFromRaw('map', raw);
++    } catch (e) {
++      problems = (e as { problems: string[] }).problems;
++    }
++    expect(problems).toContain('hit "ice-cream": missing or has fewer than 3 points');
++    expect(problems).toContain('path "road": missing or has fewer than 2 points');
++  });
++
++  it('draws every hit, anchor, slot and path on the preview', () => {
++    const svg = previewSvg({
++      v: 1,
++      screenId: 'map',
++      design: { width: 1024, height: 768 },
++      renderScale: 2,
++      anchors: { pizza: { x: 1, y: 2 } },
++      hits: { pizza: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 10 }] },
++      slots: { 'pizza-1': { x: 5, y: 5 } },
++      paths: { road: [{ x: 0, y: 0 }, { x: 5, y: 5 }] },
++    });
++    expect(svg).toMatch(/^<svg [^>]*width="2048" height="1536"/);
++    expect(svg).toContain('<polygon points="0.0,0.0 20.0,0.0 0.0,20.0"');
++    expect(svg).toContain('<circle cx="2.0" cy="4.0"');
++    expect(svg).toContain('<polyline');
++    expect(svg).toContain('<rect');
++    expect(STATIONS).toHaveLength(7);
++  });
++});
+diff --git a/app/tools/render/blender/build_map.py b/app/tools/render/blender/build_map.py
+new file mode 100644
+index 0000000..a188605
+--- /dev/null
++++ b/app/tools/render/blender/build_map.py
+@@ -0,0 +1,472 @@
++# Builds art/map.blend from the vendored reference scene art/src/map-v2.blend (Story 1.4).
++#
++# Run by `npm run art:build -- map` (tools/render/build.ts), never by hand:
++#   blender -b --factory-startup art/src/map-v2.blend --python-exit-code 1 --python build_map.py -- \
++#     --out <tmp>/map.blend --params <tmp>/params.json
++# params.json (written by build.ts from Tokens): creature colours (hex), hitPad, renderScale,
++# design size and the interactive rect (design px) used to keep slots on screen.
++#
++# Steps: fail on SUBSURF; prune the Tiệm kem preview; regroup station objects into
++# `sprite.<id>` collections; recolour creatures; create the layout objects (`hit.*`, `anchor.*`,
++# `slot.*`, `path.road`) in a `layout` collection with hide_render; set the render size; save.
++# Every constant below is in Blender world units (metres), read off the reference scene.
++import json
++import math
++import sys
++
++import bmesh
++import bpy
++from bpy_extras.object_utils import world_to_camera_view
++from mathutils import Vector
++
++# --- the station table ---------------------------------------------------------------------------
++# sprite: collections (`C:`) or root objects (`O:`; the object and all its children) drawn as the
++# station sprite. area: objects that stay in the plate but count toward the hit hull.
++STATIONS = {
++    'ice-cream': {'sprite': ['C:IceCream'], 'area': []},
++    'pizza': {'sprite': ['C:Pizza'], 'area': []},
++    'race': {'sprite': ['C:Race', 'C:RaceCars'], 'area': []},
++    'fishing': {'sprite': ['O:A_FishGold', 'O:A_FishClown', 'O:A_FishKoi', 'O:A_Dock', 'O:A_Rod'], 'area': ['Pond', 'PStone*']},
++    'touch-talk': {'sprite': ['C:Town'], 'area': []},
++    'dino-puzzle': {'sprite': ['O:A_DinoNeck', 'O:A_DinoTri', 'O:A_DinoSteg'], 'area': ['Fence*', 'FenceRail']},
++    'shadow-match': {'sprite': ['C:Cave'], 'area': []},
++}
++KART = {'sprite': ['C:Car']}
++
++# The Tiệm kem preview of the reference (Story 1.8 builds its own scene).
++PRUNE_COLLECTIONS = ['GameIce']
++PRUNE_OBJECTS = ['CamGame2', 'HintRing']
++
++# Rule fixes (spec: edge pieces may stay in the plate; a station may shift ≤ 0.6 m in XY).
++# Objects listed here stay in the plate even though their collection is a station sprite.
++KEEP_IN_PLATE = {
++    # The outer race flags sit on the island's right edge; in the sprite they push the race hit
++    # polygon past the right dead zone. They stay in the plate (decor), the arch and car stay tappable.
++    'race': ['FlagPole-1', 'Flag-1', 'FlagPole1', 'Flag1'],
++    # The stop sign and traffic light stand at the road edge in front of the town; in the sprite they
++    # pull the touch-talk polygon down onto the road and the pizza sign.
++    'touch-talk': ['A_StopSign', 'road-sign-stop', 'A_TrafficLight', 'traffic-light',
++                   # The tall right-hand building (building-g) stands right in front of the cave on
++                   # screen; as plate scenery it no longer hides the cave's tap area.
++                   'A_House3', 'building-g'],
++}
++# Station shifts in metres (world XY), each at most 0.6.
++STATION_SHIFT = {
++    'pizza': (0.0, -0.6),  # toward the camera: the pizza sign no longer reaches into the town
++    'dino-puzzle': (0.0, 0.6),  # away from the pond (the fence and the jumping fish overlap on screen)
++    'shadow-match': (0.6, 0.0),  # right, away from the town's buildings
++}
++MAX_SHIFT = 0.6
++
++# Creature recolour: (root object, material base name, colour token).
++RECOLOUR = [
++    ('A_Shiba', 'Main', 'creatureOrange'),  # Main_Light (white face and belly) is kept
++    ('A_DinoTri', 'Purple', 'creatureGreen'),  # Triceratops (its Tìm bóng role)
++    ('A_DinoSteg', 'DarkBrown', 'creaturePink'),  # Stegosaurus
++    ('A_DinoNeck', 'Brown', 'creatureBlue'),  # long-neck
++    ('A_FishGold', 'Goldfish_Main', 'creatureOrange'),
++    ('A_FishClown', 'Clownfish_Main', 'creaturePurple'),
++    ('A_FishKoi', 'Koi_Main', 'creatureGreen'),
++]
++
++# The road: centreline of the `Road` mesh strip (midpoints of its 225 vertex pairs, simplified with
++# Douglas-Peucker at 0.03 m), read once from map-v2.blend. Width 1.45 m, top at z 0.46 + 0.07.
++ROAD_CENTRE = [
++    (-9.00, -5.00), (-6.71, -4.81), (-5.50, -4.60), (-4.84, -4.37), (-3.09, -3.49), (-2.22, -3.22),
++    (-1.78, -3.20), (-1.14, -3.32), (0.37, -3.93), (1.04, -4.14), (1.50, -4.20), (2.24, -4.21),
++    (3.56, -4.11), (4.59, -3.91), (5.50, -3.60), (6.34, -3.13), (7.12, -2.51), (7.60, -2.01),
++    (7.91, -1.51), (8.00, -1.04), (7.85, -0.53), (7.38, 0.19), (6.71, 0.81), (6.35, 1.04),
++    (6.00, 1.20), (5.63, 1.26), (5.23, 1.24), (3.18, 0.69), (2.50, 0.60), (1.62, 0.66),
++    (-0.12, 0.97), (-1.00, 1.00), (-1.87, 0.79), (-3.62, 0.10), (-4.06, 0.01), (-4.50, 0.00),
++    (-4.97, 0.07), (-5.76, 0.27), (-6.56, 0.57), (-7.05, 0.81), (-7.48, 1.07), (-7.80, 1.33),
++    (-8.00, 1.60), (-8.07, 1.89), (-8.04, 2.23), (-7.91, 2.60), (-7.72, 2.97), (-7.32, 3.52),
++    (-6.84, 3.97), (-6.50, 4.20), (-6.12, 4.36), (-5.68, 4.48), (-4.38, 4.62), (-2.25, 4.58),
++    (-1.50, 4.46), (0.50, 3.99), (1.50, 3.90), (2.03, 3.94), (2.88, 4.09), (5.50, 4.80),
++]
++ROAD_HALF_WIDTH = 0.725
++ROAD_TOP_Z = 0.53
++
++# Decoration slots: grass points around each station's anchor.
++SLOTS_PER_STATION = 2
++SLOT_RADII = [1.4, 1.8, 2.2, 2.6, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0]
++SLOT_ANGLE_STEP_DEG = 10
++SLOT_ROAD_CLEARANCE = 0.3  # beyond the road edge
++SLOT_FOOTPRINT = 0.35  # radius that must be clear grass
++SLOT_SPACING = 1.0  # between any two slots
++SLOT_SCREEN_MARGIN = 16  # design px inside the interactive rect
++SLOT_HULL_MARGIN = 6  # design px beyond the padded station hulls
++GRASS = 'Grass'
++
++RENDER_SIZE = (2048, 1536)
++
++
++def fail(msg):
++    raise RuntimeError(f'build_map: {msg}')
++
++
++def parse_args():
++    argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
++    args = {}
++    for i in range(0, len(argv) - 1, 2):
++        args[argv[i].lstrip('-')] = argv[i + 1]
++    for key in ('out', 'params'):
++        if key not in args:
++            fail(f'missing --{key}')
++    with open(args['params'], encoding='utf8') as f:
++        args['params'] = json.load(f)
++    return args
++
++
++def srgb_to_linear(c):
++    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
++
++
++def hex_to_linear(hex_colour):
++    h = hex_colour.lstrip('#')
++    return tuple(srgb_to_linear(int(h[i:i + 2], 16) / 255) for i in (0, 2, 4)) + (1.0,)
++
++
++def descendants(obj):
++    out = [obj]
++    for child in obj.children:
++        out.extend(descendants(child))
++    return out
++
++
++def match(name, pattern):
++    return name.startswith(pattern[:-1]) if pattern.endswith('*') else name == pattern
++
++
++def resolve_members(spec):
++    objs = []
++    for item in spec:
++        kind, name = item.split(':', 1)
++        if kind == 'C':
++            coll = bpy.data.collections.get(name)
++            if coll is None:
++                fail(f'collection "{name}" not found')
++            objs.extend(coll.all_objects)
++        else:
++            obj = bpy.data.objects.get(name)
++            if obj is None:
++                fail(f'object "{name}" not found')
++            objs.extend(descendants(obj))
++    seen = []
++    for o in objs:
++        if o not in seen:
++            seen.append(o)
++    return seen
++
++
++def area_objects(patterns):
++    out = [o for o in bpy.data.objects if any(match(o.name, p) for p in patterns)]
++    if patterns and not out:
++        fail(f'area objects {patterns} not found')
++    return sorted(out, key=lambda o: o.name)
++
++
++def move_to(obj, coll):
++    for c in list(obj.users_collection):
++        c.objects.unlink(obj)
++    coll.objects.link(obj)
++
++
++def check_no_subsurf():
++    for o in bpy.data.objects:
++        for m in o.modifiers:
++            if m.type == 'SUBSURF':
++                fail(f'object "{o.name}" has a subdivision modifier (not allowed)')
++
++
++def prune():
++    for name in PRUNE_COLLECTIONS:
++        coll = bpy.data.collections.get(name)
++        if coll is None:
++            fail(f'collection "{name}" to prune not found')
++        for o in list(coll.all_objects):
++            bpy.data.objects.remove(o, do_unlink=True)
++        bpy.data.collections.remove(coll)
++    for name in PRUNE_OBJECTS:
++        o = bpy.data.objects.get(name)
++        if o is not None:
++            bpy.data.objects.remove(o, do_unlink=True)
++
++
++def recolour(colours):
++    for root_name, mat_base, token in RECOLOUR:
++        root = bpy.data.objects.get(root_name)
++        if root is None:
++            fail(f'recolour root "{root_name}" not found')
++        hit = 0
++        for o in descendants(root):
++            for slot in o.material_slots:
++                m = slot.material
++                if m is None or m.name.split('.')[0] != mat_base or m.node_tree is None:
++                    continue
++                bsdf = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None)
++                if bsdf is None:
++                    continue
++                bsdf.inputs['Base Color'].default_value = hex_to_linear(colours[token])
++                hit += 1
++        if hit == 0:
++            fail(f'recolour: no material "{mat_base}" under "{root_name}"')
++
++
++def eval_world_verts(objs, depsgraph):
++    pts = []
++    for o in objs:
++        if o.type != 'MESH' or o.hide_render:
++            continue
++        ev = o.evaluated_get(depsgraph)
++        me = ev.to_mesh()
++        mw = ev.matrix_world
++        pts.extend(mw @ v.co for v in me.vertices)
++        ev.to_mesh_clear()
++    return pts
++
++
++def roots(objs):
++    s = set(objs)
++    return [o for o in objs if o.parent not in s]
++
++
++def nearest_on_road(p):
++    best = None
++    for (ax, ay), (bx, by) in zip(ROAD_CENTRE, ROAD_CENTRE[1:]):
++        dx, dy = bx - ax, by - ay
++        t = max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / (dx * dx + dy * dy)))
++        q = (ax + t * dx, ay + t * dy)
++        d = math.dist(p, q)
++        if best is None or d < best[0]:
++            best = (d, q)
++    return best
++
++
++def add_empty(name, loc, coll):
++    e = bpy.data.objects.new(name, None)
++    e.location = loc
++    e.empty_display_type = 'PLAIN_AXES'
++    e.empty_display_size = 0.3
++    coll.objects.link(e)
++    return e
++
++
++def hull_object(name, pts, coll):
++    bm = bmesh.new()
++    verts = [bm.verts.new(p) for p in pts]
++    res = bmesh.ops.convex_hull(bm, input=verts)
++    junk = list({g for g in res['geom_interior'] + res['geom_unused'] if isinstance(g, bmesh.types.BMVert)})
++    bmesh.ops.delete(bm, geom=junk, context='VERTS')
++    me = bpy.data.meshes.new(name)
++    bm.to_mesh(me)
++    bm.free()
++    o = bpy.data.objects.new(name, me)
++    coll.objects.link(o)
++    return o
++
++
++class Screen:
++    """Projects world points to design px with the scene camera (same as render_screen.py)."""
++
++    def __init__(self, scene, params):
++        self.scene = scene
++        self.cam = scene.camera
++        self.w, self.h = params['design']['width'], params['design']['height']
++
++    def project(self, p):
++        v = world_to_camera_view(self.scene, self.cam, Vector(p))
++        return (v.x * self.w, (1 - v.y) * self.h)
++
++
++def hull_2d(points):
++    pts = sorted(set(points))
++    if len(pts) < 3:
++        return pts
++
++    def cross(o, a, b):
++        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
++
++    lower, upper = [], []
++    for p in pts:
++        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
++            lower.pop()
++        lower.append(p)
++    for p in reversed(pts):
++        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
++            upper.pop()
++        upper.append(p)
++    return lower[:-1] + upper[:-1]
++
++
++def point_in_poly(p, poly):
++    inside = False
++    for (ax, ay), (bx, by) in zip(poly, poly[1:] + poly[:1]):
++        if (ay > p[1]) != (by > p[1]) and p[0] < (bx - ax) * (p[1] - ay) / (by - ay) + ax:
++            inside = not inside
++    return inside
++
++
++def dist_to_poly(p, poly):
++    best = math.inf
++    for (ax, ay), (bx, by) in zip(poly, poly[1:] + poly[:1]):
++        dx, dy = bx - ax, by - ay
++        L = dx * dx + dy * dy
++        t = 0.0 if L == 0 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L))
++        best = min(best, math.dist(p, (ax + t * dx, ay + t * dy)))
++    return best
++
++
++def is_grass(scene, depsgraph, x, y):
++    hit, _loc, _n, _i, obj, _m = scene.ray_cast(depsgraph, Vector((x, y, 50.0)), Vector((0, 0, -1)))
++    return hit and obj.original.name == GRASS
++
++
++def choose_slots(scene, depsgraph, screen, params, centres, station_polys):
++    rect = params['rect']
++    clearance = params['hitPad'] + SLOT_HULL_MARGIN
++    chosen = {}
++    taken = []
++    for sid in STATIONS:
++        cx, cy = centres[sid]
++        cands = []
++        for r in SLOT_RADII:
++            row = []
++            for k in range(0, 360, SLOT_ANGLE_STEP_DEG):
++                a = math.radians(k)
++                p = (round(cx + r * math.cos(a), 3), round(cy + r * math.sin(a), 3))
++                road_d = nearest_on_road(p)[0]
++                row.append((-road_d, k, p, road_d))
++            row.sort()
++            cands.extend(row)
++        picks = []
++        why = {'road': 0, 'spacing': 0, 'grass': 0, 'rect': 0, 'station': 0}
++        for _neg, _k, p, road_d in cands:
++            if len(picks) == SLOTS_PER_STATION:
++                break
++            if road_d < ROAD_HALF_WIDTH + SLOT_ROAD_CLEARANCE + SLOT_FOOTPRINT:
++                why['road'] += 1
++                continue
++            if any(math.dist(p, q) < SLOT_SPACING for q in taken + picks):
++                why['spacing'] += 1
++                continue
++            ring = [(p[0] + SLOT_FOOTPRINT * math.cos(math.radians(a)), p[1] + SLOT_FOOTPRINT * math.sin(math.radians(a))) for a in range(0, 360, 45)]
++            if not all(is_grass(scene, depsgraph, x, y) for x, y in [p] + ring):
++                why['grass'] += 1
++                continue
++            sx, sy = screen.project((p[0], p[1], 0.45))
++            if not (rect['x0'] + SLOT_SCREEN_MARGIN <= sx <= rect['x1'] - SLOT_SCREEN_MARGIN and rect['y0'] + SLOT_SCREEN_MARGIN <= sy <= rect['y1'] - SLOT_SCREEN_MARGIN):
++                why['rect'] += 1
++                continue
++            if any(point_in_poly((sx, sy), poly) or dist_to_poly((sx, sy), poly) < clearance for poly in station_polys.values()):
++                why['station'] += 1
++                continue
++            picks.append(p)
++        if len(picks) < SLOTS_PER_STATION:
++            # The layout rules (render/check) then report the missing slot by id.
++            print(f'build_map: WARNING only {len(picks)} grass slot(s) found for station "{sid}" (rejected: {why})')
++        chosen[sid] = picks
++        taken.extend(picks)
++    return chosen
++
++
++def main():
++    args = parse_args()
++    params = args['params']
++    scene = bpy.context.scene
++
++    check_no_subsurf()
++    prune()
++
++    # Regroup into sprite.<id> collections.
++    sprite_parent = bpy.data.collections.new('sprites')
++    scene.collection.children.link(sprite_parent)
++    groups = {}
++    emptied = set()
++    for sid, spec in list(STATIONS.items()) + [('kart', KART)]:
++        members = resolve_members(spec['sprite'])
++        for c in spec['sprite']:
++            if c.startswith('C:'):
++                emptied.add(c[2:])
++        keep = set(KEEP_IN_PLATE.get(sid, []))
++        coll = bpy.data.collections.new(f'sprite.{sid}')
++        sprite_parent.children.link(coll)
++        coll['occlude'] = 0 if sid == 'kart' else 1
++        sprite_objs = []
++        for o in members:
++            if o.name in keep:
++                continue
++            move_to(o, coll)
++            sprite_objs.append(o)
++        groups[sid] = sprite_objs
++    for name in sorted(emptied):
++        coll = bpy.data.collections.get(name)
++        if coll is not None and len(coll.all_objects) == 0:
++            bpy.data.collections.remove(coll)
++        elif coll is not None:
++            # Plate leftovers (kept edge pieces) move to the plate's World collection.
++            for o in list(coll.all_objects):
++                move_to(o, bpy.data.collections['World'])
++            bpy.data.collections.remove(coll)
++
++    # Rule-fix shifts.
++    for sid, (dx, dy) in STATION_SHIFT.items():
++        if math.hypot(dx, dy) > MAX_SHIFT + 1e-9:
++            fail(f'shift of "{sid}" exceeds {MAX_SHIFT} m')
++        for o in roots(groups[sid] + area_objects(STATIONS[sid]['area'])):
++            o.location.x += dx
++            o.location.y += dy
++
++    recolour(params['colours'])
++
++    scene.render.resolution_x, scene.render.resolution_y = RENDER_SIZE
++    scene.render.resolution_percentage = 100
++    bpy.context.view_layer.update()
++    depsgraph = bpy.context.evaluated_depsgraph_get()
++
++    layout = bpy.data.collections.new('layout')
++    scene.collection.children.link(layout)
++    layout.hide_render = True
++    screen = Screen(scene, params)
++
++    centres = {}
++    station_polys = {}
++    for sid, spec in STATIONS.items():
++        sprite_pts = eval_world_verts(groups[sid], depsgraph)
++        area_pts = eval_world_verts(area_objects(spec['area']), depsgraph)
++        if not sprite_pts:
++            fail(f'station "{sid}" has no visible mesh')
++        hull_object(f'hit.{sid}', sprite_pts + area_pts, layout)
++        xs = [p.x for p in sprite_pts]
++        ys = [p.y for p in sprite_pts]
++        zmin = min(p.z for p in sprite_pts)
++        cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
++        add_empty(f'anchor.{sid}', (cx, cy, zmin), layout)
++        centres[sid] = (cx, cy)
++        _d, (sx, sy) = nearest_on_road((cx, cy))
++        add_empty(f'anchor.{sid}-stop', (sx, sy, ROAD_TOP_Z), layout)
++        station_polys[sid] = hull_2d([screen.project(p) for p in sprite_pts + area_pts])
++
++    kart_pts = eval_world_verts(groups['kart'], depsgraph)
++    kx = (min(p.x for p in kart_pts) + max(p.x for p in kart_pts)) / 2
++    ky = (min(p.y for p in kart_pts) + max(p.y for p in kart_pts)) / 2
++    _d, (sx, sy) = nearest_on_road((kx, ky))
++    add_empty('anchor.kart-start', (sx, sy, ROAD_TOP_Z), layout)
++
++    curve = bpy.data.curves.new('path.road', 'CURVE')
++    curve.dimensions = '3D'
++    spline = curve.splines.new('POLY')
++    spline.points.add(len(ROAD_CENTRE) - 1)
++    for pt, (x, y) in zip(spline.points, ROAD_CENTRE):
++        pt.co = (x, y, ROAD_TOP_Z, 1.0)
++    layout.objects.link(bpy.data.objects.new('path.road', curve))
++
++    slots = choose_slots(scene, depsgraph, screen, params, centres, station_polys)
++    for sid, picks in slots.items():
++        for n, (x, y) in enumerate(picks, 1):
++            add_empty(f'slot.{sid}-{n}', (x, y, 0.45), layout)
++
++    bpy.ops.wm.save_as_mainfile(filepath=args['out'], compress=True)
++    print(f'build_map: saved {args["out"]}')
++
++
++main()
+diff --git a/app/tools/render/blender/render_screen.py b/app/tools/render/blender/render_screen.py
+new file mode 100644
+index 0000000..72024e7
+--- /dev/null
++++ b/app/tools/render/blender/render_screen.py
+@@ -0,0 +1,155 @@
++# Renders one screen's .blend (Story 1.4). Generic: works for any art/<screen>.blend that follows
++# the naming contract. Run by `npm run render -- <screen>` (tools/render/render.ts), never by hand:
++#   blender -b --factory-startup art/<screen>.blend --python-exit-code 1 --python render_screen.py -- \
++#     --out <tmp dir> --screen <screen>
++#
++# Writes into --out:
++# (`--images 0` skips the renders and writes raw.json only, for diagnosis.)
++#   bg.png                          the plate: the whole scene from the scene camera; sprite objects
++#                                   have visible_camera = False but still cast their shadows
++#   frames/<object>/idle/00.png     one full-frame transparent render per `sprite.<object>` collection
++#                                   (the collection prop `occlude` = 1 turns plate objects into
++#                                   holdouts, so plate objects in front of the sprite cut it)
++#   raw.json                        every object of the `layout` collection projected to render px:
++#                                   hit = every evaluated vertex, anchor/slot = the origin,
++#                                   path = the evaluated spline points (in order). Each point is
++#                                   [x, y, depth]; x/y from the top-left, y down; depth <= 0 is
++#                                   behind the camera. tools/layout/to-layout.ts checks everything.
++import json
++import os
++import sys
++
++import bpy
++from bpy_extras.object_utils import world_to_camera_view
++
++
++def fail(msg):
++    raise RuntimeError(f'render_screen: {msg}')
++
++
++def parse_args():
++    argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
++    args = {}
++    for i in range(0, len(argv) - 1, 2):
++        args[argv[i].lstrip('-')] = argv[i + 1]
++    for key in ('out', 'screen'):
++        if key not in args:
++            fail(f'missing --{key}')
++    return args
++
++
++def sprite_collections():
++    return sorted((c for c in bpy.data.collections if c.name.startswith('sprite.')), key=lambda c: c.name)
++
++
++def project_layout(scene, depsgraph):
++    layout = bpy.data.collections.get('layout')
++    if layout is None:
++        fail('no "layout" collection')
++    if not layout.hide_render:
++        fail('the "layout" collection must have hide_render = True')
++    cam = scene.camera
++    w, h = scene.render.resolution_x, scene.render.resolution_y
++
++    def proj(co):
++        v = world_to_camera_view(scene, cam, co)
++        return [round(v.x * w, 3), round((1 - v.y) * h, 3), round(v.z, 4)]
++
++    objects = []
++    for o in sorted(layout.all_objects, key=lambda o: o.name):
++        ev = o.evaluated_get(depsgraph)
++        mw = ev.matrix_world
++        if o.type == 'MESH':
++            me = ev.to_mesh()
++            pts = [proj(mw @ v.co) for v in me.vertices]
++            ev.to_mesh_clear()
++        elif o.type == 'CURVE':
++            pts = []
++            for spline in ev.data.splines:
++                if spline.type == 'POLY':
++                    pts.extend(proj(mw @ p.co.xyz) for p in spline.points)
++                else:
++                    pts.extend(proj(mw @ p.co) for p in spline.bezier_points)
++        else:
++            pts = [proj(mw.translation)]
++        objects.append({'name': o.name, 'type': o.type, 'points': pts})
++    return objects
++
++
++def render_to(scene, path):
++    scene.render.filepath = path
++    bpy.ops.render.render(write_still=True)
++    if not os.path.isfile(path):
++        fail(f'render did not write {path}')
++
++
++def main():
++    args = parse_args()
++    out = os.path.abspath(args['out'])
++    scene = bpy.context.scene
++    if scene.camera is None:
++        fail('the scene has no camera')
++    r = scene.render
++    r.resolution_percentage = 100
++    r.image_settings.file_format = 'PNG'
++    r.image_settings.color_mode = 'RGBA'
++    r.image_settings.color_depth = '8'
++    r.image_settings.compression = 15
++    r.use_file_extension = False
++
++    bpy.context.view_layer.update()
++    depsgraph = bpy.context.evaluated_depsgraph_get()
++    sprites = sprite_collections()
++    sprite_objs = {c.name: list(c.all_objects) for c in sprites}
++    in_sprite = {o for objs in sprite_objs.values() for o in objs}
++    layout = bpy.data.collections['layout']
++    plate_objs = [o for o in scene.objects if o not in in_sprite and o.name not in layout.all_objects]
++
++    raw = {
++        'screenId': args['screen'],
++        'render': {'width': r.resolution_x, 'height': r.resolution_y},
++        'objects': project_layout(scene, depsgraph),
++        'frames': [],
++    }
++
++    if args.get('images', '1') == '0':  # diagnosis only: projection without renders
++        with open(os.path.join(out, 'raw.json'), 'w', encoding='utf8') as f:
++            json.dump(raw, f, indent=1, sort_keys=True)
++        return
++
++    # Plate: sprites hidden from the camera, still casting shadows.
++    film = r.film_transparent
++    for o in in_sprite:
++        o.visible_camera = False
++    render_to(scene, os.path.join(out, 'bg.png'))
++    for o in in_sprite:
++        o.visible_camera = True
++
++    # One full-frame transparent render per sprite collection.
++    r.film_transparent = True
++    for c in sprites:
++        name = c.name[len('sprite.'):]
++        occlude = bool(c.get('occlude', 0))
++        saved = [(o, o.hide_render, o.is_holdout) for o in scene.objects]
++        for o in in_sprite:
++            if o not in sprite_objs[c.name]:
++                o.hide_render = True
++        for o in plate_objs:
++            if occlude:
++                o.is_holdout = True
++            else:
++                o.hide_render = True
++        frame = f'{name}/idle/00'
++        render_to(scene, os.path.join(out, 'frames', name, 'idle', '00.png'))
++        raw['frames'].append(frame)
++        for o, hide, hold in saved:
++            o.hide_render = hide
++            o.is_holdout = hold
++    r.film_transparent = film
++
++    with open(os.path.join(out, 'raw.json'), 'w', encoding='utf8') as f:
++        json.dump(raw, f, indent=1, sort_keys=True)
++    print(f'render_screen: wrote {len(raw["frames"])} frames and {len(raw["objects"])} layout objects')
++
++
++main()
+diff --git a/app/tools/atlas/pack.ts b/app/tools/atlas/pack.ts
+new file mode 100644
+index 0000000..5794538
+--- /dev/null
++++ b/app/tools/atlas/pack.ts
+@@ -0,0 +1,194 @@
++// `npm run atlas -- <screen>` (Story 1.4): packs app/.generated/render/<screen>/frames/**.png into
++// public/assets/atlases/<screen>.png|json (texture key `atlas.<screen>`, JSON hash) with
++// free-tex-packer-core 0.3.9, and re-encodes the plate to public/assets/bg/<screen>.png (`bg.<screen>`).
++// Fails with no write when packing needs more than one page, a page exceeds 2048 on either side, a
++// file exceeds 8 MiB or a frame name breaks `<object>/<state>/<nn>`.
++import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
++import { createRequire } from 'node:module';
++import { dirname, join, relative, resolve, sep } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import sharp from 'sharp';
++import { ATLASES, BACKGROUNDS, FRAME_NAME, SCREEN_IDS, type ScreenId } from '../../src/content/assets.ts';
++import { MAX_FILE_BYTES, MAX_PAGE_SIDE } from '../layout/rules.ts';
++import type { PackFile, PackOptions, PackResult } from './free-tex-packer-core.d.ts';
++
++const require = createRequire(import.meta.url);
++sharp.cache(false);
++
++const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
++const RENDER_DIR = join(APP_DIR, '.generated', 'render');
++const PUBLIC_DIR = join(APP_DIR, 'public');
++
++/** PNG zlib level of the shipped background. */
++const BG_COMPRESSION = 9;
++
++/** The packer settings of every atlas (spec 1.4 › Atlas). */
++export function packOptions(screen: string): PackOptions {
++  return {
++    textureName: screen,
++    width: MAX_PAGE_SIDE,
++    height: MAX_PAGE_SIDE,
++    fixedSize: false,
++    powerOfTwo: false,
++    padding: 2,
++    allowRotation: false,
++    allowTrim: true,
++    detectIdentical: true,
++    removeFileExtension: true,
++    prependFolderName: true,
++    exporter: 'JsonHash',
++  };
++}
++
++interface FrameJson {
++  trimmed: boolean;
++  spriteSourceSize: { x: number; y: number; w: number; h: number };
++  sourceSize: { w: number; h: number };
++}
++
++interface AtlasJson {
++  frames: Record<string, FrameJson>;
++  meta: { size: { w: number; h: number }; image?: string };
++}
++
++/** Checks the packer output; returns the problems (empty = OK). */
++export function checkAtlas(screen: string, files: readonly PackResult[]): string[] {
++  const problems: string[] = [];
++  const pngs = files.filter((f) => f.name.endsWith('.png'));
++  const jsons = files.filter((f) => f.name.endsWith('.json'));
++  if (pngs.length !== 1 || jsons.length !== 1) {
++    problems.push(`atlas "${screen}": packing needs ${pngs.length} pages (max 1)`);
++    return problems;
++  }
++  const json = JSON.parse(jsons[0]!.buffer.toString('utf8')) as AtlasJson;
++  const { w, h } = json.meta.size;
++  if (w > MAX_PAGE_SIDE || h > MAX_PAGE_SIDE) problems.push(`atlas "${screen}": page ${w}×${h} exceeds ${MAX_PAGE_SIDE}`);
++  for (const name of Object.keys(json.frames)) {
++    if (!FRAME_NAME.test(name)) problems.push(`atlas "${screen}": frame "${name}" is not <object>/<state>/<nn>`);
++  }
++  for (const f of files) {
++    if (f.buffer.length > MAX_FILE_BYTES) problems.push(`atlas "${screen}": ${f.name} is ${f.buffer.length} bytes (max ${MAX_FILE_BYTES})`);
++  }
++  return problems;
++}
++
++/** Where a trimmed frame sat in its full frame. */
++export interface Trim {
++  left: number;
++  top: number;
++  width: number;
++  height: number;
++}
++
++/** Bounding box of the pixels with alpha > 0 in raw RGBA data; the whole frame when empty. */
++export function alphaBounds(data: Uint8Array, width: number, height: number): { left: number; top: number; right: number; bottom: number } {
++  let left = width;
++  let top = height;
++  let right = -1;
++  let bottom = -1;
++  const RGBA = 4;
++  for (let y = 0; y < height; y++) {
++    for (let x = 0; x < width; x++) {
++      if (data[(y * width + x) * RGBA + RGBA - 1]! > 0) {
++        if (x < left) left = x;
++        if (x > right) right = x;
++        if (y < top) top = y;
++        if (y > bottom) bottom = y;
++      }
++    }
++  }
++  return right < 0 ? { left: 0, top: 0, right: width - 1, bottom: height - 1 } : { left, top, right, bottom };
++}
++
++async function trimFrame(png: Buffer): Promise<{ png: Buffer; trim: Trim }> {
++  const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
++  const b = alphaBounds(data, info.width, info.height);
++  const box = { left: b.left, top: b.top, width: b.right - b.left + 1, height: b.bottom - b.top + 1 };
++  const out = await sharp(png).extract(box).png().toBuffer();
++  return { png: out, trim: { ...box, width: info.width, height: info.height } };
++}
++
++/** Puts each frame back into its full source frame (Phaser places it with spriteSourceSize). */
++export function restoreTrim(json: { frames: Record<string, FrameJson> }, trims: ReadonlyMap<string, Trim>): void {
++  for (const [name, f] of Object.entries(json.frames)) {
++    const t = trims.get(name);
++    if (!t) continue;
++    f.spriteSourceSize = { ...f.spriteSourceSize, x: f.spriteSourceSize.x + t.left, y: f.spriteSourceSize.y + t.top };
++    f.sourceSize = { w: t.width, h: t.height };
++    f.trimmed = true;
++  }
++}
++
++function listPngs(dir: string): string[] {
++  const out: string[] = [];
++  for (const e of readdirSync(dir, { withFileTypes: true })) {
++    const p = join(dir, e.name);
++    if (e.isDirectory()) out.push(...listPngs(p));
++    else if (e.name.endsWith('.png')) out.push(p);
++  }
++  return out.sort();
++}
++
++/** Atomically writes several files: all go to temp names first, then are renamed into place. */
++function writeAll(files: readonly { path: string; data: Buffer }[]): void {
++  for (const f of files) {
++    mkdirSync(dirname(f.path), { recursive: true });
++    writeFileSync(`${f.path}.tmp`, f.data);
++  }
++  for (const f of files) renameSync(`${f.path}.tmp`, f.path);
++}
++
++export async function packScreen(screenArg: string | undefined): Promise<string[]> {
++  if (!SCREEN_IDS.includes(screenArg as ScreenId)) {
++    throw new Error(`unknown screen "${screenArg ?? ''}": known screens are ${SCREEN_IDS.join(', ')}`);
++  }
++  const screen = screenArg as ScreenId;
++  const src = join(RENDER_DIR, screen);
++  const framesDir = join(src, 'frames');
++  const bgSrc = join(src, 'bg.png');
++  if (!existsSync(framesDir) || !existsSync(bgSrc)) throw new Error(`no render for "${screen}": run npm run render -- ${screen}`);
++
++  // free-tex-packer-core checks the untrimmed size against the page size before it trims, so a
++  // full-frame 2048×1536 sprite can never fit a 2048 page. Frames are trimmed here and the JSON
++  // gets the full-frame offsets back (restoreTrim), exactly as the packer's own trim would write.
++  const trims = new Map<string, Trim>();
++  const inputs: PackFile[] = [];
++  for (const p of listPngs(framesDir)) {
++    const path = relative(framesDir, p).split(sep).join('/');
++    const t = await trimFrame(readFileSync(p));
++    trims.set(path.replace(/\.png$/, ''), t.trim);
++    inputs.push({ path, contents: t.png });
++  }
++  const { packAsync } = require('free-tex-packer-core') as { packAsync: (f: PackFile[], o: PackOptions) => Promise<PackResult[]> };
++  const result = await packAsync(inputs, packOptions(screen));
++  const problems = checkAtlas(screen, result);
++  const bg = await sharp(bgSrc).png({ compressionLevel: BG_COMPRESSION }).toBuffer();
++  if (bg.length > MAX_FILE_BYTES) problems.push(`background "${screen}": ${bg.length} bytes (max ${MAX_FILE_BYTES})`);
++  if (problems.length > 0) throw new Error(problems.join('\n'));
++
++  const atlas = ATLASES[screen];
++  const png = result.find((f) => f.name.endsWith('.png'))!;
++  const jsonFile = result.find((f) => f.name.endsWith('.json'))!;
++  const json = JSON.parse(jsonFile.buffer.toString('utf8')) as AtlasJson;
++  restoreTrim(json, trims);
++  json.meta.image = atlas.png.split('/').pop()!;
++  const out = [
++    { path: join(PUBLIC_DIR, atlas.png), data: png.buffer },
++    { path: join(PUBLIC_DIR, atlas.json), data: Buffer.from(`${JSON.stringify(json, null, 2)}\n`) },
++    { path: join(PUBLIC_DIR, BACKGROUNDS[screen].path), data: bg },
++  ];
++  writeAll(out);
++  return out.map((f) => `${relative(APP_DIR, f.path).split('\\').join('/')} (${f.data.length} bytes)`);
++}
++
++async function main(): Promise<void> {
++  try {
++    const written = await packScreen(process.argv[2]);
++    for (const w of written) console.log(`atlas: wrote ${w}`);
++  } catch (e) {
++    console.error(`atlas: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
++    process.exit(1);
++  }
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) void main();
+diff --git a/app/tools/atlas/pack.test.ts b/app/tools/atlas/pack.test.ts
+new file mode 100644
+index 0000000..c2f321c
+--- /dev/null
++++ b/app/tools/atlas/pack.test.ts
+@@ -0,0 +1,68 @@
++import { describe, expect, it } from 'vitest';
++import { alphaBounds, checkAtlas, packOptions, packScreen, restoreTrim } from './pack.ts';
++
++const json = (frames: string[], w = 1024, h = 1024): Buffer =>
++  Buffer.from(JSON.stringify({ frames: Object.fromEntries(frames.map((f) => [f, {}])), meta: { size: { w, h } } }));
++
++describe('atlas packing', () => {
++  it('uses the pinned packer settings', () => {
++    expect(packOptions('map')).toEqual({
++      textureName: 'map',
++      width: 2048,
++      height: 2048,
++      fixedSize: false,
++      powerOfTwo: false,
++      padding: 2,
++      allowRotation: false,
++      allowTrim: true,
++      detectIdentical: true,
++      removeFileExtension: true,
++      prependFolderName: true,
++      exporter: 'JsonHash',
++    });
++  });
++
++  it('accepts one page with good frame names', () => {
++    expect(checkAtlas('map', [{ name: 'map.png', buffer: Buffer.alloc(10) }, { name: 'map.json', buffer: json(['pizza/idle/00', 'kart/idle/00']) }])).toEqual([]);
++  });
++
++  it('fails on more than one page', () => {
++    const files = [
++      { name: 'map-0.png', buffer: Buffer.alloc(1) },
++      { name: 'map-0.json', buffer: json([]) },
++      { name: 'map-1.png', buffer: Buffer.alloc(1) },
++      { name: 'map-1.json', buffer: json([]) },
++    ];
++    expect(checkAtlas('map', files)).toEqual(['atlas "map": packing needs 2 pages (max 1)']);
++  });
++
++  it('fails on a page over 2048, a bad frame name or a file over 8 MiB', () => {
++    expect(checkAtlas('map', [{ name: 'map.png', buffer: Buffer.alloc(1) }, { name: 'map.json', buffer: json(['pizza/idle/00'], 4096, 10) }])).toEqual([
++      'atlas "map": page 4096×10 exceeds 2048',
++    ]);
++    expect(checkAtlas('map', [{ name: 'map.png', buffer: Buffer.alloc(1) }, { name: 'map.json', buffer: json(['pizza.png']) }])).toEqual([
++      'atlas "map": frame "pizza.png" is not <object>/<state>/<nn>',
++    ]);
++    expect(checkAtlas('map', [{ name: 'map.png', buffer: Buffer.alloc(8388609) }, { name: 'map.json', buffer: json([]) }])).toEqual([
++      'atlas "map": map.png is 8388609 bytes (max 8388608)',
++    ]);
++  });
++
++  it('rejects an unknown screen', async () => {
++    await expect(packScreen('foo')).rejects.toThrow('unknown screen "foo": known screens are map');
++  });
++
++  it('alphaBounds finds the opaque box (whole frame when empty)', () => {
++    const data = new Uint8Array(4 * 4 * 3);
++    data[(1 * 4 + 2) * 4 + 3] = 255;
++    data[(2 * 4 + 1) * 4 + 3] = 1;
++    expect(alphaBounds(data, 4, 3)).toEqual({ left: 1, top: 1, right: 2, bottom: 2 });
++    expect(alphaBounds(new Uint8Array(4 * 4 * 3), 4, 3)).toEqual({ left: 0, top: 0, right: 3, bottom: 2 });
++  });
++
++  it('restoreTrim puts a pre-trimmed frame back into its full frame', () => {
++    const json = { frames: { 'pizza/idle/00': { trimmed: false, spriteSourceSize: { x: 0, y: 0, w: 250, h: 293 }, sourceSize: { w: 250, h: 293 } } } };
++    restoreTrim(json, new Map([['pizza/idle/00', { left: 1091, top: 702, width: 2048, height: 1536 }]]));
++    expect(json.frames['pizza/idle/00']).toEqual({ trimmed: true, spriteSourceSize: { x: 1091, y: 702, w: 250, h: 293 }, sourceSize: { w: 2048, h: 1536 } });
++  });
++});
+diff --git a/app/tools/atlas/free-tex-packer-core.d.ts b/app/tools/atlas/free-tex-packer-core.d.ts
+new file mode 100644
+index 0000000..1e95daa
+--- /dev/null
++++ b/app/tools/atlas/free-tex-packer-core.d.ts
+@@ -0,0 +1,29 @@
++// The subset of free-tex-packer-core 0.3.9 used by tools/atlas/pack.ts. The package's own
++// index.d.ts declares an ambient module inside a module file, which does not type a default import,
++// so pack.ts loads it with createRequire and these types.
++
++export interface PackFile {
++  /** Relative path; becomes the frame name (folder kept, extension removed). */
++  path: string;
++  contents: Buffer;
++}
++
++export interface PackResult {
++  name: string;
++  buffer: Buffer;
++}
++
++export interface PackOptions {
++  textureName: string;
++  width: number;
++  height: number;
++  fixedSize: boolean;
++  powerOfTwo: boolean;
++  padding: number;
++  allowRotation: boolean;
++  allowTrim: boolean;
++  detectIdentical: boolean;
++  removeFileExtension: boolean;
++  prependFolderName: boolean;
++  exporter: 'JsonHash';
++}
+diff --git a/app/tools/doctor/doctor.ts b/app/tools/doctor/doctor.ts
+new file mode 100644
+index 0000000..d874539
+--- /dev/null
++++ b/app/tools/doctor/doctor.ts
+@@ -0,0 +1,39 @@
++// `npm run doctor` (Story 1.4): reports the build-time tools together — Blender 5.2 (images),
++// ffmpeg and edge-tts (audio) — each resolved like the tools do (env var, then PATH). Exits 1 if any
++// is missing. Not needed for `npm run check` or to run the app.
++import { resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { EDGE_TTS, FFMPEG, probeBinary, readVersion, resolveBinary, resolveBlender, type Env, type Probe, type VersionReader } from '../shared/binaries.ts';
++
++export interface DoctorLine {
++  tool: string;
++  ok: boolean;
++  detail: string;
++}
++
++/** Checks the three tools; never throws. */
++export function doctor(env: Env, probe: Probe = probeBinary, read: VersionReader = readVersion): DoctorLine[] {
++  const check = (tool: string, fn: () => string): DoctorLine => {
++    try {
++      return { tool, ok: true, detail: fn() };
++    } catch (e) {
++      return { tool, ok: false, detail: (e as Error).message };
++    }
++  };
++  return [
++    check('Blender', () => {
++      const bin = resolveBlender(env, probe, read);
++      return `${read(bin).split(/\r?\n/)[0]?.trim() ?? ''} (${bin})`;
++    }),
++    check('ffmpeg', () => resolveBinary(FFMPEG, env, probe)),
++    check('edge-tts', () => resolveBinary(EDGE_TTS, env, probe)),
++  ];
++}
++
++function main(): void {
++  const lines = doctor(process.env);
++  for (const l of lines) console.log(`doctor: ${l.ok ? 'OK     ' : 'MISSING'} ${l.tool}: ${l.detail}`);
++  if (lines.some((l) => !l.ok)) process.exit(1);
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+diff --git a/app/tools/doctor/doctor.test.ts b/app/tools/doctor/doctor.test.ts
+new file mode 100644
+index 0000000..40ba384
+--- /dev/null
++++ b/app/tools/doctor/doctor.test.ts
+@@ -0,0 +1,22 @@
++import { describe, expect, it } from 'vitest';
++import { doctor } from './doctor.ts';
++
++describe('doctor', () => {
++  it('reports Blender, ffmpeg and edge-tts together', () => {
++    const lines = doctor({}, () => true, () => 'Blender 5.2.2 LTS\n');
++    expect(lines.map((l) => [l.tool, l.ok])).toEqual([
++      ['Blender', true],
++      ['ffmpeg', true],
++      ['edge-tts', true],
++    ]);
++    expect(lines[0]!.detail).toBe('Blender 5.2.2 LTS (blender)');
++  });
++
++  it('reports every missing tool and a wrong Blender version', () => {
++    const lines = doctor({}, (bin) => bin === 'blender', () => 'Blender 4.2.0\n');
++    expect(lines.every((l) => !l.ok)).toBe(true);
++    expect(lines[0]!.detail).toMatch(/needs Blender 5\.2 \(found 4\.2\.0\)/);
++    expect(lines[1]!.detail).toMatch(/^ffmpeg not found/);
++    expect(lines[2]!.detail).toMatch(/^edge-tts not found/);
++  });
++});
+diff --git a/app/tools/lint/validate-content.ts b/app/tools/lint/validate-content.ts
+new file mode 100644
+index 0000000..c552fb7
+--- /dev/null
++++ b/app/tools/lint/validate-content.ts
+@@ -0,0 +1,119 @@
++// `npm run validate:content` — runs the content validators (AD-12): GameIds, the audio catalog
++// (id grammar, path convention, the file existing under public/) and the voice lines (rules of
++// content/validate.ts with the real filesystem and `lineHash`, including stray files), the screen
++// layouts (src/content/generated/<screen>.layout.json against stations and touch rules) and the image
++// assets (atlases, backgrounds, 8 MiB cap on every file under public/assets) — Story 1.4.
++import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
++import { dirname, join, relative, resolve, sep } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { ATLASES, BACKGROUNDS, SCREEN_IDS } from '../../src/content/assets.ts';
++import { AUDIO_CATALOG } from '../../src/content/audio-catalog.ts';
++import type { ScreenLayout } from '../../src/content/layout-types.ts';
++import { STATIONS } from '../../src/content/stations.ts';
++import { Tokens } from '../../src/core/tokens.ts';
++import { RENDER_SCALE, layoutLimits, pngSizeOf, validateAssets, validateLayout } from '../layout/rules.ts';
++import { GAME_IDS } from '../../src/content/types.ts';
++import { validateContent } from '../../src/content/validate.ts';
++import { VOICE_LINES } from '../../src/content/voice-lines.ts';
++import { lineHash } from '../tts/line-hash.ts';
++
++const VOICE_DIR = 'assets/audio/vo';
++
++const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
++/** Where `npm run render` writes `<screen>.layout.json`. */
++export const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
++
++/** Frames each screen's atlas must hold. */
++export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
++  map: [...STATIONS.map((s) => `${s.id}/idle/00`), 'kart/idle/00'],
++};
++
++function listFiles(dir: string): string[] {
++  if (!existsSync(dir)) return [];
++  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? listFiles(join(dir, e.name)) : [join(dir, e.name)]));
++}
++
++/** Layout problems of every screen (missing or invalid JSON included). */
++export function layoutProblems(layoutDir: string): string[] {
++  const problems: string[] = [];
++  for (const screen of SCREEN_IDS) {
++    const file = join(layoutDir, `${screen}.layout.json`);
++    let layout: ScreenLayout;
++    try {
++      layout = JSON.parse(readFileSync(file, 'utf8')) as ScreenLayout;
++    } catch {
++      problems.push(`layout "${screen}": ${screen}.layout.json is missing or invalid (run npm run render -- ${screen})`);
++      continue;
++    }
++    if (layout.v !== 1 || layout.screenId !== screen) problems.push(`layout "${screen}": not a v1 layout of screen "${screen}"`);
++    if (screen === 'map') {
++      for (const p of validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, limits: layoutLimits() })) problems.push(`layout "${screen}": ${p}`);
++    }
++  }
++  return problems;
++}
++
++/** Asset problems under `publicDir` (atlases, backgrounds, size caps). */
++export function assetProblems(publicDir: string): string[] {
++  const scale = RENDER_SCALE;
++  return validateAssets({
++    atlases: SCREEN_IDS.map((id) => ({ ...ATLASES[id], frames: REQUIRED_FRAMES[id] ?? [] })),
++    backgrounds: SCREEN_IDS.map((id) => ({ ...BACKGROUNDS[id], width: Tokens.design.width * scale, height: Tokens.design.height * scale })),
++    files: listFiles(join(publicDir, 'assets')).map((f) => ({ path: relative(publicDir, f).split(sep).join('/'), bytes: statSync(f).size })),
++    pngSize: (path) => {
++      try {
++        return pngSizeOf(readFileSync(resolve(publicDir, path)));
++      } catch {
++        return undefined;
++      }
++    },
++    readJson: (path) => {
++      try {
++        return JSON.parse(readFileSync(resolve(publicDir, path), 'utf8')) as unknown;
++      } catch {
++        return undefined;
++      }
++    },
++  });
++}
++
++/** Validates the real content against the files under `publicDir` and the layouts in `layoutDir`; returns the problems. */
++export function run(publicDir: string, layoutDir: string = LAYOUT_DIR): string[] {
++  const fileExists = (path: string): boolean => existsSync(resolve(publicDir, path));
++  const content = validateContent({
++    gameIds: GAME_IDS,
++    audio: AUDIO_CATALOG,
++    fileExists,
++    voice: {
++      lines: VOICE_LINES,
++      hashLine: lineHash,
++      fileExists,
++      listVoiceFiles: () => {
++        const dir = resolve(publicDir, VOICE_DIR);
++        return existsSync(dir) ? readdirSync(dir) : [];
++      },
++      readHash: (path) => {
++        try {
++          return readFileSync(resolve(publicDir, path), 'utf8');
++        } catch {
++          return undefined;
++        }
++      },
++    },
++  });
++  return [...content, ...layoutProblems(layoutDir), ...assetProblems(publicDir)];
++}
++
++function main(): void {
++  const publicDir = join(APP_DIR, 'public');
++  const problems = run(publicDir);
++  if (problems.length > 0) {
++    for (const p of problems) console.error(`content: ${p}`);
++    process.exit(1);
++  }
++  console.log(
++    `content: OK (${GAME_IDS.length} game ids, ${Object.keys(AUDIO_CATALOG).length} audio ids, ${VOICE_LINES.length} voice lines, ${SCREEN_IDS.length} layout(s) with ${STATIONS.length} stations, ${SCREEN_IDS.length} atlas(es), ${listFiles(join(publicDir, 'assets')).length} asset files)`,
++  );
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+diff --git a/app/tools/lint/validate-content.test.ts b/app/tools/lint/validate-content.test.ts
+new file mode 100644
+index 0000000..e1275a0
+--- /dev/null
++++ b/app/tools/lint/validate-content.test.ts
+@@ -0,0 +1,125 @@
++// tools/lint/validate-content.ts wiring (Story 1.2 deferred item, picked up in 1.3): run(publicDir)
++// against temp public/ trees — real fs, real lineHash, real catalog and voice lines.
++import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { dirname, join } from 'node:path';
++import { afterEach, describe, expect, it } from 'vitest';
++import { AUDIO_CATALOG } from '../../src/content/audio-catalog.ts';
++import { VOICE_LINES, voiceHashPath, voicePath } from '../../src/content/voice-lines.ts';
++import { lineHash } from '../tts/line-hash.ts';
++import { ATLASES, BACKGROUNDS } from '../../src/content/assets.ts';
++import { REQUIRED_FRAMES, run } from './validate-content.ts';
++
++const dirs: string[] = [];
++
++/** A PNG header (signature + IHDR) of the given size: the validator reads only the IHDR. */
++function pngHeader(width: number, height: number): Buffer {
++  const b = Buffer.alloc(33);
++  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]).copy(b);
++  b.writeUInt32BE(width, 16);
++  b.writeUInt32BE(height, 20);
++  return b;
++}
++
++function atlasJson(frames: readonly string[]): string {
++  return JSON.stringify({ frames: Object.fromEntries(frames.map((f) => [f, {}])), meta: { size: { w: 1024, h: 1024 } } });
++}
++
++function put(root: string, rel: string, content: string | Buffer): void {
++  const file = join(root, rel);
++  mkdirSync(dirname(file), { recursive: true });
++  writeFileSync(file, content);
++}
++
++/** A public/ tree with every catalog file and every voice line's .m4a + current .hash. */
++function goodTree(): string {
++  const root = mkdtempSync(join(tmpdir(), 'bhc-public-'));
++  dirs.push(root);
++  for (const entry of Object.values(AUDIO_CATALOG)) put(root, entry.path, 'audio');
++  for (const line of VOICE_LINES) {
++    put(root, voicePath(line.id), 'audio');
++    put(root, voiceHashPath(line.id), `${lineHash(line)}\n`);
++  }
++  put(root, ATLASES.map.png, pngHeader(1024, 1024));
++  put(root, ATLASES.map.json, atlasJson(REQUIRED_FRAMES.map!));
++  put(root, BACKGROUNDS.map.path, pngHeader(2048, 1536));
++  return root;
++}
++
++afterEach(() => {
++  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
++});
++
++describe('validate-content run(publicDir)', () => {
++  it('a good tree passes', () => {
++    expect(run(goodTree())).toEqual([]);
++  });
++
++  it('the real public/ passes (committed voice files are current)', () => {
++    expect(run(join(import.meta.dirname, '..', '..', 'public'))).toEqual([]);
++  });
++
++  it('a missing voice file fails and names the id', () => {
++    const root = goodTree();
++    unlinkSync(join(root, voicePath('vo.shell.greeting')));
++    const problems = run(root);
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toMatch(/voice "vo\.shell\.greeting": file .*\.m4a is missing/);
++  });
++
++  it('an edited .hash fails and names the id', () => {
++    const root = goodTree();
++    put(root, voiceHashPath('vo.shell.greeting'), 'deadbeef\n');
++    const problems = run(root);
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toMatch(/voice "vo\.shell\.greeting": .* does not match the line/);
++  });
++
++  it('a stray voice file fails and names its id', () => {
++    const root = goodTree();
++    put(root, 'assets/audio/vo/vo.shell.old-hello.m4a', 'audio');
++    const problems = run(root);
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toMatch(/voice "vo\.shell\.old-hello": stray file/);
++  });
++
++  it('a missing catalog file fails (fileExists is wired to public/)', () => {
++    const root = goodTree();
++    unlinkSync(join(root, AUDIO_CATALOG['sfx.shell.pop'].path));
++    const problems = run(root);
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toMatch(/"sfx\.shell\.pop": file .* is missing/);
++  });
++
++  it('a missing atlas frame fails and names it', () => {
++    const root = goodTree();
++    put(root, ATLASES.map.json, atlasJson(REQUIRED_FRAMES.map!.filter((f) => f !== 'kart/idle/00')));
++    expect(run(root)).toEqual(['atlas "atlas.map": frame "kart/idle/00" is missing']);
++  });
++
++  it('a file over 8 MiB fails and names it', () => {
++    const root = goodTree();
++    put(root, 'assets/bg/huge.png', Buffer.alloc(8 * 1024 * 1024 + 1));
++    expect(run(root)).toEqual(['file assets/bg/huge.png: 8388609 bytes exceeds 8 MiB (8388608)']);
++  });
++
++  it('a wrong background size fails', () => {
++    const root = goodTree();
++    put(root, BACKGROUNDS.map.path, pngHeader(1024, 768));
++    expect(run(root)).toEqual(['background "bg.map": assets/bg/map.png is 1024×768 (must be 2048×1536)']);
++  });
++
++  it('a missing or broken layout fails naming the screen and the ids', () => {
++    const root = goodTree();
++    const layouts = mkdtempSync(join(tmpdir(), 'bhc-layout-'));
++    dirs.push(layouts);
++    expect(run(root, layouts)).toEqual(['layout "map": map.layout.json is missing or invalid (run npm run render -- map)']);
++    const real = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'src', 'content', 'generated', 'map.layout.json'), 'utf8'));
++    delete real.hits.pizza;
++    real.slots['race-1'] = real.anchors.race;
++    put(layouts, 'map.layout.json', JSON.stringify(real));
++    const problems = run(root, layouts);
++    expect(problems).toContain('layout "map": hit "pizza": missing or has fewer than 3 points');
++    expect(problems).toContain('layout "map": slot "race-1": inside the hit polygon of "race"');
++  });
++});

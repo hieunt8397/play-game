@@ -1,0 +1,2411 @@
+diff --git a/app/src/core/dev-hooks.test.ts b/app/src/core/dev-hooks.test.ts
+new file mode 100644
+index 0000000..d5934f0
+--- /dev/null
++++ b/app/src/core/dev-hooks.test.ts
+@@ -0,0 +1,22 @@
++import { readFileSync } from 'node:fs';
++import { describe, expect, it, vi } from 'vitest';
++import { installDevHooks, type BhcDev } from './dev-hooks';
++
++describe('installDevHooks (Story 2.3)', () => {
++  it('flyInTouchTalk emits reward:earned for touch-talk, then restarts Map', () => {
++    const order: string[] = [];
++    const bus = { emit: vi.fn((ev: string, payload: unknown) => order.push(`${ev} ${JSON.stringify(payload)}`)) };
++    const game = { scene: { start: vi.fn((key: string) => order.push(`start ${key}`)) } };
++    const target: { bhcDev?: BhcDev } = {};
++    const hooks = installDevHooks(game, target, bus as never);
++    expect(target.bhcDev).toBe(hooks);
++    hooks.flyInTouchTalk();
++    expect(order).toEqual(['reward:earned {"gameId":"touch-talk"}', 'start Map']);
++  });
++
++  it('main.ts loads it only behind import.meta.env.DEV, through a dynamic import', () => {
++    const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
++    expect(main).not.toMatch(/^import .*dev-hooks/m);
++    expect(main).toMatch(/if \(import\.meta\.env\.DEV\) \{\s*void import\('\.\/core\/dev-hooks'\)/);
++  });
++});
+diff --git a/app/src/core/dev-hooks.ts b/app/src/core/dev-hooks.ts
+new file mode 100644
+index 0000000..f50fda8
+--- /dev/null
++++ b/app/src/core/dev-hooks.ts
+@@ -0,0 +1,36 @@
++// Dev-only console hooks (Story 2.3). main.ts imports this module dynamically only when
++// `import.meta.env.DEV`, so it never reaches a production bundle.
++//   window.bhcDev.flyInTouchTalk(): emits `reward:earned { gameId: 'touch-talk' }` (core/reward-service
++//   grants and queues the fly-in, as Chạm là nói will in Epic 4), then restarts Map, which exercises
++//   the `create` + abandon path of the post-round chain: pull-back on the fire station and a fly-in to
++//   `touch-talk-1`. No difficulty is written and no overlay path but the default `onChainEnd` runs.
++import { bus as appBus, type Bus } from './bus';
++
++/** The slice of Phaser.Game the hooks use. */
++export interface DevGameLike {
++  readonly scene: { start(key: string): unknown };
++}
++
++export interface BhcDev {
++  flyInTouchTalk(): void;
++}
++
++declare global {
++  interface Window {
++    bhcDev?: BhcDev;
++  }
++}
++
++const MAP_KEY = 'Map';
++
++export function installDevHooks(game: DevGameLike, target: { bhcDev?: BhcDev } = window, bus: Pick<Bus, 'emit'> = appBus): BhcDev {
++  const hooks: BhcDev = {
++    flyInTouchTalk() {
++      bus.emit('reward:earned', { gameId: 'touch-talk' });
++      // SceneManager.start restarts a running Map (shutdown, then create).
++      game.scene.start(MAP_KEY);
++    },
++  };
++  target.bhcDev = hooks;
++  return hooks;
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/difficulty.test.ts b/app/src/core/difficulty.test.ts
+index 9f012bd..520f0b7 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/difficulty.test.ts
++++ b/app/src/core/difficulty.test.ts
+@@ -1,8 +1,6 @@
+ import { describe, expect, it } from 'vitest';
+ import type { HintLevel } from '../content/types';
+-import { nextLevel, persistRoundLevel } from './difficulty';
+-import { ProgressStoreService } from './progress-store';
+-import { SessionStore } from './session-store';
++import { nextLevel } from './difficulty';
+ 
+ const o = (questions: number, firstTryCorrect: number, maxHintLevel: HintLevel) => ({ questions, firstTryCorrect, maxHintLevel });
+ 
+@@ -42,41 +40,3 @@ describe('nextLevel', () => {
+     expect(nextLevel(0, o(4, 4, 0), 1)).toBe(0);
+   });
+ });
+-
+-describe('persistRoundLevel (Story 2.1, Map on round:complete)', () => {
+-  const outcome = (q: number, first: number, max: HintLevel) => ({ gameId: 'ice-cream' as const, ...o(q, first, max) });
+-  const fake = () => {
+-    const writes: [string, number][] = [];
+-    return { writes, setDifficulty: (id: string, level: number) => void writes.push([id, level]) };
+-  };
+-
+-  it.each([
+-    ['up', 1, outcome(4, 4, 0), 2],
+-    ['down', 2, outcome(5, 1, 4), 1],
+-    ['flat', 1, outcome(4, 3, 3), 1],
+-  ])('%s: writes nextLevel from the started level', (_name, started, out, expected) => {
+-    const p = fake();
+-    expect(persistRoundLevel({ id: 'ice-cream', level: started }, out, 4, p)).toBe(expected);
+-    expect(p.writes).toEqual([['ice-cream', expected]]);
+-  });
+-
+-  it('a mismatched gameId, no running game or no ladder writes nothing', () => {
+-    const p = fake();
+-    expect(persistRoundLevel({ id: 'pizza', level: 1 }, outcome(3, 3, 0), 4, p)).toBeUndefined();
+-    expect(persistRoundLevel(undefined, outcome(3, 3, 0), 4, p)).toBeUndefined();
+-    expect(persistRoundLevel({ id: 'ice-cream', level: 1 }, outcome(3, 3, 0), undefined, p)).toBeUndefined();
+-    expect(p.writes).toEqual([]);
+-  });
+-
+-  it('the written level comes back after a reload through SessionStore.startData', async () => {
+-    const data = new Map<string, string>();
+-    const storage = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+-    const before = new ProgressStoreService();
+-    await before.init({ storage, persist: async () => true });
+-    persistRoundLevel({ id: 'ice-cream', level: 0 }, outcome(3, 3, 0), 4, before);
+-
+-    const after = new ProgressStoreService();
+-    await after.init({ storage, persist: async () => true });
+-    expect(new SessionStore().startData('ice-cream', 4, () => 0, after).level).toBe(1);
+-  });
+-});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/difficulty.ts b/app/src/core/difficulty.ts
+index 0d55da6..a84f195 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/difficulty.ts
++++ b/app/src/core/difficulty.ts
+@@ -1,7 +1,6 @@
+-// Difficulty policy (Story 1.10, FR5, AR8), pure. Only the shell (Map) calls it, on `round:complete`;
+-// games never decide their own level.
+-import type { GameId, RoundOutcome } from '../content/types';
+-import type { ProgressStoreService } from './progress-store';
++// Difficulty policy (Story 1.10, FR5, AR8), pure. Only the shell calls it: Map's post-round chain
++// (core/post-round-chain, Story 2.3) on `round:complete`; games never decide their own level.
++import type { RoundOutcome } from '../content/types';
+ 
+ /** The highest hint level: a question that reached it counts as "needed full help". */
+ const FULL_HELP_LEVEL = 4;
+@@ -29,26 +28,3 @@ export function nextLevel(
+   else if (outcome.maxHintLevel === FULL_HELP_LEVEL) step = -1;
+   return clamp(base + step, ladderLength);
+ }
+-
+-/** The game Map started, with the level it passed in the start data. */
+-export interface RunningGame {
+-  readonly id: GameId;
+-  readonly level: number;
+-}
+-
+-/**
+- * Story 2.1, called by Map synchronously on `round:complete`: when the outcome belongs to the running
+- * game, persist `nextLevel(run.level, outcome, ladderLength)` through `progress.setDifficulty` and
+- * return it. A missing run, a different `gameId` or an unknown ladder writes nothing (undefined).
+- */
+-export function persistRoundLevel(
+-  run: RunningGame | undefined,
+-  outcome: RoundOutcome,
+-  ladderLength: number | undefined,
+-  progress: Pick<ProgressStoreService, 'setDifficulty'>,
+-): number | undefined {
+-  if (!run || run.id !== outcome.gameId || ladderLength === undefined) return undefined;
+-  const level = nextLevel(run.level, outcome, ladderLength);
+-  progress.setDifficulty(run.id, level);
+-  return level;
+-}
+diff --git a/app/src/core/fly-in.test.ts b/app/src/core/fly-in.test.ts
+new file mode 100644
+index 0000000..dde77e1
+--- /dev/null
++++ b/app/src/core/fly-in.test.ts
+@@ -0,0 +1,178 @@
++import { describe, expect, it } from 'vitest';
++import { arcPoint, easeOut, flyInPlan, itemAt, oldAt, planEndMs, sparkleAt, type FlyInPlan } from './fly-in';
++import { Tokens } from './tokens';
++
++const T = Tokens.Timing;
++const ui = Tokens.ui;
++const from = { x: 300, y: 400 };
++const to = { x: 500, y: 420 };
++const FLIGHT = T.decorationFlyInMs - T.flyInLandMs;
++
++const variants: Array<[string, FlyInPlan]> = [
++  ['normal', flyInPlan({ from, to, hasOld: false, reduced: false })],
++  ['normal + replace', flyInPlan({ from, to, hasOld: true, reduced: false })],
++  ['reduced', flyInPlan({ from, to, hasOld: false, reduced: true })],
++  ['reduced + replace', flyInPlan({ from, to, hasOld: true, reduced: true })],
++];
++
++/** Samples t = 0..totalMs every `step` ms (both ends included). */
++function samples(totalMs: number, step = 10): number[] {
++  const out: number[] = [];
++  for (let t = 0; t <= totalMs; t += step) out.push(t);
++  return out;
++}
++
++describe('flyInPlan › totals', () => {
++  it.each(variants)('%s: every timeline ends at or before decorationFlyInMs', (_name, plan) => {
++    expect(plan.totalMs).toBe(T.decorationFlyInMs);
++    expect(planEndMs(plan)).toBeLessThanOrEqual(T.decorationFlyInMs);
++    expect(plan.landMs).toBeLessThanOrEqual(T.decorationFlyInMs);
++  });
++
++  it.each(variants)('%s: at the end the item is at its slot, full size and opaque', (_name, plan) => {
++    expect(itemAt(plan.item, plan.totalMs)).toEqual({ x: to.x, y: to.y, scale: 1, alpha: 1, landed: true });
++    if (plan.old) expect(oldAt(plan.old, plan.totalMs)).toMatchObject({ alpha: 0, gone: true });
++  });
++});
++
++describe('flyInPlan › normal flight', () => {
++  const plan = flyInPlan({ from, to, hasOld: false, reduced: false });
++
++  it('starts at the station at flyInStartScale, above the sprites (not landed)', () => {
++    expect(itemAt(plan.item, 0)).toEqual({ x: from.x, y: from.y, scale: ui.flyInStartScale, alpha: 1, landed: false });
++    expect(plan.landMs).toBe(FLIGHT);
++    expect(plan.old).toBeUndefined();
++  });
++
++  it('the arc peaks flyInArcPx above the straight line', () => {
++    if (plan.item.kind !== 'fly') throw new Error('fly track expected');
++    const { control } = plan.item;
++    let maxAbove = 0;
++    for (let i = 0; i <= 1000; i++) {
++      const u = i / 1000;
++      const p = arcPoint(from, control, to, u);
++      const lineY = from.y + (to.y - from.y) * u;
++      maxAbove = Math.max(maxAbove, lineY - p.y);
++    }
++    expect(maxAbove).toBeCloseTo(ui.flyInArcPx, 6);
++    const mid = arcPoint(from, control, to, 0.5);
++    expect(mid.x).toBeCloseTo((from.x + to.x) / 2, 9);
++    expect((from.y + to.y) / 2 - mid.y).toBeCloseTo(ui.flyInArcPx, 9);
++  });
++
++  it('ease-out: more than half the way at half the flight; the scale grows monotonically to 1', () => {
++    expect(easeOut(0.5)).toBeGreaterThan(0.5);
++    let last = 0;
++    for (const t of samples(FLIGHT)) {
++      const s = itemAt(plan.item, t).scale;
++      expect(s).toBeGreaterThanOrEqual(last);
++      last = s;
++    }
++    expect(itemAt(plan.item, FLIGHT).scale).toBe(1);
++  });
++
++  it('lands with a 1 → flyInLandScale → 1 bounce over flyInLandMs, at the slot depth', () => {
++    const mid = itemAt(plan.item, FLIGHT + T.flyInLandMs / 2);
++    expect(mid.scale).toBeCloseTo(ui.flyInLandScale, 9);
++    expect(mid).toMatchObject({ x: to.x, y: to.y, landed: true });
++    for (const t of samples(T.decorationFlyInMs).filter((t) => t >= FLIGHT)) {
++      const s = itemAt(plan.item, t).scale;
++      expect(s).toBeGreaterThanOrEqual(1);
++      expect(s).toBeLessThanOrEqual(ui.flyInLandScale + 1e-9);
++    }
++    expect(itemAt(plan.item, FLIGHT - 1).landed).toBe(false);
++  });
++});
++
++describe('flyInPlan › balloon (replace)', () => {
++  const plan = flyInPlan({ from, to, hasOld: true, reduced: false });
++
++  it('rises balloonRisePx while fading out from t = 0 over balloonOutMs', () => {
++    const old = plan.old!;
++    expect(old).toEqual({ kind: 'balloon', risePx: ui.balloonRisePx, startMs: 0, endMs: T.balloonOutMs });
++    expect(oldAt(old, 0)).toEqual({ rise: 0, alpha: 1, gone: false });
++    expect(oldAt(old, T.balloonOutMs / 2)).toMatchObject({ rise: ui.balloonRisePx / 2, alpha: 0.5, gone: false });
++    expect(oldAt(old, T.balloonOutMs)).toEqual({ rise: ui.balloonRisePx, alpha: 0, gone: true });
++  });
++
++  it('overlaps the flight and has left the slot before the new item lands', () => {
++    const old = plan.old!;
++    expect(old.startMs).toBeLessThan(FLIGHT);
++    expect(old.endMs).toBeLessThan(plan.landMs);
++    let last = 1;
++    for (const t of samples(T.decorationFlyInMs)) {
++      const a = oldAt(old, t).alpha;
++      expect(a).toBeLessThanOrEqual(last);
++      last = a;
++    }
++  });
++});
++
++describe('flyInPlan › sparkles', () => {
++  const plan = flyInPlan({ from, to, hasOld: false, reduced: false });
++
++  it('sparkleCount stars at evenly spaced fixed angles around the slot, from flight/2 to the end', () => {
++    expect(plan.sparkles).toHaveLength(ui.sparkleCount);
++    const step = (2 * Math.PI) / ui.sparkleCount;
++    plan.sparkles.forEach((s, i) => {
++      expect(s.angle - plan.sparkles[0]!.angle).toBeCloseTo(i * step, 9);
++      expect(s.from).toEqual(to);
++      expect(Math.hypot(s.to.x - to.x, s.to.y - to.y)).toBeCloseTo(ui.sparkleSpreadPx, 9);
++      expect(s.startMs).toBe(FLIGHT / 2);
++      expect(s.endMs).toBeLessThanOrEqual(T.decorationFlyInMs);
++      expect(s.radius).toBe(ui.sparkleRadiusPx);
++    });
++  });
++
++  it('alpha never rises (no blink): invisible, then 1 → 0, then gone', () => {
++    for (const s of plan.sparkles) {
++      expect(sparkleAt(s, s.startMs - 1).visible).toBe(false);
++      expect(sparkleAt(s, s.startMs)).toMatchObject({ alpha: 1, visible: true });
++      let last = 1;
++      for (const t of samples(T.decorationFlyInMs, 5).filter((t) => t >= s.startMs)) {
++        const st = sparkleAt(s, t);
++        const a = st.visible ? st.alpha : 0;
++        expect(a).toBeLessThanOrEqual(last);
++        last = a;
++      }
++      expect(sparkleAt(s, T.decorationFlyInMs).visible).toBe(false);
++    }
++  });
++
++  it('each sparkle drifts outward only', () => {
++    for (const s of plan.sparkles) {
++      let last = -1;
++      for (const t of samples(s.endMs - 1, 5).filter((t) => t >= s.startMs)) {
++        const p = sparkleAt(s, t);
++        const d = Math.hypot(p.x - to.x, p.y - to.y);
++        expect(d).toBeGreaterThanOrEqual(last);
++        last = d;
++      }
++    }
++  });
++});
++
++describe('flyInPlan › reduced motion', () => {
++  it('with an old item: old fades out over [0, 500], new fades in over [500, 1000], in place, no sparkles', () => {
++    const plan = flyInPlan({ from, to, hasOld: true, reduced: true });
++    const half = T.decorationFlyInMs / 2;
++    expect(plan.sparkles).toEqual([]);
++    expect(plan.old).toEqual({ kind: 'fade', startMs: 0, endMs: half });
++    expect(plan.item).toEqual({ kind: 'fade', at: to, startMs: half, endMs: T.decorationFlyInMs });
++    expect(oldAt(plan.old!, half / 2)).toEqual({ rise: 0, alpha: 0.5, gone: false });
++    expect(itemAt(plan.item, half).alpha).toBe(0);
++    expect(itemAt(plan.item, half + half / 2)).toEqual({ x: to.x, y: to.y, scale: 1, alpha: 0.5, landed: true });
++    for (const t of samples(T.decorationFlyInMs)) {
++      const s = itemAt(plan.item, t);
++      expect([s.x, s.y, s.scale]).toEqual([to.x, to.y, 1]);
++    }
++  });
++
++  it('without an old item: the new one fades in over the whole fly-in', () => {
++    const plan = flyInPlan({ from, to, hasOld: false, reduced: true });
++    expect(plan.old).toBeUndefined();
++    expect(plan.item).toEqual({ kind: 'fade', at: to, startMs: 0, endMs: T.decorationFlyInMs });
++    expect(plan.landMs).toBe(0);
++    expect(itemAt(plan.item, T.decorationFlyInMs / 2).alpha).toBe(0.5);
++  });
++});
+diff --git a/app/src/core/fly-in.ts b/app/src/core/fly-in.ts
+new file mode 100644
+index 0000000..55eeb62
+--- /dev/null
++++ b/app/src/core/fly-in.ts
+@@ -0,0 +1,201 @@
++// Decoration fly-in plan (Story 2.3), pure. Every value comes from Tokens / Timing; the Phaser player
++// (core/ui/decoration-fly.ts) drives one scene tween over `totalMs` and samples the tracks below, so a
++// paused scene freezes the whole fly-in where it is.
++//   Normal motion (flight = decorationFlyInMs − flyInLandMs):
++//   - new item: from its station anchor at ui.flyInStartScale, above every sprite, along a quadratic
++//     arc that peaks ui.flyInArcPx above the straight line to its slot (ease-out), growing to 1 over
++//     the flight; then a 1 → ui.flyInLandScale → 1 bounce over flyInLandMs, at the slot depth;
++//   - old item (a replacement): from t = 0 it rises ui.balloonRisePx while its alpha goes 1 → 0 over
++//     balloonOutMs, so it has left the slot before the new one lands;
++//   - sparkles: ui.sparkleCount stars at fixed, evenly spaced angles around the slot, from flight/2;
++//     each drifts out ui.sparkleSpreadPx while its alpha falls 1 → 0 (never blinks), gone by the end.
++//   Reduced motion: nothing moves and there are no sparkles. With an old item it fades out over
++//   [0, ½] and the new one fades in over [½, 1] × decorationFlyInMs, both in place; without one the new
++//   item fades in over the whole fly-in.
++// Every timeline ends at or before Timing.decorationFlyInMs.
++import type { Point } from '../content/layout-types';
++import { Tokens } from './tokens';
++
++export interface FlyInInput {
++  /** The station anchor the item leaves from. */
++  readonly from: Point;
++  /** The slot's draw position (core/decoration-plan). */
++  readonly to: Point;
++  /** Whether an old item stands at the slot (a replacement). */
++  readonly hasOld: boolean;
++  readonly reduced: boolean;
++}
++
++export type ItemTrack =
++  | {
++      readonly kind: 'fly';
++      readonly from: Point;
++      /** Quadratic Bézier control point: the arc peaks `arcPx` above the chord's midpoint. */
++      readonly control: Point;
++      readonly to: Point;
++      readonly startScale: number;
++      readonly flightMs: number;
++      readonly landScale: number;
++      readonly landStartMs: number;
++      readonly landEndMs: number;
++    }
++  | { readonly kind: 'fade'; readonly at: Point; readonly startMs: number; readonly endMs: number };
++
++export type OldTrack =
++  | { readonly kind: 'balloon'; readonly risePx: number; readonly startMs: number; readonly endMs: number }
++  | { readonly kind: 'fade'; readonly startMs: number; readonly endMs: number };
++
++export interface SparkleTrack {
++  /** Fixed angle (radians) around the slot. */
++  readonly angle: number;
++  readonly from: Point;
++  readonly to: Point;
++  readonly startMs: number;
++  readonly endMs: number;
++  /** Outer star radius (design px). */
++  readonly radius: number;
++}
++
++export interface FlyInPlan {
++  readonly totalMs: number;
++  /** When the item is "in": touchdown (normal) or the start of its fade-in (reduced). The land sound. */
++  readonly landMs: number;
++  readonly item: ItemTrack;
++  readonly old: OldTrack | undefined;
++  readonly sparkles: readonly SparkleTrack[];
++}
++
++export interface ItemState {
++  readonly x: number;
++  readonly y: number;
++  /** Relative to the item's base scale. */
++  readonly scale: number;
++  readonly alpha: number;
++  /** True once the item sits at its slot (depth: the slot's). */
++  readonly landed: boolean;
++}
++
++export interface OldState {
++  /** Upward offset from the slot (design px). */
++  readonly rise: number;
++  readonly alpha: number;
++  readonly gone: boolean;
++}
++
++export interface SparkleState {
++  readonly x: number;
++  readonly y: number;
++  readonly alpha: number;
++  readonly visible: boolean;
++}
++
++const clamp01 = (v: number): number => (v <= 0 ? 0 : v >= 1 ? 1 : v);
++const lerp = (a: number, b: number, u: number): number => a + (b - a) * u;
++const progress = (t: number, startMs: number, endMs: number): number => (endMs > startMs ? clamp01((t - startMs) / (endMs - startMs)) : t >= endMs ? 1 : 0);
++const FULL_TURN = 2 * Math.PI;
++/** Sparkle 0 sits straight above the slot. */
++const FIRST_SPARKLE_ANGLE = -Math.PI / 2;
++
++/** Cubic ease-out on [0, 1]. */
++export function easeOut(u: number): number {
++  const v = 1 - clamp01(u);
++  return 1 - v * v * v;
++}
++
++/** Point at parameter `u` (0..1) of the quadratic Bézier from → control → to. */
++export function arcPoint(from: Point, control: Point, to: Point, u: number): Point {
++  const a = (1 - u) * (1 - u);
++  const b = 2 * u * (1 - u);
++  const c = u * u;
++  return { x: a * from.x + b * control.x + c * to.x, y: a * from.y + b * control.y + c * to.y };
++}
++
++export function flyInPlan(input: FlyInInput): FlyInPlan {
++  const T = Tokens.Timing;
++  const ui = Tokens.ui;
++  const total = T.decorationFlyInMs;
++  const { from, to, hasOld } = input;
++
++  if (input.reduced) {
++    const half = total / 2;
++    return {
++      totalMs: total,
++      landMs: hasOld ? half : 0,
++      item: { kind: 'fade', at: to, startMs: hasOld ? half : 0, endMs: total },
++      old: hasOld ? { kind: 'fade', startMs: 0, endMs: half } : undefined,
++      sparkles: [],
++    };
++  }
++
++  const flight = total - T.flyInLandMs;
++  // B(½) − chord midpoint = ½ (control − midpoint): the control sits 2 × arcPx above the midpoint.
++  const control = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 - 2 * ui.flyInArcPx };
++  const sparkles: SparkleTrack[] = [];
++  for (let i = 0; i < ui.sparkleCount; i++) {
++    const angle = FIRST_SPARKLE_ANGLE + (i * FULL_TURN) / ui.sparkleCount;
++    sparkles.push({
++      angle,
++      from: { x: to.x, y: to.y },
++      to: { x: to.x + Math.cos(angle) * ui.sparkleSpreadPx, y: to.y + Math.sin(angle) * ui.sparkleSpreadPx },
++      startMs: flight / 2,
++      endMs: total,
++      radius: ui.sparkleRadiusPx,
++    });
++  }
++  return {
++    totalMs: total,
++    landMs: flight,
++    item: {
++      kind: 'fly',
++      from,
++      control,
++      to,
++      startScale: ui.flyInStartScale,
++      flightMs: flight,
++      landScale: ui.flyInLandScale,
++      landStartMs: flight,
++      landEndMs: total,
++    },
++    old: hasOld ? { kind: 'balloon', risePx: ui.balloonRisePx, startMs: 0, endMs: Math.min(T.balloonOutMs, flight) } : undefined,
++    sparkles,
++  };
++}
++
++/** The new item at time `t` (ms since the fly-in started). */
++export function itemAt(track: ItemTrack, t: number): ItemState {
++  if (track.kind === 'fade') {
++    return { x: track.at.x, y: track.at.y, scale: 1, alpha: progress(t, track.startMs, track.endMs), landed: true };
++  }
++  if (t < track.flightMs) {
++    const u = easeOut(progress(t, 0, track.flightMs));
++    const p = arcPoint(track.from, track.control, track.to, u);
++    return { x: p.x, y: p.y, scale: lerp(track.startScale, 1, u), alpha: 1, landed: false };
++  }
++  const v = progress(t, track.landStartMs, track.landEndMs);
++  // 1 → landScale → 1 (a half sine: smooth, one bounce).
++  const scale = v >= 1 ? 1 : 1 + (track.landScale - 1) * Math.sin(Math.PI * v);
++  return { x: track.to.x, y: track.to.y, scale, alpha: 1, landed: true };
++}
++
++/** The old item at time `t`. */
++export function oldAt(track: OldTrack, t: number): OldState {
++  const v = progress(t, track.startMs, track.endMs);
++  return { rise: track.kind === 'balloon' ? track.risePx * v : 0, alpha: 1 - v, gone: v >= 1 };
++}
++
++/** One sparkle at time `t`: invisible before its start and from its end on; alpha only falls. */
++export function sparkleAt(s: SparkleTrack, t: number): SparkleState {
++  if (t < s.startMs || t >= s.endMs) {
++    return { x: s.from.x, y: s.from.y, alpha: 0, visible: false };
++  }
++  const v = progress(t, s.startMs, s.endMs);
++  const u = easeOut(v);
++  return { x: lerp(s.from.x, s.to.x, u), y: lerp(s.from.y, s.to.y, u), alpha: 1 - v, visible: true };
++}
++
++/** The last end time of every track (≤ decorationFlyInMs; tested). */
++export function planEndMs(plan: FlyInPlan): number {
++  const ends = [plan.item.kind === 'fly' ? plan.item.landEndMs : plan.item.endMs, ...plan.sparkles.map((s) => s.endMs)];
++  if (plan.old) ends.push(plan.old.endMs);
++  return Math.max(...ends);
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/input/input.test.ts b/app/src/core/input/input.test.ts
+index 2a244ca..d3e2144 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/input/input.test.ts
++++ b/app/src/core/input/input.test.ts
+@@ -6,6 +6,8 @@ import { fakeScene, press } from './fakes';
+ import { InputGuard } from './guard';
+ import { createTapRouter } from './tap-router';
+ import { createTapTarget, inCircle } from './tap-target';
++import { LAYOUTS } from '../../content/layouts';
++import { Tokens } from '../tokens';
+ 
+ const square = [
+   { x: 0, y: 0 },
+@@ -260,3 +262,50 @@ describe('tap router › z tiebreak (Story 2.2)', () => {
+     expect(low).toHaveBeenCalledTimes(1);
+   });
+ });
++
++describe('createTapRouter › toWorld (Story 2.3)', () => {
++  /** Phaser's getWorldPoint for a camera centred on `c` at `zoom` (viewport = the design frame). */
++  const zoomedOn = (c: { x: number; y: number }, zoom: number) => (p: { x: number; y: number }) => ({
++    x: c.x + (p.x - Tokens.design.width / 2) / zoom,
++    y: c.y + (p.y - Tokens.design.height / 2) / zoom,
++  });
++
++  it('default: the design point is hit-tested as is', () => {
++    const scene = fakeScene();
++    const router = createTapRouter(scene, { guard: new InputGuard() });
++    const hit = vi.fn();
++    new HotspotPolygon(router, square, hit);
++    scene.tap(5, 5);
++    expect(hit).toHaveBeenCalledWith({ x: 5, y: 5 });
++  });
++
++  it('a point is hit-tested (and delivered) after the transform', () => {
++    const scene = fakeScene();
++    const router = createTapRouter(scene, { guard: new InputGuard(), toWorld: (p) => ({ x: p.x - 100, y: p.y - 100 }) });
++    const hit = vi.fn();
++    const any = vi.fn();
++    router.onAnyTap = any;
++    new HotspotPolygon(router, square, hit);
++    scene.tap(5, 5);
++    expect(hit).not.toHaveBeenCalled();
++    scene.tap(105, 105);
++    expect(hit).toHaveBeenCalledWith({ x: 5, y: 5 });
++    expect(any).toHaveBeenLastCalledWith({ x: 5, y: 5 });
++  });
++
++  it('zoom 1.8 on the ice-cream anchor: the screen centre hits the ice-cream station seen there', () => {
++    const map = LAYOUTS.map;
++    const anchor = map.anchors['ice-cream']!;
++    const poly = map.hits['ice-cream']!;
++    expect(pointInPolygon(anchor, poly)).toBe(true);
++    const centre = { x: Tokens.design.width / 2, y: Tokens.design.height / 2 };
++    // Without the transform the screen centre is not on the truck.
++    expect(pointInPolygon(centre, poly)).toBe(false);
++    const scene = fakeScene();
++    const router = createTapRouter(scene, { guard: new InputGuard(), toWorld: zoomedOn(anchor, Tokens.ui.cameraZoomScale) });
++    const hit = vi.fn();
++    new HotspotPolygon(router, poly, hit);
++    scene.tap(centre.x, centre.y);
++    expect(hit).toHaveBeenCalledWith(anchor);
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/input/tap-router.ts b/app/src/core/input/tap-router.ts
+index 570e298..0aae38d 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/input/tap-router.ts
++++ b/app/src/core/input/tap-router.ts
+@@ -4,6 +4,8 @@
+ // first finger, layers overlay > hud > scene) and calls back into the routers. Within a router the
+ // enabled target containing the design point with the highest `z` (default 0) wins; at equal z the
+ // last one registered wins (Story 2.2: Map decorations use z −1, so a station polygon always wins).
++// Story 2.3: an optional `toWorld(p)` maps the design point before hit-testing and before it reaches the
++// target (Map passes the camera's world point, so taps hit what the child sees while zoomed).
+ // This folder is the only place that touches pointer events (ESLint enforces it).
+ import { inputGuard, type GuardPointer, type GuardRouter, type GuardTarget, type InputGuard, type Layer } from './guard';
+ import type { ScaleLike } from './pointer-adapter';
+@@ -44,6 +46,8 @@ export interface TapRouterOptions {
+   readonly layer?: Layer;
+   /** The guard to forward to (tests); default the app-wide `inputGuard`. */
+   readonly guard?: InputGuard;
++  /** Story 2.3: design point → the point targets are tested in (default: identity). */
++  readonly toWorld?: (p: Point) => Point;
+ }
+ 
+ export const POINTER_DOWN = 'pointerdown';
+@@ -57,6 +61,7 @@ const DESTROY = 'destroy';
+ export function createTapRouter(scene: RouterSceneLike, opts: TapRouterOptions = {}): TapRouter {
+   const guard = opts.guard ?? inputGuard;
+   const layer = opts.layer ?? 'scene';
++  const toWorld = opts.toWorld ?? ((p: Point): Point => p);
+   let targets: RouterTarget[] = [];
+   let live = true;
+ 
+@@ -72,7 +77,7 @@ export function createTapRouter(scene: RouterSceneLike, opts: TapRouterOptions =
+       return best;
+     },
+     anyTap(p) {
+-      router.onAnyTap?.(p);
++      router.onAnyTap?.(toWorld(p));
+     },
+   };
+ 
+@@ -96,13 +101,13 @@ export function createTapRouter(scene: RouterSceneLike, opts: TapRouterOptions =
+       const { onRelease, onMove, onEnd, onCancel } = target;
+       const wrapped: RouterTarget = {
+         ...(target.z !== undefined ? { z: target.z } : {}),
+-        contains: (p) => target.contains(p),
++        contains: (p) => target.contains(toWorld(p)),
+         isEnabled: () => live && target.isEnabled(),
+-        onPress: (p, pointer) => target.onPress(p, pointer),
+-        ...(onRelease ? { onRelease: (p: Point) => onRelease.call(target, p) } : {}),
++        onPress: (p, pointer) => target.onPress(toWorld(p), pointer),
++        ...(onRelease ? { onRelease: (p: Point) => onRelease.call(target, toWorld(p)) } : {}),
+         // Drag callbacks also go dead with the router (a destroyed scene never hears its drop).
+-        ...(onMove ? { onMove: (p: Point) => live && onMove.call(target, p) } : {}),
+-        ...(onEnd ? { onEnd: (p: Point) => live && onEnd.call(target, p) } : {}),
++        ...(onMove ? { onMove: (p: Point) => live && onMove.call(target, toWorld(p)) } : {}),
++        ...(onEnd ? { onEnd: (p: Point) => live && onEnd.call(target, toWorld(p)) } : {}),
+         ...(onCancel ? { onCancel: () => live && onCancel.call(target) } : {}),
+       };
+       targets.push(wrapped);
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/motion.test.ts b/app/src/core/motion.test.ts
+index 5143ae6..8787ecb 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/motion.test.ts
++++ b/app/src/core/motion.test.ts
+@@ -1,5 +1,16 @@
+ import { describe, expect, it, vi } from 'vitest';
+-import { enterPlan, enterStation, FADE_IN_COMPLETE, FADE_OUT_COMPLETE, revealScene, ZOOM_COMPLETE, type CameraLike } from './motion';
++import {
++  enterPlan,
++  enterStation,
++  FADE_IN_COMPLETE,
++  FADE_OUT_COMPLETE,
++  pullBack,
++  pullBackPlan,
++  revealScene,
++  ZOOM_COMPLETE,
++  type CameraLike,
++  type PullBackCameraLike,
++} from './motion';
+ import { Timing } from './timing';
+ import { Tokens } from './tokens';
+ 
+@@ -60,3 +71,60 @@ describe('enterStation / revealScene', () => {
+     await expect(p).resolves.toBeUndefined();
+   });
+ });
++
++describe('pullBackPlan / pullBack (Story 2.3)', () => {
++  function fakePullBackCamera() {
++    const { cam, fire } = fakeCamera();
++    const calls: string[] = [];
++    const full = {
++      ...cam,
++      pan: vi.fn((...a: unknown[]) => calls.push(`pan ${a.slice(0, 3).join(',')}`)),
++      zoomTo: vi.fn((...a: unknown[]) => calls.push(`zoomTo ${a.slice(0, 2).join(',')}`)),
++      fadeIn: vi.fn((ms: number) => calls.push(`fadeIn ${ms}`)),
++      resetFX: vi.fn(() => calls.push('resetFX')),
++      setZoom: vi.fn((z: number) => calls.push(`setZoom ${z}`)),
++      centerOn: vi.fn((x: number, y: number) => calls.push(`centerOn ${x},${y}`)),
++      setScroll: vi.fn((x: number, y: number) => calls.push(`setScroll ${x},${y}`)),
++    } satisfies PullBackCameraLike;
++    return { cam: full, fire, calls };
++  }
++
++  it('normal: zoom cameraZoomScale → 1 over cameraPullBackMs, ease-out', () => {
++    expect(pullBackPlan(false)).toEqual({ kind: 'zoom', fromZoom: Tokens.ui.cameraZoomScale, toZoom: 1, ms: 1200, ease: expect.stringMatching(/Out$/) });
++    expect(Timing.cameraPullBackMs).toBe(1200);
++  });
++
++  it('reduced: a sceneFadeMs (300 ms) fade', () => {
++    expect(pullBackPlan(true)).toEqual({ kind: 'fade', ms: 300 });
++  });
++
++  it('normal: jumps to the zoomed station view, then pans to the island centre while zooming out', async () => {
++    const { cam, fire, calls } = fakePullBackCamera();
++    const done = vi.fn();
++    const p = pullBack({ cameras: { main: cam } }, { x: 200, y: 300 }, false).then(done);
++    const W = Tokens.design.width / 2;
++    const H = Tokens.design.height / 2;
++    expect(calls).toEqual([
++      'resetFX',
++      `setZoom ${Tokens.ui.cameraZoomScale}`,
++      'centerOn 200,300',
++      `pan ${W},${H},${Timing.cameraPullBackMs}`,
++      `zoomTo 1,${Timing.cameraPullBackMs}`,
++    ]);
++    expect(cam.fadeIn).not.toHaveBeenCalled();
++    await Promise.resolve();
++    expect(done).not.toHaveBeenCalled();
++    fire(ZOOM_COMPLETE);
++    await p;
++    expect(done).toHaveBeenCalled();
++    expect(calls.slice(-2)).toEqual(['setZoom 1', 'setScroll 0,0']);
++  });
++
++  it('reduced: zoom 1, scroll 0, then a fade-in; no pan or zoom', async () => {
++    const { cam, fire, calls } = fakePullBackCamera();
++    const p = pullBack({ cameras: { main: cam } }, { x: 200, y: 300 }, true);
++    expect(calls).toEqual(['resetFX', 'setZoom 1', 'setScroll 0,0', `fadeIn ${Timing.sceneFadeMs}`]);
++    fire(FADE_IN_COMPLETE);
++    await expect(p).resolves.toBeUndefined();
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/motion.ts b/app/src/core/motion.ts
+index ca932fc..b21d71b 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/motion.ts
++++ b/app/src/core/motion.ts
+@@ -2,6 +2,7 @@
+ // (`Tokens.ui.cameraZoomScale` over `Timing.cameraZoomInMs`). Reduced motion: a fade out over
+ // `Timing.sceneFadeMs`, no zoom. `revealScene` fades a scene in (every game start, the return to the
+ // island). The plan is pure and tested; the Phaser calls stay thin. Fades go to the sky colour.
++// Story 2.3 adds `pullBack` (the post-round chain's camera step) and its pure `pullBackPlan`.
+ import type { Point } from '../content/layout-types';
+ import { Tokens } from './tokens';
+ 
+@@ -55,6 +56,64 @@ export function enterStation(scene: SceneWithCamera, focus: Point, reduced: bool
+   });
+ }
+ 
++// --- Story 2.3: the post-round camera pull-back --------------------------------------------------
++
++export type PullBackPlan =
++  | { readonly kind: 'zoom'; readonly fromZoom: number; readonly toZoom: number; readonly ms: number; readonly ease: string }
++  | { readonly kind: 'fade'; readonly ms: number };
++
++const PULL_BACK_EASE = 'Cubic.easeOut';
++
++/**
++ * Normal: start at zoom `ui.cameraZoomScale` on the station, then zoom to 1 and pan back to the island
++ * centre (scroll 0) over `Timing.cameraPullBackMs`, ease-out. Reduced: zoom 1, scroll 0, a fade-in
++ * over `Timing.sceneFadeMs`.
++ */
++export function pullBackPlan(reduced: boolean): PullBackPlan {
++  return reduced
++    ? { kind: 'fade', ms: Tokens.Timing.sceneFadeMs }
++    : { kind: 'zoom', fromZoom: Tokens.ui.cameraZoomScale, toZoom: 1, ms: Tokens.Timing.cameraPullBackMs, ease: PULL_BACK_EASE };
++}
++
++/** The camera slice the pull-back also needs (it sets the start state at once). */
++export interface PullBackCameraLike extends CameraLike {
++  resetFX(): unknown;
++  setZoom(zoom: number): unknown;
++  centerOn(x: number, y: number): unknown;
++  setScroll(x: number, y: number): unknown;
++}
++
++export interface SceneWithPullBackCamera {
++  readonly cameras: { readonly main: PullBackCameraLike };
++}
++
++/**
++ * Story 2.3: the island appears zoomed on `focus` and pulls back to the whole island (or fades in
++ * under reduced motion). Resolves when the camera is done; the camera ends at zoom 1, scroll 0.
++ */
++export function pullBack(scene: SceneWithPullBackCamera, focus: Point, reduced: boolean): Promise<void> {
++  const cam = scene.cameras.main;
++  const plan = pullBackPlan(reduced);
++  cam.resetFX();
++  if (plan.kind === 'fade') {
++    cam.setZoom(1);
++    cam.setScroll(0, 0);
++    return revealScene(scene);
++  }
++  cam.setZoom(plan.fromZoom);
++  cam.centerOn(focus.x, focus.y);
++  return new Promise((resolve) => {
++    cam.once(ZOOM_COMPLETE, () => {
++      cam.setZoom(plan.toZoom);
++      cam.setScroll(0, 0);
++      resolve();
++    });
++    // Scroll 0 at zoom 1 puts the design centre in the middle of the camera.
++    cam.pan(Tokens.design.width / 2, Tokens.design.height / 2, plan.ms, plan.ease, true);
++    cam.zoomTo(plan.toZoom, plan.ms, plan.ease, true);
++  });
++}
++
+ /** Fades the scene in from the sky colour over `Timing.sceneFadeMs`. */
+ export function revealScene(scene: SceneWithCamera): Promise<void> {
+   const cam = scene.cameras.main;
+diff --git a/app/src/core/post-round-chain.test.ts b/app/src/core/post-round-chain.test.ts
+new file mode 100644
+index 0000000..169c06c
+--- /dev/null
++++ b/app/src/core/post-round-chain.test.ts
+@@ -0,0 +1,418 @@
++import { describe, expect, it, vi } from 'vitest';
++import type { GrantResult, RoundOutcome } from '../content/types';
++import { newestPerSlot, PostRoundChain, routeRoundAbandon, routeRoundComplete, type ChainDeps, type ChainFinish } from './post-round-chain';
++import { ProgressStoreService } from './progress-store';
++import { SessionStore } from './session-store';
++import { Timing } from './timing';
++
++/** Lets every pending promise callback run. */
++const flush = (): Promise<void> => new Promise((r) => setImmediate(r));
++
++function grant(slotId: string, decorationId: string, seq: number, replaced?: string): GrantResult {
++  const stationId = slotId.replace(/-[0-9]+$/, '') as GrantResult['slot']['stationId'];
++  return { slot: { slotId, stationId, decorationId, seq }, ...(replaced ? { replaced: { decorationId: replaced } } : {}) };
++}
++
++const PERFECT: RoundOutcome = { gameId: 'ice-cream', questions: 4, firstTryCorrect: 4, maxHintLevel: 0 };
++
++/**
++ * Fake deps on a fake scene clock: `wait` and each fly-in (decorationFlyInMs) run on `advance`;
++ * stopGameAndWake and pullBack resolve when the test says so (or at once with `auto`).
++ */
++function harness(opts: { pending?: GrantResult[]; auto?: boolean } = {}) {
++  let clock = 0;
++  let timers: { at: number; fn: () => void }[] = [];
++  const calls: string[] = [];
++  const session = new SessionStore();
++  session.pendingFlyIns.push(...(opts.pending ?? []));
++  const ends: ChainFinish[] = [];
++  const logs: string[] = [];
++  const warns: string[] = [];
++  const flyStarts: { id: string; at: number }[] = [];
++  let wake: () => void = () => {};
++  let pulled: () => void = () => {};
++
++  const wait = (ms: number): Promise<void> =>
++    new Promise((resolve) => {
++      timers.push({ at: clock + ms, fn: resolve });
++    });
++
++  const deps: ChainDeps = {
++    setDifficulty: vi.fn((id, l) => calls.push(`setDifficulty ${id} ${l}`)),
++    clearResume: vi.fn((id) => {
++      calls.push(`clearResume ${id}`);
++      session.clearResume(id);
++    }),
++    ladderLength: (id) => (id === 'ice-cream' ? 4 : id === 'touch-talk' ? undefined : 5),
++    stopGameAndWake: vi.fn(() => {
++      calls.push('stopGameAndWake');
++      return opts.auto ? Promise.resolve() : new Promise<void>((r) => (wake = r));
++    }),
++    pullBack: vi.fn((focus) => {
++      calls.push(`pullBack ${focus}`);
++      return opts.auto ? Promise.resolve() : new Promise<void>((r) => (pulled = r));
++    }),
++    flyIn: vi.fn(async (e: GrantResult) => {
++      calls.push(`flyIn ${e.slot.decorationId}`);
++      flyStarts.push({ id: e.slot.decorationId, at: clock });
++      await wait(Timing.decorationFlyInMs);
++      calls.push(`landed ${e.slot.decorationId}`);
++    }),
++    wait,
++    pending: () => session.pendingFlyIns,
++    end: vi.fn((e: ChainFinish) => {
++      calls.push(`end ${e.kind}`);
++      ends.push(e);
++    }),
++    now: () => clock,
++    log: (line) => logs.push(line),
++    warn: (msg) => warns.push(msg),
++  };
++
++  let paused = false;
++
++  /**
++   * Advances the fake scene clock in timer order, flushing promise callbacks after each timer. While
++   * paused (scene.pause()) frames go by but the scene clock does not move.
++   */
++  async function advance(ms: number): Promise<void> {
++    if (paused) {
++      await flush();
++      return;
++    }
++    const target = clock + ms;
++    await flush();
++    for (;;) {
++      const due = timers.filter((t) => t.at <= target).sort((a, b) => a.at - b.at)[0];
++      if (!due) break;
++      timers = timers.filter((t) => t !== due);
++      clock = due.at;
++      due.fn();
++      await flush();
++    }
++    clock = target;
++    await flush();
++  }
++
++  return {
++    deps,
++    chain: new PostRoundChain(deps),
++    session,
++    calls,
++    ends,
++    logs,
++    warns,
++    flyStarts,
++    advance,
++    pause: () => void (paused = true),
++    resume: () => void (paused = false),
++    sceneTime: () => clock,
++    wake: async () => {
++      wake();
++      await flush();
++    },
++    pulled: async () => {
++      pulled();
++      await flush();
++    },
++  };
++}
++
++describe('PostRoundChain › complete', () => {
++  it('L1, 4/4 first try, one pending: setDifficulty + clearResume synchronously, then the exact order 1 → 6', async () => {
++    const h = harness({ pending: [grant('ice-cream-1', 'parasol', 1)] });
++    h.session.resume['ice-cream'] = { v: 1, level: 1, seed: 1, questionIndex: 0, partial: null };
++    const p = h.chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 1 });
++    // Steps 1–3 ran before `start` returned its promise.
++    expect(h.calls).toEqual(['setDifficulty ice-cream 2', 'clearResume ice-cream', 'stopGameAndWake']);
++    expect(h.session.resume).toEqual({});
++    expect(h.chain.active).toBe(true);
++    await flush();
++    expect(h.deps.pullBack).not.toHaveBeenCalled();
++    await h.wake();
++    expect(h.calls.at(-1)).toBe('pullBack ice-cream');
++    expect(h.deps.flyIn).not.toHaveBeenCalled();
++    await h.pulled();
++    expect(h.calls.at(-1)).toBe('flyIn parasol');
++    expect(h.deps.end).not.toHaveBeenCalled();
++    await h.advance(Timing.decorationFlyInMs);
++    await p;
++    expect(h.calls).toEqual([
++      'setDifficulty ice-cream 2',
++      'clearResume ice-cream',
++      'stopGameAndWake',
++      'pullBack ice-cream',
++      'flyIn parasol',
++      'landed parasol',
++      'end complete',
++    ]);
++    expect(h.session.pendingFlyIns).toEqual([]);
++    expect(h.ends).toEqual([{ kind: 'complete', gameId: 'ice-cream', queuedStation: undefined }]);
++    expect(h.chain.active).toBe(false);
++  });
++
++  it('the level written comes from nextLevel (−1 after full help; clamped at the ladder top)', () => {
++    const a = harness({ auto: true });
++    void a.chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: { ...PERFECT, firstTryCorrect: 2, maxHintLevel: 4 }, startedLevel: 2 });
++    expect(a.deps.setDifficulty).toHaveBeenCalledWith('ice-cream', 1);
++    const b = harness({ auto: true });
++    void b.chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 3 });
++    expect(b.deps.setDifficulty).toHaveBeenCalledWith('ice-cream', 3);
++  });
++
++  it('writes through a real ProgressStore before the first await', () => {
++    const store = new ProgressStoreService();
++    const h = harness({ auto: true });
++    h.deps.setDifficulty = (id, l) => store.setDifficulty(id, l);
++    const chain = new PostRoundChain(h.deps);
++    void chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 0 });
++    expect(store.getDifficulty('ice-cream', 4)).toBe(1);
++  });
++
++  it('end runs only after every fly-in has resolved', async () => {
++    const h = harness({ auto: true, pending: [grant('ice-cream-1', 'parasol', 1), grant('ice-cream-2', 'giant-cone', 2)] });
++    const p = h.chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 0 });
++    await h.advance(Timing.decorationFlyInMs);
++    expect(h.calls).toContain('landed parasol');
++    expect(h.deps.end).not.toHaveBeenCalled();
++    expect(h.session.pendingFlyIns.map((e) => e.slot.decorationId)).toEqual(['giant-cone']);
++    await h.advance(Timing.flyInStaggerMs);
++    await p;
++    expect(h.calls.slice(-2)).toEqual(['landed giant-cone', 'end complete']);
++  });
++
++  it('dev timing log: post-round: <kind> <gameId> → onChainEnd <ms> ms', async () => {
++    const h = harness({ auto: true, pending: [grant('ice-cream-1', 'parasol', 1)] });
++    const p = h.chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 0 });
++    await h.advance(Timing.decorationFlyInMs);
++    await p;
++    expect(h.logs).toEqual([`post-round: complete ice-cream → onChainEnd ${Timing.decorationFlyInMs} ms`]);
++  });
++});
++
++describe('PostRoundChain › abandon', () => {
++  it('2 pending (touch-talk-1, pizza-1): no setDifficulty / clearResume; items start at 0 and 300 ms; end({abandon})', async () => {
++    const h = harness({ auto: true, pending: [grant('touch-talk-1', 'fire-truck', 1), grant('pizza-1', 'pizza-pie', 2)] });
++    const p = h.chain.start({ kind: 'abandon', gameId: 'touch-talk' });
++    await h.advance(Timing.flyInStaggerMs + Timing.decorationFlyInMs);
++    await p;
++    expect(h.deps.setDifficulty).not.toHaveBeenCalled();
++    expect(h.deps.clearResume).not.toHaveBeenCalled();
++    expect(h.flyStarts).toEqual([
++      { id: 'fire-truck', at: 0 },
++      { id: 'pizza-pie', at: Timing.flyInStaggerMs },
++    ]);
++    expect(h.ends).toEqual([{ kind: 'abandon', gameId: 'touch-talk', queuedStation: undefined }]);
++    expect(h.session.pendingFlyIns).toEqual([]);
++  });
++
++  it('a stagger of 3 items starts them at 0, 300 and 600 ms', async () => {
++    const h = harness({
++      auto: true,
++      pending: [grant('ice-cream-1', 'parasol', 1), grant('ice-cream-2', 'giant-cone', 2), grant('pizza-1', 'pizza-pie', 3)],
++    });
++    const p = h.chain.start({ kind: 'abandon', gameId: 'ice-cream' });
++    await h.advance(2 * Timing.flyInStaggerMs + Timing.decorationFlyInMs);
++    await p;
++    expect(h.flyStarts.map((s) => s.at)).toEqual([0, 300, 600]);
++  });
++
++  it('entries added while the chain runs stay pending for the next return', async () => {
++    const first = grant('ice-cream-1', 'parasol', 1);
++    const h = harness({ auto: true, pending: [first] });
++    const p = h.chain.start({ kind: 'abandon', gameId: 'ice-cream' });
++    await flush();
++    const late = grant('pizza-1', 'pizza-pie', 2);
++    h.session.pendingFlyIns.push(late);
++    await h.advance(Timing.decorationFlyInMs);
++    await p;
++    expect(h.flyStarts.map((s) => s.id)).toEqual(['parasol']);
++    expect(h.session.pendingFlyIns).toEqual([late]);
++  });
++});
++
++describe('PostRoundChain › taps, re-entry, skipped entries', () => {
++  it('queued taps: pizza then ice-cream mid-chain → only ice-cream reaches end', async () => {
++    const h = harness({ pending: [grant('ice-cream-1', 'parasol', 1)] });
++    h.chain.queueTap('pizza'); // before start: not queued
++    const p = h.chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 0 });
++    await h.wake();
++    h.chain.queueTap('pizza');
++    await h.pulled();
++    h.chain.queueTap('ice-cream');
++    expect(h.chain.queuedStation).toBe('ice-cream');
++    await h.advance(Timing.decorationFlyInMs);
++    await p;
++    expect(h.ends).toEqual([{ kind: 'complete', gameId: 'ice-cream', queuedStation: 'ice-cream' }]);
++    expect(h.chain.queuedStation).toBeUndefined();
++  });
++
++  it('a second start while active warns and is ignored', async () => {
++    const h = harness();
++    const p = h.chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 0 });
++    await h.chain.start({ kind: 'abandon', gameId: 'pizza' });
++    expect(h.warns).toHaveLength(1);
++    expect(h.deps.stopGameAndWake).toHaveBeenCalledTimes(1);
++    expect(h.deps.setDifficulty).toHaveBeenCalledTimes(1);
++    await h.wake();
++    await h.pulled();
++    await p;
++    expect(h.ends).toHaveLength(1);
++    // A new chain may start once the first one ended.
++    void h.chain.start({ kind: 'abandon', gameId: 'pizza' });
++    expect(h.deps.stopGameAndWake).toHaveBeenCalledTimes(2);
++  });
++
++  it('a skipped entry (flyIn resolves at once) is removed from pending', async () => {
++    const unknown = grant('ice-cream-1', 'unicorn', 1);
++    const h = harness({ auto: true, pending: [unknown] });
++    h.deps.flyIn = vi.fn(() => Promise.resolve());
++    const p = new PostRoundChain(h.deps).start({ kind: 'abandon', gameId: 'ice-cream' });
++    await flush();
++    await p;
++    expect(h.session.pendingFlyIns).toEqual([]);
++    expect(h.ends).toHaveLength(1);
++  });
++
++  it('no pending items: end right after the pull-back', async () => {
++    const h = harness({ auto: true });
++    await h.chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 0 });
++    expect(h.calls).toEqual(['setDifficulty ice-cream 1', 'clearResume ice-cream', 'stopGameAndWake', 'pullBack ice-cream', 'end complete']);
++  });
++
++  it('a failing fly-in warns, is removed, and the chain still ends', async () => {
++    const h = harness({ auto: true, pending: [grant('ice-cream-1', 'parasol', 1)] });
++    h.deps.flyIn = vi.fn(() => Promise.reject(new Error('boom')));
++    await new PostRoundChain(h.deps).start({ kind: 'abandon', gameId: 'ice-cream' });
++    expect(h.warns).toHaveLength(1);
++    expect(h.session.pendingFlyIns).toEqual([]);
++    expect(h.ends).toHaveLength(1);
++  });
++
++  it('pause: no progress while the scene is paused; it continues from the same point after resume', async () => {
++    const h = harness({ auto: true, pending: [grant('ice-cream-1', 'parasol', 1)] });
++    const p = h.chain.start({ kind: 'abandon', gameId: 'ice-cream' });
++    await h.advance(Timing.decorationFlyInMs / 2);
++    expect(h.sceneTime()).toBe(Timing.decorationFlyInMs / 2);
++    h.pause();
++    // Many frames' worth of time pass while paused: nothing moves.
++    await h.advance(Timing.decorationFlyInMs * 10);
++    expect(h.sceneTime()).toBe(Timing.decorationFlyInMs / 2);
++    expect(h.calls).not.toContain('landed parasol');
++    expect(h.deps.end).not.toHaveBeenCalled();
++    expect(h.chain.active).toBe(true);
++    h.resume();
++    await h.advance(Timing.decorationFlyInMs / 2 - 1);
++    expect(h.calls).not.toContain('landed parasol');
++    await h.advance(1);
++    await p;
++    // It landed one fly-in of scene time after it started: the paused span did not count.
++    expect(h.sceneTime()).toBe(Timing.decorationFlyInMs);
++    expect(h.calls.slice(-2)).toEqual(['landed parasol', 'end abandon']);
++  });
++
++  it('kill mid-flight: the chain never ends; after a reload nothing is pending, the item is saved at its slot, the level is new', async () => {
++    const data = new Map<string, string>();
++    const storage = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
++    const store = new ProgressStoreService();
++    await store.init({ storage, persist: async () => true });
++    // reward-service grants (and saves) before Map hears round:complete.
++    const granted = store.grantDecoration('ice-cream');
++    expect(granted?.slot).toMatchObject({ slotId: 'ice-cream-1', decorationId: 'parasol' });
++    const h = harness({ auto: true, pending: [granted!] });
++    h.deps.setDifficulty = (id, l) => store.setDifficulty(id, l);
++    void new PostRoundChain(h.deps).start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 1 });
++    await h.advance(Timing.decorationFlyInMs / 2);
++    // The app dies here: the flight never finishes, so the chain never ends.
++    expect(h.calls).toContain('flyIn parasol');
++    expect(h.calls).not.toContain('landed parasol');
++    expect(h.deps.end).not.toHaveBeenCalled();
++
++    // Reload: a fresh session and a store on the same storage.
++    const reloadedSession = new SessionStore();
++    const reloaded = new ProgressStoreService();
++    await reloaded.init({ storage, persist: async () => true });
++    expect(reloadedSession.pendingFlyIns).toEqual([]);
++    expect(reloaded.getDecorations()).toEqual([granted!.slot]);
++    expect(reloaded.getDifficulty('ice-cream', 4)).toBe(2);
++  });
++});
++
++describe('newest pending grant per slot', () => {
++  it('two grants for touch-talk-1: only the newest flies in, the older is dropped unplayed', async () => {
++    const older = grant('touch-talk-1', 'fire-truck', 1);
++    const newer = grant('touch-talk-1', 'ambulance', 2, 'fire-truck');
++    const other = grant('pizza-1', 'pizza-pie', 3);
++    const h = harness({ auto: true, pending: [older, newer, other] });
++    const p = h.chain.start({ kind: 'abandon', gameId: 'touch-talk' });
++    await flush();
++    // The superseded entry left pending at once, without a fly-in.
++    expect(h.session.pendingFlyIns).toEqual([newer, other]);
++    await h.advance(Timing.flyInStaggerMs + Timing.decorationFlyInMs);
++    await p;
++    expect(h.flyStarts).toEqual([
++      { id: 'ambulance', at: 0 },
++      { id: 'pizza-pie', at: Timing.flyInStaggerMs },
++    ]);
++    expect(h.session.pendingFlyIns).toEqual([]);
++  });
++
++  it('newestPerSlot keeps pending order and the highest seq per slot', () => {
++    const a = grant('ice-cream-1', 'parasol', 4);
++    const b = grant('ice-cream-1', 'giant-cone', 2);
++    const c = grant('ice-cream-2', 'popsicle', 3);
++    expect(newestPerSlot([a, b, c])).toEqual({ play: [a, c], superseded: [b] });
++    expect(newestPerSlot([])).toEqual({ play: [], superseded: [] });
++  });
++});
++
++describe('PostRoundChain › complete without its data', () => {
++  it.each([
++    ['no outcome', { startedLevel: 1 }],
++    ['no started level', { outcome: PERFECT }],
++  ])('%s: warns, writes no difficulty, still clears resume and runs', async (_name, extra) => {
++    const h = harness({ auto: true });
++    await h.chain.start({ kind: 'complete', gameId: 'ice-cream', ...extra });
++    expect(h.deps.setDifficulty).not.toHaveBeenCalled();
++    expect(h.warns).toHaveLength(1);
++    expect(h.deps.clearResume).toHaveBeenCalledWith('ice-cream');
++    expect(h.ends).toHaveLength(1);
++  });
++
++  it('an unknown ladder warns and writes no difficulty', async () => {
++    const h = harness({ auto: true });
++    await h.chain.start({ kind: 'complete', gameId: 'touch-talk', outcome: { ...PERFECT, gameId: 'touch-talk' }, startedLevel: 0 });
++    expect(h.deps.setDifficulty).not.toHaveBeenCalled();
++    expect(h.warns).toEqual([expect.stringContaining('ladder')]);
++  });
++});
++
++describe('Map terminal-event routing', () => {
++  const running = { id: 'ice-cream' as const, level: 1 };
++
++  it('round:complete of the running game → a complete chain carrying the outcome and the started level', () => {
++    expect(routeRoundComplete(running, PERFECT)).toEqual({
++      action: 'chain',
++      start: { kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 1 },
++    });
++  });
++
++  it('round:complete of another game, or with no running game → nothing', () => {
++    expect(routeRoundComplete({ id: 'pizza', level: 0 }, PERFECT)).toEqual({ action: 'ignore' });
++    expect(routeRoundComplete(undefined, PERFECT)).toEqual({ action: 'ignore' });
++  });
++
++  it('round:abandon with pending fly-ins → an abandon chain', () => {
++    expect(routeRoundAbandon(running, 'ice-cream', 2, false)).toEqual({ action: 'chain', start: { kind: 'abandon', gameId: 'ice-cream' } });
++  });
++
++  it('round:abandon with nothing pending (or a chain already running) → the fade return', () => {
++    expect(routeRoundAbandon(running, 'ice-cream', 0, false)).toEqual({ action: 'fade', gameId: 'ice-cream' });
++    expect(routeRoundAbandon(running, 'ice-cream', 1, true)).toEqual({ action: 'fade', gameId: 'ice-cream' });
++  });
++
++  it('round:abandon of another game, or with no running game → nothing', () => {
++    expect(routeRoundAbandon(running, 'pizza', 1, false)).toEqual({ action: 'ignore' });
++    expect(routeRoundAbandon(undefined, 'ice-cream', 1, false)).toEqual({ action: 'ignore' });
++  });
++});
+diff --git a/app/src/core/post-round-chain.ts b/app/src/core/post-round-chain.ts
+new file mode 100644
+index 0000000..0132cb5
+--- /dev/null
++++ b/app/src/core/post-round-chain.ts
+@@ -0,0 +1,190 @@
++// Map's post-round chain (Story 2.3, AD-1), pure: every effect is injected, so Vitest checks the order,
++// the stagger and the queued tap without Phaser. One awaited sequence per return to the island:
++//   1. `complete` only: deps.setDifficulty(gameId, nextLevel(startedLevel, outcome, ladderLength));
++//   2. `complete` only: deps.clearResume(gameId);
++//   3. await deps.stopGameAndWake() (resolves on Map's `wake`; at once when no game runs);
++//      — steps 1–3 start synchronously inside `start`, before its first await —
++//   4. await deps.pullBack(gameId) (the camera; the kart stays parked at the station);
++//   5. fly-ins: a copy of deps.pending(); item i starts after i × Timing.flyInStaggerMs (deps.wait) and
++//      plays through deps.flyIn; once it resolves, that same object leaves the live pending list.
++//      Entries added meanwhile stay pending for the next return. All items are awaited. Only the
++//      newest (highest-seq) entry per slotId plays; older ones for that slot are dropped unplayed;
++//   6. deps.end({ kind, gameId, queuedStation }).
++// `active` is true from `start` until `end`; a second `start` meanwhile warns and is ignored. Station
++// taps during the chain are queued (`queueTap`, the last one wins) and handed to `end`. deps.wait and
++// every animation run on the scene clock and tweens (never setTimeout), so a paused scene freezes the
++// chain mid-step. In a dev build `log` prints `post-round: <kind> <gameId> → onChainEnd <ms> ms`.
++import type { GameId, GrantResult, RoundOutcome } from '../content/types';
++import { nextLevel } from './difficulty';
++import { Tokens } from './tokens';
++
++export type ChainKind = 'complete' | 'abandon';
++
++export interface ChainStart {
++  readonly kind: ChainKind;
++  readonly gameId: GameId;
++  /** `complete` only: the outcome and the level the round started at. */
++  readonly outcome?: RoundOutcome;
++  readonly startedLevel?: number;
++}
++
++/** What Map's `onChainEnd` hook receives (Story 2.4 opens its overlay from it). */
++export interface ChainEnd {
++  readonly kind: ChainKind;
++  readonly gameId: GameId;
++}
++
++/** What the runner hands to deps.end: the hook payload plus the last station tapped mid-chain. */
++export interface ChainFinish extends ChainEnd {
++  readonly queuedStation: string | undefined;
++}
++
++export interface ChainDeps {
++  setDifficulty(gameId: GameId, level: number): void;
++  clearResume(gameId: GameId): void;
++  /** The game's ladder length (undefined: unknown game, no difficulty write). */
++  ladderLength(gameId: GameId): number | undefined;
++  stopGameAndWake(): Promise<void>;
++  pullBack(focus: GameId): Promise<void>;
++  flyIn(entry: GrantResult): Promise<void>;
++  /** Resolves after `ms` on the scene clock. */
++  wait(ms: number): Promise<void>;
++  /** The live SessionStore.pendingFlyIns array. */
++  pending(): GrantResult[];
++  end(e: ChainFinish): void;
++  now(): number;
++  /** Dev builds: the timing log line (omit in production). */
++  log?: ((line: string) => void) | undefined;
++  /** Default console.warn. */
++  warn?: (msg: string, ...rest: unknown[]) => void;
++  /** Default Timing.flyInStaggerMs. */
++  staggerMs?: number;
++}
++
++/**
++ * Splits pending grants into the ones to play (the newest, highest-seq entry per slotId, in pending
++ * order) and the superseded older ones for the same slot, which are dropped without animation.
++ */
++export function newestPerSlot(pending: readonly GrantResult[]): { play: GrantResult[]; superseded: GrantResult[] } {
++  const newest = new Map<string, GrantResult>();
++  for (const e of pending) {
++    const kept = newest.get(e.slot.slotId);
++    if (!kept || e.slot.seq > kept.slot.seq) newest.set(e.slot.slotId, e);
++  }
++  const keep = new Set(newest.values());
++  return { play: pending.filter((e) => keep.has(e)), superseded: pending.filter((e) => !keep.has(e)) };
++}
++
++/** The game Map started from a station and that has not ended yet. */
++export interface RunningGame {
++  readonly id: GameId;
++  readonly level: number;
++}
++
++/** What Map does with a terminal event of a game. */
++export type TerminalRoute =
++  | { readonly action: 'ignore' }
++  | { readonly action: 'chain'; readonly start: ChainStart }
++  | { readonly action: 'fade'; readonly gameId: GameId };
++
++/** `round:complete`: only the running game's event starts a `complete` chain, with its outcome and started level. */
++export function routeRoundComplete(running: RunningGame | undefined, outcome: RoundOutcome): TerminalRoute {
++  if (!running || outcome.gameId !== running.id) return { action: 'ignore' };
++  return { action: 'chain', start: { kind: 'complete', gameId: running.id, outcome, startedLevel: running.level } };
++}
++
++/**
++ * `round:abandon` of the running game: pending fly-ins (and no chain running) → an `abandon` chain;
++ * otherwise the Story 1.7 fade return. Another game's event (or none running) is ignored.
++ */
++export function routeRoundAbandon(running: RunningGame | undefined, gameId: GameId, pendingCount: number, chainActive: boolean): TerminalRoute {
++  if (!running || gameId !== running.id) return { action: 'ignore' };
++  if (pendingCount > 0 && !chainActive) return { action: 'chain', start: { kind: 'abandon', gameId } };
++  return { action: 'fade', gameId };
++}
++
++export class PostRoundChain {
++  private activeFlag = false;
++  private queued: string | undefined;
++  private readonly deps: ChainDeps;
++
++  constructor(deps: ChainDeps) {
++    this.deps = deps;
++  }
++
++  get active(): boolean {
++    return this.activeFlag;
++  }
++
++  /** The station tapped last while the chain runs (applied at its end). */
++  get queuedStation(): string | undefined {
++    return this.queued;
++  }
++
++  /** A station tap during the chain: remembered, any earlier queued tap is dropped. */
++  queueTap(id: string): void {
++    if (this.activeFlag) this.queued = id;
++  }
++
++  start(req: ChainStart): Promise<void> {
++    const warn = this.deps.warn ?? ((msg: string, ...rest: unknown[]) => console.warn(msg, ...rest));
++    if (this.activeFlag) {
++      warn(`post-round: a ${req.kind} chain for "${req.gameId}" was ignored — a chain is already running`);
++      return Promise.resolve();
++    }
++    this.activeFlag = true;
++    this.queued = undefined;
++    const t0 = this.deps.now();
++    if (req.kind === 'complete') {
++      const len = this.deps.ladderLength(req.gameId);
++      if (req.outcome && req.startedLevel !== undefined && len !== undefined) {
++        this.deps.setDifficulty(req.gameId, nextLevel(req.startedLevel, req.outcome, len));
++      } else {
++        warn(
++          `post-round: complete "${req.gameId}" without ${!req.outcome ? 'an outcome' : req.startedLevel === undefined ? 'a started level' : 'a known ladder'} — difficulty unchanged`,
++        );
++      }
++      this.deps.clearResume(req.gameId);
++    }
++    return this.run(req, t0, warn);
++  }
++
++  private async run(req: ChainStart, t0: number, warn: (msg: string, ...rest: unknown[]) => void): Promise<void> {
++    const deps = this.deps;
++    try {
++      // Called synchronously (before the first await) by `start`.
++      await deps.stopGameAndWake();
++      await deps.pullBack(req.gameId);
++      const { play, superseded } = newestPerSlot(deps.pending());
++      // An older grant for a slot that a newer pending grant replaces is never shown: drop it unplayed.
++      for (const entry of superseded) {
++        const live = deps.pending();
++        const at = live.indexOf(entry);
++        if (at >= 0) live.splice(at, 1);
++      }
++      const items = play;
++      const stagger = deps.staggerMs ?? Tokens.Timing.flyInStaggerMs;
++      await Promise.all(
++        items.map(async (entry, i) => {
++          if (i > 0) await deps.wait(i * stagger);
++          try {
++            await deps.flyIn(entry);
++          } catch (err) {
++            warn(`post-round: the fly-in of "${entry.slot.decorationId}" failed`, err);
++          }
++          const live = deps.pending();
++          const at = live.indexOf(entry);
++          if (at >= 0) live.splice(at, 1);
++        }),
++      );
++    } catch (err) {
++      warn('post-round: the chain failed', err);
++    } finally {
++      const queuedStation = this.queued;
++      this.activeFlag = false;
++      this.queued = undefined;
++      deps.log?.(`post-round: ${req.kind} ${req.gameId} → onChainEnd ${Math.round(deps.now() - t0)} ms`);
++      deps.end({ kind: req.kind, gameId: req.gameId, queuedStation });
++    }
++  }
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/session-store.test.ts b/app/src/core/session-store.test.ts
+index 9edbc43..b0fed01 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/session-store.test.ts
++++ b/app/src/core/session-store.test.ts
+@@ -13,6 +13,18 @@ describe('SessionStore', () => {
+     expect(s.lastStation).toBeUndefined();
+     expect(s.kartTrips).toBe(0);
+     expect(s.pendingFlyIns).toEqual([]);
++    expect(s.resume).toEqual({});
++  });
++
++  it('clearResume (Story 2.3) removes only that game', () => {
++    const s = new SessionStore();
++    const snap = { v: 1 as const, level: 1, seed: 3, questionIndex: 2, partial: null };
++    s.resume['ice-cream'] = snap;
++    s.resume.pizza = { ...snap, level: 0 };
++    s.clearResume('ice-cream');
++    expect(s.resume).toEqual({ pizza: { ...snap, level: 0 } });
++    s.clearResume('race');
++    expect(Object.keys(s.resume)).toEqual(['pizza']);
+   });
+ 
+   it('startData: level from the injected progress, seed floor(rng × 2^31)', () => {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/session-store.ts b/app/src/core/session-store.ts
+index eeebf37..4e1155d 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/session-store.ts
++++ b/app/src/core/session-store.ts
+@@ -2,8 +2,9 @@
+ // `kart-start`. Story 2.1 moved the ladder level to the durable ProgressStore: `startData` reads it
+ // through `getDifficulty`, and Map writes it with `setDifficulty` on `round:complete`.
+ // Story 2.2 adds `pendingFlyIns`: core/reward-service queues every grant here (memory only); Map's
+-// post-round chain (Story 2.3) drains it. Story 2.5 adds `resume`.
+-import type { GameId, GameStartData, GrantResult } from '../content/types';
++// post-round chain (Story 2.3) drains it. Story 2.3 adds `resume` (empty until Story 2.5 writes it)
++// and `clearResume`, which the post-round chain calls on `round:complete`.
++import type { GameId, GameStartData, GrantResult, Snapshot } from '../content/types';
+ import { ProgressStore, type ProgressStoreService } from './progress-store';
+ 
+ /** 2^31: seeds are non-negative 31-bit integers. */
+@@ -19,6 +20,13 @@ export class SessionStore {
+   kartTrips = 0;
+   /** Grants not yet animated on the Map, oldest first (Story 2.2 pushes, Story 2.3 drains). */
+   pendingFlyIns: GrantResult[] = [];
++  /** In-session resume points by game (Story 2.5 writes them on round:abandon). */
++  resume: Partial<Record<GameId, Snapshot>> = {};
++
++  /** Drops the resume point of `id` only (Story 2.3: on that game's round:complete). */
++  clearResume(id: GameId): void {
++    delete this.resume[id];
++  }
+ 
+   /** Start data for a game: its persisted level (clamped to the ladder) and a fresh seed `floor(rng() × 2^31)`. */
+   startData(
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/timing.ts b/app/src/core/timing.ts
+index 2e5eaf9..b28c909 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/timing.ts
++++ b/app/src/core/timing.ts
+@@ -95,6 +95,17 @@ export const Timing = {
+   roundCelebrationMs: 1500,
+   cameraPullBackMaxMs: 1500,
+   decorationFlyInMs: 1000,
++  /**
++   * Story 2.3: the post-round camera pull-back (zoom cameraZoomScale → 1, ease-out). With one fly-in
++   * (decorationFlyInMs) it leaves ~300 ms of frame slack under roundEndToOverlayMaxMs − roundCelebrationMs.
++   */
++  cameraPullBackMs: 1200,
++  /** Story 2.3: pending fly-ins start this far apart (item i at i × this). */
++  flyInStaggerMs: 300,
++  /** Story 2.3: the landing bounce (1 → ui.flyInLandScale → 1) at the end of a fly-in. */
++  flyInLandMs: 200,
++  /** Story 2.3: a replaced item rises and fades out like a balloon over this long, from the fly-in start. */
++  balloonOutMs: 600,
+   /** Total from round end to the two Play-again buttons appearing. */
+   roundEndToOverlayMaxMs: 4000,
+ 
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/tokens.test.ts b/app/src/core/tokens.test.ts
+index fbd9931..b0a441f 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/tokens.test.ts
++++ b/app/src/core/tokens.test.ts
+@@ -74,6 +74,37 @@ describe('safeRect', () => {
+   });
+ });
+ 
++describe('post-round chain budget (Story 2.3)', () => {
++  const T = Tokens.Timing;
++
++  it('the new values', () => {
++    expect(T.cameraPullBackMs).toBe(1200);
++    expect(T.flyInStaggerMs).toBe(300);
++    expect(T.flyInLandMs).toBe(200);
++    expect(T.balloonOutMs).toBe(600);
++    expect(Tokens.ui.flyInStartScale).toBe(0.5);
++    expect(Tokens.ui.flyInArcPx).toBe(90);
++    expect(Tokens.ui.flyInLandScale).toBe(1.08);
++    expect(Tokens.ui.balloonRisePx).toBe(140);
++    expect(Tokens.ui.sparkleCount).toBe(5);
++    expect(Tokens.ui.sparkleRadiusPx).toBe(6);
++    expect(Tokens.ui.sparkleSpreadPx).toBe(48);
++  });
++
++  it('the pull-back stays within its cap', () => {
++    expect(T.cameraPullBackMs).toBeLessThanOrEqual(T.cameraPullBackMaxMs);
++  });
++
++  it('pull-back + one fly-in fit between the celebration and the overlay', () => {
++    expect(T.cameraPullBackMs + T.decorationFlyInMs).toBeLessThanOrEqual(T.roundEndToOverlayMaxMs - T.roundCelebrationMs);
++  });
++
++  it('the land bounce and the balloon fit inside one fly-in', () => {
++    expect(T.flyInLandMs).toBeLessThan(T.decorationFlyInMs);
++    expect(T.balloonOutMs).toBeLessThanOrEqual(T.decorationFlyInMs - T.flyInLandMs);
++  });
++});
++
+ describe('Tokens.art (Story 1.8)', () => {
+   const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+   const luminance = (css: string) => {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/tokens.ts b/app/src/core/tokens.ts
+index 4c806fc..3f0cd1e 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/tokens.ts
++++ b/app/src/core/tokens.ts
+@@ -49,6 +49,20 @@ const ui = {
+   hintDimAlpha: 0.6,
+   /** Story 1.9 level 4: the drop target's snap radius factor. */
+   hintSnapScale: 2,
++  /** Story 2.3 fly-in: the new decoration leaves its station at this scale and grows to 1 in flight. */
++  flyInStartScale: 0.5,
++  /** Story 2.3 fly-in: the arc peaks this far (design px) above the straight station → slot line. */
++  flyInArcPx: 90,
++  /** Story 2.3 fly-in: landing bounce peak (1 → this → 1 over Timing.flyInLandMs). */
++  flyInLandScale: 1.08,
++  /** Story 2.3 balloon: a replaced decoration rises this far (design px) while fading out. */
++  balloonRisePx: 140,
++  /** Story 2.3: fading sparkle stars around a landing decoration. */
++  sparkleCount: 5,
++  /** Story 2.3: outer radius of one sparkle star (design px). */
++  sparkleRadiusPx: 6,
++  /** Story 2.3: each sparkle drifts outward this far (design px) while it fades. */
++  sparkleSpreadPx: 48,
+ } as const;
+ 
+ /** A colour in the generated-token shape (`css`, `value`, `alpha`). */
+diff --git a/app/src/core/ui/decoration-fly.test.ts b/app/src/core/ui/decoration-fly.test.ts
+new file mode 100644
+index 0000000..16fc700
+--- /dev/null
++++ b/app/src/core/ui/decoration-fly.test.ts
+@@ -0,0 +1,147 @@
++// Story 2.3: playFlyIn drives one counter tween and samples the core/fly-in plan.
++import { describe, expect, it, vi } from 'vitest';
++import type { GameObjects, Scene } from 'phaser';
++import { flyInPlan } from '../fly-in';
++import { Tokens } from '../tokens';
++import { playFlyIn } from './decoration-fly';
++
++type Fake = Record<string, unknown> & { destroyed: boolean };
++
++function fakeImage(x: number, y: number): Fake {
++  const img: Fake = { x, y, scale: 1, alpha: 1, depth: 0, destroyed: false };
++  img.setPosition = (nx: number, ny: number) => ((img.x = nx), (img.y = ny), img);
++  img.setY = (ny: number) => ((img.y = ny), img);
++  img.setScale = (s: number) => ((img.scale = s), img);
++  img.setAlpha = (a: number) => ((img.alpha = a), img);
++  img.setDepth = (d: number) => ((img.depth = d), img);
++  img.destroy = () => void (img.destroyed = true);
++  return img;
++}
++
++function fakePhaser() {
++  const graphics: Fake[] = [];
++  let counter: { onUpdate: (t: { getValue(): number }) => void; onComplete: () => void; duration: number } | undefined;
++  const scene = {
++    add: {
++      graphics: vi.fn(() => {
++        const g = fakeImage(0, 0);
++        g.visible = true;
++        g.fillStyle = vi.fn(() => g);
++        g.fillPoints = vi.fn(() => g);
++        g.setVisible = (v: boolean) => ((g.visible = v), g);
++        graphics.push(g);
++        return g;
++      }),
++    },
++    tweens: {
++      addCounter: vi.fn((cfg: typeof counter) => {
++        counter = cfg;
++        return {};
++      }),
++    },
++  };
++  return {
++    scene: scene as unknown as Scene,
++    graphics,
++    /** One frame at tween time `t` (ms). */
++    step: (t: number) => counter!.onUpdate({ getValue: () => t }),
++    complete: () => counter!.onComplete(),
++    duration: () => counter!.duration,
++  };
++}
++
++const from = { x: 100, y: 300 };
++const to = { x: 400, y: 320 };
++const BASE = 0.5;
++const FLY_DEPTH = 900;
++const SLOT_DEPTH = 320;
++
++describe('playFlyIn', () => {
++  it('normal replace: steps the counter, lands once, destroys the old image and the sparkles, ends at base scale / alpha 1 / slot depth', async () => {
++    const f = fakePhaser();
++    const item = fakeImage(to.x, to.y);
++    const old = fakeImage(to.x, to.y);
++    const onLand = vi.fn();
++    const plan = flyInPlan({ from, to, hasOld: true, reduced: false });
++    const done = vi.fn();
++    const p = playFlyIn(f.scene, plan, {
++      item: item as unknown as GameObjects.Image,
++      old: old as unknown as GameObjects.Image,
++      baseScale: BASE,
++      flyDepth: FLY_DEPTH,
++      slotDepth: SLOT_DEPTH,
++      onLand,
++    }).then(done);
++    expect(f.duration()).toBe(Tokens.Timing.decorationFlyInMs);
++    expect(f.graphics).toHaveLength(Tokens.ui.sparkleCount);
++    // t = 0: at the station, small, above every sprite.
++    expect(item).toMatchObject({ x: from.x, y: from.y, scale: BASE * Tokens.ui.flyInStartScale, depth: FLY_DEPTH });
++    expect(f.graphics.every((g) => g.visible === false)).toBe(true);
++
++    f.step(Tokens.Timing.balloonOutMs / 2);
++    expect(old.destroyed).toBe(false);
++    expect(old.y as number).toBeLessThan(to.y);
++    expect(old.alpha as number).toBeCloseTo(0.5, 9);
++    f.step(Tokens.Timing.balloonOutMs);
++    expect(old.destroyed).toBe(true);
++    expect(onLand).not.toHaveBeenCalled();
++
++    const land = plan.landMs;
++    f.step(land - 1);
++    expect(onLand).not.toHaveBeenCalled();
++    expect(item.depth).toBe(FLY_DEPTH);
++    expect(f.graphics.every((g) => g.visible === true)).toBe(true);
++    f.step(land);
++    f.step(land + 50);
++    f.step(plan.totalMs - 1);
++    expect(onLand).toHaveBeenCalledTimes(1);
++    expect(item.depth).toBe(SLOT_DEPTH);
++
++    expect(done).not.toHaveBeenCalled();
++    f.complete();
++    await p;
++    expect(done).toHaveBeenCalled();
++    expect(onLand).toHaveBeenCalledTimes(1);
++    expect(f.graphics.every((g) => g.destroyed)).toBe(true);
++    expect(item).toMatchObject({ x: to.x, y: to.y, scale: BASE, alpha: 1, depth: SLOT_DEPTH, destroyed: false });
++  });
++
++  it('reduced, no old item: no sparkles, lands at t = 0 once, fades in place, ends opaque at the slot', async () => {
++    const f = fakePhaser();
++    const item = fakeImage(to.x, to.y);
++    const onLand = vi.fn();
++    const plan = flyInPlan({ from, to, hasOld: false, reduced: true });
++    const p = playFlyIn(f.scene, plan, {
++      item: item as unknown as GameObjects.Image,
++      baseScale: BASE,
++      flyDepth: FLY_DEPTH,
++      slotDepth: SLOT_DEPTH,
++      onLand,
++    });
++    expect(f.graphics).toHaveLength(0);
++    expect(onLand).toHaveBeenCalledTimes(1);
++    expect(item).toMatchObject({ x: to.x, y: to.y, alpha: 0, scale: BASE, depth: SLOT_DEPTH });
++    f.step(plan.totalMs / 2);
++    expect(item.alpha).toBe(0.5);
++    f.complete();
++    await p;
++    expect(onLand).toHaveBeenCalledTimes(1);
++    expect(item).toMatchObject({ scale: BASE, alpha: 1, depth: SLOT_DEPTH });
++  });
++
++  it('an old image whose track has not ended is still destroyed on complete', async () => {
++    const f = fakePhaser();
++    const old = fakeImage(to.x, to.y);
++    const plan = flyInPlan({ from, to, hasOld: true, reduced: false });
++    const p = playFlyIn(f.scene, plan, {
++      item: fakeImage(to.x, to.y) as unknown as GameObjects.Image,
++      old: old as unknown as GameObjects.Image,
++      baseScale: BASE,
++      flyDepth: FLY_DEPTH,
++      slotDepth: SLOT_DEPTH,
++    });
++    f.complete();
++    await p;
++    expect(old.destroyed).toBe(true);
++  });
++});
+diff --git a/app/src/core/ui/decoration-fly.ts b/app/src/core/ui/decoration-fly.ts
+new file mode 100644
+index 0000000..2e90750
+--- /dev/null
++++ b/app/src/core/ui/decoration-fly.ts
+@@ -0,0 +1,98 @@
++// Decoration fly-in player (Story 2.3): plays a pure core/fly-in plan with one scene tween (a counter
++// over `plan.totalMs`) that samples every track each frame. Scene tweens stop while the scene is
++// paused (AudioUnlockOverlay), so the flight freezes and continues where it stopped. Sparkles are small
++// Graphics stars in `components.decorationItem.sparkle` that only fade (never blink). The old item
++// (a replacement) is destroyed once its balloon / fade-out ends; the new item is left at its slot, at
++// the slot depth and base scale, for the caller to hand to Map's decoration registry.
++import type { GameObjects, Scene } from 'phaser';
++import { itemAt, oldAt, sparkleAt, type FlyInPlan } from '../fly-in';
++import { Tokens } from '../tokens';
++
++export interface FlySprites {
++  /** The new item, already placed at its slot with its frame origin. */
++  readonly item: GameObjects.Image;
++  /** The item's static scale (1 / renderScale); the plan's scales are relative to it. */
++  readonly baseScale: number;
++  /** The item standing at the slot now (replaced), if any. Destroyed by the player. */
++  readonly old?: GameObjects.Image | undefined;
++  /** Depth while flying (above every sprite) and once landed (the slot's). */
++  readonly flyDepth: number;
++  readonly slotDepth: number;
++  /** Runs once when the item lands (plan.landMs): the happy sound. */
++  readonly onLand?: () => void;
++}
++
++/** Inner radius of a sparkle star relative to its outer radius. */
++const STAR_INNER_RATIO = 0.45;
++const STAR_POINTS = 5;
++
++function drawStar(g: GameObjects.Graphics, radius: number): void {
++  const colour = Tokens.components.decorationItem.sparkle;
++  const pts: { x: number; y: number }[] = [];
++  for (let i = 0; i < STAR_POINTS * 2; i++) {
++    const r = i % 2 === 0 ? radius : radius * STAR_INNER_RATIO;
++    const a = -Math.PI / 2 + (i * Math.PI) / STAR_POINTS;
++    pts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
++  }
++  g.fillStyle(colour.value, colour.alpha);
++  // Phaser reads only x and y of each point.
++  g.fillPoints(pts as unknown as Parameters<GameObjects.Graphics['fillPoints']>[0], true);
++}
++
++/** Plays `plan` on `sprites`; resolves when every track has ended. */
++export function playFlyIn(scene: Scene, plan: FlyInPlan, sprites: FlySprites): Promise<void> {
++  const { item, old } = sprites;
++  const oldY = old?.y ?? 0;
++  let oldLeft = old;
++  let landed = false;
++  const stars = plan.sparkles.map((s) => {
++    const g = scene.add.graphics();
++    drawStar(g, s.radius);
++    g.setDepth(sprites.flyDepth).setVisible(false);
++    return g;
++  });
++
++  const apply = (t: number): void => {
++    const st = itemAt(plan.item, t);
++    item
++      .setPosition(st.x, st.y)
++      .setScale(sprites.baseScale * st.scale)
++      .setAlpha(st.alpha)
++      .setDepth(st.landed ? sprites.slotDepth : sprites.flyDepth);
++    if (!landed && t >= plan.landMs) {
++      landed = true;
++      sprites.onLand?.();
++    }
++    if (oldLeft) {
++      const o = plan.old ? oldAt(plan.old, t) : { rise: 0, alpha: 0, gone: true };
++      if (o.gone) {
++        oldLeft.destroy();
++        oldLeft = undefined;
++      } else {
++        oldLeft.setY(oldY - o.rise).setAlpha(o.alpha);
++      }
++    }
++    plan.sparkles.forEach((s, i) => {
++      const sp = sparkleAt(s, t);
++      stars[i]!.setVisible(sp.visible).setPosition(sp.x, sp.y).setAlpha(sp.alpha);
++    });
++  };
++
++  apply(0);
++  return new Promise((resolve) => {
++    scene.tweens.addCounter({
++      from: 0,
++      to: plan.totalMs,
++      duration: plan.totalMs,
++      onUpdate: (tween) => apply(tween.getValue() ?? 0),
++      onComplete: () => {
++        apply(plan.totalMs);
++        oldLeft?.destroy();
++        oldLeft = undefined;
++        for (const g of stars) g.destroy();
++        item.setScale(sprites.baseScale).setAlpha(1).setDepth(sprites.slotDepth);
++        resolve();
++      },
++    });
++  });
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/ui/map-prop.test.ts b/app/src/core/ui/map-prop.test.ts
+index 701da4a..1cfae84 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/ui/map-prop.test.ts
++++ b/app/src/core/ui/map-prop.test.ts
+@@ -75,3 +75,32 @@ describe('createMapProp', () => {
+     prop.destroy();
+   });
+ });
++
++describe('createMapProp (Story 2.3)', () => {
++  it('adopts an existing image instead of adding one', () => {
++    const { scene, images } = fakePhaser();
++    const own = (scene as unknown as { add: { image: (...a: unknown[]) => Record<string, unknown> } }).add.image(0, 0, 'atlas.map', frame.frame);
++    own.setPosition = (x: number, y: number) => ((own.x = x), (own.y = y), own);
++    const router = createTapRouter(fakeScene(), { guard: new InputGuard() });
++    const prop = createMapProp(scene, router, { texture: 'atlas.map', frame, rect, onTap: vi.fn(), image: own as never, depth: 7 });
++    expect(images).toHaveLength(1);
++    expect(prop.image).toBe(own);
++    expect(own).toMatchObject({ x: 100, y: 200, origin: [0.1, 0.25], scale: 0.5, depth: 7 });
++  });
++
++  it('canTap false: a press does nothing (no bounce, no onTap); true again: it reacts', () => {
++    const { scene, tweens } = fakePhaser();
++    const input = fakeScene();
++    const router = createTapRouter(input, { guard: new InputGuard() });
++    const onTap = vi.fn();
++    let open = false;
++    createMapProp(scene, router, { texture: 'atlas.map', frame, rect, onTap, canTap: () => open });
++    input.tap(300, 300);
++    expect(onTap).not.toHaveBeenCalled();
++    expect(tweens).toHaveLength(0);
++    open = true;
++    input.tap(300, 300);
++    expect(onTap).toHaveBeenCalledTimes(1);
++    expect(tweens).toHaveLength(1);
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/ui/map-prop.ts b/app/src/core/ui/map-prop.ts
+index 824ddc1..f966d6f 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/core/ui/map-prop.ts
++++ b/app/src/core/ui/map-prop.ts
+@@ -4,6 +4,8 @@
+ // It never opens a game. Story 2.2 (decorations): `at` places the frame at another point than the
+ // planned one, `origin` overrides the frame origin (the render pivot), and `z` is the hotspot's hit
+ // priority within the router (decorations use −1, so a station polygon wins an overlap).
++// Story 2.3: `image` adopts an existing image (a decoration that just flew in) instead of adding one, and
++// `canTap()` false makes a press do nothing at all (no bounce, no onTap: Map's post-round chain).
+ import type { GameObjects, Scene } from 'phaser';
+ import { HotspotPolygon } from '../input/hotspot-polygon';
+ import type { Point } from '../input/polygon';
+@@ -28,6 +30,10 @@ export interface MapPropOptions {
+   readonly origin?: { readonly x: number; readonly y: number };
+   /** Hotspot hit priority within the router (default 0). */
+   readonly z?: number;
++  /** Adopt this image (placed, scaled and depth-set like a new one) instead of adding one. */
++  readonly image?: GameObjects.Image;
++  /** False: the press is ignored entirely (default: always tappable). */
++  readonly canTap?: () => boolean;
+ }
+ 
+ export interface MapProp {
+@@ -40,7 +46,8 @@ export function createMapProp(scene: Scene, router: TapRouter, opts: MapPropOpti
+   const f = opts.frame;
+   const at = opts.at ?? { x: f.x, y: f.y };
+   const origin = opts.origin ?? { x: f.originX, y: f.originY };
+-  const image = scene.add.image(at.x, at.y, opts.texture, f.frame).setOrigin(origin.x, origin.y).setScale(f.scale);
++  const image = (opts.image ?? scene.add.image(at.x, at.y, opts.texture, f.frame)).setOrigin(origin.x, origin.y).setScale(f.scale);
++  if (opts.image) image.setPosition(at.x, at.y);
+   if (opts.depth !== undefined) image.setDepth(opts.depth);
+   const react = Tokens.components.tappableProp.react;
+   const peak = amplitude(react.scale, opts.reduced ?? false);
+@@ -48,6 +55,7 @@ export function createMapProp(scene: Scene, router: TapRouter, opts: MapPropOpti
+     router,
+     opts.rect,
+     () => {
++      if (opts.canTap && !opts.canTap()) return;
+       bounce(scene, image, f.scale, peak, react.durationMs);
+       opts.onTap();
+     },
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/main.ts b/app/src/main.ts
+index 709a4a6..12cd4ac 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/main.ts
++++ b/app/src/main.ts
+@@ -54,3 +54,9 @@ const game = new Game(config);
+ // wraps Phaser's unlock and the visibility handling. WebAudioSoundManager satisfies SoundLike.
+ // `navigator` lets it set audioSession.type = 'playback' (the silent switch must not mute the app).
+ audio.attach(game.sound satisfies SoundLike, document, navigator);
++
++// Story 2.3: dev-only console hooks (window.bhcDev). The dynamic import sits behind the DEV constant,
++// so production builds drop it entirely.
++if (import.meta.env.DEV) {
++  void import('./core/dev-hooks').then((m) => m.installDevHooks(game));
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/scenes/Map.ts b/app/src/scenes/Map.ts
+index 3cf2c74..9ad973b 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-3/app/src/scenes/Map.ts
++++ b/app/src/scenes/Map.ts
+@@ -7,28 +7,42 @@
+ //   - sleeping station → bounce + happy sound; kart → bounce + beep (a boost while driving);
+ //   - every tap resets idle (core/map-idle), which is suspended while the kart travels.
+ // A terminal event (`round:complete` / `round:abandon`) of the running game stops it and wakes Map:
+-// the island fades back with the kart parked at `SessionStore.lastStation`. The game's own assets are
+-// removed when its scene shuts down (AR39). Story 2.1: on `round:complete`, synchronously on receipt, Map
+-// persists the next level (core/difficulty persistRoundLevel → ProgressStore.setDifficulty(id, nextLevel(startedLevel, …))), and
+-// the next start reads it back (SessionStore.startData → ProgressStore.getDifficulty), also after a reload.
++// the kart stays parked at `SessionStore.lastStation`. The game's own assets are removed when its scene
++// shuts down (AR39). The next start reads the level back (SessionStore.startData → ProgressStore.getDifficulty).
+ // Story 2.2: saved decorations (ProgressStore.getDecorations, granted by core/reward-service before Map
+ // hears round:complete) are drawn statically by `syncDecorations()` on create and on wake, diffed by
+ // slotId + seq (core/decoration-plan). A tap bounces one with the happy sound; it never opens a game,
+ // moves the kart or triggers a station (its targets use z −1, so a station polygon wins an overlap).
++// Story 2.3: the post-round chain (core/post-round-chain) runs on `round:complete`, on `round:abandon`
++// with pending fly-ins, and on a `create` with pending fly-ins: setDifficulty(nextLevel) and clearResume
++// synchronously (complete only) → stop the game and wake → camera pull-back on the station
++// (core/motion) → each pending decoration flies in (core/fly-in + core/ui/decoration-fly) → `onChainEnd`.
++// Meanwhile the pending slots are held (their old sprite stays, the new one is not drawn statically),
++// idle is suspended, station taps are queued (the last one applies at the end instead of onChainEnd)
++// and kart / decoration taps are ignored. Taps are hit-tested in camera world space (router `toWorld`).
++// `round:abandon` with nothing pending keeps the Story 1.7 fade return.
+ // Timing, routing and geometry are pure core code; this
+ // scene only wires Phaser. The kart moves only in `update` (no timers or tweens), so a pause freezes it.
+ import { Scene, type GameObjects } from 'phaser';
+ import { ATLASES, BACKGROUNDS, MAP_KART } from '../content/assets';
+ import { DECORATIONS } from '../content/decorations';
+ import type { Point } from '../content/layout-types';
+-import type { GameId } from '../content/types';
++import type { DecorationSlot, GameId, GrantResult } from '../content/types';
+ import { LAYOUTS } from '../content/layouts';
+ import { KART_START_ANCHOR, ROAD_PATH, STATIONS, stopAnchor } from '../content/stations';
+ import { inviteLine, islandPrompt, stationNameLine } from '../content/voice-lines';
+ import { audio } from '../core/audio-director';
+ import { bus } from '../core/bus';
+-import { DECORATION_Z, diffDecorations, planDecorations, spriteSourceRect, type SpriteSourceSize } from '../core/decoration-plan';
+-import { persistRoundLevel } from '../core/difficulty';
++import {
++  DECORATION_Z,
++  diffDecorations,
++  planDecorations,
++  spriteSourceRect,
++  type DecorationPlan,
++  type PlannedDecoration,
++  type SpriteSourceSize,
++} from '../core/decoration-plan';
++import { flyInPlan } from '../core/fly-in';
+ import { AssetTracker, loadPlan, releasePlan } from '../core/game-assets';
+ import { createHintRing, type HintRing } from '../core/hint-visuals';
+ import { setHudMode } from '../core/hud-mode';
+@@ -39,12 +53,21 @@ import { createTapTarget, type TapTarget } from '../core/input/tap-target';
+ import { KART_TARGET, KartTrip, type TripCommand } from '../core/kart-trip';
+ import { createMapIdle, type MapIdle, type MapIdleEvent } from '../core/map-idle';
+ import { planMap, type MapPlan, type PlannedKart, type PlannedStation } from '../core/map-plan';
+-import { enterStation, revealScene } from '../core/motion';
++import { enterStation, pullBack, revealScene } from '../core/motion';
++import {
++  PostRoundChain,
++  routeRoundAbandon,
++  routeRoundComplete,
++  type ChainEnd,
++  type ChainFinish,
++  type TerminalRoute,
++} from '../core/post-round-chain';
+ import { ProgressStore } from '../core/progress-store';
+ import { amplitude, prefersReducedMotion } from '../core/reduced-motion';
+ import { createRoad } from '../core/road';
+ import { session } from '../core/session-store';
+ import { Tokens } from '../core/tokens';
++import { playFlyIn } from '../core/ui/decoration-fly';
+ import { createMapProp, type MapProp } from '../core/ui/map-prop';
+ import { bob, bounce, isMoving, stopMotion } from '../core/ui/scale-motion';
+ import { GAMES, isGameId, ladderLength } from '../games/registry';
+@@ -66,6 +89,12 @@ interface FrameData {
+   readonly spriteSourceSize?: { x: number; y: number; w: number; h: number };
+ }
+ 
++/** A drawn decoration and the slot it stands on (Story 2.3: held slots, fly-in hand-over). */
++interface DrawnDecoration {
++  readonly prop: MapProp;
++  readonly slotId: string;
++}
++
+ interface KartView {
+   readonly plan: PlannedKart;
+   readonly body: GameObjects.Container;
+@@ -91,9 +120,19 @@ export class MapScene extends Scene {
+   private loadedGames = new Set<string>();
+   private router: TapRouter | undefined;
+   /** Drawn decorations by plan key (slotId + seq). */
+-  private decorations = new Map<string, MapProp>();
++  private decorations = new Map<string, DrawnDecoration>();
+   /** Decoration warnings already logged this Map instance (one warn per bad entry, not per wake). */
+   private decorationWarnings = new Set<string>();
++  /** Story 2.3: the post-round chain (one per Map instance). */
++  private chain: PostRoundChain | undefined;
++
++  /**
++   * Story 2.3: runs when a post-round chain ends without a queued station tap. The default returns Map
++   * to "Mời chơi" (a new idle visit). Story 2.4 replaces it to open the play-again overlay.
++   */
++  onChainEnd: (e: ChainEnd) => void = () => {
++    if (this.idle) this.handle(this.idle.reset());
++  };
+ 
+   constructor() {
+     super('Map');
+@@ -151,7 +190,13 @@ export class MapScene extends Scene {
+       console.warn(`map: texture "${bgKey}" is missing — plate skipped`);
+     }
+ 
+-    const router = createTapRouter(this);
++    // Story 2.3: hit-test in camera world space, so a tap during the zoomed pull-back hits what is seen.
++    const router = createTapRouter(this, {
++      toWorld: (p) => {
++        const w = this.cameras.main.getWorldPoint(p.x, p.y);
++        return { x: w.x, y: w.y };
++      },
++    });
+     this.router = router;
+     router.onAnyTap = () => this.handle(this.idle?.tap() ?? []);
+ 
+@@ -161,7 +206,7 @@ export class MapScene extends Scene {
+         ? this.add.image(s.image.x, s.image.y, atlasKey, s.image.frame).setOrigin(s.image.originX, s.image.originY).setScale(s.image.scale).setDepth(s.depth)
+         : undefined;
+       this.views.set(s.id, { plan: s, image });
+-      new HotspotPolygon(router, s.hit, () => this.applyAll(this.trip?.tapStation(s.id) ?? []));
++      new HotspotPolygon(router, s.hit, () => this.tapStation(s.id));
+       label(s.label).setPosition(s.labelPos.x, s.labelPos.y).setDepth(plan.labelDepth);
+     }
+ 
+@@ -189,7 +234,8 @@ export class MapScene extends Scene {
+       },
+     });
+     this.kart = this.addKart(plan.kart, router, atlasKey, road.pointAt(startS));
+-    this.syncDecorations();
++    // Story 2.3: grants still pending (Map was stopped meanwhile) are held for their fly-in below.
++    this.syncDecorations({ hold: this.pendingSlots() });
+ 
+     this.idle = createMapIdle({
+       stations: plan.stations.map((s) => s.id),
+@@ -219,14 +265,35 @@ export class MapScene extends Scene {
+     };
+     this.load.on(LOAD_COMPLETE, onComplete);
+ 
++    const chain = new PostRoundChain({
++      setDifficulty: (id, level) => ProgressStore.setDifficulty(id, level),
++      clearResume: (id) => session.clearResume(id),
++      ladderLength: (id) => {
++        const entry = GAMES[id];
++        return entry ? ladderLength(entry) : undefined;
++      },
++      stopGameAndWake: () => this.stopRunningGameAndWake(),
++      pullBack: (id) => pullBack(this, LAYOUTS.map.anchors[id] ?? { x: Tokens.design.width / 2, y: Tokens.design.height / 2 }, this.reduced),
++      flyIn: (e) => this.flyIn(e),
++      wait: (ms) => this.waitScene(ms),
++      pending: () => session.pendingFlyIns,
++      end: (e) => this.endChain(e),
++      now: () => performance.now(),
++      log: import.meta.env.DEV ? (line) => console.info(line) : undefined,
++    });
++    this.chain = chain;
++
+     // Scoped subscriptions stay alive while Map sleeps (they end on shutdown/destroy only).
+     const scoped = bus.scoped(this);
+-    scoped.on('round:complete', (outcome) => {
+-      const entry = this.running ? GAMES[this.running.id] : undefined;
+-      persistRoundLevel(this.running, outcome, entry ? ladderLength(entry) : undefined, ProgressStore);
+-      this.returnFrom(outcome.gameId);
+-    });
+-    scoped.on('round:abandon', ({ gameId }) => this.returnFrom(gameId));
++    // Routing is pure (core/post-round-chain routeRound*): chain, Story 1.7 fade return, or ignore.
++    const follow = (route: TerminalRoute): void => {
++      if (route.action === 'chain') void chain.start(route.start);
++      else if (route.action === 'fade') this.returnFrom(route.gameId);
++    };
++    scoped.on('round:complete', (outcome) => follow(routeRoundComplete(this.running, outcome)));
++    scoped.on('round:abandon', ({ gameId }) =>
++      follow(routeRoundAbandon(this.running, gameId, session.pendingFlyIns.length, chain.active)),
++    );
+     this.events.on(WAKE, this.onWake, this);
+ 
+     // Hud runs in parallel above Map and the games; launched once, never on Start.
+@@ -246,8 +313,16 @@ export class MapScene extends Scene {
+       this.trip = undefined;
+       this.kart = undefined;
+       this.router = undefined;
++      this.chain = undefined;
+       this.decorations = new Map();
+     });
++
++    // Story 2.3: Map was stopped while grants arrived (e.g. Chạm là nói, Epic 4): show them now.
++    const first = session.pendingFlyIns[0];
++    if (first) {
++      this.enterChainIdle();
++      void chain.start({ kind: 'abandon', gameId: first.slot.stationId });
++    }
+   }
+ 
+   override update(_time: number, delta: number): void {
+@@ -261,40 +336,169 @@ export class MapScene extends Scene {
+ 
+   /**
+    * Draws the saved decorations statically: entries no longer saved (or replaced: a new seq) are
+-   * destroyed, new ones added, unchanged ones kept. No animation (the fly-in is Story 2.3).
++   * destroyed, new ones added, unchanged ones kept. No animation. Story 2.3: a slot in `hold` (a
++   * pending fly-in) keeps whatever sprite it has now and gets no new one; its fly-in draws it.
+    */
+-  private syncDecorations(): void {
++  private syncDecorations(opts: { readonly hold?: ReadonlySet<string> } = {}): void {
+     const router = this.router;
+     if (!router) return;
++    const hold = opts.hold ?? new Set<string>();
++    const plan = this.planDecorationEntries(ProgressStore.getDecorations());
++    const drawn = [...this.decorations].filter(([, d]) => !hold.has(d.slotId)).map(([key]) => key);
++    const diff = diffDecorations(
++      drawn,
++      plan.items.filter((i) => !hold.has(i.slotId)),
++    );
++    for (const key of diff.remove) {
++      this.decorations.get(key)?.prop.destroy();
++      this.decorations.delete(key);
++    }
++    for (const item of diff.add) this.addDecorationProp(router, item);
++  }
++
++  /** planDecorations over the map layout and atlas; each warning is logged once per Map instance. */
++  private planDecorationEntries(saved: readonly DecorationSlot[], warn = true): DecorationPlan {
+     const atlasKey = ATLASES.map.key;
+     const hasAtlas = this.textures.exists(atlasKey);
+-    const plan = planDecorations(ProgressStore.getDecorations(), LAYOUTS.map, STATIONS, DECORATIONS, (frame) => {
++    const plan = planDecorations(saved, LAYOUTS.map, STATIONS, DECORATIONS, (frame) => {
+       if (!hasAtlas || !this.textures.get(atlasKey).has(frame)) return undefined;
+       const data = this.textures.get(atlasKey).get(frame).customData as { spriteSourceSize?: SpriteSourceSize } | undefined;
+       return spriteSourceRect(data?.spriteSourceSize);
+     });
+-    for (const w of plan.warnings) {
+-      if (this.decorationWarnings.has(w)) continue;
+-      this.decorationWarnings.add(w);
+-      console.warn(w);
++    if (warn) {
++      for (const w of plan.warnings) {
++        if (this.decorationWarnings.has(w)) continue;
++        this.decorationWarnings.add(w);
++        console.warn(w);
++      }
+     }
+-    const diff = diffDecorations(this.decorations.keys(), plan.items);
+-    for (const key of diff.remove) {
+-      this.decorations.get(key)?.destroy();
++    return plan;
++  }
++
++  /** Registers a drawn decoration (z −1 tap target); `image` hands over a sprite that just flew in. */
++  private addDecorationProp(router: TapRouter, item: PlannedDecoration, image?: GameObjects.Image): void {
++    const prop = createMapProp(this, router, {
++      texture: ATLASES.map.key,
++      frame: { frame: item.frame, x: item.x, y: item.y, originX: item.originX, originY: item.originY, scale: item.scale },
++      rect: item.hit,
++      depth: item.depth,
++      reduced: this.reduced,
++      z: DECORATION_Z,
++      // Decoration taps are ignored while the post-round chain runs.
++      canTap: () => !this.chain?.active,
++      onTap: () => audio.sfx(HAPPY_SFX),
++      ...(image ? { image } : {}),
++    });
++    this.decorations.set(item.key, { prop, slotId: item.slotId });
++  }
++
++  // --- post-round chain (Story 2.3) ---------------------------------------------------------------
++
++  /** Slots of the grants still waiting for their fly-in. */
++  private pendingSlots(): ReadonlySet<string> {
++    return new Set(session.pendingFlyIns.map((e) => e.slot.slotId));
++  }
++
++  /** No ambient, invitation or bob while the chain runs (UX-DR72); a new idle visit afterwards. */
++  private enterChainIdle(): void {
++    if (!this.idle) return;
++    this.handle(this.idle.reset());
++    this.handle(this.idle.suspend());
++  }
++
++  /** A station tap: queued while the chain runs (no reaction), else the kart trip. */
++  private tapStation(id: string): void {
++    if (this.chain?.active) {
++      this.chain.queueTap(id);
++      return;
++    }
++    this.applyAll(this.trip?.tapStation(id) ?? []);
++  }
++
++  /** Stops the running game and wakes Map; resolves on `wake` (at once when no game runs). */
++  private stopRunningGameAndWake(): Promise<void> {
++    const run = this.running;
++    if (!run) return Promise.resolve();
++    this.running = undefined;
++    return new Promise((resolve) => {
++      // Registered after onWake (create), so onWake has run when this resolves.
++      this.events.once(WAKE, () => resolve());
++      this.scene.stop(run.id);
++      this.scene.wake();
++    });
++  }
++
++  /** Resolves after `ms` on the scene clock (freezes while the scene is paused). */
++  private waitScene(ms: number): Promise<void> {
++    return new Promise((resolve) => {
++      this.time.delayedCall(ms, () => resolve());
++    });
++  }
++
++  /** One pending grant flies from its station to its slot, then joins the static decorations. */
++  private async flyIn(entry: GrantResult): Promise<void> {
++    const router = this.router;
++    if (!router) return;
++    const item = this.planDecorationEntries([entry.slot]).items[0];
++    if (!item) return; // skipped (warned once by the plan)
++    if (this.decorations.has(item.key)) return; // already drawn statically (nothing to animate)
++
++    // The old sprite: the one standing at the slot now, else a temporary one of `replaced`.
++    let old: GameObjects.Image | undefined;
++    for (const [key, d] of [...this.decorations]) {
++      if (d.slotId !== item.slotId) continue;
+       this.decorations.delete(key);
++      if (old) {
++        d.prop.destroy();
++        continue;
++      }
++      d.prop.hotspot.destroy();
++      // A tap bounce may still run on it: stop it before the balloon drives the image.
++      this.tweens.killTweensOf(d.prop.image);
++      old = d.prop.image;
++    }
++    if (!old && entry.replaced) {
++      const prev = this.planDecorationEntries([{ ...entry.slot, decorationId: entry.replaced.decorationId }], false).items[0];
++      if (prev) {
++        old = this.add.image(prev.x, prev.y, ATLASES.map.key, prev.frame).setOrigin(prev.originX, prev.originY).setScale(prev.scale).setDepth(prev.depth);
++      }
++    }
++
++    const image = this.add
++      .image(item.x, item.y, ATLASES.map.key, item.frame)
++      .setOrigin(item.originX, item.originY)
++      .setScale(item.scale)
++      .setDepth(item.depth);
++    const to = { x: item.x, y: item.y };
++    const from = LAYOUTS.map.anchors[entry.slot.stationId] ?? to;
++    const plan = flyInPlan({ from, to, hasOld: old !== undefined, reduced: this.reduced });
++    await playFlyIn(this, plan, {
++      item: image,
++      baseScale: item.scale,
++      old,
++      flyDepth: this.plan?.ringDepth ?? item.depth,
++      slotDepth: item.depth,
++      onLand: () => audio.sfx(HAPPY_SFX),
++    });
++    const live = this.router;
++    if (!live) {
++      image.destroy();
++      return;
+     }
+-    for (const item of diff.add) {
+-      const prop = createMapProp(this, router, {
+-        texture: atlasKey,
+-        frame: { frame: item.frame, x: item.x, y: item.y, originX: item.originX, originY: item.originY, scale: item.scale },
+-        rect: item.hit,
+-        depth: item.depth,
+-        reduced: this.reduced,
+-        z: DECORATION_Z,
+-        onTap: () => audio.sfx(HAPPY_SFX),
+-      });
+-      this.decorations.set(item.key, prop);
++    // Hand over: the final syncDecorations() at the chain end is then a no-op for this item.
++    this.addDecorationProp(live, item, image);
++  }
++
++  /** The chain ended: static decorations, idle back, then the queued tap or the onChainEnd hook. */
++  private endChain(e: ChainFinish): void {
++    // Grants that arrived mid-chain stay pending: keep their slots held for their own fly-in next time.
++    this.syncDecorations({ hold: this.pendingSlots() });
++    this.syncIdle();
++    if (e.queuedStation !== undefined) {
++      this.applyAll(this.trip?.tapStation(e.queuedStation) ?? []);
++      return;
+     }
++    this.onChainEnd({ kind: e.kind, gameId: e.gameId });
+   }
+ 
+   // --- kart -------------------------------------------------------------------------------------
+@@ -307,7 +511,10 @@ export class MapScene extends Scene {
+     if (image) body.add(image);
+     const target = createTapTarget(router, {
+       circle: { x: at.x + plan.centerOffset.x, y: at.y + plan.centerOffset.y, r: plan.hitRadius },
+-      onPress: () => this.applyAll(this.trip?.tapKart() ?? []),
++      // Kart taps are ignored while the post-round chain runs (Story 2.3).
++      onPress: () => {
++        if (!this.chain?.active) this.applyAll(this.trip?.tapKart() ?? []);
++      },
+       // A station drawn in front of the kart (deeper y) keeps its taps.
+       excludes: (p) => this.stationInFrontAt(p, body.depth),
+     });
+@@ -371,10 +578,13 @@ export class MapScene extends Scene {
+     }
+   }
+ 
+-  /** Idle (ambient moves, invitations) pauses while the kart travels: one prominent motion (UX-DR72). */
++  /**
++   * Idle (ambient moves, invitations) pauses while the kart travels and while the post-round chain runs:
++   * one prominent motion (UX-DR72).
++   */
+   private syncIdle(): void {
+     if (!this.idle || !this.trip) return;
+-    if (this.trip.state === 'parked') this.idle.resume();
++    if (this.trip.state === 'parked' && !this.chain?.active) this.idle.resume();
+     else this.handle(this.idle.suspend());
+   }
+ 
+@@ -464,18 +674,27 @@ export class MapScene extends Scene {
+   }
+ 
+   private onWake(): void {
+-    const cam = this.cameras.main;
+-    cam.resetFX();
+-    cam.setZoom(1);
+-    cam.setScroll(0, 0);
+-    void revealScene(this);
++    const chaining = this.chain?.active ?? false;
++    if (!chaining) {
++      // Story 1.7 fade return. During the post-round chain, pullBack owns the camera instead.
++      const cam = this.cameras.main;
++      cam.resetFX();
++      cam.setZoom(1);
++      cam.setScroll(0, 0);
++      void revealScene(this);
++    }
+     setHudMode('map');
+     // The game's request must not stay on the Speaker (its line may already be released).
+     const prompt = islandPrompt(session.lastStation);
+     if (prompt) audio.setPrompt(prompt);
+     else audio.clearPrompt();
+-    if (this.idle) this.handle(this.idle.reset());
+-    this.syncDecorations();
++    if (chaining) {
++      this.enterChainIdle();
++      this.syncDecorations({ hold: this.pendingSlots() });
++    } else {
++      if (this.idle) this.handle(this.idle.reset());
++      this.syncDecorations();
++    }
+     const last = session.lastStation;
+     const s = last !== undefined ? this.stops[last] : undefined;
+     if (this.trip && s !== undefined) this.applyAll(this.trip.parkAt(s));

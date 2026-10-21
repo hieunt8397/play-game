@@ -1,0 +1,2604 @@
+diff --git a/app/public/assets/audio/vo/vo.shell.play-again-ask.hash b/app/public/assets/audio/vo/vo.shell.play-again-ask.hash
+new file mode 100644
+index 0000000..75ac51f
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.play-again-ask.hash
+@@ -0,0 +1 @@
++ac556c4ab146986332536db2a5e793669abd27048c2595614c8e3cf1d1b6f6f0
+diff --git a/app/public/assets/audio/vo/vo.shell.play-again-ask.ice-cream.hash b/app/public/assets/audio/vo/vo.shell.play-again-ask.ice-cream.hash
+new file mode 100644
+index 0000000..31da214
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.play-again-ask.ice-cream.hash
+@@ -0,0 +1 @@
++7c3e239ed4f26726f87c6a51d3c4fa9d493a517356c70ee83990e6eb393170a2
+diff --git a/app/public/assets/audio/vo/vo.shell.play-again-elsewhere.hash b/app/public/assets/audio/vo/vo.shell.play-again-elsewhere.hash
+new file mode 100644
+index 0000000..47d6842
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.play-again-elsewhere.hash
+@@ -0,0 +1 @@
++f550133abdd0e188eb9d2da3481b942031b7c085213300c492d65d8946596cad
+diff --git a/app/src/content/play-again.ts b/app/src/content/play-again.ts
+new file mode 100644
+index 0000000..a2f52b7
+--- /dev/null
++++ b/app/src/content/play-again.ts
+@@ -0,0 +1,42 @@
++// "Hỏi chơi tiếp" overlay content (Story 2.4). Data only, plus two pure name helpers.
++// - Voice: `ask` is `vo.shell.play-again-ask.<gameId>` ("Chơi nữa với bạn <character> nhé?") when that
++//   line exists, else the generic `vo.shell.play-again-ask`; `elsewhere` is `vo.shell.play-again-elsewhere`.
++// - Icons: `PLAY_AGAIN_ICONS` lists the replay-button characters that tools/render/build.ts hands to
++//   build_map.py. Each becomes `state.<gameId>` under the detached `sprite.icon` group of art/map.blend,
++//   rendered as frame `icon/<gameId>/00` of `atlas.map` (trimmed longest side ÷ renderScale ≥
++//   ui.playAgainIconPx, checked by tools/layout/rules.ts). A game without an entry falls back to its
++//   station frame `<gameId>/idle/00` (core/ui/play-again-icons.ts), so the overlay works for every game.
++// Epics 3/4 add their own line and icon entry. `.ts` specifiers: tools/ import this under Node.
++import type { GameId } from './types.ts';
++import { isVoiceLineId } from './voice-lines.ts';
++
++export interface PlayAgainIcon {
++  /** Relative to the project's `assets/` folder (Quaternius, CC0). */
++  readonly model: string;
++  /** Creature colour token (Tokens.colors) for spec-1-8's `recolor_creature` (`Main` material). */
++  readonly creature: string;
++}
++
++export const PLAY_AGAIN_ICONS: Readonly<Partial<Record<GameId, PlayAgainIcon>>> = {
++  'ice-cream': { model: 'quaternius/animals/ShibaInu.fbx', creature: 'creatureOrange' },
++};
++
++export const PLAY_AGAIN_ASK = 'vo.shell.play-again-ask';
++export const PLAY_AGAIN_ELSEWHERE = 'vo.shell.play-again-elsewhere';
++
++/** The per-game ask line id (may not exist). */
++export const playAgainAskLine = (gameId: string): string => `${PLAY_AGAIN_ASK}.${gameId}`;
++
++/** The replay icon frame of a game in `atlas.map`. */
++export const playAgainIconFrame = (gameId: string): string => `icon/${gameId}/00`;
++
++export interface PlayAgainLines {
++  readonly ask: string;
++  readonly elsewhere: string;
++}
++
++/** The two lines of the question for `gameId`: its own ask line when it exists, else the generic one. */
++export function playAgainLines(gameId: string, isLine: (id: string) => boolean = isVoiceLineId): PlayAgainLines {
++  const own = playAgainAskLine(gameId);
++  return { ask: isLine(own) ? own : PLAY_AGAIN_ASK, elsewhere: PLAY_AGAIN_ELSEWHERE };
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/content/validate.test.ts b/app/src/content/validate.test.ts
+index 1991c23..02fef49 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/content/validate.test.ts
++++ b/app/src/content/validate.test.ts
+@@ -1,6 +1,7 @@
+ import { describe, expect, it } from "vitest";
+ import { GAME_IDS } from "./types";
+-import { validateContent, validateDecorationCatalogue, validateGames, validateStations } from "./validate";
++import { validateContent, validateDecorationCatalogue, validateGames, validatePlayAgain, validateStations } from "./validate";
++import { PLAY_AGAIN_ICONS, playAgainLines } from "./play-again";
+ import { DECORATIONS } from "./decorations";
+ import { GAME_CONTENT } from "./games/index";
+ import { STATIONS } from "./stations";
+@@ -419,3 +420,44 @@ describe("validateContent › decorations (Story 2.2)", () => {
+     ]);
+   });
+ });
++
++describe("validatePlayAgain (Story 2.4)", () => {
++  const voiceIds = VOICE_LINES.map((l) => l.id);
++  const real = { gameIds: GAME_IDS, voiceIds, iconIds: Object.keys(PLAY_AGAIN_ICONS) };
++
++  it("the real lines and icons pass", () => {
++    expect(validatePlayAgain(real)).toEqual([]);
++  });
++
++  it("the generic ask and the elsewhere line must exist", () => {
++    const problems = validatePlayAgain({ ...real, voiceIds: voiceIds.filter((id) => !id.startsWith("vo.shell.play-again")) });
++    expect(problems).toEqual([
++      'play-again: voice line "vo.shell.play-again-ask" is missing',
++      'play-again: voice line "vo.shell.play-again-elsewhere" is missing',
++    ]);
++  });
++
++  it("per-game ask lines and icon keys must be GameIds other than touch-talk", () => {
++    const problems = validatePlayAgain({
++      ...real,
++      voiceIds: [...voiceIds, "vo.shell.play-again-ask.touch-talk", "vo.shell.play-again-ask.unicorn"],
++      iconIds: ["ice-cream", "touch-talk"],
++    });
++    expect(problems).toHaveLength(3);
++    expect(problems[0]).toMatch(/"vo.shell.play-again-ask.touch-talk"/);
++    expect(problems[1]).toMatch(/"unicorn"/);
++    expect(problems[2]).toMatch(/PLAY_AGAIN_ICONS key "touch-talk"/);
++  });
++
++  it("validateContent runs the play-again rules", () => {
++    expect(validateContent({ gameIds: GAME_IDS, playAgain: { ...real, iconIds: ["nope"] } })).toHaveLength(1);
++  });
++});
++
++describe("playAgainLines (Story 2.4)", () => {
++  it("ice-cream has its own ask line; a game without one gets the generic line", () => {
++    expect(playAgainLines("ice-cream")).toEqual({ ask: "vo.shell.play-again-ask.ice-cream", elsewhere: "vo.shell.play-again-elsewhere" });
++    expect(playAgainLines("pizza")).toEqual({ ask: "vo.shell.play-again-ask", elsewhere: "vo.shell.play-again-elsewhere" });
++    expect(playAgainLines("pizza", () => true).ask).toBe("vo.shell.play-again-ask.pizza");
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/content/validate.ts b/app/src/content/validate.ts
+index 7fa0b42..82f8792 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/content/validate.ts
++++ b/app/src/content/validate.ts
+@@ -4,6 +4,7 @@
+ // polygons inside Tokens.safeRect / outside dead-zones, target size/gap, layout coverage.
+ // The filesystem and the hash function are injected (tools/lint/validate-content.ts), so the rules
+ // stay pure. Imports carry `.ts` so Node type stripping can run this file from tools/.
++import { PLAY_AGAIN_ASK, PLAY_AGAIN_ELSEWHERE } from "./play-again.ts";
+ import {
+   inviteLine,
+   stationNameLine,
+@@ -47,6 +48,43 @@ export interface ContentInput {
+   games?: GamesInput;
+   /** Decoration catalogue and slots (content/decorations.ts, stations.ts; Story 2.2). */
+   decorations?: DecorationCatalogueInput;
++  /** Play-again overlay lines and icons (content/play-again.ts; Story 2.4). */
++  playAgain?: PlayAgainInput;
++}
++
++/** Story 2.4: the play-again voice lines and the replay-icon list. */
++export interface PlayAgainInput {
++  gameIds: readonly string[];
++  /** Every voice-line id. */
++  voiceIds: readonly string[];
++  /** `PLAY_AGAIN_ICONS` keys. */
++  iconIds: readonly string[];
++}
++
++/** The game that never gets the play-again overlay (it ends through `reward:earned`, Epic 4). */
++const NO_PLAY_AGAIN = "touch-talk";
++
++/**
++ * Play-again rules (Story 2.4): the generic ask and the elsewhere line exist; every per-game ask line
++ * `vo.shell.play-again-ask.<x>` and every `PLAY_AGAIN_ICONS` key is a GameId other than touch-talk.
++ */
++export function validatePlayAgain(input: PlayAgainInput): string[] {
++  const problems: string[] = [];
++  const ids = new Set(input.voiceIds);
++  for (const line of [PLAY_AGAIN_ASK, PLAY_AGAIN_ELSEWHERE]) {
++    if (!ids.has(line)) problems.push(`play-again: voice line "${line}" is missing`);
++  }
++  const allowed = (x: string): boolean => input.gameIds.includes(x) && x !== NO_PLAY_AGAIN;
++  const prefix = `${PLAY_AGAIN_ASK}.`;
++  for (const id of input.voiceIds) {
++    if (!id.startsWith(prefix)) continue;
++    const gameId = id.slice(prefix.length);
++    if (!allowed(gameId)) problems.push(`play-again: voice line "${id}" names "${gameId}", which is not a GameId with the overlay (touch-talk has none)`);
++  }
++  for (const gameId of input.iconIds) {
++    if (!allowed(gameId)) problems.push(`play-again: PLAY_AGAIN_ICONS key "${gameId}" is not a GameId with the overlay (touch-talk has none)`);
++  }
++  return problems;
+ }
+ 
+ /** Story 2.2: the decoration catalogue per station and each station's slot ids. */
+@@ -314,5 +352,6 @@ export function validateContent(input: ContentInput): string[] {
+   if (input.stations) problems.push(...validateStations(input.stations));
+   if (input.games) problems.push(...validateGames(input.games));
+   if (input.decorations) problems.push(...validateDecorationCatalogue(input.decorations));
++  if (input.playAgain) problems.push(...validatePlayAgain(input.playAgain));
+   return problems;
+ }
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/content/voice-lines.ts b/app/src/content/voice-lines.ts
+index 2f183f5..e08eabb 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/content/voice-lines.ts
++++ b/app/src/content/voice-lines.ts
+@@ -49,6 +49,11 @@ export const VOICE_LINES = [
+   { id: 'vo.shell.invite.ice-cream', text: 'Bé ơi, mình đi ăn | kem nhé!', keywordPauseMs: 300 },
+   /** Hud Home tap inside a game (Story 1.6). Not yet approved. */
+   { id: 'vo.shell.home', text: 'Về đảo nào!' },
++  // Play-again overlay (Story 2.4, content/play-again.ts): the per-game ask (else the generic one),
++  // then the "go elsewhere" line. Not yet approved.
++  { id: 'vo.shell.play-again-ask.ice-cream', text: 'Chơi nữa với bạn Shiba nhé?' },
++  { id: 'vo.shell.play-again-ask', text: 'Mình chơi nữa nhé?' },
++  { id: 'vo.shell.play-again-elsewhere', text: 'Hay mình đi chỗ khác?' },
+   // Tiệm kem (Story 1.8): Shiba asks for a flavour (+ its colour word: hồng, nâu, trắng, xanh); the
+   // retry after a wrong scoop. "sô-cô-la" counts as 3 words, so its lines carry no colour word.
+   // Played only through core/hint-director. Not yet approved.
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/audio-director.test.ts b/app/src/core/audio-director.test.ts
+index 503673b..63b4692 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/audio-director.test.ts
++++ b/app/src/core/audio-director.test.ts
+@@ -636,6 +636,76 @@ describe("AudioDirector — voice channel", () => {
+     expect(s.director.replayPrompt()).toBeUndefined();
+   });
+ 
++  it("chain prompt (Story 2.4): replayPrompt requests [a,b] with restart under a new token", async () => {
++    const s = await voiceSession();
++    s.director.setPrompt([A, B]);
++    const first = s.director.replayPrompt();
++    expect(s.voices().map((v) => v.key)).toEqual([A]);
++    s.voices()[0]?.finish();
++    expect(s.voices().map((v) => v.key)).toEqual([A, B]);
++    // Speaker mid-chain: both lines restart from the first, the old token ends false, no overlap.
++    const second = s.director.replayPrompt();
++    expect(second).toBe((first ?? 0) + 1);
++    expect(s.ended).toEqual([{ token: first, completed: false }]);
++    expect(s.voices()[1]?.stop).toHaveBeenCalledTimes(1);
++    expect(s.voices().map((v) => v.key)).toEqual([A, B, A]);
++    s.voices()[2]?.finish();
++    s.voices()[3]?.finish();
++    expect(s.ended.at(-1)).toEqual({ token: second, completed: true });
++  });
++
++  it("chain prompt: clearPrompt() and clearPrompt(one of its lines) forget it; an unknown id keeps the old prompt", async () => {
++    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
++    const s = await voiceSession();
++    s.director.setPrompt([A, B]);
++    s.director.clearPrompt();
++    expect(s.director.replayPrompt()).toBeUndefined();
++    s.director.setPrompt([A, B]);
++    s.director.clearPrompt(C);
++    expect(s.director.replayPrompt()).toBeDefined();
++    s.director.clearPrompt(B);
++    expect(s.director.replayPrompt()).toBeUndefined();
++    s.director.setPrompt(B);
++    s.director.setPrompt([A, "vo.shell.nope"]);
++    expect(warn).toHaveBeenCalledTimes(1);
++    s.director.replayPrompt();
++    expect(s.voices().at(-1)?.key).toBe(B);
++  });
++
++  it("stop(token) (Story 2.4): cuts the current utterance with that token (completed:false)", async () => {
++    const s = await voiceSession();
++    const a = s.director.say(A);
++    s.director.stop(a);
++    expect(s.voices()[0]?.stop).toHaveBeenCalledTimes(1);
++    expect(s.ended).toEqual([{ token: a, completed: false }]);
++    // Music restored once the channel is idle.
++    expect(s.ramp).toHaveBeenLastCalledWith(s.music, 1, Timing.musicDuckDownMs, Timing.musicDuckRestoreDelayMs);
++    s.director.stop(a); // already ended: no-op
++    expect(s.ended).toHaveLength(1);
++  });
++
++  it("stop(token): a pending utterance is dropped; the current one keeps playing", async () => {
++    const s = await voiceSession();
++    const a = s.director.say(A);
++    const first = s.voices()[0]!;
++    first.seek = first.duration - 0.2;
++    const b = s.director.say(B);
++    s.director.stop(b);
++    expect(s.ended).toEqual([{ token: b, completed: false }]);
++    expect(first.stop).not.toHaveBeenCalled();
++    first.finish();
++    expect(s.voices()).toHaveLength(1);
++    expect(s.ended.at(-1)).toEqual({ token: a, completed: true });
++  });
++
++  it("stop(token): another token current → untouched", async () => {
++    const s = await voiceSession();
++    const a = s.director.say(A);
++    s.director.stop(a + 5);
++    expect(s.voices()[0]?.stop).not.toHaveBeenCalled();
++    expect(s.ended).toEqual([]);
++  });
++
+   it("replay also cuts an unrelated line and drops the pending one", async () => {
+     const s = await voiceSession();
+     s.director.setPrompt(A);
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/audio-director.ts b/app/src/core/audio-director.ts
+index f0d6c4a..99dd123 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/audio-director.ts
++++ b/app/src/core/audio-director.ts
+@@ -201,7 +201,8 @@ export class AudioDirector {
+   private pendingVoice: Utterance | undefined;
+   /** While `request` rearranges the channel, cut tokens wait here so a listener's `say` sees settled state. */
+   private heldEnds: number[] | undefined;
+-  private prompt: VoiceLineId | undefined;
++  /** The Speaker's prompt: one line, or a chain (Story 2.4) replayed back to back. */
++  private prompt: readonly VoiceLineId[] | undefined;
+   /** Music is (being) ducked for the voice channel. */
+   private ducked = false;
+ 
+@@ -296,27 +297,47 @@ export class AudioDirector {
+     return this.request(ids, false);
+   }
+ 
+-  /** Stores the line that `replayPrompt()` (the Speaker button) replays. */
+-  setPrompt(id: string): void {
+-    if (!isVoiceLineId(id)) {
+-      console.warn(`audio: unknown voice line "${id}" — prompt not set`);
++  /**
++   * Stores the line (or, Story 2.4, the chain of lines) that `replayPrompt()` (the Speaker button)
++   * replays. A chain replays from its first line under one token, with no overlap.
++   */
++  setPrompt(idOrIds: string | readonly string[]): void {
++    const ids: readonly string[] = typeof idOrIds === "string" ? [idOrIds] : [...idOrIds];
++    const unknown = ids.filter((id) => !isVoiceLineId(id));
++    if (ids.length === 0 || unknown.length > 0) {
++      console.warn(`audio: unknown voice line "${unknown.join(", ") || "(empty chain)"}" — prompt not set`);
+       return;
+     }
+-    this.prompt = id;
++    this.prompt = ids as readonly VoiceLineId[];
+   }
+ 
+   /**
+    * Story 1.8: forgets the prompt (only when it is `id`, if given), so the Speaker does not replay a
+-   * line of a scene that has gone (a game's request after Home).
++   * line of a scene that has gone (a game's request after Home). Story 2.4: a chain prompt matches an
++   * `id` that is one of its lines.
+    */
+   clearPrompt(id?: string): void {
+-    if (id === undefined || this.prompt === id) this.prompt = undefined;
++    if (id === undefined || this.prompt?.some((p) => p === id)) this.prompt = undefined;
+   }
+ 
+   /** Stops anything on the voice channel and replays the prompt from the start with a new token. */
+   replayPrompt(): number | undefined {
+     if (!this.prompt) return undefined;
+-    return this.request([this.prompt], true);
++    return this.request(this.prompt, true);
++  }
++
++  /**
++   * Story 2.4: cuts the utterance with this token — the current or the pending one — which then ends
++   * `completed:false`. Any other token (unknown, finished or someone else's) is left alone.
++   */
++  stop(token: number): void {
++    if (this.pendingVoice?.token === token) {
++      this.dropPending();
++      return;
++    }
++    if (this.voice === undefined || this.voice.token !== token) return;
++    this.cutCurrent();
++    this.afterVoiceEnded();
+   }
+ 
+   // --- voice internals --------------------------------------------------------
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/kart-trip.test.ts b/app/src/core/kart-trip.test.ts
+index 5415664..e4d304d 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/kart-trip.test.ts
++++ b/app/src/core/kart-trip.test.ts
+@@ -1,7 +1,7 @@
+ // Story 1.7 I/O matrix (trip rows): first trip, long road, short hop, same stop, later trip,
+ // re-target, re-tap target, sleeping tap, kart boost, kart parked, wait for assets, assets first,
+ // entering, pause.
+-import { describe, expect, it } from 'vitest';
++import { describe, expect, it, vi } from 'vitest';
+ import { KartTrip, KART_TARGET, SFX_HAPPY, SFX_KART_BEEP, type TripCommand } from './kart-trip';
+ import { createRoad } from './road';
+ import { Timing } from './timing';
+@@ -283,3 +283,60 @@ describe('KartTrip', () => {
+     expect(trip.target).toBeUndefined();
+   });
+ });
++
++describe('KartTrip.replay (Story 2.4)', () => {
++  it('parked at the ice-cream stop: [load]; taps ignored while entering; enter{via:replay} once on settle', () => {
++    const { trip } = make({ start: 1300 });
++    expect(trip.replay('ice-cream')).toEqual([{ kind: 'load', gameId: 'ice-cream' }]);
++    expect(trip.state).toBe('entering');
++    expect(trip.tapStation('ice-cream')).toEqual([]);
++    expect(trip.tapStation('pizza')).toEqual([]);
++    expect(trip.tapKart()).toEqual([]);
++    expect(trip.tick(1000)).toEqual([]);
++    expect(trip.assetsSettled('ice-cream')).toEqual([{ kind: 'enter', gameId: 'ice-cream', via: 'replay' }]);
++    expect(trip.assetsSettled('ice-cream')).toEqual([]);
++    expect(trip.replay('ice-cream')).toEqual([]); // second finger: still entering
++    trip.entered();
++    expect(trip.state).toBe('parked');
++    expect(trip.s).toBe(1300);
++  });
++
++  it('after a completed trip: replay emits only load; enter{via:replay} follows the settle of this load', () => {
++    const { trip } = make({ start: 100 });
++    trip.tapStation('ice-cream');
++    trip.assetsSettled('ice-cream');
++    runUntil(trip, () => trip.state === 'entering');
++    trip.entered();
++    trip.assetsSettled('ice-cream'); // a late settle of the old load
++    expect(trip.replay('ice-cream')).toEqual([{ kind: 'load', gameId: 'ice-cream' }]);
++    expect(trip.tick(250)).toEqual([]);
++    expect(trip.assetsSettled('ice-cream')).toEqual([{ kind: 'enter', gameId: 'ice-cream', via: 'replay' }]);
++    expect(trip.assetsSettled('ice-cream')).toEqual([]);
++  });
++
++  it('a normal trip still enters without via', () => {
++    const { trip } = make({ start: 1300 });
++    trip.replay('ice-cream');
++    trip.assetsSettled('ice-cream');
++    trip.entered();
++    trip.tapStation('ice-cream');
++    trip.assetsSettled('ice-cream');
++    const { cmds } = runUntil(trip, () => trip.state === 'entering');
++    expect(cmds.filter((c) => c.kind === 'enter')).toEqual([{ kind: 'enter', gameId: 'ice-cream' }]);
++  });
++
++  it('invalid: driving, or parked at another stop → [] and a warning', () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const { trip } = make({ start: 1300 });
++    trip.tapStation('fishing');
++    runUntil(trip, () => trip.state === 'driving');
++    expect(trip.state).toBe('driving');
++    expect(trip.replay('fishing')).toEqual([]);
++    const other = make({ start: 100 }).trip;
++    expect(other.replay('ice-cream')).toEqual([]);
++    expect(other.state).toBe('parked');
++    expect(other.replay('pizza')).toEqual([]); // no stop
++    expect(warn).toHaveBeenCalledTimes(3);
++    warn.mockRestore();
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/kart-trip.ts b/app/src/core/kart-trip.ts
+index 74818df..ea47996 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/kart-trip.ts
++++ b/app/src/core/kart-trip.ts
+@@ -14,6 +14,10 @@
+ // - Kart tap: bounce + beep; while driving the remaining time × boostTimeScale.
+ // - `enter` is emitted once, when the drive has ended and `assetsSettled(target)` was seen (either order).
+ // - entering ignores every tap; `entered()` parks the kart at that stop.
++// - Story 2.4 `replay(id)`: only while parked at id's stop. Returns [load{id}] and enters `entering`
++//   at once (every tap ignored); `enter{id, via:'replay'}` is emitted once, when `assetsSettled(id)`
++//   of this load arrives (the game released its assets on shutdown, so an earlier settle does not count).
++//   Anything else returns [] with a warning.
+ import { MAX_TICK_MS } from './map-idle';
+ import type { Road } from './road';
+ import { Tokens } from './tokens';
+@@ -24,6 +28,8 @@ export const SFX_HAPPY = 'sfx.shell.happy';
+ export const SFX_KART_BEEP = 'sfx.shell.kart-beep';
+ /** The bounce target of the kart itself. */
+ export const KART_TARGET = 'kart';
++/** A kart within this many px of a stop (arc length) is parked at it (Story 2.4 replay). */
++export const STOP_EPSILON_PX = 0.5;
+ /** |dx| below this (a near-vertical road stretch) keeps the current facing (move dx = 0). */
+ export const FACING_MIN_DX = 0.25;
+ 
+@@ -37,7 +43,8 @@ export type TripCommand =
+   | { readonly kind: 'load'; readonly gameId: string }
+   /** `dx`: x direction of travel (−1…1); 0 = keep the current facing. */
+   | { readonly kind: 'move'; readonly x: number; readonly y: number; readonly dx: number }
+-  | { readonly kind: 'enter'; readonly gameId: string };
++  /** `via: 'replay'` (Story 2.4): the play-again overlay's replay, which zooms in more slowly. */
++  | { readonly kind: 'enter'; readonly gameId: string; readonly via?: 'replay' };
+ 
+ export interface KartTripTiming {
+   readonly departMs: number;
+@@ -81,6 +88,8 @@ export class KartTrip {
+   private _s: number;
+   private _target: string | undefined;
+   private departLeft = 0;
++  /** Story 2.4: a replay waits for its assets (in `entering`) before it emits `enter`. */
++  private replayWaiting = false;
+   private drive: Drive | undefined;
+   /** Ids already loaded this trip. */
+   private readonly loaded = new Set<string>();
+@@ -180,9 +189,30 @@ export class KartTrip {
+   /** The game's assets are cached (or failed): enter once the kart has also arrived. */
+   assetsSettled(id: string): TripCommand[] {
+     this.settled.add(id);
++    if (this.replayWaiting && id === this._target) return this.enterReplay();
+     return this._state === 'arrived' && id === this._target ? this.enter() : [];
+   }
+ 
++  /**
++   * Story 2.4: replay the game the kart is parked at (the play-again overlay). Valid only while
++   * `parked` at `id`'s stop: returns [load{id}] and enters `entering` (taps ignored); `enter` with
++   * `via: 'replay'` follows once this load's assets have settled. Otherwise [] and a warning.
++   */
++  replay(id: string): TripCommand[] {
++    const stop = this.opts.stops[id];
++    if (this._state !== 'parked' || stop === undefined || Math.abs(this._s - stop) > STOP_EPSILON_PX) {
++      console.warn(`kart-trip: replay("${id}") ignored — the kart is ${this._state}${stop === undefined ? ' and the station has no stop' : ''}, not parked at its stop`);
++      return [];
++    }
++    this._target = id;
++    this._state = 'entering';
++    this.replayWaiting = true;
++    // A fresh load: an earlier settle of this id refers to assets released since.
++    this.settled.delete(id);
++    this.loaded.add(id);
++    return [{ kind: 'load', gameId: id }];
++  }
++
+   /** The game scene started: park at its stop for the next trip. */
+   entered(): void {
+     this._state = 'parked';
+@@ -199,6 +229,7 @@ export class KartTrip {
+ 
+   private resetTrip(): void {
+     this._target = undefined;
++    this.replayWaiting = false;
+     this.drive = undefined;
+     this.departLeft = 0;
+     this.loaded.clear();
+@@ -228,6 +259,12 @@ export class KartTrip {
+     return this.settled.has(id) ? this.enter() : [];
+   }
+ 
++  private enterReplay(): TripCommand[] {
++    const id = this._target;
++    this.replayWaiting = false;
++    return id === undefined ? [] : [{ kind: 'enter', gameId: id, via: 'replay' }];
++  }
++
+   private enter(): TripCommand[] {
+     const id = this._target;
+     if (id === undefined) return [];
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/motion.test.ts b/app/src/core/motion.test.ts
+index 8787ecb..a07db67 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/motion.test.ts
++++ b/app/src/core/motion.test.ts
+@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
+ import {
+   enterPlan,
+   enterStation,
++  enterZoomMs,
+   FADE_IN_COMPLETE,
+   FADE_OUT_COMPLETE,
+   pullBack,
+@@ -35,6 +36,27 @@ describe('enterPlan', () => {
+     expect(enterPlan(true)).toEqual({ kind: 'fade', ms: Timing.sceneFadeMs });
+     expect(Timing.sceneFadeMs).toBe(300);
+   });
++
++  it('Story 2.4: zoomMs sets the zoom duration (replay 1500 ms); reduced motion keeps the fade', () => {
++    expect(enterPlan(false, Timing.replayZoomInMs)).toEqual({ kind: 'zoom', zoom: Tokens.ui.cameraZoomScale, ms: 1500 });
++    expect(enterPlan(true, Timing.replayZoomInMs)).toEqual({ kind: 'fade', ms: Timing.sceneFadeMs });
++  });
++});
++
++describe('enterZoomMs (Story 2.4)', () => {
++  it('replay → replayZoomInMs (1500); a normal trip → cameraZoomInMs', () => {
++    expect(enterZoomMs('replay')).toBe(1500);
++    expect(enterZoomMs()).toBe(Timing.cameraZoomInMs);
++  });
++});
++
++describe('enterStation zoomMs (Story 2.4)', () => {
++  it('a replay zooms over replayZoomInMs', () => {
++    const { cam } = fakeCamera();
++    void enterStation({ cameras: { main: cam } }, { x: 10, y: 20 }, false, Timing.replayZoomInMs);
++    expect(cam.pan).toHaveBeenCalledWith(10, 20, Timing.replayZoomInMs, expect.any(String), true);
++    expect(cam.zoomTo).toHaveBeenCalledWith(Tokens.ui.cameraZoomScale, Timing.replayZoomInMs, expect.any(String), true);
++  });
+ });
+ 
+ describe('enterStation / revealScene', () => {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/motion.ts b/app/src/core/motion.ts
+index b21d71b..0b960df 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/motion.ts
++++ b/app/src/core/motion.ts
+@@ -10,10 +10,19 @@ export type EnterPlan =
+   | { readonly kind: 'zoom'; readonly zoom: number; readonly ms: number }
+   | { readonly kind: 'fade'; readonly ms: number };
+ 
+-export function enterPlan(reduced: boolean): EnterPlan {
++/**
++ * Story 2.4: `zoomMs` sets the zoom-in duration (a replay uses `Timing.replayZoomInMs`); the default
++ * is `Timing.cameraZoomInMs`. Under reduced motion it is always the `sceneFadeMs` fade.
++ */
++export function enterPlan(reduced: boolean, zoomMs: number = Tokens.Timing.cameraZoomInMs): EnterPlan {
+   return reduced
+     ? { kind: 'fade', ms: Tokens.Timing.sceneFadeMs }
+-    : { kind: 'zoom', zoom: Tokens.ui.cameraZoomScale, ms: Tokens.Timing.cameraZoomInMs };
++    : { kind: 'zoom', zoom: Tokens.ui.cameraZoomScale, ms: zoomMs };
++}
++
++/** Story 2.4: the zoom-in duration of an enter: a replay zooms more slowly. */
++export function enterZoomMs(via?: 'replay'): number {
++  return via === 'replay' ? Tokens.Timing.replayZoomInMs : Tokens.Timing.cameraZoomInMs;
+ }
+ 
+ /** The slice of a Phaser camera these transitions use. */
+@@ -41,9 +50,14 @@ function skyRgb(): [number, number, number] {
+ }
+ 
+ /** Pans + zooms onto `focus` (or fades out under reduced motion); resolves when the camera is done. */
+-export function enterStation(scene: SceneWithCamera, focus: Point, reduced: boolean): Promise<void> {
++export function enterStation(
++  scene: SceneWithCamera,
++  focus: Point,
++  reduced: boolean,
++  zoomMs: number = Tokens.Timing.cameraZoomInMs,
++): Promise<void> {
+   const cam = scene.cameras.main;
+-  const plan = enterPlan(reduced);
++  const plan = enterPlan(reduced, zoomMs);
+   return new Promise((resolve) => {
+     if (plan.kind === 'fade') {
+       cam.once(FADE_OUT_COMPLETE, () => resolve());
+diff --git a/app/src/core/play-again-layout.test.ts b/app/src/core/play-again-layout.test.ts
+new file mode 100644
+index 0000000..18e19bf
+--- /dev/null
++++ b/app/src/core/play-again-layout.test.ts
+@@ -0,0 +1,114 @@
++// Story 2.4 I/O matrix (placement rows): candidate order, the no-fit warn, and the real map layout —
++// every station with worst-case footprints (every catalogue item at every slot of the station).
++import { readFileSync } from 'node:fs';
++import { describe, expect, it, vi } from 'vitest';
++import { DECORATIONS } from '../content/decorations';
++import { STATIONS } from '../content/stations';
++import type { ScreenLayout } from '../content/layout-types';
++import { decorationFootprint, decorationFrameName, type Rect } from './decoration-plan';
++import { boundingBox } from './input/polygon';
++import {
++  DEFAULT_PLAY_AGAIN_METRICS as M,
++  buttonBox,
++  pairFits,
++  playAgainCandidates,
++  playAgainInteractiveRect,
++  playAgainPlacement,
++} from './play-again-layout';
++import { Tokens } from './tokens';
++
++const AREA = playAgainInteractiveRect();
++const noWarn = (): void => undefined;
++const centreDist = (p: { replay: { x: number; y: number }; map: { x: number; y: number } }): number =>
++  Math.hypot(p.map.x - p.replay.x, p.map.y - p.replay.y);
++
++describe('playAgainPlacement', () => {
++  it('the interactive rect is safeRect minus the dead bands; centres are 208 apart on one row', () => {
++    expect(AREA).toEqual({ x0: 24, y0: 66, x1: 1000, y1: 694 });
++    const p = playAgainPlacement([{ x: 400, y: 500, width: 100, height: 100 }], AREA, M, noWarn);
++    expect(centreDist(p)).toBe(Tokens.components.buttonReplay.size + Tokens.components.playAgainOverlay.gap);
++    expect(p.replay.y).toBe(p.map.y);
++    expect(p.replay.x).toBeLessThan(p.map.x);
++  });
++
++  it('candidate 1: centred at x 512, bottom edge 24 px above the obstacles (bob included)', () => {
++    const obstacle: Rect = { x: 100, y: 400, width: 200, height: 100 };
++    const p = playAgainPlacement([obstacle], AREA, M, noWarn);
++    expect(p.candidate).toBe(0);
++    expect((p.replay.x + p.map.x) / 2).toBe(512);
++    const box = buttonBox(p.replay);
++    expect(box.y + box.height).toBe(400 - Tokens.ui.playAgainClearPx);
++    expect(box.height).toBe(160 + 2 * Tokens.ui.playBobPx);
++  });
++
++  it('candidate 2: below when there is no room above', () => {
++    const p = playAgainPlacement([{ x: 300, y: 80, width: 400, height: 100 }], AREA, M, noWarn);
++    expect(p.candidate).toBe(1);
++    expect(buttonBox(p.map).y).toBe(180 + Tokens.ui.playAgainClearPx);
++  });
++
++  it('candidate order: centre above, centre below, then the screen half away from the station (above, below)', () => {
++    const left: Rect = { x: 60, y: 300, width: 200, height: 100 };
++    const c = playAgainCandidates([left]);
++    const cx = (i: number): number => (c[i]!.replay.x + c[i]!.map.x) / 2;
++    expect(c.map((_, i) => cx(i))).toEqual([512, 512, 768, 768]);
++    expect(c[0]!.replay.y).toBe(c[2]!.replay.y);
++    expect(c[1]!.replay.y).toBe(c[3]!.replay.y);
++    expect(c[0]!.replay.y).toBeLessThan(300);
++    expect(c[1]!.replay.y).toBeGreaterThan(400);
++    // A station on the right uses the left half.
++    const right = playAgainCandidates([{ x: 700, y: 300, width: 200, height: 100 }]);
++    expect((right[2]!.replay.x + right[2]!.map.x) / 2).toBe(256);
++  });
++
++  it('no fit: a synthetic obstacle covering everything → candidate 1 clamped, one warn', () => {
++    const warn = vi.fn();
++    const p = playAgainPlacement([{ x: 0, y: 0, width: 1024, height: 768 }], AREA, M, warn);
++    expect(p.candidate).toBe(-1);
++    expect(warn).toHaveBeenCalledTimes(1);
++    for (const c of [p.replay, p.map]) {
++      const b = buttonBox(c);
++      expect(b.x).toBeGreaterThanOrEqual(AREA.x0);
++      expect(b.y).toBeGreaterThanOrEqual(AREA.y0);
++      expect(b.x + b.width).toBeLessThanOrEqual(AREA.x1);
++      expect(b.y + b.height).toBeLessThanOrEqual(AREA.y1);
++    }
++    expect((p.replay.x + p.map.x) / 2).toBe(512);
++  });
++});
++
++describe('playAgainPlacement on the real map layout (worst-case decorations)', () => {
++  const layout = JSON.parse(readFileSync(new URL('../content/generated/map.layout.json', import.meta.url), 'utf8')) as ScreenLayout;
++  const atlas = JSON.parse(readFileSync(new URL('../../public/assets/atlases/map.json', import.meta.url), 'utf8')) as {
++    frames: Record<string, { spriteSourceSize: { x: number; y: number; w: number; h: number } }>;
++  };
++
++  for (const station of STATIONS) {
++    it(`${station.id}: a candidate fits inside the interactive rect, clear of the station and its items`, () => {
++      const hit = layout.hits[station.id];
++      expect(hit).toBeDefined();
++      const obstacles: Rect[] = [boundingBox(hit!)];
++      const pivot = layout.slots[station.slots[0]!]!;
++      for (const slot of station.slots) {
++        const at = layout.slots[slot]!;
++        for (const item of DECORATIONS[station.id]) {
++          const ss = atlas.frames[decorationFrameName(item.id)]!.spriteSourceSize;
++          obstacles.push(decorationFootprint({ x: ss.x, y: ss.y, width: ss.w, height: ss.h }, pivot, at, layout.renderScale));
++        }
++      }
++      const warn = vi.fn();
++      const p = playAgainPlacement(obstacles, AREA, M, warn);
++      expect(warn).not.toHaveBeenCalled();
++      expect(p.candidate).toBeGreaterThanOrEqual(0);
++      expect(pairFits(p, obstacles, AREA)).toBe(true);
++      expect(centreDist(p)).toBe(208);
++    });
++  }
++
++  it('ice-cream: the pair stands above the truck (candidate 1)', () => {
++    const hit = layout.hits['ice-cream']!;
++    const p = playAgainPlacement([boundingBox(hit)], AREA, M, noWarn);
++    expect(p.candidate).toBe(0);
++    expect(p.replay.y).toBeLessThan(boundingBox(hit).y);
++  });
++});
+diff --git a/app/src/core/play-again-layout.ts b/app/src/core/play-again-layout.ts
+new file mode 100644
+index 0000000..0c3ef0e
+--- /dev/null
++++ b/app/src/core/play-again-layout.ts
+@@ -0,0 +1,129 @@
++// Play-again button placement (Story 2.4), pure. The replay button sits left and the map button right,
++// on one row, centres `size + gap` apart (160 + 48 = 208 design px). Each button's box is its circle
++// plus ui.playBobPx above and below (the bob). Obstacles are the station just played: the bbox of its
++// hit polygon and the footprints of the decorations drawn at its slots (so the new item stays visible).
++// Candidates, first fit wins:
++//   1. the pair centred at x = design centre, its bottom edge ui.playAgainClearPx above the obstacles;
++//   2. the same, centred below them (top edge playAgainClearPx under the obstacles);
++//   3. candidates 1 and 2 with x at the centre of the screen half away from the station.
++// Fit: both boxes inside the interactive rect (safeRect minus the edge dead bands, spec-2-2's rule) and
++// clear of every obstacle. No fit: candidate 1 clamped into the interactive rect, with a console.warn.
++import type { Point } from '../content/layout-types';
++import type { Rect } from './decoration-plan';
++import { Tokens } from './tokens';
++
++export type { Rect };
++
++/** x∈[x0,x1], y∈[y0,y1] (design px). */
++export interface InteractiveRect {
++  readonly x0: number;
++  readonly y0: number;
++  readonly x1: number;
++  readonly y1: number;
++}
++
++export interface PlayAgainPlacement {
++  readonly replay: Point;
++  readonly map: Point;
++  /** Index (0-based) of the candidate that fit, or -1 when candidate 1 was clamped. */
++  readonly candidate: number;
++}
++
++export interface PlayAgainMetrics {
++  /** Button diameter (components.buttonReplay.size; buttonBackToMap has the same size). */
++  readonly size: number;
++  /** Gap between the two circles (components.playAgainOverlay.gap). */
++  readonly gap: number;
++  /** Vertical bob room on each side (ui.playBobPx). */
++  readonly bob: number;
++  /** Clearance from the obstacles (ui.playAgainClearPx). */
++  readonly clear: number;
++  /** Design width: x = width / 2 is the screen centre; the halves are centred at width / 4 and 3·width / 4. */
++  readonly width: number;
++}
++
++export const DEFAULT_PLAY_AGAIN_METRICS: PlayAgainMetrics = {
++  size: Tokens.components.buttonReplay.size,
++  gap: Tokens.components.playAgainOverlay.gap,
++  bob: Tokens.ui.playBobPx,
++  clear: Tokens.ui.playAgainClearPx,
++  width: Tokens.design.width,
++};
++
++/** safeRect inset by the edge dead bands (side 24, top 32, bottom 40): the interactive rect. */
++export function playAgainInteractiveRect(): InteractiveRect {
++  const s = Tokens.safeRect;
++  const sp = Tokens.spacing;
++  return { x0: s.x + sp.edgeDeadSide, y0: s.y + sp.edgeDeadTop, x1: s.x + s.w - sp.edgeDeadSide, y1: s.y + s.h - sp.edgeDeadBottom };
++}
++
++/** The box of a button centred at `c`: its circle plus the bob above and below. */
++export function buttonBox(c: Point, m: PlayAgainMetrics = DEFAULT_PLAY_AGAIN_METRICS): Rect {
++  const r = m.size / 2;
++  return { x: c.x - r, y: c.y - r - m.bob, width: m.size, height: m.size + 2 * m.bob };
++}
++
++/** The two centres of a pair centred at (cx, cy): replay left, map right. */
++export function pairAt(cx: number, cy: number, m: PlayAgainMetrics = DEFAULT_PLAY_AGAIN_METRICS): { replay: Point; map: Point } {
++  const half = (m.size + m.gap) / 2;
++  return { replay: { x: cx - half, y: cy }, map: { x: cx + half, y: cy } };
++}
++
++const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
++
++const inside = (r: Rect, area: InteractiveRect): boolean => r.x >= area.x0 && r.y >= area.y0 && r.x + r.width <= area.x1 && r.y + r.height <= area.y1;
++
++function union(rects: readonly Rect[]): Rect | undefined {
++  if (rects.length === 0) return undefined;
++  let x0 = Infinity;
++  let y0 = Infinity;
++  let x1 = -Infinity;
++  let y1 = -Infinity;
++  for (const r of rects) {
++    x0 = Math.min(x0, r.x);
++    y0 = Math.min(y0, r.y);
++    x1 = Math.max(x1, r.x + r.width);
++    y1 = Math.max(y1, r.y + r.height);
++  }
++  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
++}
++
++/** True when both buttons of the pair lie inside `area` and clear of every obstacle. */
++export function pairFits(pair: { replay: Point; map: Point }, obstacles: readonly Rect[], area: InteractiveRect, m: PlayAgainMetrics = DEFAULT_PLAY_AGAIN_METRICS): boolean {
++  return [pair.replay, pair.map].every((c) => {
++    const box = buttonBox(c, m);
++    return inside(box, area) && obstacles.every((o) => !overlaps(box, o));
++  });
++}
++
++/** The candidate pair centres in order (see the header). */
++export function playAgainCandidates(obstacles: readonly Rect[], m: PlayAgainMetrics = DEFAULT_PLAY_AGAIN_METRICS): Array<{ replay: Point; map: Point }> {
++  const u = union(obstacles) ?? { x: m.width / 2, y: 0, width: 0, height: 0 };
++  const r = m.size / 2;
++  const above = u.y - m.clear - m.bob - r;
++  const below = u.y + u.height + m.clear + m.bob + r;
++  const centre = m.width / 2;
++  // The half away from the station: a station on the left puts the pair in the right half.
++  const away = u.x + u.width / 2 < centre ? (3 * m.width) / 4 : m.width / 4;
++  return [pairAt(centre, above, m), pairAt(centre, below, m), pairAt(away, above, m), pairAt(away, below, m)];
++}
++
++export function playAgainPlacement(
++  obstacles: readonly Rect[],
++  interactive: InteractiveRect = playAgainInteractiveRect(),
++  m: PlayAgainMetrics = DEFAULT_PLAY_AGAIN_METRICS,
++  warn: (msg: string) => void = (msg) => console.warn(msg),
++): PlayAgainPlacement {
++  const candidates = playAgainCandidates(obstacles, m);
++  const i = candidates.findIndex((c) => pairFits(c, obstacles, interactive, m));
++  const fit = candidates[i];
++  if (fit) return { ...fit, candidate: i };
++  const first = candidates[0]!;
++  const r = m.size / 2;
++  const half = (m.size + m.gap) / 2;
++  const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), Math.max(lo, hi));
++  const cx = clamp((first.replay.x + first.map.x) / 2, interactive.x0 + half + r, interactive.x1 - half - r);
++  const cy = clamp(first.replay.y, interactive.y0 + r + m.bob, interactive.y1 - r - m.bob);
++  warn('play-again: no clear spot for the buttons — candidate 1 clamped into the interactive rect');
++  return { ...pairAt(cx, cy, m), candidate: -1 };
++}
+diff --git a/app/src/core/play-again.test.ts b/app/src/core/play-again.test.ts
+new file mode 100644
+index 0000000..ccdf0fd
+--- /dev/null
++++ b/app/src/core/play-again.test.ts
+@@ -0,0 +1,313 @@
++// Story 2.4 I/O matrix (controller rows): open, second line, clock start, cut ask, foreign token,
++// re-ask, activity, one re-ask, auto close, replay, back, station tap, close before create, close
++// mid-ask, paused — with fake ports, a fake view and fake ticks.
++import { describe, expect, it } from 'vitest';
++import { playAgainLines } from '../content/play-again';
++import { PlayAgainController, routePlayAgainClose, type CloseReason, type PlayAgainButton, type PlayAgainView } from './play-again';
++import { Timing } from './timing';
++
++const LINES = playAgainLines('ice-cream');
++const ASK = 'vo.shell.play-again-ask.ice-cream';
++const ELSEWHERE = 'vo.shell.play-again-elsewhere';
++const TICK = Timing.hintTickMs;
++
++function setup(opts: { attach?: boolean; open?: boolean } = {}) {
++  const log: string[] = [];
++  let token = 0;
++  let closeHandler: (() => void) | undefined;
++  const closed: CloseReason[] = [];
++  const says: Array<{ id: string; token: number }> = [];
++  const stopped: number[] = [];
++  const bobs = new Map<PlayAgainButton, boolean>();
++  const rings: Array<PlayAgainButton | null> = [];
++  const fades: number[] = [];
++  let disabled = false;
++  let unsubscribed = 0;
++  const controller = new PlayAgainController(LINES, {
++    say: (id) => {
++      token += 1;
++      says.push({ id, token });
++      log.push(`say ${id}`);
++      return token;
++    },
++    setPrompt: (ids) => log.push(`setPrompt ${ids.join(',')}`),
++    clearPrompt: (id) => log.push(`clearPrompt ${id}`),
++    stopVoice: (t) => {
++      stopped.push(t);
++      log.push(`stop ${t}`);
++    },
++    onOverlayClose: (h) => {
++      closeHandler = h;
++      return () => {
++        unsubscribed += 1;
++        closeHandler = undefined;
++        log.push('unsubscribe');
++      };
++    },
++    onClosed: (r) => {
++      closed.push(r);
++      log.push(`closed ${r}`);
++    },
++  });
++  const view: PlayAgainView = {
++    bob: (b, on) => {
++      bobs.set(b, on);
++      log.push(`bob ${b} ${on}`);
++    },
++    ring: (b) => {
++      rings.push(b);
++      log.push(`ring ${b}`);
++    },
++    disable: () => {
++      disabled = true;
++      log.push('disable');
++    },
++    fadeOut: (ms) => {
++      fades.push(ms);
++      log.push(`fade ${ms}`);
++    },
++  };
++  if (opts.attach ?? true) controller.attach(view);
++  if (opts.open ?? true) controller.open();
++  const ticks = (ms: number): void => {
++    for (let t = 0; t < ms; t += TICK) controller.tick(TICK);
++  };
++  /** Plays the first question through: ask completes, elsewhere completes. */
++  const finishQuestion = (): void => {
++    const ask = says.at(-1)!;
++    controller.speechEnded(ask.token, true);
++    const elsewhere = says.at(-1)!;
++    controller.speechEnded(elsewhere.token, true);
++  };
++  return {
++    controller,
++    log,
++    says,
++    stopped,
++    bobs,
++    rings,
++    fades,
++    closed,
++    ticks,
++    finishQuestion,
++    view,
++    isDisabled: () => disabled,
++    unsubscribed: () => unsubscribed,
++    overlayClose: () => closeHandler?.(),
++  };
++}
++
++describe('PlayAgainController', () => {
++  it('open: setPrompt([ask, elsewhere]); replay bobs; say(ask) → t1', () => {
++    const s = setup();
++    expect(s.controller.phase).toBe('asking');
++    expect(s.log).toEqual([`setPrompt ${ASK},${ELSEWHERE}`, 'bob replay true', `say ${ASK}`]);
++    expect(s.says).toEqual([{ id: ASK, token: 1 }]);
++  });
++
++  it('second line: t1 completed → replay bob off, map bob on, say(elsewhere) → t2', () => {
++    const s = setup();
++    s.log.length = 0;
++    s.controller.speechEnded(1, true);
++    expect(s.log).toEqual(['bob replay false', 'bob map true', `say ${ELSEWHERE}`]);
++    expect(s.says.at(-1)).toEqual({ id: ELSEWHERE, token: 2 });
++    expect(s.controller.phase).toBe('asking');
++  });
++
++  it('clock start: t2 ends → waiting, idle 0, bobs off; the clock runs only from then', () => {
++    const s = setup();
++    s.ticks(5000);
++    expect(s.controller.idleMs).toBe(0);
++    s.controller.speechEnded(1, true);
++    s.controller.speechEnded(2, true);
++    expect(s.controller.phase).toBe('waiting');
++    expect(s.controller.idleMs).toBe(0);
++    expect(s.bobs.get('replay')).toBe(false);
++    expect(s.bobs.get('map')).toBe(false);
++    s.ticks(1000);
++    expect(s.controller.idleMs).toBe(1000);
++  });
++
++  it('cut ask: t1 ends completed:false (Speaker) → no elsewhere; waiting, idle 0', () => {
++    const s = setup();
++    s.controller.speechEnded(1, false);
++    expect(s.says).toHaveLength(1);
++    expect(s.controller.phase).toBe('waiting');
++    expect(s.controller.idleMs).toBe(0);
++    expect(s.bobs.get('replay')).toBe(false);
++  });
++
++  it('foreign token: speech:ended{t9} is ignored', () => {
++    const s = setup();
++    s.log.length = 0;
++    s.controller.speechEnded(9, true);
++    s.controller.speechEnded(9, false);
++    expect(s.log).toEqual([]);
++    expect(s.controller.phase).toBe('asking');
++  });
++
++  it('re-ask: 10 000 ms of ticks in waiting → ring replay + say(ask); then ring map + say(elsewhere); then swaps every 2000 ms', () => {
++    const s = setup();
++    s.finishQuestion();
++    s.ticks(Timing.playAgainRepromptMs - TICK);
++    expect(s.says).toHaveLength(2);
++    s.log.length = 0;
++    s.ticks(TICK);
++    expect(s.controller.phase).toBe('reasking');
++    expect(s.log).toEqual(['ring replay', `say ${ASK}`]);
++    s.log.length = 0;
++    s.controller.speechEnded(3, true);
++    expect(s.log).toEqual(['ring map', `say ${ELSEWHERE}`]);
++    expect(s.bobs.get('map')).toBe(false); // no bob during the re-ask, only the ring
++    s.log.length = 0;
++    s.controller.speechEnded(4, true);
++    expect(s.controller.phase).toBe('waiting');
++    expect(s.log).toEqual(['bob replay false', 'bob map false', 'ring map']);
++    s.rings.length = 0;
++    s.ticks(Timing.playAgainRingSwapMs - TICK);
++    expect(s.rings).toEqual([]);
++    s.ticks(TICK);
++    expect(s.rings).toEqual(['replay']);
++    s.ticks(Timing.playAgainRingSwapMs);
++    expect(s.rings).toEqual(['replay', 'map']);
++    // One ring at a time, swapped (never cleared) until close.
++    expect(s.rings.includes(null)).toBe(false);
++  });
++
++  it('activity: a tap at idle 9 s resets idle; the re-ask comes 10 s later', () => {
++    const s = setup();
++    s.finishQuestion();
++    s.ticks(9000);
++    s.controller.activity();
++    expect(s.controller.idleMs).toBe(0);
++    expect(s.controller.phase).toBe('waiting');
++    s.ticks(Timing.playAgainRepromptMs - TICK);
++    expect(s.controller.phase).toBe('waiting');
++    s.ticks(TICK);
++    expect(s.controller.phase).toBe('reasking');
++  });
++
++  it('one re-ask: idle reaching 10 s again after the re-ask asks no more', () => {
++    const s = setup();
++    s.finishQuestion();
++    s.ticks(Timing.playAgainRepromptMs);
++    s.controller.speechEnded(3, true);
++    s.controller.speechEnded(4, true);
++    s.controller.activity();
++    s.ticks(Timing.playAgainRepromptMs + 5000);
++    expect(s.says).toHaveLength(4);
++    expect(s.controller.phase).toBe('waiting');
++  });
++
++  it('auto close: idle 30 000 ms (through the re-ask) → stop own tokens, clearPrompt, ring off, fade 800, onClosed(auto)', () => {
++    const s = setup();
++    s.finishQuestion();
++    s.ticks(Timing.playAgainRepromptMs);
++    // The re-ask is still speaking its ask when the clock keeps running.
++    s.ticks(Timing.playAgainAutoCloseMs - Timing.playAgainRepromptMs - TICK);
++    expect(s.closed).toEqual([]);
++    s.log.length = 0;
++    s.ticks(TICK);
++    expect(s.closed).toEqual(['auto']);
++    expect(s.log).toEqual([
++      'stop 3',
++      `clearPrompt ${ASK}`,
++      'ring null',
++      'bob replay false',
++      'bob map false',
++      'disable',
++      `fade ${Timing.playAgainFadeOutMs}`,
++      'unsubscribe',
++      'closed auto',
++    ]);
++    expect(Timing.playAgainFadeOutMs).toBe(800);
++  });
++
++  it('replay, then replay again (two fingers): one onClosed(replay); later inputs are no-ops', () => {
++    const s = setup();
++    s.finishQuestion();
++    s.controller.replay();
++    s.controller.replay();
++    s.controller.backToMap();
++    s.overlayClose();
++    s.controller.tick(Timing.playAgainAutoCloseMs);
++    s.controller.speechEnded(2, true);
++    expect(s.closed).toEqual(['replay']);
++    expect(s.fades).toEqual([Timing.sceneFadeMs]);
++    expect(s.isDisabled()).toBe(true);
++    expect(s.unsubscribed()).toBe(1);
++  });
++
++  it('back: fade sceneFadeMs (300); onClosed(back)', () => {
++    const s = setup();
++    s.finishQuestion();
++    s.controller.backToMap();
++    expect(s.closed).toEqual(['back']);
++    expect(s.fades).toEqual([300]);
++    expect(s.stopped).toEqual([]); // no live token after the question
++  });
++
++  it('station tap: overlay:close → closed(station)', () => {
++    const s = setup();
++    s.finishQuestion();
++    s.overlayClose();
++    expect(s.closed).toEqual(['station']);
++    expect(s.controller.closed).toBe(true);
++  });
++
++  it('close before create: overlay:close before attach/open → closed; open never speaks', () => {
++    const s = setup({ attach: false, open: false });
++    s.overlayClose();
++    expect(s.closed).toEqual(['station']);
++    expect(s.controller.closed).toBe(true);
++    s.controller.attach(s.view);
++    s.controller.open();
++    expect(s.says).toEqual([]);
++    expect(s.fades).toEqual([]);
++  });
++
++  it('close mid-ask: stopVoice(t1); no t2', () => {
++    const s = setup();
++    s.overlayClose();
++    expect(s.stopped).toEqual([1]);
++    s.controller.speechEnded(1, false);
++    expect(s.says).toHaveLength(1);
++  });
++
++  it('close mid-elsewhere: stopVoice(t2)', () => {
++    const s = setup();
++    s.controller.speechEnded(1, true);
++    s.controller.backToMap();
++    expect(s.stopped).toEqual([2]);
++  });
++
++  it('paused: no ticks for 60 s → nothing changes; continues on resume', () => {
++    const s = setup();
++    s.finishQuestion();
++    s.ticks(4000);
++    // No ticks arrive while the scene is paused.
++    expect(s.controller.idleMs).toBe(4000);
++    expect(s.closed).toEqual([]);
++    s.ticks(Timing.playAgainRepromptMs - 4000);
++    expect(s.controller.phase).toBe('reasking');
++  });
++
++  it('activity before open is ignored; ticks before the question ends do not count', () => {
++    const s = setup({ open: false });
++    s.controller.activity();
++    s.controller.tick(Timing.playAgainAutoCloseMs);
++    expect(s.closed).toEqual([]);
++    expect(s.controller.phase).toBe('idle');
++  });
++});
++
++describe('routePlayAgainClose', () => {
++  const load = [{ kind: 'load', gameId: 'ice-cream' }];
++  it('replay with commands → replay; back / auto / station → idle visit', () => {
++    expect(routePlayAgainClose('replay', load)).toEqual({ action: 'replay', commands: load });
++    for (const r of ['back', 'auto', 'station'] as const) expect(routePlayAgainClose(r, load)).toEqual({ action: 'idle-visit' });
++  });
++  it('a refused replay (no commands) falls back to the idle visit', () => {
++    expect(routePlayAgainClose('replay', [])).toEqual({ action: 'idle-visit' });
++  });
++});
+diff --git a/app/src/core/play-again.ts b/app/src/core/play-again.ts
+new file mode 100644
+index 0000000..a0f5c4b
+--- /dev/null
++++ b/app/src/core/play-again.ts
+@@ -0,0 +1,229 @@
++// "Hỏi chơi tiếp" controller (Story 2.4, FR25 / UX-DR53), pure. Map builds it synchronously at chain
++// end (so an `overlay:close` from a station tap can never race the scene launch); the overlay scene
++// attaches its view, feeds `tick(hintTickMs)` from its own `time` and forwards `speech:ended`.
++//
++//   idle (built) → open() → asking → waiting ⇄ reasking → closed
++//
++// - open(): setPrompt([ask, elsewhere]) (the Speaker replays both lines), the replay button bobs, say(ask).
++// - Own token ends: `ask` completed → replay bob off, map bob on, say(elsewhere). `elsewhere` ends, or
++//   `ask` ends completed:false (the Speaker cut it; its replay already holds `elsewhere`) → every bob off,
++//   `waiting`, idle 0. Foreign tokens (Speaker replays included) are ignored.
++// - Clock: tick(ms) advances idle only in waiting / reasking, so it starts when the question has ended;
++//   activity() (any primary press anywhere) resets idle without changing the phase.
++// - Re-ask, at most once per opening: at Timing.playAgainRepromptMs of idle the two lines play again as
++//   `reasking`, the ring on `replay` during ask and on `map` during elsewhere (no bob). Afterwards the one
++//   ring swaps replay ⇄ map every Timing.playAgainRingSwapMs (counted by ticks) until close; it never blinks.
++// - Auto close at Timing.playAgainAutoCloseMs of idle. replay() / backToMap() / `overlay:close` close too.
++// - close(reason), first call only: stop own live voice → clearPrompt(ask) (own prompt only) → ring off, bobs off, disable →
++//   fadeOut (auto: playAgainFadeOutMs, else sceneFadeMs) → unsubscribe overlay:close → onClosed(reason).
++import type { PlayAgainLines } from '../content/play-again';
++import type { ChainEnd } from './post-round-chain';
++import { Tokens } from './tokens';
++
++export type CloseReason = 'replay' | 'back' | 'station' | 'auto';
++export type PlayAgainButton = 'replay' | 'map';
++export type PlayAgainPhase = 'idle' | 'asking' | 'waiting' | 'reasking' | 'closed';
++
++/** What the overlay scene draws (all calls are idempotent). */
++export interface PlayAgainView {
++  bob(button: PlayAgainButton, on: boolean): void;
++  /** The one hint ring around a button, or none. */
++  ring(button: PlayAgainButton | null): void;
++  /** Input off at once: taps then fall through to Map. */
++  disable(): void;
++  /** Fades the overlay out over `ms`, then stops the scene. */
++  fadeOut(ms: number): void;
++}
++
++export interface PlayAgainPorts {
++  say(id: string): number;
++  setPrompt(ids: readonly string[]): void;
++  /** Clears the prompt only when it is (a chain holding) `id`: the overlay's own question. */
++  clearPrompt(id: string): void;
++  stopVoice(token: number): void;
++  /** Subscribes to the Bus `overlay:close`; returns the unsubscribe. */
++  onOverlayClose(handler: () => void): () => void;
++  onClosed(reason: CloseReason): void;
++}
++
++export interface PlayAgainTiming {
++  readonly repromptMs: number;
++  readonly autoCloseMs: number;
++  readonly ringSwapMs: number;
++  readonly fadeOutMs: number;
++  readonly closeFadeMs: number;
++}
++
++export const DEFAULT_PLAY_AGAIN_TIMING: PlayAgainTiming = {
++  repromptMs: Tokens.Timing.playAgainRepromptMs,
++  autoCloseMs: Tokens.Timing.playAgainAutoCloseMs,
++  ringSwapMs: Tokens.Timing.playAgainRingSwapMs,
++  fadeOutMs: Tokens.Timing.playAgainFadeOutMs,
++  closeFadeMs: Tokens.Timing.sceneFadeMs,
++};
++
++/**
++ * Whether a chain end opens the overlay: only `complete` (never `round:abandon` nor Map's create-time
++ * chain, which is also `abandon`), never for touch-talk, and only for a registered game.
++ */
++export function opensPlayAgain(e: ChainEnd, isGame: (id: string) => boolean): boolean {
++  return e.kind === 'complete' && e.gameId !== 'touch-talk' && isGame(e.gameId);
++}
++
++type Line = 'ask' | 'elsewhere';
++
++export class PlayAgainController {
++  private _phase: PlayAgainPhase = 'idle';
++  private view: PlayAgainView | undefined;
++  private live: { token: number; line: Line } | undefined;
++  private _idleMs = 0;
++  private reasked = false;
++  /** The alternating ring after the re-ask (undefined before). */
++  private swapRing: PlayAgainButton | undefined;
++  private swapMs = 0;
++  private off: (() => void) | undefined;
++  private readonly lines: PlayAgainLines;
++  private readonly ports: PlayAgainPorts;
++  private readonly timing: PlayAgainTiming;
++
++  constructor(lines: PlayAgainLines, ports: PlayAgainPorts, timing: PlayAgainTiming = DEFAULT_PLAY_AGAIN_TIMING) {
++    this.lines = lines;
++    this.ports = ports;
++    this.timing = timing;
++    this.off = ports.onOverlayClose(() => this.close('station'));
++  }
++
++  get phase(): PlayAgainPhase {
++    return this._phase;
++  }
++
++  get closed(): boolean {
++    return this._phase === 'closed';
++  }
++
++  get idleMs(): number {
++    return this._idleMs;
++  }
++
++  /** The overlay scene's view (it arrives after construction, from the scene's create). */
++  attach(view: PlayAgainView): void {
++    if (this.closed) return;
++    this.view = view;
++  }
++
++  /** Starts the question (once). */
++  open(): void {
++    if (this._phase !== 'idle') return;
++    this._phase = 'asking';
++    this.ports.setPrompt([this.lines.ask, this.lines.elsewhere]);
++    this.view?.bob('replay', true);
++    this.speak('ask');
++  }
++
++  speechEnded(token: number, completed: boolean): void {
++    const live = this.live;
++    if (this.closed || live === undefined || live.token !== token) return;
++    this.live = undefined;
++    const reasking = this._phase === 'reasking';
++    if (live.line === 'ask' && completed) {
++      if (reasking) this.view?.ring('map');
++      else {
++        this.view?.bob('replay', false);
++        this.view?.bob('map', true);
++      }
++      this.speak('elsewhere');
++      return;
++    }
++    // The question has ended (or its ask was cut: the Speaker's replay already holds `elsewhere`).
++    this.view?.bob('replay', false);
++    this.view?.bob('map', false);
++    this._phase = 'waiting';
++    if (reasking) {
++      // The idle clock runs through the re-ask; the ring now swaps between the buttons.
++      this.swapRing = live.line === 'ask' ? 'replay' : 'map';
++      this.swapMs = 0;
++      this.view?.ring(this.swapRing);
++    } else {
++      this._idleMs = 0;
++    }
++  }
++
++  tick(ms: number): void {
++    if (this._phase !== 'waiting' && this._phase !== 'reasking') return;
++    const d = Math.max(0, Number.isFinite(ms) ? ms : 0);
++    this._idleMs += d;
++    if (this._idleMs >= this.timing.autoCloseMs) {
++      this.close('auto');
++      return;
++    }
++    if (this._phase === 'waiting' && this.swapRing !== undefined) {
++      this.swapMs += d;
++      while (this.swapMs >= this.timing.ringSwapMs) {
++        this.swapMs -= this.timing.ringSwapMs;
++        this.swapRing = this.swapRing === 'replay' ? 'map' : 'replay';
++        this.view?.ring(this.swapRing);
++      }
++    }
++    if (this._phase === 'waiting' && !this.reasked && this._idleMs >= this.timing.repromptMs) this.reask();
++  }
++
++  /** Any primary press anywhere: the child is not idle. */
++  activity(): void {
++    if (this._phase === 'idle' || this.closed) return;
++    this._idleMs = 0;
++  }
++
++  replay(): void {
++    this.close('replay');
++  }
++
++  backToMap(): void {
++    this.close('back');
++  }
++
++  close(reason: CloseReason): void {
++    if (this.closed) return;
++    this._phase = 'closed';
++    const live = this.live;
++    this.live = undefined;
++    if (live) this.ports.stopVoice(live.token);
++    this.ports.clearPrompt(this.lines.ask);
++    const view = this.view;
++    if (view) {
++      view.ring(null);
++      view.bob('replay', false);
++      view.bob('map', false);
++      view.disable();
++      view.fadeOut(reason === 'auto' ? this.timing.fadeOutMs : this.timing.closeFadeMs);
++    }
++    this.off?.();
++    this.off = undefined;
++    this.ports.onClosed(reason);
++  }
++
++  private reask(): void {
++    this.reasked = true;
++    this._phase = 'reasking';
++    this.view?.ring('replay');
++    this.speak('ask');
++  }
++
++  private speak(line: Line): void {
++    const token = this.ports.say(line === 'ask' ? this.lines.ask : this.lines.elsewhere);
++    // A port may close us synchronously (never in practice); keep no token then.
++    if (!this.closed) this.live = { token, line };
++  }
++}
++
++/** What Map does when the overlay closes (Story 2.4). */
++export type PlayAgainCloseRoute<C> =
++  | { readonly action: 'replay'; readonly commands: readonly C[] }
++  | { readonly action: 'idle-visit' };
++
++/**
++ * `replay` with trip commands (KartTrip.replay accepted) → replay: clear the resume point and apply them.
++ * back / auto / station, or a refused replay (no commands) → a new idle visit (invitations restart).
++ */
++export function routePlayAgainClose<C>(reason: CloseReason, replayCommands: readonly C[]): PlayAgainCloseRoute<C> {
++  return reason === 'replay' && replayCommands.length > 0 ? { action: 'replay', commands: replayCommands } : { action: 'idle-visit' };
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/post-round-chain.test.ts b/app/src/core/post-round-chain.test.ts
+index 169c06c..d04d073 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/post-round-chain.test.ts
++++ b/app/src/core/post-round-chain.test.ts
+@@ -1,6 +1,7 @@
+ import { describe, expect, it, vi } from 'vitest';
+ import type { GrantResult, RoundOutcome } from '../content/types';
+-import { newestPerSlot, PostRoundChain, routeRoundAbandon, routeRoundComplete, type ChainDeps, type ChainFinish } from './post-round-chain';
++import { newestPerSlot, PostRoundChain, routeChainEnd, routeRoundAbandon, routeRoundComplete, type ChainDeps, type ChainFinish } from './post-round-chain';
++import { opensPlayAgain } from './play-again';
+ import { ProgressStoreService } from './progress-store';
+ import { SessionStore } from './session-store';
+ import { Timing } from './timing';
+@@ -416,3 +417,37 @@ describe('Map terminal-event routing', () => {
+     expect(routeRoundAbandon(undefined, 'ice-cream', 1, false)).toEqual({ action: 'ignore' });
+   });
+ });
++
++describe('chain end → onChainEnd hook (Story 2.4 regression)', () => {
++  it('a queued tap never reaches the hook: end({queuedStation}) routes to the tap, so no overlay opens', async () => {
++    const h = harness({ pending: [grant('ice-cream-1', 'parasol', 1)], auto: true });
++    const hook = vi.fn();
++    const taps: string[] = [];
++    (h.deps.end as ReturnType<typeof vi.fn>).mockImplementation((e: ChainFinish) => {
++      const route = routeChainEnd(e);
++      if (route.action === 'tap') taps.push(route.stationId);
++      else hook(route.end);
++    });
++    const p = h.chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 0 });
++    h.chain.queueTap('pizza');
++    await h.advance(Timing.decorationFlyInMs);
++    await p;
++    expect(taps).toEqual(['pizza']);
++    expect(hook).not.toHaveBeenCalled();
++  });
++
++  it('no queued tap: the hook gets {kind, gameId}', () => {
++    expect(routeChainEnd({ kind: 'complete', gameId: 'ice-cream', queuedStation: undefined })).toEqual({
++      action: 'hook',
++      end: { kind: 'complete', gameId: 'ice-cream' },
++    });
++  });
++
++  it('the overlay opens only for a complete chain of a registered game other than touch-talk', () => {
++    const isGame = (id: string): boolean => id === 'ice-cream' || id === 'touch-talk';
++    expect(opensPlayAgain({ kind: 'complete', gameId: 'ice-cream' }, isGame)).toBe(true);
++    expect(opensPlayAgain({ kind: 'abandon', gameId: 'ice-cream' }, isGame)).toBe(false);
++    expect(opensPlayAgain({ kind: 'complete', gameId: 'touch-talk' }, isGame)).toBe(false);
++    expect(opensPlayAgain({ kind: 'complete', gameId: 'pizza' }, isGame)).toBe(false);
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/post-round-chain.ts b/app/src/core/post-round-chain.ts
+index 0132cb5..ee07ac9 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/post-round-chain.ts
++++ b/app/src/core/post-round-chain.ts
+@@ -103,6 +103,17 @@ export function routeRoundAbandon(running: RunningGame | undefined, gameId: Game
+   return { action: 'fade', gameId };
+ }
+ 
++/** What Map does when the chain ends (Story 2.4 regression guard: a queued tap never reaches the hook). */
++export type ChainEndRoute =
++  | { readonly action: 'tap'; readonly stationId: string }
++  | { readonly action: 'hook'; readonly end: ChainEnd };
++
++/** A queued station tap applies instead of the `onChainEnd` hook; otherwise the hook runs. */
++export function routeChainEnd(e: ChainFinish): ChainEndRoute {
++  if (e.queuedStation !== undefined) return { action: 'tap', stationId: e.queuedStation };
++  return { action: 'hook', end: { kind: e.kind, gameId: e.gameId } };
++}
++
+ export class PostRoundChain {
+   private activeFlag = false;
+   private queued: string | undefined;
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/timing.ts b/app/src/core/timing.ts
+index b28c909..1d2516a 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/timing.ts
++++ b/app/src/core/timing.ts
+@@ -113,6 +113,10 @@ export const Timing = {
+   playAgainRepromptMs: 10000,
+   playAgainAutoCloseMs: 30000,
+   replayZoomInMs: 1500,
++  /** Story 2.4: after the re-ask, the hint ring swaps between the two buttons this often (≥ flashMinPeriodMs). */
++  playAgainRingSwapMs: 2000,
++  /** Story 2.4: the auto close fades the overlay out over this long ("mờ dần"). */
++  playAgainFadeOutMs: 800,
+ 
+   // --- Accessibility floor ---
+   /** Flashing ≤ 1 Hz → one flash cycle takes at least this long. */
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/tokens.test.ts b/app/src/core/tokens.test.ts
+index b0a441f..5f34f57 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/tokens.test.ts
++++ b/app/src/core/tokens.test.ts
+@@ -105,6 +105,32 @@ describe('post-round chain budget (Story 2.3)', () => {
+   });
+ });
+ 
++describe('play-again overlay (Story 2.4)', () => {
++  const T = Tokens.Timing;
++
++  it('the new values', () => {
++    expect(T.playAgainRingSwapMs).toBe(2000);
++    expect(T.playAgainFadeOutMs).toBe(800);
++    expect(Tokens.ui.playAgainIconPx).toBe(112);
++    expect(Tokens.ui.playAgainArrowPx).toBe(44);
++    expect(Tokens.ui.playAgainKartPx).toBe(72);
++    expect(Tokens.ui.playAgainClearPx).toBe(24);
++  });
++
++  it('the ring swap never flashes faster than 1 Hz', () => {
++    expect(T.playAgainRingSwapMs).toBeGreaterThanOrEqual(T.flashMinPeriodMs);
++  });
++
++  it('the re-ask comes before the auto close', () => {
++    expect(T.playAgainRepromptMs).toBeLessThan(T.playAgainAutoCloseMs);
++  });
++
++  it('the icon fits inside the replay button', () => {
++    expect(Tokens.ui.playAgainIconPx).toBeLessThan(Tokens.components.buttonReplay.size);
++    expect(Tokens.ui.playAgainKartPx).toBeLessThan(Tokens.components.buttonBackToMap.size);
++  });
++});
++
+ describe('Tokens.art (Story 1.8)', () => {
+   const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+   const luminance = (css: string) => {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/tokens.ts b/app/src/core/tokens.ts
+index 3f0cd1e..85cc301 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/tokens.ts
++++ b/app/src/core/tokens.ts
+@@ -63,6 +63,14 @@ const ui = {
+   sparkleRadiusPx: 6,
+   /** Story 2.3: each sparkle drifts outward this far (design px) while it fades. */
+   sparkleSpreadPx: 48,
++  /** Story 2.4 replay button: the character icon's trimmed longest side (design px). */
++  playAgainIconPx: 112,
++  /** Story 2.4 replay button: the circular arrow badge diameter (design px). */
++  playAgainArrowPx: 44,
++  /** Story 2.4 map button: the kart on the little island, longest side (design px). */
++  playAgainKartPx: 72,
++  /** Story 2.4: clearance (design px) between the play-again buttons and the station / its decorations. */
++  playAgainClearPx: 24,
+ } as const;
+ 
+ /** A colour in the generated-token shape (`css`, `value`, `alpha`). */
+diff --git a/app/src/core/ui/play-again-icons.test.ts b/app/src/core/ui/play-again-icons.test.ts
+new file mode 100644
+index 0000000..b4dddaa
+--- /dev/null
++++ b/app/src/core/ui/play-again-icons.test.ts
+@@ -0,0 +1,22 @@
++// Story 2.4: the pure parts of the play-again icons (fit and frame fallback).
++import { describe, expect, it } from 'vitest';
++import { iconFit, replayIconFrame } from './play-again-icons';
++
++describe('iconFit', () => {
++  it('pivots at the trimmed centre and scales the trimmed longest side to the target', () => {
++    const fit = iconFit({ x: 1000, y: 600, width: 300, height: 200 }, 2, { width: 1024, height: 768 }, 112);
++    // Trimmed centre (render px 1150, 700) → design (575, 350).
++    expect(fit.originX).toBeCloseTo(575 / 1024, 10);
++    expect(fit.originY).toBeCloseTo(350 / 768, 10);
++    // 300 render px × scale = 112 design px.
++    expect(300 * fit.scale).toBeCloseTo(112, 10);
++  });
++});
++
++describe('replayIconFrame', () => {
++  it('uses icon/<id>/00 when present, else the station frame (fallback), else nothing', () => {
++    expect(replayIconFrame('ice-cream', () => true)).toEqual({ frame: 'icon/ice-cream/00', fallback: false });
++    expect(replayIconFrame('pizza', (f) => f === 'pizza/idle/00')).toEqual({ frame: 'pizza/idle/00', fallback: true });
++    expect(replayIconFrame('pizza', () => false)).toBeUndefined();
++  });
++});
+diff --git a/app/src/core/ui/play-again-icons.ts b/app/src/core/ui/play-again-icons.ts
+new file mode 100644
+index 0000000..892877e
+--- /dev/null
++++ b/app/src/core/ui/play-again-icons.ts
+@@ -0,0 +1,128 @@
++// Play-again button icons (Story 2.4). Children added to `createRoundButton(…, icon: 'none')`:
++//   - replay: the game's character, frame `icon/<gameId>/00` of `atlas.map` (falling back to the station
++//     frame `<gameId>/idle/00`, with one warning), pivoted at its trimmed centre (spec-1-8) and scaled
++//     so its trimmed longest side is ui.playAgainIconPx; plus a small circular arrow badge
++//     (ui.playAgainArrowPx, buttonRound.icon ink, Graphics) at the lower right;
++//   - map: a little island (a `sand` ellipse under a `grass` ellipse, on a `sea` disc, Graphics) with
++//     `kart/idle/00` scaled to ui.playAgainKartPx on top.
++// The fit maths is pure (`iconFit`); the rest is thin Phaser wiring.
++import type { GameObjects, Scene } from 'phaser';
++import { ATLASES, MAP_KART } from '../../content/assets';
++import { playAgainIconFrame } from '../../content/play-again';
++import { stationFrame } from '../../content/stations';
++import { LAYOUTS } from '../../content/layouts';
++import { Tokens } from '../tokens';
++import { originFor, trimmedCentre, type TrimmedRect } from './sprite-pivot';
++
++export interface IconFit {
++  readonly originX: number;
++  readonly originY: number;
++  readonly scale: number;
++}
++
++/**
++ * Places a full-frame trimmed sprite so its visible centre sits at the image position and its trimmed
++ * longest side measures `targetPx` design px. `frame` is in render px (spriteSourceSize).
++ */
++export function iconFit(frame: TrimmedRect, renderScale: number, design: { readonly width: number; readonly height: number }, targetPx: number): IconFit {
++  const origin = originFor(trimmedCentre(frame, renderScale), design);
++  const longest = Math.max(frame.width, frame.height);
++  return { originX: origin.x, originY: origin.y, scale: longest > 0 ? targetPx / longest : 1 };
++}
++
++/** The replay frame to use for `gameId`: its icon frame, else its station frame (`fallback: true`). */
++export function replayIconFrame(gameId: string, has: (frame: string) => boolean): { frame: string; fallback: boolean } | undefined {
++  const icon = playAgainIconFrame(gameId);
++  if (has(icon)) return { frame: icon, fallback: false };
++  const station = stationFrame(gameId);
++  return has(station) ? { frame: station, fallback: true } : undefined;
++}
++
++interface FrameData {
++  readonly spriteSourceSize?: { x: number; y: number; w: number; h: number };
++}
++
++const warned = new Set<string>();
++
++function warnOnce(msg: string): void {
++  if (warned.has(msg)) return;
++  warned.add(msg);
++  console.warn(msg);
++}
++
++/** A trimmed atlas frame as an image centred at (0, 0), its trimmed longest side `px`; undefined when missing. */
++function fittedImage(scene: Scene, frame: string, px: number): GameObjects.Image | undefined {
++  const key = ATLASES.map.key;
++  if (!scene.textures.exists(key) || !scene.textures.get(key).has(frame)) return undefined;
++  const ss = (scene.textures.get(key).get(frame).customData as FrameData | undefined)?.spriteSourceSize;
++  if (!ss) return scene.add.image(0, 0, key, frame).setDisplaySize(px, px);
++  const fit = iconFit({ x: ss.x, y: ss.y, width: ss.w, height: ss.h }, LAYOUTS.map.renderScale, Tokens.design, px);
++  return scene.add.image(0, 0, key, frame).setOrigin(fit.originX, fit.originY).setScale(fit.scale);
++}
++
++// Badge proportions (visual only): its centre relative to the button radius, the arrow arc.
++const BADGE_AT = 0.5;
++const ARC = { from: -0.35 * Math.PI, to: 1.25 * Math.PI, radius: 0.5, width: 0.16, head: 0.3 } as const;
++
++/** The circular-arrow badge: a white disc with an ink arc and arrow head, centred at (0, 0). */
++function arrowBadge(scene: Scene): GameObjects.Graphics {
++  const d = Tokens.ui.playAgainArrowPx;
++  const r = d / 2;
++  const ink = Tokens.components.buttonRound.icon;
++  const white = Tokens.components.buttonRound.highlight;
++  const g = scene.add.graphics();
++  g.fillStyle(white.value, white.alpha);
++  g.fillCircle(0, 0, r);
++  const ar = r * ARC.radius;
++  g.lineStyle(d * ARC.width, ink.value, ink.alpha);
++  g.beginPath();
++  g.arc(0, 0, ar, ARC.from, ARC.to);
++  g.strokePath();
++  // Arrow head at the arc's end, pointing along the turn.
++  const ex = ar * Math.cos(ARC.to);
++  const ey = ar * Math.sin(ARC.to);
++  const h = d * ARC.head;
++  const tx = -Math.sin(ARC.to);
++  const ty = Math.cos(ARC.to);
++  g.fillStyle(ink.value, ink.alpha);
++  g.fillTriangle(ex + tx * h, ey + ty * h, ex - ty * h * 0.6, ey + tx * h * 0.6, ex + ty * h * 0.6, ey - tx * h * 0.6);
++  return g;
++}
++
++/** The replay button's children: the character and the arrow badge. */
++export function replayIconChildren(scene: Scene, gameId: string, buttonSize: number): GameObjects.GameObject[] {
++  const key = ATLASES.map.key;
++  const has = (frame: string): boolean => scene.textures.exists(key) && scene.textures.get(key).has(frame);
++  const out: GameObjects.GameObject[] = [];
++  const pick = replayIconFrame(gameId, has);
++  if (pick?.fallback) warnOnce(`play-again: atlas "map" has no "${playAgainIconFrame(gameId)}" — using "${pick.frame}"`);
++  if (!pick) warnOnce(`play-again: atlas "map" has neither "${playAgainIconFrame(gameId)}" nor "${stationFrame(gameId)}" — no icon`);
++  const image = pick ? fittedImage(scene, pick.frame, Tokens.ui.playAgainIconPx) : undefined;
++  if (image) out.push(image);
++  const badge = arrowBadge(scene);
++  const at = (buttonSize / 2) * BADGE_AT;
++  badge.setPosition(at, at);
++  out.push(badge);
++  return out;
++}
++
++// Island proportions relative to the button radius (visual only).
++const ISLAND = { sea: 0.62, sandW: 1.0, sandH: 0.5, grassW: 0.8, grassH: 0.36, y: 0.12, grassLift: 0.06, kartLift: 0.12 } as const;
++
++/** The map button's children: the little island and the kart. */
++export function mapIconChildren(scene: Scene, buttonSize: number): GameObjects.GameObject[] {
++  const r = buttonSize / 2;
++  const c = Tokens.colors;
++  const g = scene.add.graphics();
++  g.fillStyle(c.sea.value, c.sea.alpha);
++  g.fillCircle(0, 0, r * ISLAND.sea);
++  g.fillStyle(c.sand.value, c.sand.alpha);
++  g.fillEllipse(0, r * ISLAND.y, r * ISLAND.sandW, r * ISLAND.sandH);
++  g.fillStyle(c.grass.value, c.grass.alpha);
++  g.fillEllipse(0, r * (ISLAND.y - ISLAND.grassLift), r * ISLAND.grassW, r * ISLAND.grassH);
++  const out: GameObjects.GameObject[] = [g];
++  const kart = fittedImage(scene, MAP_KART.frame, Tokens.ui.playAgainKartPx);
++  if (kart) out.push(kart.setY(-r * ISLAND.kartLift));
++  else warnOnce(`play-again: atlas "map" has no "${MAP_KART.frame}" — the map icon has no kart`);
++  return out;
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/ui/round-button.ts b/app/src/core/ui/round-button.ts
+index d091e39..2135df4 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/core/ui/round-button.ts
++++ b/app/src/core/ui/round-button.ts
+@@ -20,7 +20,8 @@ export interface RoundButtonOptions {
+   icon?: RoundButtonIcon;
+ }
+ 
+-export type RoundButtonIcon = 'play' | 'home' | 'speaker';
++/** Story 2.4: `'none'` draws no icon (the caller adds its own children, e.g. the play-again icons). */
++export type RoundButtonIcon = 'play' | 'home' | 'speaker' | 'none';
+ 
+ // Proportions of the drawn highlight and ▶ icon, relative to the radius (visual only).
+ const HIGHLIGHT = { x: -0.38, y: -0.45, w: 0.55, h: 0.3, alpha: 0.55 } as const;
+@@ -33,6 +34,7 @@ const SPEAKER = {
+ } as const;
+ 
+ function drawIcon(g: GameObjects.Graphics, icon: RoundButtonIcon, r: number): void {
++  if (icon === 'none') return;
+   if (icon === 'home') {
+     g.fillTriangle(0, r * HOME.roofTop, -r * HOME.roofHalf, r * HOME.roofBase, r * HOME.roofHalf, r * HOME.roofBase);
+     g.fillRect(-r * HOME.bodyHalf, r * HOME.roofBase, 2 * r * HOME.bodyHalf, r * (HOME.bodyBottom - HOME.roofBase));
+@@ -91,11 +93,11 @@ export function pressButton(scene: Scene, button: GameObjects.Container): void {
+   );
+ }
+ 
+-/** Slow endless bob (button-play "Nhún chậm"). */
+-export function startBob(scene: Scene, target: GameObjects.Container): Tweens.Tween {
++/** Slow endless bob (button-play "Nhún chậm"); Story 2.4: `px` sets the height (reduced motion). */
++export function startBob(scene: Scene, target: GameObjects.Container, px: number = Tokens.ui.playBobPx): Tweens.Tween {
+   return scene.tweens.add({
+     targets: target,
+-    y: target.y - Tokens.ui.playBobPx,
++    y: target.y - px,
+     duration: Tokens.Timing.playBobMs,
+     ease: 'Sine.easeInOut',
+     yoyo: true,
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/main.ts b/app/src/main.ts
+index 12cd4ac..d56bb58 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/main.ts
++++ b/app/src/main.ts
+@@ -10,6 +10,7 @@ import { AudioUnlockOverlay } from './scenes/AudioUnlockOverlay';
+ import { Boot } from './scenes/Boot';
+ import { Hud } from './scenes/Hud';
+ import { MapScene } from './scenes/Map';
++import { PlayAgainOverlay } from './scenes/PlayAgainOverlay';
+ import { Start } from './scenes/Start';
+ 
+ /**
+@@ -32,9 +33,10 @@ const config: Types.Core.GameConfig = {
+   input: {
+     activePointers: ACTIVE_POINTERS,
+   },
+-  // The games between Map and Hud, so Hud renders above them (Story 1.7); AudioUnlockOverlay last so it
+-  // renders above the shell scenes (it also bringToTop()s on wake).
+-  scene: [Boot, Start, MapScene, ...GAME_SCENES, Hud, AudioUnlockOverlay],
++  // The games between Map and Hud, so Hud renders above them (Story 1.7); the play-again overlay (Story
++  // 2.4) below Hud, so its dim never covers the Speaker (input priority comes from the guard layers);
++  // AudioUnlockOverlay last so it renders above the shell scenes (it also bringToTop()s on wake).
++  scene: [Boot, Start, MapScene, ...GAME_SCENES, PlayAgainOverlay, Hud, AudioUnlockOverlay],
+ };
+ 
+ installPageGuards();
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/scenes/Map.ts b/app/src/scenes/Map.ts
+index 9ad973b..ab37b37 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/src/scenes/Map.ts
++++ b/app/src/scenes/Map.ts
+@@ -21,11 +21,17 @@
+ // idle is suspended, station taps are queued (the last one applies at the end instead of onChainEnd)
+ // and kart / decoration taps are ignored. Taps are hit-tested in camera world space (router `toWorld`).
+ // `round:abandon` with nothing pending keeps the Story 1.7 fade return.
++// Story 2.4: `onChainEnd` of a `complete` chain (not touch-talk) builds a PlayAgainController
++// (core/play-again) at once and launches the PlayAgainOverlay scene; idle stays suspended while it is
++// open. A station tap emits `overlay:close` first, then runs the trip as usual. On close: back / auto /
++// station → a new idle visit (invitations restart); replay → clearResume + KartTrip.replay, which loads
++// the game and enters it with the slower replay zoom (Timing.replayZoomInMs).
+ // Timing, routing and geometry are pure core code; this
+ // scene only wires Phaser. The kart moves only in `update` (no timers or tweens), so a pause freezes it.
+ import { Scene, type GameObjects } from 'phaser';
+ import { ATLASES, BACKGROUNDS, MAP_KART } from '../content/assets';
+ import { DECORATIONS } from '../content/decorations';
++import { playAgainLines } from '../content/play-again';
+ import type { Point } from '../content/layout-types';
+ import type { DecorationSlot, GameId, GrantResult } from '../content/types';
+ import { LAYOUTS } from '../content/layouts';
+@@ -40,6 +46,7 @@ import {
+   spriteSourceRect,
+   type DecorationPlan,
+   type PlannedDecoration,
++  type Rect,
+   type SpriteSourceSize,
+ } from '../core/decoration-plan';
+ import { flyInPlan } from '../core/fly-in';
+@@ -53,9 +60,12 @@ import { createTapTarget, type TapTarget } from '../core/input/tap-target';
+ import { KART_TARGET, KartTrip, type TripCommand } from '../core/kart-trip';
+ import { createMapIdle, type MapIdle, type MapIdleEvent } from '../core/map-idle';
+ import { planMap, type MapPlan, type PlannedKart, type PlannedStation } from '../core/map-plan';
+-import { enterStation, pullBack, revealScene } from '../core/motion';
++import { opensPlayAgain, PlayAgainController, routePlayAgainClose, type CloseReason } from '../core/play-again';
++import { playAgainPlacement } from '../core/play-again-layout';
++import { enterStation, enterZoomMs, pullBack, revealScene } from '../core/motion';
+ import {
+   PostRoundChain,
++  routeChainEnd,
+   routeRoundAbandon,
+   routeRoundComplete,
+   type ChainEnd,
+@@ -71,6 +81,7 @@ import { playFlyIn } from '../core/ui/decoration-fly';
+ import { createMapProp, type MapProp } from '../core/ui/map-prop';
+ import { bob, bounce, isMoving, stopMotion } from '../core/ui/scale-motion';
+ import { GAMES, isGameId, ladderLength } from '../games/registry';
++import { PLAY_AGAIN_KEY, type PlayAgainData } from './PlayAgainOverlay';
+ 
+ const HUD_KEY = 'Hud';
+ const WAKE = 'wake';
+@@ -93,6 +104,8 @@ interface FrameData {
+ interface DrawnDecoration {
+   readonly prop: MapProp;
+   readonly slotId: string;
++  /** Visible rect at its slot (Story 2.4: the play-again buttons keep clear of it). */
++  readonly footprint: Rect;
+ }
+ 
+ interface KartView {
+@@ -125,12 +138,19 @@ export class MapScene extends Scene {
+   private decorationWarnings = new Set<string>();
+   /** Story 2.3: the post-round chain (one per Map instance). */
+   private chain: PostRoundChain | undefined;
++  /** Story 2.4: the open play-again question (undefined once it closed). */
++  private playAgain: PlayAgainController | undefined;
+ 
+   /**
+-   * Story 2.3: runs when a post-round chain ends without a queued station tap. The default returns Map
+-   * to "Mời chơi" (a new idle visit). Story 2.4 replaces it to open the play-again overlay.
++   * Story 2.3: runs when a post-round chain ends without a queued station tap. Story 2.4: a completed
++   * round of a registered game other than touch-talk opens the play-again overlay; anything else (an
++   * abandon, Map's create-time chain, touch-talk) returns Map to "Mời chơi" (a new idle visit).
+    */
+-  onChainEnd: (e: ChainEnd) => void = () => {
++  onChainEnd: (e: ChainEnd) => void = (e) => {
++    if (opensPlayAgain(e, (id) => isGameId(id) && GAMES[id] !== undefined)) {
++      this.openPlayAgain(e.gameId);
++      return;
++    }
+     if (this.idle) this.handle(this.idle.reset());
+   };
+ 
+@@ -303,6 +323,10 @@ export class MapScene extends Scene {
+     setHudMode('map');
+ 
+     this.events.once(SHUTDOWN, () => {
++      // An open question closes with Map (its onClosed then does nothing: playAgain is cleared first).
++      const open = this.playAgain;
++      this.playAgain = undefined;
++      open?.close('back');
+       this.load.off(FILE_COMPLETE, onFile);
+       this.load.off(LOAD_ERROR, onError);
+       this.load.off(LOAD_COMPLETE, onComplete);
+@@ -389,7 +413,7 @@ export class MapScene extends Scene {
+       onTap: () => audio.sfx(HAPPY_SFX),
+       ...(image ? { image } : {}),
+     });
+-    this.decorations.set(item.key, { prop, slotId: item.slotId });
++    this.decorations.set(item.key, { prop, slotId: item.slotId, footprint: item.footprint });
+   }
+ 
+   // --- post-round chain (Story 2.3) ---------------------------------------------------------------
+@@ -406,12 +430,16 @@ export class MapScene extends Scene {
+     this.handle(this.idle.suspend());
+   }
+ 
+-  /** A station tap: queued while the chain runs (no reaction), else the kart trip. */
++  /**
++   * A station tap: queued while the chain runs (no reaction), else the kart trip. Story 2.4: while the
++   * play-again overlay is open, the tap first closes it (`overlay:close`), in the same handler.
++   */
+   private tapStation(id: string): void {
+     if (this.chain?.active) {
+       this.chain.queueTap(id);
+       return;
+     }
++    if (this.playAgain && !this.playAgain.closed) bus.emit('overlay:close');
+     this.applyAll(this.trip?.tapStation(id) ?? []);
+   }
+ 
+@@ -494,11 +522,62 @@ export class MapScene extends Scene {
+     // Grants that arrived mid-chain stay pending: keep their slots held for their own fly-in next time.
+     this.syncDecorations({ hold: this.pendingSlots() });
+     this.syncIdle();
+-    if (e.queuedStation !== undefined) {
+-      this.applyAll(this.trip?.tapStation(e.queuedStation) ?? []);
++    // A queued tap applies instead of the hook (so no play-again overlay after it).
++    const route = routeChainEnd(e);
++    if (route.action === 'tap') {
++      this.applyAll(this.trip?.tapStation(route.stationId) ?? []);
+       return;
+     }
+-    this.onChainEnd({ kind: e.kind, gameId: e.gameId });
++    this.onChainEnd(route.end);
++  }
++
++  // --- play-again overlay (Story 2.4) -------------------------------------------------------------
++
++  /** Builds the question at once (it hears `overlay:close` from now on) and launches the overlay scene. */
++  private openPlayAgain(gameId: GameId): void {
++    if (this.idle) this.handle(this.idle.suspend());
++    const previous = this.playAgain;
++    this.playAgain = undefined;
++    previous?.close('back');
++    if (this.scene.isActive(PLAY_AGAIN_KEY) || this.scene.isPaused(PLAY_AGAIN_KEY) || this.scene.isSleeping(PLAY_AGAIN_KEY)) {
++      this.scene.stop(PLAY_AGAIN_KEY);
++    }
++    const controller: PlayAgainController = new PlayAgainController(playAgainLines(gameId), {
++      say: (id) => audio.say(id),
++      setPrompt: (ids) => audio.setPrompt(ids),
++      clearPrompt: (id) => audio.clearPrompt(id),
++      stopVoice: (token) => audio.stop(token),
++      onOverlayClose: (handler) => bus.on('overlay:close', handler),
++      onClosed: (reason) => this.playAgainClosed(controller, gameId, reason),
++    });
++    this.playAgain = controller;
++    const data: PlayAgainData = { controller, gameId, placement: playAgainPlacement(this.playAgainObstacles(gameId)) };
++    this.scene.launch(PLAY_AGAIN_KEY, data);
++  }
++
++  /** The station just played: its hit bbox and the decorations drawn at its slots (the new item included). */
++  private playAgainObstacles(gameId: GameId): Rect[] {
++    const out: Rect[] = [];
++    const hit = this.views.get(gameId)?.plan.hit;
++    if (hit) out.push(boundingBox(hit));
++    const slots = new Set<string>(STATIONS.find((s) => s.id === gameId)?.slots ?? []);
++    for (const d of this.decorations.values()) if (slots.has(d.slotId)) out.push(d.footprint);
++    return out;
++  }
++
++  private playAgainClosed(controller: PlayAgainController, gameId: GameId, reason: CloseReason): void {
++    if (this.playAgain !== controller) return; // Map shut down, or a newer question replaced it
++    this.playAgain = undefined;
++    const route = routePlayAgainClose(reason, reason === 'replay' ? (this.trip?.replay(gameId) ?? []) : []);
++    if (route.action === 'replay') {
++      session.clearResume(gameId);
++      this.applyAll(route.commands);
++      return;
++    }
++    // back / auto / station (or a refused replay): a new idle visit, so the invitation schedule restarts (UX-DR41). For a
++    // station tap this runs before its trip commands; a departing trip suspends idle again.
++    if (this.idle) this.handle(this.idle.reset());
++    this.syncIdle();
+   }
+ 
+   // --- kart -------------------------------------------------------------------------------------
+@@ -573,7 +652,7 @@ export class MapScene extends Scene {
+         this.placeKart(c.x, c.y, c.dx);
+         return;
+       case 'enter':
+-        void this.enterGame(c.gameId);
++        void this.enterGame(c.gameId, c.via);
+         return;
+     }
+   }
+@@ -584,7 +663,8 @@ export class MapScene extends Scene {
+    */
+   private syncIdle(): void {
+     if (!this.idle || !this.trip) return;
+-    if (this.trip.state === 'parked' && !this.chain?.active) this.idle.resume();
++    // Story 2.4: idle also stays suspended while the play-again overlay is open.
++    if (this.trip.state === 'parked' && !this.chain?.active && !this.playAgain) this.idle.resume();
+     else this.handle(this.idle.suspend());
+   }
+ 
+@@ -620,13 +700,14 @@ export class MapScene extends Scene {
+     this.load.start();
+   }
+ 
+-  private async enterGame(id: string): Promise<void> {
++  private async enterGame(id: string, via?: 'replay'): Promise<void> {
+     if (!isGameId(id)) return;
+     const entry = GAMES[id];
+     if (!entry) return;
+     session.lastStation = id;
+     const focus = LAYOUTS.map.anchors[id] ?? { x: this.kart?.body.x ?? 0, y: this.kart?.body.y ?? 0 };
+-    await enterStation(this, focus, this.reduced);
++    // Story 2.4: a replay zooms back in more slowly (a fade under reduced motion either way).
++    await enterStation(this, focus, this.reduced, enterZoomMs(via));
+     if (!this.trip) return; // Map shut down meanwhile
+     const data = session.startData(id, ladderLength(entry));
+     // At most one MiniGame: stop any other one still around.
+diff --git a/app/src/scenes/PlayAgainOverlay.ts b/app/src/scenes/PlayAgainOverlay.ts
+new file mode 100644
+index 0000000..2faea8b
+--- /dev/null
++++ b/app/src/scenes/PlayAgainOverlay.ts
+@@ -0,0 +1,147 @@
++// PlayAgainOverlay (Story 2.4, FR25 / UX-DR53): "Hỏi chơi tiếp". Launched by Map at the end of a
++// completed round's post-round chain, above Map (and below Hud, so the Speaker is never dimmed).
++// Wiring only — the question sequence, idle clock, re-ask, ring swap and the four closes live in
++// core/play-again.ts (PlayAgainController, built by Map), the placement in core/play-again-layout.ts.
++//   - a 15% dim over the visible rect, NOT interactive: a station tap falls through to Map, which emits
++//     `overlay:close`; empty map and decoration taps leave the overlay open;
++//   - `button-replay` (green, the game's character + a circular arrow) and `button-back-to-map` (blue,
++//     a little island with the kart), both 160 px, on the `overlay` input layer;
++//   - any primary press anywhere (the guard runs every router's onAnyTap) counts as activity;
++//   - the controller ticks on this scene's `time` (Timing.hintTickMs) and hears `speech:ended`, so the
++//     AudioUnlockOverlay pause and a hidden page freeze the clock, bobs, ring and fades.
++// No text, no praise, no confetti, no music, no setTimeout.
++import { Scene, type GameObjects, type Tweens } from 'phaser';
++import { audio } from '../core/audio-director';
++import { bus } from '../core/bus';
++import { createHintRing, type HintRing } from '../core/hint-visuals';
++import { createTapRouter } from '../core/input/tap-router';
++import { createTapTarget, type TapTarget } from '../core/input/tap-target';
++import { currentView, visibleDesignRect } from '../core/input/space';
++import type { PlayAgainButton, PlayAgainController, PlayAgainView } from '../core/play-again';
++import type { PlayAgainPlacement } from '../core/play-again-layout';
++import { amplitude, prefersReducedMotion } from '../core/reduced-motion';
++import { Tokens } from '../core/tokens';
++import { mapIconChildren, replayIconChildren } from '../core/ui/play-again-icons';
++import { createRoundButton, pressButton, startBob } from '../core/ui/round-button';
++
++export const PLAY_AGAIN_KEY = 'PlayAgainOverlay';
++const POP_SFX = 'sfx.shell.pop';
++
++export interface PlayAgainData {
++  readonly controller: PlayAgainController;
++  readonly gameId: string;
++  readonly placement: PlayAgainPlacement;
++}
++
++interface ButtonView {
++  readonly body: GameObjects.Container;
++  readonly target: TapTarget;
++  readonly baseY: number;
++  bob: Tweens.Tween | undefined;
++}
++
++export class PlayAgainOverlay extends Scene {
++  constructor() {
++    super(PLAY_AGAIN_KEY);
++  }
++
++  create(data: PlayAgainData): void {
++    const { controller, gameId, placement } = data;
++    // Closed before this scene could create (a station tap in the launch gap): draw and say nothing.
++    if (controller.closed) {
++      this.scene.stop();
++      return;
++    }
++    const reduced = prefersReducedMotion(window);
++    const view0 = currentView();
++    const vis = view0 ? visibleDesignRect(view0) : { x: 0, y: 0, w: Tokens.design.width, h: Tokens.design.height };
++    const dim = Tokens.components.playAgainOverlay.backdrop;
++    // Visual only: no interactive backdrop.
++    const backdrop = this.add.rectangle(vis.x, vis.y, vis.w, vis.h, dim.value, dim.alpha).setOrigin(0);
++
++    const router = createTapRouter(this, { layer: 'overlay' });
++    router.onAnyTap = () => controller.activity();
++
++    const spec = {
++      replay: Tokens.components.buttonReplay,
++      map: Tokens.components.buttonBackToMap,
++    } as const;
++    const make = (which: PlayAgainButton, at: { x: number; y: number }, onPress: () => void): ButtonView => {
++      const s = spec[which];
++      const body = createRoundButton(this, { x: at.x, y: at.y, size: s.size, fill: s.background, icon: 'none' });
++      body.add(which === 'replay' ? replayIconChildren(this, gameId, s.size) : mapIconChildren(this, s.size));
++      const target = createTapTarget(router, {
++        circle: { x: at.x, y: at.y, r: s.size / 2 + Tokens.spacing.hitPad },
++        onPress: () => {
++          // Feedback in the same handler (≤ Timing.feedbackMaxMs), then the close.
++          pressButton(this, body);
++          audio.sfx(POP_SFX);
++          onPress();
++        },
++      });
++      return { body, target, baseY: at.y, bob: undefined };
++    };
++    const buttons: Record<PlayAgainButton, ButtonView> = {
++      replay: make('replay', placement.replay, () => controller.replay()),
++      map: make('map', placement.map, () => controller.backToMap()),
++    };
++
++    // Fade in over sceneFadeMs.
++    const drawn: Array<GameObjects.Rectangle | GameObjects.Container> = [backdrop, buttons.replay.body, buttons.map.body];
++    for (const o of drawn) o.setAlpha(0);
++    const fadeIn = this.tweens.add({ targets: drawn, alpha: 1, duration: Tokens.Timing.sceneFadeMs });
++
++    // The bob height goes through the reduced-motion amplitude (as a scale amplitude around 1).
++    const bobPx = amplitude(1 + Tokens.ui.playBobPx, reduced) - 1;
++    let ring: HintRing | undefined;
++    let fading = false;
++    const view: PlayAgainView = {
++      bob: (which, on) => {
++        const b = buttons[which];
++        if (on) {
++          if (b.bob) return;
++          b.bob = startBob(this, b.body, bobPx);
++          return;
++        }
++        if (!b.bob) return;
++        b.bob.stop();
++        b.bob = undefined;
++        b.body.setY(b.baseY);
++      },
++      ring: (which) => {
++        ring?.destroy();
++        ring = undefined;
++        if (which === null) return;
++        const b = buttons[which];
++        const d = spec[which].size + 2 * Tokens.ui.hintRingPad;
++        ring = createHintRing(this, { x: b.body.x - d / 2, y: b.baseY - d / 2, width: d, height: d }, { reduced });
++      },
++      disable: () => {
++        buttons.replay.target.setEnabled(false);
++        buttons.map.target.setEnabled(false);
++      },
++      fadeOut: (ms) => {
++        if (fading) return;
++        fading = true;
++        fadeIn.stop();
++        this.tweens.add({
++          targets: drawn,
++          alpha: 0,
++          duration: ms,
++          onComplete: () => this.scene.stop(),
++        });
++      },
++    };
++
++    bus.scoped(this).on('speech:ended', (e) => controller.speechEnded(e.token, e.completed));
++    const tick = Tokens.Timing.hintTickMs;
++    this.time.addEvent({ delay: tick, loop: true, callback: () => controller.tick(tick) });
++    this.events.once('shutdown', () => {
++      ring?.destroy();
++      ring = undefined;
++    });
++
++    controller.attach(view);
++    controller.open();
++  }
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/atlas/pack.ts b/app/tools/atlas/pack.ts
+index fe85a37..7e91194 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/atlas/pack.ts
++++ b/app/tools/atlas/pack.ts
+@@ -10,11 +10,22 @@ import { fileURLToPath } from 'node:url';
+ import sharp from 'sharp';
+ import { ATLASES, BACKGROUNDS, FRAME_NAME, SCREEN_IDS, type ScreenId } from '../../src/content/assets.ts';
+ import { DECORATIONS } from '../../src/content/decorations.ts';
++import { PLAY_AGAIN_ICONS } from '../../src/content/play-again.ts';
++import { Tokens } from '../../src/core/tokens.ts';
+ import { screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
+ import { STATIONS } from '../../src/content/stations.ts';
+ import { GAME_IDS } from '../../src/content/types.ts';
+ import type { ScreenLayout } from '../../src/content/layout-types.ts';
+-import { MAX_FILE_BYTES, MAX_PAGE_SIDE, decorationLimits, iceCreamLimits, validateDecorations, validateIceCream, type AtlasJsonLike } from '../layout/rules.ts';
++import {
++  MAX_FILE_BYTES,
++  MAX_PAGE_SIDE,
++  decorationLimits,
++  iceCreamLimits,
++  validateDecorations,
++  validateIceCream,
++  validatePlayAgainIcons,
++  type AtlasJsonLike,
++} from '../layout/rules.ts';
+ import type { PackFile, PackOptions, PackResult } from './free-tex-packer-core.d.ts';
+ 
+ const require = createRequire(import.meta.url);
+@@ -27,10 +38,14 @@ const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
+ 
+ /**
+  * Screen rules that need the packed atlas (Story 1.8; Story 2.2 adds the map decorations: frames,
+- * sizes, tap rects, station clearance); they read the published layout. Any problem refuses the write.
++ * sizes, tap rects, station clearance; Story 2.4 the play-again icon frames); they read the published
++ * layout. Any problem refuses the write.
+  */
+ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayout, atlas: AtlasJsonLike) => string[]>>> = {
+-  map: (layout, atlas) => validateDecorations(layout, decorationLimits(STATIONS, GAME_IDS, DECORATIONS), atlas),
++  map: (layout, atlas) => [
++    ...validateDecorations(layout, decorationLimits(STATIONS, GAME_IDS, DECORATIONS), atlas),
++    ...validatePlayAgainIcons(Object.keys(PLAY_AGAIN_ICONS), atlas, layout.renderScale, Tokens.ui.playAgainIconPx),
++  ],
+   'ice-cream': (layout, atlas) => validateIceCream(layout, iceCreamLimits(iceCreamScreen), atlas),
+ };
+ 
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/layout/rules.test.ts b/app/tools/layout/rules.test.ts
+index 45192f4..b8a0f8d 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/layout/rules.test.ts
++++ b/app/tools/layout/rules.test.ts
+@@ -3,7 +3,7 @@ import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
+ import { STATIONS } from '../../src/content/stations.ts';
+ import { GAME_IDS } from '../../src/content/types.ts';
+ import { DECORATIONS } from '../../src/content/decorations.ts';
+-import { DECO_STATION_DIST_OVERRIDE, decorationLimits, layoutLimits, pngSizeOf, validateAssets, validateDecorations, validateLayout, type AssetRuleInput, type AtlasJsonLike } from './rules.ts';
++import { DECO_STATION_DIST_OVERRIDE, decorationLimits, layoutLimits, pngSizeOf, validateAssets, validateDecorations, validateLayout, validatePlayAgainIcons, type AssetRuleInput, type AtlasJsonLike } from './rules.ts';
+ 
+ const sq = (x: number, y: number, s: number): Point[] => [
+   { x, y },
+@@ -406,3 +406,18 @@ describe('validateDecorations (Story 2.2)', () => {
+     expect(validateDecorations(l, rules())).toContain('slot "pizza-2": 138.92 px from slot "pizza-1" (max 110)');
+   });
+ });
++
++describe('validatePlayAgainIcons (Story 2.4)', () => {
++  const frame = (w: number, h: number) => ({ frame: { x: 0, y: 0, w, h }, spriteSourceSize: { x: 10, y: 20, w, h }, trimmed: true });
++
++  it('passes when icon/<id>/00 exists at ≥ 112 px (trimmed longest side ÷ renderScale)', () => {
++    expect(validatePlayAgainIcons(['ice-cream'], { frames: { 'icon/ice-cream/00': frame(224, 150) } }, 2, 112)).toEqual([]);
++  });
++
++  it('names the id when the frame is missing or too small', () => {
++    expect(validatePlayAgainIcons(['ice-cream'], { frames: {} }, 2, 112)).toEqual(['play-again icon "ice-cream": atlas "map" has no frame "icon/ice-cream/00"']);
++    expect(validatePlayAgainIcons(['ice-cream'], { frames: { 'icon/ice-cream/00': frame(200, 150) } }, 2, 112)).toEqual([
++      'play-again icon "ice-cream": frame "icon/ice-cream/00" is 100 px on its longest side (min 112)',
++    ]);
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/layout/rules.ts b/app/tools/layout/rules.ts
+index baa5562..1b01b37 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/layout/rules.ts
++++ b/app/tools/layout/rules.ts
+@@ -6,6 +6,7 @@ import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
+ import type { Station } from '../../src/content/stations.ts';
+ import { FRAME_NAME } from '../../src/content/assets.ts';
+ import { decorationFootprint, decorationFrameName, padRect, rectPolygon, type Rect as DecoRect } from '../../src/core/decoration-plan.ts';
++import { playAgainIconFrame } from '../../src/content/play-again.ts';
+ import { distToPolyline, minWidth, pointInPolygon, polygonDistance } from './geometry.ts';
+ 
+ export interface LayoutLimits {
+@@ -513,3 +514,25 @@ export function validateDecorations(layout: ScreenLayout, input: DecorationRuleI
+   }
+   return problems;
+ }
++
++// --- play-again icons (Story 2.4) ---------------------------------------------------------------
++
++/**
++ * Play-again icon rule (run by `atlas` before writing and by `validate:content`): `icon/<id>/00`
++ * exists in atlas "map" for every `PLAY_AGAIN_ICONS` id, with its trimmed longest side ÷ renderScale
++ * ≥ `minPx` (ui.playAgainIconPx). Each message names the id.
++ */
++export function validatePlayAgainIcons(ids: readonly string[], atlas: AtlasJsonLike, renderScale: number, minPx: number): string[] {
++  const problems: string[] = [];
++  for (const id of ids) {
++    const frame = playAgainIconFrame(id);
++    const ss = trimmedRect(atlas, frame);
++    if (!ss) {
++      problems.push(`play-again icon "${id}": atlas "map" has no frame "${frame}"`);
++      continue;
++    }
++    const longest = Math.max(ss.width, ss.height) / renderScale;
++    if (longest < minPx) problems.push(`play-again icon "${id}": frame "${frame}" is ${round2(longest)} px on its longest side (min ${minPx})`);
++  }
++  return problems;
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/lint/validate-content.ts b/app/tools/lint/validate-content.ts
+index f34972a..7b0c8b4 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/lint/validate-content.ts
++++ b/app/tools/lint/validate-content.ts
+@@ -6,13 +6,15 @@
+ // station rules (label, name line, invite line of awake stations) — Story 1.5 — and the game content
+ // (awake ⇔ GAME_CONTENT, game audio ids exist) — Story 1.7 — and the hint ring contrast on the real
+ // plates (tools/lint/hint-contrast.ts) — Story 1.9 — and the decorations (catalogue shape, slot ids,
+-// `decoration/<id>/00` frames, footprint size, tap rects, station clearance) — Story 2.2.
++// `decoration/<id>/00` frames, footprint size, tap rects, station clearance) — Story 2.2 — and the
++// play-again lines and icons (`icon/<id>/00` frames ≥ ui.playAgainIconPx) — Story 2.4.
+ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+ import { dirname, join, relative, resolve, sep } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import { ATLASES, BACKGROUNDS, SCREEN_IDS } from '../../src/content/assets.ts';
+ import { AUDIO_CATALOG } from '../../src/content/audio-catalog.ts';
+ import { DECORATIONS } from '../../src/content/decorations.ts';
++import { PLAY_AGAIN_ICONS } from '../../src/content/play-again.ts';
+ import { GAME_CONTENT } from '../../src/content/games/index.ts';
+ import type { ScreenLayout } from '../../src/content/layout-types.ts';
+ import { KART_FRAME, STATIONS, stationFrame } from '../../src/content/stations.ts';
+@@ -27,6 +29,7 @@ import {
+   validateDecorations,
+   validateIceCream,
+   validateLayout,
++  validatePlayAgainIcons,
+   type AtlasJsonLike,
+ } from '../layout/rules.ts';
+ import { screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
+@@ -90,6 +93,9 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[]
+       for (const p of validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, limits: layoutLimits() })) problems.push(`layout "${screen}": ${p}`);
+       const decorations = validateDecorations(layout, decorationLimits(STATIONS, GAME_IDS, DECORATIONS), readAtlas(publicDir, screen));
+       for (const p of decorations) problems.push(`layout "${screen}": ${p}`);
++      const atlas = readAtlas(publicDir, screen);
++      // Story 2.4: the play-again icon frames (icon/<id>/00, ≥ ui.playAgainIconPx).
++      if (atlas) for (const p of validatePlayAgainIcons(Object.keys(PLAY_AGAIN_ICONS), atlas, layout.renderScale, Tokens.ui.playAgainIconPx)) problems.push(`layout "${screen}": ${p}`);
+     } else if (screen === 'ice-cream') {
+       for (const p of validateIceCream(layout, iceCreamLimits(iceCreamScreen), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+     }
+@@ -135,6 +141,7 @@ export function run(publicDir: string, layoutDir: string = LAYOUT_DIR): string[]
+       audioIds: Object.keys(AUDIO_CATALOG),
+     },
+     decorations: { gameIds: GAME_IDS, catalogue: DECORATIONS, stations: STATIONS },
++    playAgain: { gameIds: GAME_IDS, voiceIds: VOICE_LINES.map((l) => l.id), iconIds: Object.keys(PLAY_AGAIN_ICONS) },
+     voice: {
+       lines: VOICE_LINES,
+       hashLine: lineHash,
+@@ -164,7 +171,7 @@ async function main(): Promise<void> {
+     process.exit(1);
+   }
+   console.log(
+-    `content: OK (${GAME_IDS.length} game ids, ${Object.keys(AUDIO_CATALOG).length} audio ids, ${VOICE_LINES.length} voice lines, ${SCREEN_IDS.length} layout(s) with ${STATIONS.length} stations, ${STATIONS.reduce((n, s) => n + s.slots.length, 0)} slots, ${Object.values(DECORATIONS).flat().length} decorations, ${SCREEN_IDS.length} atlas(es), ${listFiles(join(publicDir, 'assets')).length} asset files; hint contrast ${Object.entries(contrast.rings)
++    `content: OK (${GAME_IDS.length} game ids, ${Object.keys(AUDIO_CATALOG).length} audio ids, ${VOICE_LINES.length} voice lines, ${SCREEN_IDS.length} layout(s) with ${STATIONS.length} stations, ${STATIONS.reduce((n, s) => n + s.slots.length, 0)} slots, ${Object.values(DECORATIONS).flat().length} decorations, play-again icon frames ${Object.keys(PLAY_AGAIN_ICONS).map((id) => `icon/${id}/00`).join(", ")}, ${SCREEN_IDS.length} atlas(es), ${listFiles(join(publicDir, 'assets')).length} asset files; hint contrast ${Object.entries(contrast.rings)
+       .map(([s, n]) => `${s} ${n} rings`)
+       .join(', ')})`,
+   );
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/render/blender/build_map.py b/app/tools/render/blender/build_map.py
+index a9e4be1..e8f75b2 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/render/blender/build_map.py
++++ b/app/tools/render/blender/build_map.py
+@@ -2,16 +2,20 @@
+ #
+ # Run by `npm run art:build -- map` (tools/render/build.ts), never by hand:
+ #   blender -b --factory-startup art/src/map-v2.blend --python-exit-code 1 --python build_map.py -- \
+-#     --out <tmp>/map.blend --params <tmp>/params.json --decorations <tmp>/decorations.json
++#     --out <tmp>/map.blend --params <tmp>/params.json --decorations <tmp>/decorations.json \
++#     --icons <tmp>/icons.json
+ # params.json (written by build.ts from Tokens): creature colours (hex), hitPad, renderScale,
+ # design size and the interactive rect (design px) used to keep slots on screen; Story 2.2 adds
+ # decorationMin. decorations.json (Story 2.2): the catalogue [{id, stationId, model (absolute path)}].
++# icons.json (Story 2.4): the play-again icons [{id (GameId), model (absolute path), creature (colour token)}];
++# params gain iconMin (ui.playAgainIconPx).
+ #
+ # Steps: fail on SUBSURF; prune the Tiệm kem preview; regroup station objects into
+ # `sprite.<id>` collections; recolour creatures; create the layout objects (`hit.*`, `anchor.*`,
+ # `slot.*`, `path.road`) in a `layout` collection with hide_render; Story 2.2: 1-2 slots per station (10 in total)
+ # from SLOT_OFFSETS and the detached `sprite.decoration` group (one `state.<id>` per catalogue item,
+-# built at its station's slot 1, the render pivot); set the render size; save.
++# built at its station's slot 1, the render pivot); Story 2.4: the detached `sprite.icon` group (one
++# `state.<gameId>` per play-again icon, rendered as frame `icon/<gameId>/00`); set the render size; save.
+ # Every constant below is in Blender world units (metres), read off the reference scene.
+ import json
+ import math
+@@ -151,6 +155,18 @@ BLOB_RADIUS = 0.42  # times the item's largest XY extent
+ BLOB_LIFT = 0.01  # above the ground, against z-fighting
+ BLOB_SEGMENTS = 32
+ 
++# Play-again icons (Story 2.4): each model of content/play-again.ts › PLAY_AGAIN_ICONS (passed in as
++# JSON by build.ts) is imported, recoloured with recolor_creature (its `Main` material to the creature
++# token; `Main_Light`, the white face and belly, is kept), forced opaque (FBX alpha 0), normalised to
++# ICON_SIZE_M on its largest dimension, turned by ICON_YAW_DEG toward the camera and stood on the ground
++# at ICON_AT (any visible point: the group is detached and rendered alone). Each is a `state.<id>`
++# collection under `sprite.icon`. ICON_SIZE_M keeps the trimmed longest side / renderScale above
++# ui.playAgainIconPx (112), with headroom so the runtime only scales it down.
++ICON_SIZE_M = 3.4
++ICON_AT = (0.0, -1.0)
++ICON_YAW_DEG = 60.0  # a three-quarter side view: the face and the orange back both read at 112 px
++ICON_MATERIAL = 'Main'
++
+ RENDER_SIZE = (2048, 1536)
+ 
+ 
+@@ -445,6 +461,75 @@ def build_decorations(items, slots, colours, sprite_parent):
+     return built
+ 
+ 
++# --- play-again icons (Story 2.4) -----------------------------------------------------------------
++
++def load_icons(path):
++    with open(path, encoding='utf8') as f:
++        items = json.load(f)
++    for it in items:
++        if it['id'] not in STATIONS:
++            fail(f'icon "{it["id"]}": not a station')
++        if not os.path.isfile(it['model']):
++            fail(f'icon "{it["id"]}": model {it["model"]} is missing')
++    return items
++
++
++def build_icons(items, colours, sprite_parent):
++    """sprite.icon (detached) with one state.<id> per play-again icon."""
++    scene = bpy.context.scene
++    group = bpy.data.collections.new('sprite.icon')
++    sprite_parent.children.link(group)
++    group['bhc_detached'] = 1  # never in the plate, rendered one state at a time
++    group['occlude'] = 0  # renders alone, like the kart
++    built = {}
++    for it in items:
++        gid = it['id']
++        if it['creature'] not in colours:
++            fail(f'icon "{gid}": unknown colour token "{it["creature"]}"')
++        coll = bpy.data.collections.new(f'state.{gid}')
++        group.children.link(coll)
++        new = import_model(it['model'])
++        force_opaque(new)
++        root = add_empty(f'icon.{gid}', (0.0, 0.0, 0.0), coll)
++        for o in new:
++            move_to(o, coll)
++        for o in roots(new):
++            o.parent = root
++        if recolor_creature(root, ICON_MATERIAL, colours[it['creature']]) == 0:
++            fail(f'icon "{gid}": no material "{ICON_MATERIAL}" to recolour')
++        root.rotation_euler = (0.0, 0.0, math.radians(ICON_YAW_DEG))
++        bpy.context.view_layer.update()
++        depsgraph = bpy.context.evaluated_depsgraph_get()
++        pts = eval_world_verts(new, depsgraph)
++        if not pts:
++            fail(f'icon "{gid}" has no visible mesh')
++        lo = [min(p[i] for p in pts) for i in range(3)]
++        hi = [max(p[i] for p in pts) for i in range(3)]
++        s = ICON_SIZE_M / max(h - l for h, l in zip(hi, lo))
++        gz = ground_z(scene, depsgraph, ICON_AT[0], ICON_AT[1])
++        root.scale = (s, s, s)
++        root.location = (ICON_AT[0] - (lo[0] + hi[0]) / 2 * s, ICON_AT[1] - (lo[1] + hi[1]) / 2 * s, gz - lo[2] * s)
++        built[gid] = list(coll.all_objects)
++    bpy.context.view_layer.update()
++    return built
++
++
++def icon_report(screen, params, built):
++    """Estimated trimmed size (design px) of every icon; flags one under params['iconMin']."""
++    depsgraph = bpy.context.evaluated_depsgraph_get()
++    problems = []
++    for gid, objs in built.items():
++        pts = [screen.project(p) for p in eval_world_verts(objs, depsgraph)]
++        w = max(p[0] for p in pts) - min(p[0] for p in pts)
++        h = max(p[1] for p in pts) - min(p[1] for p in pts)
++        print(f'build_map: icon "{gid}": {w:.0f}x{h:.0f} px')
++        if max(w, h) < params['iconMin']:
++            problems.append(f'icon "{gid}" is under {params["iconMin"]} px')
++    for p in problems:
++        print(f'build_map: CHECK {p}')
++    return problems
++
++
+ def footprint_report(screen, params, built, slots, station_polys):
+     """Estimated screen footprints (design px) of every item at every slot of its station; prints the
+     rule breaches the TS gate will report after the render (bbox of the projected vertices)."""
+@@ -589,6 +674,10 @@ def build(args):
+     built = build_decorations(decorations, slots, params['colours'], sprite_parent) if decorations else {}
+     check_no_subsurf()
+     report = footprint_report(screen, params, built, slots, station_polys) if built else []
++    icons = load_icons(args['icons']) if 'icons' in args else []
++    built_icons = build_icons(icons, params['colours'], sprite_parent) if icons else {}
++    check_no_subsurf()
++    report += icon_report(screen, params, built_icons) if built_icons else []
+ 
+     if args.get('out'):
+         bpy.ops.wm.save_as_mainfile(filepath=args['out'], compress=True)
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/render/build.ts b/app/tools/render/build.ts
+index 00939fc..29ee631 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/render/build.ts
++++ b/app/tools/render/build.ts
+@@ -5,10 +5,13 @@
+ // Story 2.2: the map builder also gets the decoration catalogue (content/decorations.ts) as JSON,
+ // `[{id, stationId, model}]` with absolute model paths (`--decorations <file>`); a missing model file
+ // fails the build before Blender runs, naming it.
++// Story 2.4: it also gets the play-again icon list (content/play-again.ts › PLAY_AGAIN_ICONS) as
++// `[{id, model, creature}]` (`--icons <file>`), checked the same way.
+ import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+ import { join, resolve } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import { DECORATIONS } from '../../src/content/decorations.ts';
++import { PLAY_AGAIN_ICONS } from '../../src/content/play-again.ts';
+ import { GAME_IDS } from '../../src/content/types.ts';
+ import { Tokens } from '../../src/core/tokens.ts';
+ import { RENDER_SCALE, layoutLimits } from '../layout/rules.ts';
+@@ -26,6 +29,8 @@ export interface BuildParams {
+   hitPad: number;
+   /** Story 2.2: decorationItem.minSize (the builder's footprint report). */
+   decorationMin: number;
++  /** Story 2.4: ui.playAgainIconPx (the icon's trimmed longest side, design px; the builder's report). */
++  iconMin: number;
+   renderScale: number;
+   design: { width: number; height: number };
+   rect: { x0: number; y0: number; x1: number; y1: number };
+@@ -46,6 +51,7 @@ export function buildParams(): BuildParams {
+     rowGap: Tokens.ui.iceCreamRowGap,
+     hitPad: Tokens.spacing.hitPad,
+     decorationMin: Tokens.components.decorationItem.minSize,
++    iconMin: Tokens.ui.playAgainIconPx,
+     renderScale: RENDER_SCALE,
+     design: { width: Tokens.design.width, height: Tokens.design.height },
+     rect: layoutLimits().rect,
+@@ -68,6 +74,24 @@ export function decorationModels(assetsDir: string = ASSETS_DIR): DecorationMode
+   return GAME_IDS.flatMap((stationId) => DECORATIONS[stationId].map((d) => ({ id: d.id, stationId, model: join(assetsDir, ...d.model.split('/')) })));
+ }
+ 
++/** One play-again icon (Story 2.4) as build_map.py imports it: `state.<id>` under `sprite.icon`. */
++export interface IconModel {
++  /** The GameId (frame `icon/<id>/00`). */
++  id: string;
++  /** Absolute path of the .fbx/.glb. */
++  model: string;
++  /** Tokens.colors key for recolor_creature. */
++  creature: string;
++}
++
++/** PLAY_AGAIN_ICONS in GAME_IDS order, model paths resolved under `assetsDir`. */
++export function iconModels(assetsDir: string = ASSETS_DIR): IconModel[] {
++  return GAME_IDS.flatMap((id) => {
++    const icon = PLAY_AGAIN_ICONS[id];
++    return icon ? [{ id, model: join(assetsDir, ...icon.model.split('/')), creature: icon.creature }] : [];
++  });
++}
++
+ /** Screens whose builder imports the decoration models. */
+ const DECORATED_SCREENS = new Set(['map']);
+ 
+@@ -89,6 +113,7 @@ export function build(screenArg: string | undefined, deps: BuildDeps): string {
+   const source = join(PROJECT_DIR, screen.source);
+   if (!existsSync(source)) throw new Error(`source scene ${screen.source} is missing`);
+   const decorations = DECORATED_SCREENS.has(screen.id) ? decorationModels(deps.assetsDir) : undefined;
++  const icons = DECORATED_SCREENS.has(screen.id) ? iconModels(deps.assetsDir) : undefined;
+   if (decorations) {
+     const exists = deps.exists ?? existsSync;
+     const missing = decorations.filter((d) => !exists(d.model));
+@@ -96,6 +121,13 @@ export function build(screenArg: string | undefined, deps: BuildDeps): string {
+       throw new Error(`decoration model(s) missing: ${missing.map((d) => `"${d.id}" → ${d.model}`).join(', ')}`);
+     }
+   }
++  if (icons) {
++    const exists = deps.exists ?? existsSync;
++    const missing = icons.filter((d) => !exists(d.model));
++    if (missing.length > 0) {
++      throw new Error(`play-again icon model(s) missing: ${missing.map((d) => `"${d.id}" → ${d.model}`).join(', ')}`);
++    }
++  }
+   const tmp = mkdtempSync(join(ART_DIR, `.tmp-${screen.id}-`));
+   try {
+     const params = join(tmp, 'params.json');
+@@ -107,6 +139,11 @@ export function build(screenArg: string | undefined, deps: BuildDeps): string {
+       writeFileSync(file, `${JSON.stringify(decorations, null, 2)}\n`);
+       extra.push('--decorations', file);
+     }
++    if (icons) {
++      const file = join(tmp, 'icons.json');
++      writeFileSync(file, `${JSON.stringify(icons, null, 2)}\n`);
++      extra.push('--icons', file);
++    }
+     deps.log(`art:build: building art/${screen.id}.blend with Blender (${bin})…`);
+     const result = runBlender(deps.run, bin, blenderArgs(source, join(BLENDER_SCRIPTS, screen.builder), ['--out', out, '--params', params, ...extra]));
+     // The builder's own report (Story 2.2: decoration sizes, slot warnings, estimated rule breaches).
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/render/render.test.ts b/app/tools/render/render.test.ts
+index ff416dc..a5c18ea 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-4/app/tools/render/render.test.ts
++++ b/app/tools/render/render.test.ts
+@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
+ import { STATIONS } from '../../src/content/stations.ts';
+ import { resolveBlender } from '../shared/binaries.ts';
+ import { ART_DIR, RENDER_DIR, blenderArgs, runBlender, screenSpec, tail } from './blender.ts';
+-import { ASSETS_DIR, build, buildParams, decorationModels } from './build.ts';
++import { ASSETS_DIR, build, buildParams, decorationModels, iconModels } from './build.ts';
+ import { layoutFromRaw, layoutPath, previewSvg, render, replaceDir } from './render.ts';
+ import type { RawProjection } from '../layout/to-layout.ts';
+ 
+@@ -96,6 +96,28 @@ describe('art:build', () => {
+     expect(args).not.toContain('--decorations');
+   });
+ 
++  it('Story 2.4: the play-again icons are ice-cream → ShibaInu.fbx (creatureOrange), present in assets/', () => {
++    const icons = iconModels();
++    expect(icons).toEqual([{ id: 'ice-cream', model: join(ASSETS_DIR, 'quaternius', 'animals', 'ShibaInu.fbx'), creature: 'creatureOrange' }]);
++    expect(icons.filter((m) => !existsSync(m.model))).toEqual([]);
++    expect(buildParams().iconMin).toBe(112);
++  });
++
++  it('Story 2.4: build_map.py gets --icons with the icon JSON; a missing icon model fails first', () => {
++    let seen: unknown;
++    const run = vi.fn((_bin: string, a: readonly string[]) => {
++      const i = a.indexOf('--icons');
++      if (i >= 0) seen = JSON.parse(readFileSync(a[i + 1]!, 'utf8'));
++      return { status: 1, stdout: '', stderr: 'stop here' };
++    });
++    expect(() => build('map', deps(() => 'blender', run))).toThrow(/stop here/);
++    expect(seen).toEqual(iconModels());
++    const never = vi.fn();
++    const exists = (p: string): boolean => !p.endsWith('ShibaInu.fbx');
++    expect(() => build('map', { ...deps(() => 'blender', never), exists })).toThrow(/play-again icon model\(s\) missing: "ice-cream" → .*ShibaInu\.fbx/);
++    expect(never).not.toHaveBeenCalled();
++  });
++
+   it('a failing builder leaves art/ untouched', () => {
+     const before = snapshot(ART_DIR);
+     const run = vi.fn(() => ({ status: 1, stdout: '', stderr: 'RuntimeError: build_map: object "X" has a subdivision modifier' }));

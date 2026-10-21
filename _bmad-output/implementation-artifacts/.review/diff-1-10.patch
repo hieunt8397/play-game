@@ -1,0 +1,3303 @@
+diff --git a/app/src/core/difficulty.ts b/app/src/core/difficulty.ts
+new file mode 100644
+index 0000000..68e3bf9
+--- /dev/null
++++ b/app/src/core/difficulty.ts
+@@ -0,0 +1,30 @@
++// Difficulty policy (Story 1.10, FR5, AR8), pure. Only the shell (Map) calls it, on `round:complete`;
++// games never decide their own level.
++import type { RoundOutcome } from '../content/types';
++
++/** The highest hint level: a question that reached it counts as "needed full help". */
++const FULL_HELP_LEVEL = 4;
++
++function clamp(level: number, ladderLength: number): number {
++  const max = Math.max(0, Math.floor(ladderLength) - 1);
++  const l = Math.floor(level);
++  return Number.isFinite(l) ? Math.min(max, Math.max(0, l)) : 0;
++}
++
++/**
++ * The level of the next round: `current` clamped to the ladder, then +1 when every question was
++ * solved on the first try, else −1 when a question needed full help (hint level 4), else unchanged;
++ * the result is clamped to `[0, ladderLength − 1]` (0 for an empty ladder).
++ */
++export function nextLevel(
++  current: number,
++  outcome: Pick<RoundOutcome, 'questions' | 'firstTryCorrect' | 'maxHintLevel'>,
++  ladderLength: number,
++): number {
++  if (!(ladderLength >= 1)) return 0;
++  const base = clamp(current, ladderLength);
++  let step = 0;
++  if (outcome.questions > 0 && outcome.firstTryCorrect === outcome.questions) step = 1;
++  else if (outcome.maxHintLevel === FULL_HELP_LEVEL) step = -1;
++  return clamp(base + step, ladderLength);
++}
+diff --git a/app/src/core/difficulty.test.ts b/app/src/core/difficulty.test.ts
+new file mode 100644
+index 0000000..520f0b7
+--- /dev/null
++++ b/app/src/core/difficulty.test.ts
+@@ -0,0 +1,42 @@
++import { describe, expect, it } from 'vitest';
++import type { HintLevel } from '../content/types';
++import { nextLevel } from './difficulty';
++
++const o = (questions: number, firstTryCorrect: number, maxHintLevel: HintLevel) => ({ questions, firstTryCorrect, maxHintLevel });
++
++describe('nextLevel', () => {
++  it('+1 when every question was first try', () => {
++    expect(nextLevel(1, o(4, 4, 0), 4)).toBe(2);
++  });
++
++  it('−1 when a question reached hint level 4', () => {
++    expect(nextLevel(2, o(5, 2, 4), 4)).toBe(1);
++  });
++
++  it('unchanged otherwise', () => {
++    expect(nextLevel(2, o(4, 3, 3), 4)).toBe(2);
++    expect(nextLevel(2, o(4, 0, 2), 4)).toBe(2);
++  });
++
++  it('clamps low and high', () => {
++    expect(nextLevel(0, o(3, 0, 4), 4)).toBe(0);
++    expect(nextLevel(3, o(5, 5, 0), 4)).toBe(3);
++  });
++
++  it('a round with no question never raises the level', () => {
++    expect(nextLevel(1, o(0, 0, 0), 4)).toBe(1);
++  });
++
++  it('clamps a bad current first, then applies the rule', () => {
++    expect(nextLevel(9, o(4, 3, 3), 4)).toBe(3);
++    expect(nextLevel(9, o(4, 0, 4), 4)).toBe(2);
++    expect(nextLevel(-2, o(4, 4, 0), 4)).toBe(1);
++    expect(nextLevel(-2, o(4, 0, 4), 4)).toBe(0);
++    expect(nextLevel(Number.NaN, o(4, 4, 0), 4)).toBe(1);
++  });
++
++  it('a ladder shorter than 1 gives 0', () => {
++    expect(nextLevel(2, o(4, 4, 0), 0)).toBe(0);
++    expect(nextLevel(0, o(4, 4, 0), 1)).toBe(0);
++  });
++});
+diff --git a/app/src/core/round-tally.ts b/app/src/core/round-tally.ts
+new file mode 100644
+index 0000000..afd1484
+--- /dev/null
++++ b/app/src/core/round-tally.ts
+@@ -0,0 +1,40 @@
++// Round tally (Story 1.10), pure and game-agnostic: MiniGameBase feeds it from the hint protocol
++// (`beginQuestion`, `questionDone`, `hint:level`) so every game reports a correct RoundOutcome.
++import type { GameId, HintLevel, RoundOutcome } from '../content/types';
++
++export class RoundTally {
++  private closed = 0;
++  private firstTry = 0;
++  private roundMax: HintLevel = 0;
++  /** The open question's own max level; undefined while no question is open. */
++  private open: HintLevel | undefined = undefined;
++
++  /** A question starts (a question still open is closed first). */
++  beginQuestion(): void {
++    if (this.open !== undefined) this.questionDone();
++    this.open = 0;
++  }
++
++  /** The hint level changed; ignored while no question is open (the reset after questionDone). */
++  level(l: HintLevel): void {
++    if (this.open === undefined) return;
++    if (l > this.open) this.open = l;
++    if (l > this.roundMax) this.roundMax = l;
++  }
++
++  /** The open question is answered; ignored when none is open. */
++  questionDone(): void {
++    if (this.open === undefined) return;
++    this.closed += 1;
++    if (this.open === 0) this.firstTry += 1;
++    this.open = undefined;
++  }
++
++  get questions(): number {
++    return this.closed;
++  }
++
++  outcome(gameId: GameId): RoundOutcome {
++    return { gameId, questions: this.closed, firstTryCorrect: this.firstTry, maxHintLevel: this.roundMax };
++  }
++}
+diff --git a/app/src/core/round-tally.test.ts b/app/src/core/round-tally.test.ts
+new file mode 100644
+index 0000000..69c2684
+--- /dev/null
++++ b/app/src/core/round-tally.test.ts
+@@ -0,0 +1,53 @@
++import { describe, expect, it } from 'vitest';
++import { RoundTally } from './round-tally';
++
++describe('RoundTally', () => {
++  it('starts empty', () => {
++    expect(new RoundTally().outcome('ice-cream')).toEqual({ gameId: 'ice-cream', questions: 0, firstTryCorrect: 0, maxHintLevel: 0 });
++  });
++
++  it('q1 clean; q2 one wrong; q3 idle to level 3 → 3 questions, 1 first try, max 3', () => {
++    const t = new RoundTally();
++    t.beginQuestion();
++    t.questionDone();
++    t.level(0); // the machine's reset after questionDone is ignored
++    t.beginQuestion();
++    t.level(1);
++    t.questionDone();
++    t.level(0);
++    t.beginQuestion();
++    t.level(2);
++    t.level(3);
++    t.questionDone();
++    t.level(0);
++    expect(t.outcome('ice-cream')).toEqual({ gameId: 'ice-cream', questions: 3, firstTryCorrect: 1, maxHintLevel: 3 });
++  });
++
++  it('levels with no open question are ignored', () => {
++    const t = new RoundTally();
++    t.level(4);
++    t.beginQuestion();
++    t.questionDone();
++    t.level(4);
++    expect(t.outcome('ice-cream')).toMatchObject({ questions: 1, firstTryCorrect: 1, maxHintLevel: 0 });
++  });
++
++  it('a second questionDone counts nothing; an open question is not counted', () => {
++    const t = new RoundTally();
++    t.beginQuestion();
++    t.questionDone();
++    t.questionDone();
++    t.beginQuestion();
++    t.level(2);
++    expect(t.outcome('ice-cream')).toMatchObject({ questions: 1, firstTryCorrect: 1, maxHintLevel: 2 });
++  });
++
++  it('a level drop inside a question keeps its max', () => {
++    const t = new RoundTally();
++    t.beginQuestion();
++    t.level(4);
++    t.level(0);
++    t.questionDone();
++    expect(t.outcome('ice-cream')).toMatchObject({ questions: 1, firstTryCorrect: 0, maxHintLevel: 4 });
++  });
++});
+diff --git a/app/src/core/session-store.ts b/app/src/core/session-store.ts
+new file mode 100644
+index 0000000..ccb23ae
+--- /dev/null
++++ b/app/src/core/session-store.ts
+@@ -0,0 +1,42 @@
++// Session state (Story 1.7), memory only: a page reload starts fresh, so the kart is back at
++// `kart-start`. Epic 2 adds `resume` and `pendingFlyIns`; Story 2.1 moves the level to ProgressStore.
++import type { GameId, GameStartData, RoundOutcome } from '../content/types';
++import { nextLevel } from './difficulty';
++
++/** 2^31: seeds are non-negative 31-bit integers. */
++const SEED_RANGE = 2 ** 31;
++
++export class SessionStore {
++  /** The station of the last game started; Map parks the kart at its stop. */
++  lastStation: GameId | undefined = undefined;
++  /** Kart arrivals this session (the first trip is capped at kartDriveMaxMs, later ones at kartDriveRepeatMaxMs). */
++  kartTrips = 0;
++  /** Ladder level per game (Epic 1 keeps levels in memory). */
++  levels: Partial<Record<GameId, number>> = {};
++
++  /** `levels[id] ?? 0` clamped to `[0, ladderLength − 1]` (0 for an empty ladder). */
++  levelFor(id: GameId, ladderLength: number): number {
++    const max = Math.max(0, Math.floor(ladderLength) - 1);
++    const level = Math.floor(this.levels[id] ?? 0);
++    return Number.isFinite(level) ? Math.min(max, Math.max(0, level)) : 0;
++  }
++
++  /**
++   * Story 1.10: a round of `id` started at `startedLevel` completed; the next start uses
++   * `nextLevel(startedLevel, outcome, ladderLength)` (memory only; Story 2.1 persists it).
++   */
++  recordRound(id: GameId, startedLevel: number, outcome: Pick<RoundOutcome, 'questions' | 'firstTryCorrect' | 'maxHintLevel'>, ladderLength: number): number {
++    const level = nextLevel(startedLevel, outcome, ladderLength);
++    this.levels[id] = level;
++    return level;
++  }
++
++  /** Start data for a game: its session level and a fresh seed `floor(rng() × 2^31)`. */
++  startData(id: GameId, ladderLength: number, rng: () => number = Math.random): GameStartData {
++    const r = Math.min(Math.max(rng(), 0), 1 - Number.EPSILON);
++    return { level: this.levelFor(id, ladderLength), seed: Math.floor(r * SEED_RANGE) };
++  }
++}
++
++/** The app-wide session. */
++export const session = new SessionStore();
+diff --git a/app/src/core/session-store.test.ts b/app/src/core/session-store.test.ts
+new file mode 100644
+index 0000000..5bcb13c
+--- /dev/null
++++ b/app/src/core/session-store.test.ts
+@@ -0,0 +1,45 @@
++import { describe, expect, it } from 'vitest';
++import { SessionStore } from './session-store';
++
++describe('SessionStore', () => {
++  it('cold start: no last station, no trips, level 0', () => {
++    const s = new SessionStore();
++    expect(s.lastStation).toBeUndefined();
++    expect(s.kartTrips).toBe(0);
++    expect(s.levelFor('ice-cream', 3)).toBe(0);
++  });
++
++  it('levelFor clamps the stored level to the ladder', () => {
++    const s = new SessionStore();
++    s.levels['ice-cream'] = 5;
++    expect(s.levelFor('ice-cream', 3)).toBe(2);
++    s.levels['ice-cream'] = -2;
++    expect(s.levelFor('ice-cream', 3)).toBe(0);
++    s.levels['ice-cream'] = 1;
++    expect(s.levelFor('ice-cream', 3)).toBe(1);
++    expect(s.levelFor('ice-cream', 0)).toBe(0);
++  });
++
++  it('recordRound (Story 1.10): the next levelFor/startData uses nextLevel; a fresh store is back at 0', () => {
++    const s = new SessionStore();
++    expect(s.recordRound('ice-cream', 0, { questions: 3, firstTryCorrect: 3, maxHintLevel: 0 }, 4)).toBe(1);
++    expect(s.levelFor('ice-cream', 4)).toBe(1);
++    expect(s.startData('ice-cream', 4, () => 0).level).toBe(1);
++    s.recordRound('ice-cream', 1, { questions: 4, firstTryCorrect: 1, maxHintLevel: 4 }, 4);
++    expect(s.levelFor('ice-cream', 4)).toBe(0);
++    s.recordRound('ice-cream', 0, { questions: 3, firstTryCorrect: 2, maxHintLevel: 4 }, 4);
++    expect(s.levelFor('ice-cream', 4)).toBe(0);
++    s.recordRound('ice-cream', 0, { questions: 3, firstTryCorrect: 3, maxHintLevel: 0 }, 4);
++    expect(new SessionStore().levelFor('ice-cream', 4)).toBe(0);
++  });
++
++  it('startData: level from the store, seed floor(rng × 2^31)', () => {
++    const s = new SessionStore();
++    s.levels.pizza = 1;
++    expect(s.startData('pizza', 5, () => 0.5)).toEqual({ level: 1, seed: 2 ** 30 });
++    expect(s.startData('pizza', 5, () => 0).seed).toBe(0);
++    const top = s.startData('pizza', 5, () => 1).seed;
++    expect(top).toBeLessThan(2 ** 31);
++    expect(Number.isInteger(top)).toBe(true);
++  });
++});
+diff --git a/app/src/core/rng.ts b/app/src/core/rng.ts
+new file mode 100644
+index 0000000..5764e53
+--- /dev/null
++++ b/app/src/core/rng.ts
+@@ -0,0 +1,47 @@
++// Seeded randomness (Story 1.8). Every game derives its questions from the round seed through this,
++// so the same seed always gives the same round (AD-2 resume, tests).
++
++const UINT32 = 0x100000000;
++
++/** mulberry32: a fast 32-bit PRNG; returns floats in [0, 1). */
++export function mulberry32(seed: number): () => number {
++  let a = seed >>> 0;
++  return () => {
++    a = (a + 0x6d2b79f5) >>> 0;
++    let t = a;
++    t = Math.imul(t ^ (t >>> 15), t | 1);
++    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
++    return ((t ^ (t >>> 14)) >>> 0) / UINT32;
++  };
++}
++
++/** An integer in [0, n). */
++export function randInt(rand: () => number, n: number): number {
++  return Math.floor(rand() * n);
++}
++
++/** A shuffled copy (Fisher–Yates). */
++export function shuffled<T>(items: readonly T[], rand: () => number): T[] {
++  const out = [...items];
++  for (let i = out.length - 1; i > 0; i--) {
++    const j = randInt(rand, i + 1);
++    [out[i], out[j]] = [out[j]!, out[i]!];
++  }
++  return out;
++}
++
++/** Golden-ratio step that decorrelates consecutive question seeds. */
++const QUESTION_STEP = 0x9e3779b9;
++
++/** The seed of question `index` of a round: `(seed + index × 0x9E3779B9) >>> 0`. */
++export function questionSeed(seed: number, index: number): number {
++  return (seed + Math.imul(index, QUESTION_STEP)) >>> 0;
++}
++
++/** Salt of a bounded re-draw (Story 1.10): an rng decorrelated from the question's own. */
++const REDRAW_SALT = 0x5bd1e995;
++
++/** The seed of a question's one re-draw: `(questionSeed ^ 0x5BD1E995) >>> 0`. */
++export function redrawSeed(qSeed: number): number {
++  return (qSeed ^ REDRAW_SALT) >>> 0;
++}
+diff --git a/app/src/core/game-assets.test.ts b/app/src/core/game-assets.test.ts
+new file mode 100644
+index 0000000..332ff8a
+--- /dev/null
++++ b/app/src/core/game-assets.test.ts
+@@ -0,0 +1,120 @@
++import { describe, expect, it } from 'vitest';
++import { GAME_CONTENT } from '../content/games/index';
++import type { GameAssets } from '../content/games/types';
++import { bootAudio, bootTextures } from './boot-load';
++import { AssetTracker, audioUrl, loadPlan, releasePlan } from './game-assets';
++
++const ASSETS: GameAssets = {
++  atlases: [{ key: 'atlas.ice-cream', png: 'assets/atlases/ice-cream.png', json: 'assets/atlases/ice-cream.json' }],
++  audio: ['vo.shell.greeting', 'sfx.shell.pop', 'vo.ice-cream.unknown'],
++};
++
++describe('loadPlan', () => {
++  it('atlases and audio with resolved URLs; unknown audio ids skipped', () => {
++    expect(loadPlan(ASSETS, () => false)).toEqual([
++      { kind: 'atlas', key: 'atlas.ice-cream', png: 'assets/atlases/ice-cream.png', json: 'assets/atlases/ice-cream.json' },
++      { kind: 'audio', key: 'vo.shell.greeting', url: 'assets/audio/vo/vo.shell.greeting.m4a' },
++      { kind: 'audio', key: 'sfx.shell.pop', url: 'assets/audio/sfx/sfx.shell.pop.m4a' },
++    ]);
++  });
++
++  it('skips cached keys by cache kind', () => {
++    const cached = (kind: string, key: string) => (kind === 'texture' && key === 'atlas.ice-cream') || (kind === 'audio' && key === 'sfx.shell.pop');
++    expect(loadPlan(ASSETS, cached).map((c) => c.key)).toEqual(['vo.shell.greeting']);
++  });
++
++  it('an empty asset list gives an empty plan', () => {
++    expect(loadPlan({ atlases: [], audio: [] }, () => false)).toEqual([]);
++  });
++
++  it('audioUrl: undefined for unknown ids', () => {
++    expect(audioUrl('nope')).toBeUndefined();
++  });
++});
++
++describe('images (Story 1.8)', () => {
++  const WITH_IMAGE: GameAssets = { ...ASSETS, images: [{ key: 'bg.ice-cream', path: 'assets/bg/ice-cream.png' }] };
++
++  it('loadPlan emits load.image calls after the atlases, skipping cached textures', () => {
++    expect(loadPlan(WITH_IMAGE, () => false).slice(0, 2)).toEqual([
++      { kind: 'atlas', key: 'atlas.ice-cream', png: 'assets/atlases/ice-cream.png', json: 'assets/atlases/ice-cream.json' },
++      { kind: 'image', key: 'bg.ice-cream', url: 'assets/bg/ice-cream.png' },
++    ]);
++    expect(loadPlan(WITH_IMAGE, (kind, key) => kind === 'texture' && key === 'bg.ice-cream').map((c) => c.key)).not.toContain('bg.ice-cream');
++  });
++
++  it('releasePlan releases the image texture', () => {
++    expect(releasePlan(WITH_IMAGE)).toContainEqual({ kind: 'texture', key: 'bg.ice-cream' });
++  });
++
++  it('Tiệm kem loads its atlas, plate, 50 voice lines (Story 1.10) and 2 SFX', () => {
++    const plan = loadPlan(GAME_CONTENT['ice-cream']!.assets, () => false);
++    expect(plan.filter((c) => c.kind === 'atlas').map((c) => c.key)).toEqual(['atlas.ice-cream']);
++    expect(plan.filter((c) => c.kind === 'image').map((c) => c.key)).toEqual(['bg.ice-cream']);
++    const audio = plan.filter((c) => c.kind === 'audio').map((c) => c.key);
++    expect(audio.filter((k) => k.startsWith('vo.ice-cream.'))).toHaveLength(50);
++    expect(audio).toEqual(expect.arrayContaining(['sfx.ice-cream.snap', 'sfx.ice-cream.happy']));
++  });
++});
++
++describe('releasePlan', () => {
++  it('lists the texture and audio keys of the game', () => {
++    expect(releasePlan(ASSETS)).toEqual([
++      { kind: 'texture', key: 'atlas.ice-cream' },
++      { kind: 'audio', key: 'vo.shell.greeting' },
++      { kind: 'audio', key: 'sfx.shell.pop' },
++    ]);
++  });
++});
++
++describe('AssetTracker', () => {
++  it('an empty plan is settled at once', () => {
++    const t = new AssetTracker();
++    t.track('ice-cream', []);
++    expect(t.drainSettled()).toEqual(['ice-cream']);
++    expect(t.drainSettled()).toEqual([]);
++  });
++
++  it('settles once every key is done (completed or failed), in any order', () => {
++    const t = new AssetTracker();
++    t.track('ice-cream', ['a', 'b']);
++    t.fileDone('b');
++    expect(t.drainSettled()).toEqual([]);
++    t.fileDone('x');
++    t.fileDone('a');
++    expect(t.drainSettled()).toEqual(['ice-cream']);
++    t.fileDone('a');
++    expect(t.drainSettled()).toEqual([]);
++  });
++
++  it('loader complete with keys still pending: flushPending settles them and returns each key once', () => {
++    const t = new AssetTracker();
++    t.track('ice-cream', ['a', 'shared']);
++    t.track('pizza', ['shared']);
++    t.fileDone('a');
++    expect(t.drainSettled()).toEqual([]);
++    expect(t.flushPending()).toEqual(['shared']);
++    expect(t.drainSettled()).toEqual(['ice-cream', 'pizza']);
++    expect(t.flushPending()).toEqual([]);
++    expect(t.drainSettled()).toEqual([]);
++  });
++
++  it('a shared key settles every game waiting for it', () => {
++    const t = new AssetTracker();
++    t.track('ice-cream', ['shared']);
++    t.track('pizza', ['shared', 'p']);
++    t.fileDone('shared');
++    expect(t.drainSettled()).toEqual(['ice-cream']);
++    t.fileDone('p');
++    expect(t.drainSettled()).toEqual(['pizza']);
++  });
++});
++
++describe('game assets vs Boot', () => {
++  it('no game asset key overlaps a boot key (Map keeps the boot keys for the session)', () => {
++    const boot = new Set([...bootAudio().map(([key]) => key), ...bootTextures().map((t) => t.key)]);
++    for (const [id, content] of Object.entries(GAME_CONTENT)) {
++      for (const call of releasePlan(content!.assets)) expect(boot.has(call.key), `${id}: ${call.key}`).toBe(false);
++    }
++  });
++});
+diff --git a/app/src/content/games/ice-cream.ts b/app/src/content/games/ice-cream.ts
+new file mode 100644
+index 0000000..016115c
+--- /dev/null
++++ b/app/src/content/games/ice-cream.ts
+@@ -0,0 +1,71 @@
++// Tiệm kem content (Story 1.8): flavours, the difficulty ladder, home slots, the screen's layout ids
++// and frames, the voice and SFX ids, and the assets Map loads while the kart drives here.
++import { ATLASES, BACKGROUNDS } from '../assets.ts';
++import { VOICE_LINES } from '../voice-lines.ts';
++import type { GameAssets, ScreenRequirements } from './types.ts';
++
++export const FLAVOURS = ['strawberry', 'chocolate', 'vanilla', 'mint'] as const;
++export type FlavourId = (typeof FLAVOURS)[number];
++
++export interface IceCreamLevel {
++  readonly id: string;
++  /** Flavours on the counter. */
++  readonly flavours: 2 | 3 | 4;
++  /** Distinct scoops asked per question (at most the three `slot.cone-*`). */
++  readonly scoops: 1 | 2 | 3;
++  /** Whether the scoops must go on in the asked order (top level only). */
++  readonly ordered: boolean;
++  /** Questions in one round. */
++  readonly questions: 3 | 4 | 5;
++}
++
++/** Story 1.10 (FR5): 1-of-2 → more flavours and 2–3 scoops → order only at the top. */
++export const ladder: readonly IceCreamLevel[] = [
++  { id: 'one-of-2', flavours: 2, scoops: 1, ordered: false, questions: 3 },
++  { id: 'two-of-3', flavours: 3, scoops: 2, ordered: false, questions: 4 },
++  { id: 'three-of-4', flavours: 4, scoops: 3, ordered: false, questions: 5 },
++  { id: 'three-in-order', flavours: 4, scoops: 3, ordered: true, questions: 5 },
++];
++
++/** Home slots (layout `slot.*` ids) by the number of flavours on the counter, left to right. */
++export const HOME_SLOTS: Readonly<Record<number, readonly string[]>> = {
++  2: ['scoop-2', 'scoop-3'],
++  3: ['scoop-1', 'scoop-2', 'scoop-3'],
++  4: ['scoop-1', 'scoop-2', 'scoop-3', 'scoop-4'],
++};
++
++/** Every scoop frame is rendered at this slot (the builder poses all four there). */
++export const SCOOP_RENDER_SLOT = 'scoop-2';
++export const CONE_ANCHOR = 'cone';
++export const SHIBA_ANCHOR = 'shiba';
++export const CONE_SLOTS = ['cone-1', 'cone-2', 'cone-3'] as const;
++export const HITS = { shiba: 'shiba', counter: 'counter', counterUpper: 'counter-upper' } as const;
++
++export const SHIBA_FRAMES = {
++  idle: 'shiba/idle/00',
++  happy: ['shiba/happy/00', 'shiba/happy/01', 'shiba/happy/02', 'shiba/happy/03'],
++} as const;
++
++export const scoopFrame = (f: FlavourId): string => `scoop-${f}/idle/00`;
++
++/** What `ice-cream.layout.json` and `atlas.ice-cream` must hold. */
++export const screen: ScreenRequirements = {
++  anchors: [SHIBA_ANCHOR, CONE_ANCHOR],
++  hits: [HITS.shiba, HITS.counter, HITS.counterUpper],
++  slots: [...HOME_SLOTS[4]!, ...CONE_SLOTS],
++  frames: [SHIBA_FRAMES.idle, ...SHIBA_FRAMES.happy, ...FLAVOURS.map(scoopFrame)],
++};
++
++/** Shiba asks for one flavour (multi-scoop and ordered ids: games/ice-cream/lines.ts). */
++export const askLine = (f: FlavourId): string => `vo.ice-cream.ask.${f}`;
++/** Played after a wrong scoop. */
++export const retryLine = (f: FlavourId): string => `vo.ice-cream.retry.${f}`;
++
++export const SFX = { snap: 'sfx.ice-cream.snap', happy: 'sfx.ice-cream.happy' } as const;
++
++export const assets: GameAssets = {
++  atlases: [ATLASES['ice-cream']],
++  images: [BACKGROUNDS['ice-cream']],
++  // Every vo.ice-cream.* line (Story 1.10: the multi-scoop and order lines load with the game).
++  audio: [...VOICE_LINES.map((l) => l.id).filter((id) => id.startsWith('vo.ice-cream.')), SFX.snap, SFX.happy],
++};
+diff --git a/app/src/content/games/ice-cream.test.ts b/app/src/content/games/ice-cream.test.ts
+new file mode 100644
+index 0000000..f5078db
+--- /dev/null
++++ b/app/src/content/games/ice-cream.test.ts
+@@ -0,0 +1,37 @@
++import { describe, expect, it } from 'vitest';
++import { VOICE_LINES } from '../voice-lines';
++import { CONE_SLOTS, assets, ladder } from './ice-cream';
++
++describe('ice-cream ladder (Story 1.10)', () => {
++  it('level 0 is 1 scoop out of 2 flavours', () => {
++    expect(ladder[0]).toMatchObject({ flavours: 2, scoops: 1, ordered: false });
++  });
++
++  it('flavours and scoops never decrease; each level raises one of them, the last adds order', () => {
++    for (let i = 1; i < ladder.length; i++) {
++      const a = ladder[i - 1]!;
++      const b = ladder[i]!;
++      expect(b.flavours).toBeGreaterThanOrEqual(a.flavours);
++      expect(b.scoops).toBeGreaterThanOrEqual(a.scoops);
++      const raised = b.flavours > a.flavours || b.scoops > a.scoops;
++      if (i === ladder.length - 1) expect(raised || (b.ordered && !a.ordered), b.id).toBe(true);
++      else expect(raised, b.id).toBe(true);
++    }
++  });
++
++  it('scoops ≤ min(flavours, cone slots); 3–5 questions; only the last level is ordered', () => {
++    ladder.forEach((l, i) => {
++      expect(l.scoops).toBeLessThanOrEqual(Math.min(l.flavours, CONE_SLOTS.length, 3));
++      expect(l.questions).toBeGreaterThanOrEqual(3);
++      expect(l.questions).toBeLessThanOrEqual(5);
++      expect(l.ordered, l.id).toBe(i === ladder.length - 1);
++    });
++    expect(new Set(ladder.map((l) => l.id)).size).toBe(ladder.length);
++  });
++
++  it('the game loads every vo.ice-cream.* line', () => {
++    const lines = VOICE_LINES.map((l) => l.id).filter((id) => id.startsWith('vo.ice-cream.'));
++    expect(lines).toHaveLength(50);
++    for (const id of lines) expect(assets.audio).toContain(id);
++  });
++});
+diff --git a/app/src/content/voice-lines.ts b/app/src/content/voice-lines.ts
+new file mode 100644
+index 0000000..2f183f5
+--- /dev/null
++++ b/app/src/content/voice-lines.ts
+@@ -0,0 +1,146 @@
++// Voice lines (AD-6, Story 1.3). Every spoken request is a pre-generated warm Vietnamese female
++// line (edge-tts vi-VN-HoaiMyNeural, built by `npm run content:export && npm run tts`).
++// Code plays them ONLY by id through core/audio-director (`audio.say(id)`); there is no runtime
++// text concatenation, so every combination is enumerated here as its own line.
++//
++// Rules (checked by content/validate.ts + tools/lint/validate-content.ts):
++// - id `vo.<scope>.<intent>[.<subjectId>][.<n>]`, scope = `shell` or a GameId, kebab-case segments;
++// - at most 8 words; `|` marks the pause before the keyword (no empty segment around it) and
++//   then needs `keywordPauseMs` (and vice versa);
++// Authoring guidance not checked by code: one request per sentence, keyword last.
++// - no near-homophone pair (dâu/đâu, cá/cà, ba/bà, bóng/bông, cam/cầm) in one sentence;
++// - `public/<voicePath(id)>` and its `.hash` exist and match `lineHash(line)`.
++// A parent approves a line after listening by copying its `.hash` content into `approved.textHash`.
++// Type-only imports keep this file runnable by Node type stripping (tools/).
++import type { GameId } from './types';
++
++export interface VoiceLine {
++  readonly id: string;
++  /** Spoken text (NFC). `|` = silence of `keywordPauseMs` inserted by ffmpeg (not spoken). */
++  readonly text: string;
++  readonly keywordPauseMs?: number;
++  /** Speaking rate factor (default VOICE_DEFAULTS.rate). */
++  readonly rate?: number;
++  /** Set by a human after listening: the `.hash` content of the approved render. */
++  readonly approved?: { readonly textHash: string };
++}
++
++/** TTS settings shared by every line (Technical Decisions › Asset pipeline). */
++export const VOICE_DEFAULTS = {
++  voice: 'vi-VN-HoaiMyNeural',
++  rate: 0.85,
++} as const;
++
++/** Voice scopes: the shell or a mini-game. */
++export type VoiceScope = 'shell' | GameId;
++
++export const VOICE_LINES = [
++  /** Start: played once after the first tap unlocks audio (Story 1.3). Not yet approved. */
++  { id: 'vo.shell.greeting', text: 'Bé ơi, mình cùng | chơi nào!', keywordPauseMs: 300 },
++  // Map (Story 1.5). Station names = STATIONS[i].label (content/stations.ts). Not yet approved.
++  { id: 'vo.shell.station-name.ice-cream', text: 'Xe kem' },
++  { id: 'vo.shell.station-name.pizza', text: 'Tiệm pizza' },
++  { id: 'vo.shell.station-name.race', text: 'Đường đua' },
++  { id: 'vo.shell.station-name.fishing', text: 'Hồ cá' },
++  { id: 'vo.shell.station-name.touch-talk', text: 'Chạm là nói' },
++  { id: 'vo.shell.station-name.dino-puzzle', text: 'Công viên khủng long' },
++  { id: 'vo.shell.station-name.shadow-match', text: 'Hang tìm bóng' },
++  /** Map invitation of an awake station (EXPERIENCE › Mời chơi), followed by its name line. */
++  { id: 'vo.shell.invite.ice-cream', text: 'Bé ơi, mình đi ăn | kem nhé!', keywordPauseMs: 300 },
++  /** Hud Home tap inside a game (Story 1.6). Not yet approved. */
++  { id: 'vo.shell.home', text: 'Về đảo nào!' },
++  // Tiệm kem (Story 1.8): Shiba asks for a flavour (+ its colour word: hồng, nâu, trắng, xanh); the
++  // retry after a wrong scoop. "sô-cô-la" counts as 3 words, so its lines carry no colour word.
++  // Played only through core/hint-director. Not yet approved.
++  { id: 'vo.ice-cream.ask.strawberry', text: 'Cho bạn Shiba | kem dâu màu hồng nào!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.chocolate', text: 'Cho Shiba | kem sô-cô-la nào!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.vanilla', text: 'Cho bạn Shiba | kem vani màu trắng nào!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.mint', text: 'Cho Shiba | kem bạc hà màu xanh nào!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.retry.strawberry', text: 'Mình tìm | kem dâu màu hồng nhé!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.retry.chocolate', text: 'Mình tìm | kem sô-cô-la nhé!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.retry.vanilla', text: 'Mình tìm | kem vani màu trắng nhé!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.retry.mint', text: 'Mình tìm | kem bạc hà màu xanh nhé!', keywordPauseMs: 300 },
++  // Tiệm kem (Story 1.10): multi-scoop requests name the flavours in FLAVOURS order without colour
++  // words (8-word limit); ordered requests (top level) keep the asked order; order-first/order-next
++  // name the flavour expected next. Played only through core/hint-director. Not yet approved.
++  { id: 'vo.ice-cream.ask.strawberry-chocolate', text: 'Cho Shiba | dâu và sô-cô-la!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.strawberry-vanilla', text: 'Cho Shiba | dâu và vani!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.strawberry-mint', text: 'Cho Shiba | dâu và bạc hà!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.chocolate-vanilla', text: 'Cho Shiba | sô-cô-la và vani!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.chocolate-mint', text: 'Cho Shiba | sô-cô-la và bạc hà!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.vanilla-mint', text: 'Cho Shiba | vani và bạc hà!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.strawberry-chocolate-vanilla', text: 'Cho Shiba | dâu, sô-cô-la, vani!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.strawberry-chocolate-mint', text: 'Cho Shiba | dâu, sô-cô-la, bạc hà!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.strawberry-vanilla-mint', text: 'Cho Shiba | dâu, vani, bạc hà!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask.chocolate-vanilla-mint', text: 'Cho Shiba | sô-cô-la, vani, bạc hà!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.ask-order.strawberry-chocolate-vanilla', text: 'Dâu, rồi sô-cô-la, rồi vani!' },
++  { id: 'vo.ice-cream.ask-order.strawberry-chocolate-mint', text: 'Dâu, rồi sô-cô-la, rồi bạc hà!' },
++  { id: 'vo.ice-cream.ask-order.strawberry-vanilla-chocolate', text: 'Dâu, rồi vani, rồi sô-cô-la!' },
++  { id: 'vo.ice-cream.ask-order.strawberry-vanilla-mint', text: 'Dâu, rồi vani, rồi bạc hà!' },
++  { id: 'vo.ice-cream.ask-order.strawberry-mint-chocolate', text: 'Dâu, rồi bạc hà, rồi sô-cô-la!' },
++  { id: 'vo.ice-cream.ask-order.strawberry-mint-vanilla', text: 'Dâu, rồi bạc hà, rồi vani!' },
++  { id: 'vo.ice-cream.ask-order.chocolate-strawberry-vanilla', text: 'Sô-cô-la, rồi dâu, rồi vani!' },
++  { id: 'vo.ice-cream.ask-order.chocolate-strawberry-mint', text: 'Sô-cô-la, rồi dâu, rồi bạc hà!' },
++  { id: 'vo.ice-cream.ask-order.chocolate-vanilla-strawberry', text: 'Sô-cô-la, rồi vani, rồi dâu!' },
++  { id: 'vo.ice-cream.ask-order.chocolate-vanilla-mint', text: 'Sô-cô-la, rồi vani, rồi bạc hà!' },
++  { id: 'vo.ice-cream.ask-order.chocolate-mint-strawberry', text: 'Sô-cô-la, rồi bạc hà, rồi dâu!' },
++  { id: 'vo.ice-cream.ask-order.chocolate-mint-vanilla', text: 'Sô-cô-la, rồi bạc hà, rồi vani!' },
++  { id: 'vo.ice-cream.ask-order.vanilla-strawberry-chocolate', text: 'Vani, rồi dâu, rồi sô-cô-la!' },
++  { id: 'vo.ice-cream.ask-order.vanilla-strawberry-mint', text: 'Vani, rồi dâu, rồi bạc hà!' },
++  { id: 'vo.ice-cream.ask-order.vanilla-chocolate-strawberry', text: 'Vani, rồi sô-cô-la, rồi dâu!' },
++  { id: 'vo.ice-cream.ask-order.vanilla-chocolate-mint', text: 'Vani, rồi sô-cô-la, rồi bạc hà!' },
++  { id: 'vo.ice-cream.ask-order.vanilla-mint-strawberry', text: 'Vani, rồi bạc hà, rồi dâu!' },
++  { id: 'vo.ice-cream.ask-order.vanilla-mint-chocolate', text: 'Vani, rồi bạc hà, rồi sô-cô-la!' },
++  { id: 'vo.ice-cream.ask-order.mint-strawberry-chocolate', text: 'Bạc hà, rồi dâu, rồi sô-cô-la!' },
++  { id: 'vo.ice-cream.ask-order.mint-strawberry-vanilla', text: 'Bạc hà, rồi dâu, rồi vani!' },
++  { id: 'vo.ice-cream.ask-order.mint-chocolate-strawberry', text: 'Bạc hà, rồi sô-cô-la, rồi dâu!' },
++  { id: 'vo.ice-cream.ask-order.mint-chocolate-vanilla', text: 'Bạc hà, rồi sô-cô-la, rồi vani!' },
++  { id: 'vo.ice-cream.ask-order.mint-vanilla-strawberry', text: 'Bạc hà, rồi vani, rồi dâu!' },
++  { id: 'vo.ice-cream.ask-order.mint-vanilla-chocolate', text: 'Bạc hà, rồi vani, rồi sô-cô-la!' },
++  { id: 'vo.ice-cream.order-first.strawberry', text: 'Trước tiên là | kem dâu!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.order-first.chocolate', text: 'Trước tiên là | kem sô-cô-la!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.order-first.vanilla', text: 'Trước tiên là | kem vani!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.order-first.mint', text: 'Trước tiên là | kem bạc hà!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.order-next.strawberry', text: 'Tiếp theo là | kem dâu!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.order-next.chocolate', text: 'Tiếp theo là | kem sô-cô-la!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.order-next.vanilla', text: 'Tiếp theo là | kem vani!', keywordPauseMs: 300 },
++  { id: 'vo.ice-cream.order-next.mint', text: 'Tiếp theo là | kem bạc hà!', keywordPauseMs: 300 },
++] as const satisfies readonly VoiceLine[];
++
++export type VoiceLineId = (typeof VOICE_LINES)[number]['id'];
++
++const VOICE_IDS: ReadonlySet<string> = new Set(VOICE_LINES.map((line) => line.id));
++
++export function isVoiceLineId(id: string): id is VoiceLineId {
++  return VOICE_IDS.has(id);
++}
++
++/** The line that names a station (Map tap on an awake station, after an invitation). */
++export function stationNameLine(stationId: string): string {
++  return `vo.shell.station-name.${stationId}`;
++}
++
++/**
++ * The Speaker prompt of the island when Map wakes (Story 1.8): the name of the station the kart is
++ * parked at, or none. A game's request never outlives the game.
++ */
++export function islandPrompt(lastStation: string | undefined): string | undefined {
++  if (lastStation === undefined) return undefined;
++  const id = stationNameLine(lastStation);
++  return isVoiceLineId(id) ? id : undefined;
++}
++
++/** The Map invitation line of an awake station. */
++export function inviteLine(stationId: string): string {
++  return `vo.shell.invite.${stationId}`;
++}
++
++/** Shipped file of a line, relative to the app base (`base: './'`). */
++export function voicePath(id: string): string {
++  return `assets/audio/vo/${id}.m4a`;
++}
++
++/** The `.hash` file next to a line's `.m4a`. */
++export function voiceHashPath(id: string): string {
++  return `assets/audio/vo/${id}.hash`;
++}
+diff --git a/app/src/games/ice-cream/lines.ts b/app/src/games/ice-cream/lines.ts
+new file mode 100644
+index 0000000..11cb5aa
+--- /dev/null
++++ b/app/src/games/ice-cream/lines.ts
+@@ -0,0 +1,26 @@
++// Tiệm kem voice line ids (Story 1.10), pure. Every id is a literal line of content/voice-lines.ts
++// (lines.test.ts enumerates every reachable request); nothing is concatenated at play time.
++import { askLine, retryLine, type FlavourId } from '../../content/games/ice-cream';
++import type { Question } from './questions';
++
++type Request = Pick<Question, 'wanted' | 'ordered'>;
++
++/** Shiba's request: one flavour, an unordered set (spoken order) or an ordered sequence. */
++export function askLineId(q: Request): string {
++  if (q.ordered) return `vo.ice-cream.ask-order.${q.wanted.join('-')}`;
++  if (q.wanted.length === 1) return askLine(q.wanted[0]!);
++  return `vo.ice-cream.ask.${q.wanted.join('-')}`;
++}
++
++/**
++ * The retry after a wrong scoop, once `placed` are on the cone: unordered names the first remaining
++ * wanted flavour; ordered names the flavour expected next ("Trước tiên là…" when nothing is placed).
++ */
++export function retryLineId(q: Request, placed: readonly FlavourId[]): string {
++  if (q.ordered) {
++    const next = q.wanted[Math.min(placed.length, q.wanted.length - 1)]!;
++    return placed.length === 0 ? `vo.ice-cream.order-first.${next}` : `vo.ice-cream.order-next.${next}`;
++  }
++  const next = q.wanted.find((f) => !placed.includes(f)) ?? q.wanted[q.wanted.length - 1]!;
++  return retryLine(next);
++}
+diff --git a/app/src/games/ice-cream/lines.test.ts b/app/src/games/ice-cream/lines.test.ts
+new file mode 100644
+index 0000000..298e98e
+--- /dev/null
++++ b/app/src/games/ice-cream/lines.test.ts
+@@ -0,0 +1,64 @@
++import { describe, expect, it } from 'vitest';
++import { FLAVOURS, ladder, type FlavourId } from '../../content/games/ice-cream';
++import { isVoiceLineId } from '../../content/voice-lines';
++import { askLineId, retryLineId } from './lines';
++import { questionFor } from './questions';
++
++/** Every request a level can make over all 4 flavours: k-subsets in FLAVOURS order, or k-permutations. */
++function requests(scoops: number, ordered: boolean): FlavourId[][] {
++  const out: FlavourId[][] = [];
++  const walk = (acc: FlavourId[]): void => {
++    if (acc.length === scoops) {
++      if (ordered || acc.every((f, i) => i === 0 || FLAVOURS.indexOf(acc[i - 1]!) < FLAVOURS.indexOf(f))) out.push(acc);
++      return;
++    }
++    for (const f of FLAVOURS) if (!acc.includes(f)) walk([...acc, f]);
++  };
++  walk([]);
++  return out;
++}
++
++describe('ice-cream lines', () => {
++  it('reachable request counts: 4 singles, 6 pairs, 4 triples, 24 ordered triples', () => {
++    expect(requests(1, false)).toHaveLength(4);
++    expect(requests(2, false)).toHaveLength(6);
++    expect(requests(3, false)).toHaveLength(4);
++    expect(requests(3, true)).toHaveLength(24);
++  });
++
++  it('every ask and retry id of every level is a voice line', () => {
++    const missing: string[] = [];
++    for (const lvl of ladder) {
++      for (const wanted of requests(lvl.scoops, lvl.ordered)) {
++        const q = { wanted, ordered: lvl.ordered };
++        const ids = [askLineId(q)];
++        // Every placed prefix (ordered) / every placed subset in placement order (unordered).
++        for (let n = 0; n < wanted.length; n++) ids.push(retryLineId(q, wanted.slice(0, n)), retryLineId(q, wanted.slice(wanted.length - n)));
++        for (const id of ids) if (!isVoiceLineId(id)) missing.push(id);
++      }
++    }
++    expect(missing).toEqual([]);
++  });
++
++  it('every line a seeded round can ask is a voice line (seeds 0..49, every level)', () => {
++    for (let level = 0; level < ladder.length; level++) {
++      for (let seed = 0; seed < 50; seed++) {
++        for (let i = 0; i < ladder[level]!.questions; i++) expect(isVoiceLineId(askLineId(questionFor(seed, i, level)))).toBe(true);
++      }
++    }
++  });
++
++  it('ids by shape', () => {
++    expect(askLineId({ wanted: ['vanilla'], ordered: false })).toBe('vo.ice-cream.ask.vanilla');
++    expect(askLineId({ wanted: ['strawberry', 'chocolate'], ordered: false })).toBe('vo.ice-cream.ask.strawberry-chocolate');
++    expect(askLineId({ wanted: ['mint', 'vanilla', 'strawberry'], ordered: true })).toBe('vo.ice-cream.ask-order.mint-vanilla-strawberry');
++    const two = { wanted: ['strawberry', 'chocolate'] as FlavourId[], ordered: false };
++    expect(retryLineId(two, [])).toBe('vo.ice-cream.retry.strawberry');
++    expect(retryLineId(two, ['chocolate'])).toBe('vo.ice-cream.retry.strawberry');
++    expect(retryLineId(two, ['strawberry'])).toBe('vo.ice-cream.retry.chocolate');
++    const ord = { wanted: ['mint', 'vanilla', 'strawberry'] as FlavourId[], ordered: true };
++    expect(retryLineId(ord, [])).toBe('vo.ice-cream.order-first.mint');
++    expect(retryLineId(ord, ['mint'])).toBe('vo.ice-cream.order-next.vanilla');
++    expect(retryLineId(ord, ['mint', 'vanilla'])).toBe('vo.ice-cream.order-next.strawberry');
++  });
++});
+diff --git a/app/src/games/ice-cream/questions.ts b/app/src/games/ice-cream/questions.ts
+new file mode 100644
+index 0000000..8e31903
+--- /dev/null
++++ b/app/src/games/ice-cream/questions.ts
+@@ -0,0 +1,84 @@
++// Tiệm kem questions (Stories 1.8, 1.10), pure: which flavours sit on the counter (and where) and which
++// scoops Shiba asks for. Derived from the round seed only, so a question is reproducible (resume, tests).
++import { FLAVOURS, HOME_SLOTS, ladder, type FlavourId, type IceCreamLevel } from '../../content/games/ice-cream';
++import { mulberry32, questionSeed, redrawSeed, shuffled } from '../../core/rng';
++
++export interface Scoop {
++  readonly flavour: FlavourId;
++  /** Home slot id (`slot.<id>` in the layout). */
++  readonly home: string;
++}
++
++export interface Question {
++  readonly index: number;
++  /** The flavours on the counter, left to right. */
++  readonly counter: readonly FlavourId[];
++  /** The asked scoops (distinct): in FLAVOURS order (the spoken order), or the asked order when `ordered`. */
++  readonly wanted: readonly FlavourId[];
++  readonly ordered: boolean;
++  /** `counter` on its home slots, left to right. */
++  readonly scoops: readonly Scoop[];
++}
++
++export function levelIndex(level: number): number {
++  const l = Math.floor(level);
++  return Number.isFinite(l) ? Math.max(0, Math.min(ladder.length - 1, l)) : 0;
++}
++
++export function levelOf(level: number): IceCreamLevel {
++  return ladder[levelIndex(level)]!;
++}
++
++const spokenOrder = (fs: readonly FlavourId[]): FlavourId[] => [...fs].sort((a, b) => FLAVOURS.indexOf(a) - FLAVOURS.indexOf(b));
++
++/** The identity of a request: the set (unordered) or the sequence (ordered). */
++function key(wanted: readonly FlavourId[], ordered: boolean): string {
++  return (ordered ? wanted : spokenOrder(wanted)).join('-');
++}
++
++function pick(from: readonly FlavourId[], lvl: IceCreamLevel, rand: () => number): FlavourId[] {
++  const drawn = shuffled(from, rand).slice(0, lvl.scoops);
++  return lvl.ordered ? drawn : spokenOrder(drawn);
++}
++
++/** Every distinct request from `counter` for `lvl`, in a fixed order. */
++function allRequests(counter: readonly FlavourId[], lvl: IceCreamLevel): FlavourId[][] {
++  const out: FlavourId[][] = [];
++  const walk = (acc: FlavourId[]): void => {
++    if (acc.length === lvl.scoops) {
++      if (lvl.ordered || acc.every((f, i) => i === 0 || FLAVOURS.indexOf(acc[i - 1]!) < FLAVOURS.indexOf(f))) out.push([...acc]);
++      return;
++    }
++    for (const f of counter) if (!acc.includes(f)) walk([...acc, f]);
++  };
++  walk([]);
++  return out;
++}
++
++function draw(seed: number, index: number, lvl: IceCreamLevel, avoid: string | undefined): Question {
++  const qSeed = questionSeed(seed, index);
++  const rand = mulberry32(qSeed);
++  const counter = shuffled(FLAVOURS, rand).slice(0, lvl.flavours);
++  let wanted = pick(counter, lvl, rand);
++  if (avoid !== undefined && key(wanted, lvl.ordered) === avoid) {
++    // One salted re-draw among the requests that differ (bounded; one always exists since flavours > scoops or the counter changed).
++    const salted = mulberry32(redrawSeed(qSeed));
++    const others = allRequests(counter, lvl).filter((w) => key(w, lvl.ordered) !== avoid);
++    if (others.length > 0) wanted = others[Math.floor(salted() * others.length)]!;
++  }
++  const homes = HOME_SLOTS[lvl.flavours] ?? HOME_SLOTS[FLAVOURS.length]!;
++  return { index, counter, wanted, ordered: lvl.ordered, scoops: counter.map((flavour, i) => ({ flavour, home: homes[i]! })) };
++}
++
++/**
++ * Question `index` of the round: `mulberry32((seed + index × 0x9E3779B9) >>> 0)` shuffles the
++ * flavours, the level's count is laid out on its home slots, and `scoops` distinct flavours are drawn
++ * from them. From index 1 on the request differs from the previous question's (its set, or its
++ * sequence on an ordered level). An out-of-range level is clamped.
++ */
++export function questionFor(seed: number, index: number, level: number): Question {
++  const lvl = levelOf(level);
++  let q = draw(seed, 0, lvl, undefined);
++  for (let i = 1; i <= index; i++) q = draw(seed, i, lvl, key(q.wanted, lvl.ordered));
++  return q;
++}
+diff --git a/app/src/games/ice-cream/questions.test.ts b/app/src/games/ice-cream/questions.test.ts
+new file mode 100644
+index 0000000..de9289f
+--- /dev/null
++++ b/app/src/games/ice-cream/questions.test.ts
+@@ -0,0 +1,72 @@
++import { describe, expect, it } from 'vitest';
++import { FLAVOURS, HOME_SLOTS, ladder } from '../../content/games/ice-cream';
++import { questionFor } from './questions';
++
++const spoken = (fs: readonly string[]) => [...fs].sort((a, b) => FLAVOURS.indexOf(a as never) - FLAVOURS.indexOf(b as never));
++
++describe('questionFor', () => {
++  it('is deterministic for the same seed, index and level', () => {
++    for (let level = 0; level < ladder.length; level++) {
++      for (let i = 0; i < 10; i++) expect(questionFor(7, i, level)).toEqual(questionFor(7, i, level));
++    }
++  });
++
++  it('level 0: two distinct flavours at scoop-2 and scoop-3, one wanted among them', () => {
++    for (let i = 0; i < 20; i++) {
++      const q = questionFor(7, i, 0);
++      expect(q.index).toBe(i);
++      expect(q.scoops.map((s) => s.home)).toEqual(['scoop-2', 'scoop-3']);
++      expect(q.counter).toEqual(q.scoops.map((s) => s.flavour));
++      expect(new Set(q.counter).size).toBe(2);
++      expect(q.wanted).toHaveLength(1);
++      expect(q.counter).toContain(q.wanted[0]);
++    }
++  });
++
++  it('every level, seeds 0..99: counter on its home slots, distinct wanted from the counter, spoken order unless ordered, consecutive requests differ', () => {
++    for (let level = 0; level < ladder.length; level++) {
++      const lvl = ladder[level]!;
++      for (let seed = 0; seed < 100; seed++) {
++        let prev: string | undefined;
++        for (let i = 0; i < 8; i++) {
++          const q = questionFor(seed, i, level);
++          expect(q.counter).toHaveLength(lvl.flavours);
++          expect(new Set(q.counter).size).toBe(lvl.flavours);
++          expect(q.scoops.map((s) => s.home)).toEqual(HOME_SLOTS[lvl.flavours]);
++          expect(q.wanted).toHaveLength(lvl.scoops);
++          expect(new Set(q.wanted).size).toBe(lvl.scoops);
++          for (const f of q.wanted) expect(q.counter).toContain(f);
++          expect(q.ordered).toBe(lvl.ordered);
++          if (!lvl.ordered) expect(q.wanted).toEqual(spoken(q.wanted));
++          const key = lvl.ordered ? q.wanted.join() : spoken(q.wanted).join();
++          if (prev !== undefined) expect(key, `seed ${seed} level ${level} index ${i}`).not.toBe(prev);
++          prev = key;
++        }
++      }
++    }
++  });
++
++  it('the ordered level asks sequences outside the spoken order', () => {
++    const seqs = Array.from({ length: 100 }, (_, s) => questionFor(s, 0, 3).wanted);
++    expect(seqs.some((w) => w.join() !== spoken(w).join())).toBe(true);
++  });
++
++  it('level 0 asks all 4 flavours in indexes 0..19', () => {
++    for (const seed of [0, 7, 42, 123456, 2 ** 31 - 1]) {
++      const targets = Array.from({ length: 20 }, (_, i) => questionFor(seed, i, 0).wanted[0]);
++      expect(new Set(targets)).toEqual(new Set(FLAVOURS));
++    }
++  });
++
++  it('different seeds give different rounds', () => {
++    const a = Array.from({ length: 6 }, (_, i) => questionFor(1, i, 1).wanted.join()).join('|');
++    const b = Array.from({ length: 6 }, (_, i) => questionFor(2, i, 1).wanted.join()).join('|');
++    expect(a).not.toBe(b);
++  });
++
++  it('clamps an out-of-range level', () => {
++    expect(questionFor(7, 3, 99)).toEqual(questionFor(7, 3, ladder.length - 1));
++    expect(questionFor(7, 3, -2)).toEqual(questionFor(7, 3, 0));
++    expect(questionFor(7, 3, Number.NaN)).toEqual(questionFor(7, 3, 0));
++  });
++});
+diff --git a/app/src/games/ice-cream/round.ts b/app/src/games/ice-cream/round.ts
+new file mode 100644
+index 0000000..edfca3d
+--- /dev/null
++++ b/app/src/games/ice-cream/round.ts
+@@ -0,0 +1,286 @@
++// Tiệm kem round model (Stories 1.8, 1.10), pure: the scoops on the counter, the cone, drop
++// resolution, the round's questions and the outcome commands. The scene (IceCream.ts) only applies
++// the commands with Phaser.
++// Drop resolution of a scoop, first match wins:
++//   1. inside the cone target (circle at slot.cone-1, r = snapRadius × snapScale) → serve
++//   2. inside hit.shiba → serve
++//   3. within snapRadius/2 of its own pre-lift position → home (settles back, no hint)
++//   4. inside hit.counter-upper → serve
++//   5. inside hit.counter → rest (nudged clear of the other scoops; its new pre-lift position)
++//   6. anywhere else → off (slides back after a delay; a new lift cancels the slide)
++// A serve is correct when the flavour is wanted and not yet placed (and, on an ordered level, the next
++// in order). It snaps onto the next cone slot and a fresh scoop of that flavour pops in at its home.
++// Not the last scoop: `stepDone` with the next stage. The last scoop: `questionDone`, every scoop
++// unpickable, Shiba celebrates, and the question index advances at once; then the next question after
++// `nextQuestionDelayMs`, or `finishRound` after `finishDelayMs` when it was the round's last.
++// A wrong serve floats back and reports `hintWrong`. The cone and the question survive every outcome.
++import type { FlavourId } from '../../content/games/ice-cream';
++import type { Point } from '../../content/layout-types';
++import type { Snapshot } from '../../content/types';
++import { nudgeApart } from '../../core/input/drop';
++import type { Rect } from '../../core/safe-rect';
++import { askLineId, retryLineId } from './lines';
++import { levelIndex, levelOf, questionFor, type Question } from './questions';
++
++export interface Area {
++  contains(p: Point): boolean;
++}
++
++export interface RoundGeometry {
++  /** Centre of a scoop resting at home slot `slot`. */
++  homeCentre(slot: string): Point;
++  /** Centre of the n-th scoop on the cone (0-based; clamped to the last slot). */
++  coneCentre(n: number): Point;
++  readonly cone: Area;
++  readonly shiba: Area;
++  readonly counterUpper: Area;
++  readonly counter: Area;
++  /** Where a resting scoop may lie: the counter's box ∩ the drag bounds. */
++  restRect(): Rect;
++  /** dropTarget.snapRadius (design px). */
++  readonly snapRadius: number;
++  /** draggableItem.minSize: resting scoops stay this far apart. */
++  readonly minSize: number;
++  readonly offCounterDelayMs: number;
++  /** After a question's last scoop, the next question starts this much later. */
++  readonly nextQuestionDelayMs: number;
++  /** After the round's last scoop, the round finishes this much later (Timing.roundCelebrationMs). */
++  readonly finishDelayMs: number;
++}
++
++export interface ScoopState {
++  readonly id: string;
++  readonly flavour: FlavourId;
++  /** Pre-lift position (centre). */
++  readonly at: Point;
++}
++
++export type RoundCommand =
++  | { readonly kind: 'build'; readonly scoops: readonly ScoopState[] }
++  | {
++      readonly kind: 'beginQuestion';
++      readonly promptLineId: string;
++      readonly retryLineId: string;
++      readonly correct: readonly string[];
++      readonly distractors: readonly string[];
++    }
++  | { readonly kind: 'stepDone'; readonly retryLineId: string; readonly correct: readonly string[]; readonly distractors: readonly string[] }
++  | { readonly kind: 'snap'; readonly id: string; readonly to: Point }
++  | { readonly kind: 'floatBack'; readonly id: string; readonly to: Point }
++  | { readonly kind: 'rest'; readonly id: string; readonly at: Point }
++  | { readonly kind: 'returnLater'; readonly id: string; readonly to: Point; readonly ms: number }
++  | { readonly kind: 'cancelReturn'; readonly id: string }
++  | { readonly kind: 'respawn'; readonly scoop: ScoopState }
++  | { readonly kind: 'pickable'; readonly on: boolean }
++  | { readonly kind: 'celebrate' }
++  | { readonly kind: 'hintWrong' }
++  | { readonly kind: 'questionDone' }
++  | { readonly kind: 'nextLater'; readonly ms: number }
++  | { readonly kind: 'finishRound'; readonly afterMs: number }
++  | { readonly kind: 'clear' };
++
++export type DropOutcome = 'serve' | 'home' | 'rest' | 'off';
++
++export interface IceCreamProgress {
++  readonly questionIndex: number;
++  readonly partial: { readonly placed: FlavourId[] };
++}
++
++export class IceCreamRound {
++  private readonly geo: RoundGeometry;
++  private readonly seed: number;
++  private readonly level: number;
++  private index: number;
++  private question: Question;
++  private scoops = new Map<string, ScoopState>();
++  private placed: FlavourId[] = [];
++  private pendingReturn = new Set<string>();
++  private celebrating = false;
++  private finished = false;
++  private nextId = 1;
++
++  constructor(geo: RoundGeometry, seed: number, level: number, startIndex = 0) {
++    this.geo = geo;
++    this.seed = seed;
++    this.level = levelIndex(level);
++    this.index = startIndex;
++    this.question = questionFor(seed, startIndex, this.level);
++  }
++
++  get questionIndex(): number {
++    return this.index;
++  }
++
++  /** Questions in this round (the level's count). */
++  get questionCount(): number {
++    return levelOf(this.level).questions;
++  }
++
++  /** The current question's asked scoops. */
++  get wanted(): readonly FlavourId[] {
++    return this.question.wanted;
++  }
++
++  get current(): Question {
++    return this.question;
++  }
++
++  get isCelebrating(): boolean {
++    return this.celebrating;
++  }
++
++  /** True once the round's last question is answered. */
++  get isFinished(): boolean {
++    return this.finished;
++  }
++
++  /** Current scoops on the counter (not the ones on the cone). */
++  scoopStates(): ScoopState[] {
++    return [...this.scoops.values()];
++  }
++
++  conePlaced(): readonly FlavourId[] {
++    return this.placed;
++  }
++
++  /** Lays out the current question: its scoops and the hint question. */
++  start(): RoundCommand[] {
++    this.scoops = new Map();
++    this.pendingReturn = new Set();
++    this.celebrating = false;
++    for (const s of this.question.scoops) this.add(s.flavour, this.geo.homeCentre(s.home));
++    const stage = this.stage();
++    return [
++      { kind: 'build', scoops: this.scoopStates() },
++      { kind: 'pickable', on: true },
++      { kind: 'beginQuestion', promptLineId: askLineId(this.question), retryLineId: retryLineId(this.question, this.placed), ...stage },
++    ];
++  }
++
++  /** A finger lifted scoop `id`: a pending slide back is cancelled. */
++  lift(id: string): RoundCommand[] {
++    if (!this.pendingReturn.delete(id)) return [];
++    return [{ kind: 'cancelReturn', id }];
++  }
++
++  /** Where a drop at `p` of scoop `id` resolves (no state change). */
++  resolve(id: string, p: Point): DropOutcome {
++    const item = this.scoops.get(id);
++    const g = this.geo;
++    if (g.cone.contains(p) || g.shiba.contains(p)) return 'serve';
++    if (item && Math.hypot(p.x - item.at.x, p.y - item.at.y) <= g.snapRadius / 2) return 'home';
++    if (g.counterUpper.contains(p)) return 'serve';
++    if (g.counter.contains(p)) return 'rest';
++    return 'off';
++  }
++
++  /** Whether serving `f` now is correct. */
++  isCorrect(f: FlavourId): boolean {
++    const q = this.question;
++    if (!q.wanted.includes(f) || this.placed.includes(f)) return false;
++    return !q.ordered || q.wanted[this.placed.length] === f;
++  }
++
++  /** Scoop `id` released at `p` (its centre). */
++  drop(id: string, p: Point): RoundCommand[] {
++    const item = this.scoops.get(id);
++    if (!item) return [];
++    // While Shiba celebrates every scoop is unpickable; a drag already running just goes back.
++    if (this.celebrating || this.finished) return [{ kind: 'floatBack', id, to: item.at }];
++    switch (this.resolve(id, p)) {
++      case 'serve':
++        return this.isCorrect(item.flavour) ? this.serveCorrect(item) : [{ kind: 'floatBack', id, to: item.at }, { kind: 'hintWrong' }];
++      case 'home':
++        return [{ kind: 'floatBack', id, to: item.at }];
++      case 'rest': {
++        const others = this.scoopStates()
++          .filter((s) => s.id !== id)
++          .map((s) => s.at);
++        const at = nudgeApart(p, others, this.geo.minSize, this.geo.restRect());
++        this.scoops.set(id, { ...item, at });
++        return [{ kind: 'rest', id, at }];
++      }
++      case 'off':
++        this.pendingReturn.add(id);
++        return [{ kind: 'returnLater', id, to: item.at, ms: this.geo.offCounterDelayMs }];
++    }
++  }
++
++  /** The drag of `id` ended without a release (pause, lost up): back to its pre-lift spot. */
++  cancel(id: string): RoundCommand[] {
++    const item = this.scoops.get(id);
++    return item ? [{ kind: 'floatBack', id, to: item.at }] : [];
++  }
++
++  /** A delayed slide back ran. */
++  returned(id: string): void {
++    this.pendingReturn.delete(id);
++  }
++
++  /** Lays out the (already advanced) next question; the scene calls it `nextLater.ms` after the last scoop. */
++  next(): RoundCommand[] {
++    if (this.finished) return [];
++    return [{ kind: 'clear' }, ...this.start()];
++  }
++
++  /** The resumable state (AD-2). */
++  progress(): IceCreamProgress {
++    return { questionIndex: this.index, partial: { placed: [...this.placed] } };
++  }
++
++  snapshot(): Snapshot {
++    return { v: 1, level: this.level, seed: this.seed, questionIndex: this.index, partial: { placed: [...this.placed] } };
++  }
++
++  private serveCorrect(item: ScoopState): RoundCommand[] {
++    const to = this.geo.coneCentre(this.placed.length);
++    this.placed.push(item.flavour);
++    this.scoops.delete(item.id);
++    this.pendingReturn.delete(item.id);
++    const home = this.question.scoops.find((s) => s.flavour === item.flavour)?.home;
++    const fresh = this.add(item.flavour, home ? this.geo.homeCentre(home) : item.at);
++    const snapped: RoundCommand[] = [
++      { kind: 'snap', id: item.id, to },
++      { kind: 'respawn', scoop: fresh },
++    ];
++    if (this.placed.length < this.question.wanted.length) {
++      return [...snapped, { kind: 'stepDone', retryLineId: retryLineId(this.question, this.placed), ...this.stage() }];
++    }
++    this.celebrating = true;
++    // The answered question is never "in progress": the index advances at once (a Home tap during the
++    // celebration snapshots the next question with nothing placed).
++    const last = this.index + 1 >= this.questionCount;
++    this.index += 1;
++    this.placed = [];
++    if (last) this.finished = true;
++    else this.question = questionFor(this.seed, this.index, this.level);
++    // Story 1.9: the hint question ends first (the ring, hand and fade vanish on the correct answer),
++    // so its restore (pickable true) cannot unlock the scoops during the celebration.
++    return [
++      { kind: 'questionDone' },
++      ...snapped,
++      { kind: 'pickable', on: false },
++      { kind: 'celebrate' },
++      last ? { kind: 'finishRound', afterMs: this.geo.finishDelayMs } : { kind: 'nextLater', ms: this.geo.nextQuestionDelayMs },
++    ];
++  }
++
++  /**
++   * The hint stage: unordered, the remaining wanted scoops in spoken order; ordered, the next one.
++   * Every other counter scoop (already placed flavours included) is a distractor.
++   */
++  private stage(): { correct: string[]; distractors: string[] } {
++    const q = this.question;
++    const remaining = q.wanted.filter((f) => !this.placed.includes(f));
++    const wantedNow = q.ordered ? remaining.slice(0, 1) : remaining;
++    const all = this.scoopStates();
++    const correct = wantedNow.flatMap((f) => all.filter((s) => s.flavour === f).map((s) => s.id));
++    return { correct, distractors: all.filter((s) => !correct.includes(s.id)).map((s) => s.id) };
++  }
++
++  private add(flavour: FlavourId, at: Point): ScoopState {
++    const s: ScoopState = { id: `scoop-${this.nextId++}`, flavour, at };
++    this.scoops.set(s.id, s);
++    return s;
++  }
++}
+diff --git a/app/src/games/ice-cream/round.test.ts b/app/src/games/ice-cream/round.test.ts
+new file mode 100644
+index 0000000..9a9661c
+--- /dev/null
++++ b/app/src/games/ice-cream/round.test.ts
+@@ -0,0 +1,318 @@
++import { describe, expect, it } from 'vitest';
++import { ladder, type FlavourId } from '../../content/games/ice-cream';
++import type { Point } from '../../content/layout-types';
++import { pointInPolygon } from '../../core/input/polygon';
++import { questionFor } from './questions';
++import { IceCreamRound, type RoundCommand, type RoundGeometry } from './round';
++
++const rect = (x0: number, y0: number, x1: number, y1: number): Point[] => [
++  { x: x0, y: y0 },
++  { x: x1, y: y0 },
++  { x: x1, y: y1 },
++  { x: x0, y: y1 },
++];
++const poly = (pts: Point[]) => ({ contains: (p: Point) => pointInPolygon(p, pts) });
++
++const HOMES: Record<string, Point> = {
++  'scoop-1': { x: 152, y: 560 },
++  'scoop-2': { x: 332, y: 560 },
++  'scoop-3': { x: 692, y: 560 },
++  'scoop-4': { x: 872, y: 560 },
++};
++const CONE = { x: 512, y: 450, r: 100 };
++const ON_CONE = { x: CONE.x, y: CONE.y };
++const coneAt = (n: number) => ({ x: 512, y: 430 - 40 * Math.min(n, 2) });
++
++const GEO: RoundGeometry = {
++  homeCentre: (slot) => HOMES[slot]!,
++  coneCentre: coneAt,
++  cone: { contains: (p) => Math.hypot(p.x - CONE.x, p.y - CONE.y) <= CONE.r },
++  shiba: poly(rect(420, 150, 600, 340)),
++  counterUpper: poly(rect(50, 500, 970, 620)),
++  counter: poly(rect(50, 500, 970, 760)),
++  restRect: () => ({ x: 50, y: 500, w: 920, h: 230 }),
++  snapRadius: 100,
++  minSize: 90,
++  offCounterDelayMs: 1500,
++  nextQuestionDelayMs: 2000,
++  finishDelayMs: 1500,
++};
++
++function setup(seed = 7, level = 0) {
++  const round = new IceCreamRound(GEO, seed, level);
++  const cmds = round.start();
++  const scoops = round.scoopStates();
++  const target = scoops.find((s) => s.flavour === round.wanted[0])!;
++  const other = scoops.find((s) => !round.wanted.includes(s.flavour))!;
++  return { round, cmds, target, other };
++}
++
++/** The first seed whose question 0 at `level` asks exactly `wanted`. */
++function seedFor(level: number, wanted: readonly FlavourId[]): number {
++  for (let s = 0; s < 100000; s++) if (questionFor(s, 0, level).wanted.join() === wanted.join()) return s;
++  throw new Error(`no seed for ${wanted.join()}`);
++}
++
++const kinds = (cmds: readonly RoundCommand[]) => cmds.map((c) => c.kind);
++const scoopOf = (round: IceCreamRound, f: FlavourId) => round.scoopStates().find((s) => s.flavour === f)!;
++const serve = (round: IceCreamRound, f: FlavourId) => round.drop(scoopOf(round, f).id, ON_CONE);
++const idsOf = (round: IceCreamRound, fs: readonly FlavourId[]) => fs.map((f) => scoopOf(round, f).id);
++
++/** Serves every wanted scoop of the current question in order; returns the last drop's commands. */
++function answer(round: IceCreamRound): RoundCommand[] {
++  let cmds: RoundCommand[] = [];
++  for (const f of [...round.wanted]) cmds = serve(round, f);
++  return cmds;
++}
++
++describe('IceCreamRound', () => {
++  it('Enter {level 0, seed 7}: two scoops at scoop-2/3 and a beginQuestion with the ask/retry lines', () => {
++    const { round, cmds, target, other } = setup(7);
++    expect(kinds(cmds)).toEqual(['build', 'pickable', 'beginQuestion']);
++    const build = cmds[0] as Extract<RoundCommand, { kind: 'build' }>;
++    expect(build.scoops.map((s) => s.at)).toEqual([HOMES['scoop-2'], HOMES['scoop-3']]);
++    const f = round.wanted[0]!;
++    expect(cmds[2]).toEqual({
++      kind: 'beginQuestion',
++      promptLineId: `vo.ice-cream.ask.${f}`,
++      retryLineId: `vo.ice-cream.retry.${f}`,
++      correct: [target.id],
++      distractors: [other.id],
++    });
++    expect(round.snapshot()).toEqual({ v: 1, level: 0, seed: 7, questionIndex: 0, partial: { placed: [] } });
++    expect(round.questionCount).toBe(3);
++  });
++
++  it('correct single scoop: questionDone first (Story 1.9), snap, respawn, unpickable, celebrate, next in 2 s; index advances at once', () => {
++    const { round, target } = setup();
++    const cmds = round.drop(target.id, { x: CONE.x + 80, y: CONE.y });
++    expect(cmds).toEqual([
++      { kind: 'questionDone' },
++      { kind: 'snap', id: target.id, to: coneAt(0) },
++      { kind: 'respawn', scoop: { id: expect.any(String), flavour: target.flavour, at: target.at } },
++      { kind: 'pickable', on: false },
++      { kind: 'celebrate' },
++      { kind: 'nextLater', ms: 2000 },
++    ]);
++    expect(round.isCelebrating).toBe(true);
++    // Home mid-celebration (not last): the snapshot points at the next question with nothing placed.
++    expect(round.progress()).toEqual({ questionIndex: 1, partial: { placed: [] } });
++    expect(round.scoopStates()).toHaveLength(2);
++  });
++
++  it.each([
++    ['Shiba', { x: 500, y: 250 }],
++    ['the upper counter', { x: 900, y: 600 }],
++  ])('correct scoop dropped on %s is served the same way', (_name, p) => {
++    const { round, target } = setup();
++    expect(round.resolve(target.id, p)).toBe('serve');
++    expect(kinds(round.drop(target.id, p))).toEqual(['questionDone', 'snap', 'respawn', 'pickable', 'celebrate', 'nextLater']);
++  });
++
++  it('wrong scoop on the cone floats back to its pre-lift spot and reports hintWrong only', () => {
++    const { round, other } = setup();
++    expect(round.drop(other.id, ON_CONE)).toEqual([{ kind: 'floatBack', id: other.id, to: other.at }, { kind: 'hintWrong' }]);
++    expect(round.progress().partial.placed).toEqual([]);
++    expect(round.isCelebrating).toBe(false);
++  });
++
++  it('own home: dropped within snapRadius/2 of its pre-lift spot settles with no hint', () => {
++    const { round, other } = setup();
++    const p = { x: other.at.x + 30, y: other.at.y + 30 };
++    expect(round.drop(other.id, p)).toEqual([{ kind: 'floatBack', id: other.id, to: other.at }]);
++  });
++
++  it('rest: lower counter on top of another scoop stays, nudged ≥ minSize apart; the new spot is its home for floats', () => {
++    const { round, other, target } = setup();
++    const onTop = { x: target.at.x + 10, y: 690 };
++    const lowNeighbour = { ...target.at, y: 690 };
++    round.drop(target.id, lowNeighbour);
++    const cmds = round.drop(other.id, onTop);
++    expect(cmds).toHaveLength(1);
++    const rest = cmds[0] as Extract<RoundCommand, { kind: 'rest' }>;
++    expect(rest.kind).toBe('rest');
++    const t = round.scoopStates().find((s) => s.id === target.id)!;
++    expect(Math.hypot(rest.at.x - t.at.x, rest.at.y - t.at.y)).toBeGreaterThanOrEqual(90 - 1e-9);
++    expect(round.drop(other.id, ON_CONE)[0]).toEqual({ kind: 'floatBack', id: other.id, to: rest.at });
++  });
++
++  it('off the counter: slides back after 1500 ms; lifting again cancels the slide', () => {
++    const { round, other } = setup();
++    expect(round.drop(other.id, { x: 500, y: 60 })).toEqual([{ kind: 'returnLater', id: other.id, to: other.at, ms: 1500 }]);
++    expect(round.lift(other.id)).toEqual([{ kind: 'cancelReturn', id: other.id }]);
++    expect(round.lift(other.id)).toEqual([]);
++  });
++
++  it('pause mid-drag (cancel): back to the pre-lift spot', () => {
++    const { round, other } = setup();
++    expect(round.cancel(other.id)).toEqual([{ kind: 'floatBack', id: other.id, to: other.at }]);
++  });
++
++  it('celebrating: a drag still running just floats back (no second serve, no hint)', () => {
++    const { round, target, other } = setup();
++    round.drop(target.id, ON_CONE);
++    expect(round.drop(other.id, ON_CONE)).toEqual([{ kind: 'floatBack', id: other.id, to: other.at }]);
++  });
++
++  it('next(): clears the cone, lays out question 1 with a different request', () => {
++    const { round, target } = setup();
++    const first = round.wanted.join();
++    round.drop(target.id, ON_CONE);
++    const cmds = round.next();
++    expect(kinds(cmds)).toEqual(['clear', 'build', 'pickable', 'beginQuestion']);
++    expect(round.questionIndex).toBe(1);
++    expect(round.wanted.join()).not.toBe(first);
++    expect(round.isCelebrating).toBe(false);
++    expect(round.snapshot()).toMatchObject({ questionIndex: 1, partial: { placed: [] } });
++  });
++
++  it('the cone and the question survive wrong, home, rest and off outcomes', () => {
++    const { round, target, other } = setup(7, 1);
++    const outcomes: Array<[string, Point]> = [
++      ['wrong', ON_CONE],
++      ['home', { x: other.at.x + 20, y: other.at.y }],
++      ['rest', { x: 600, y: 700 }],
++      ['off', { x: 500, y: 60 }],
++    ];
++    const wanted = round.wanted.join();
++    const expectSurvives = (placed: string[]) => {
++      expect(round.wanted.join()).toBe(wanted);
++      expect(round.questionIndex).toBe(0);
++      expect(round.progress().partial.placed).toEqual(placed);
++    };
++    for (const [kind, p] of outcomes) {
++      expect(round.resolve(other.id, p), kind).toBe(kind === 'wrong' ? 'serve' : kind);
++      round.drop(other.id, p);
++      round.lift(other.id);
++      expectSurvives([]);
++    }
++    round.drop(target.id, ON_CONE);
++    for (const [, p] of outcomes) {
++      round.drop(other.id, p);
++      round.lift(other.id);
++      expectSurvives([target.flavour]);
++    }
++  });
++
++  it('unknown scoop ids are ignored', () => {
++    const { round } = setup();
++    expect(round.drop('nope', { x: 0, y: 0 })).toEqual([]);
++    expect(round.cancel('nope')).toEqual([]);
++  });
++});
++
++describe('IceCreamRound multi-scoop (Story 1.10)', () => {
++  it('Two any order (L1, [strawberry, chocolate]): chocolate → cone-1 + stepDone(retry.strawberry); strawberry → cone-2, questionDone, celebrate', () => {
++    const round = new IceCreamRound(GEO, seedFor(1, ['strawberry', 'chocolate']), 1);
++    const start = round.start();
++    expect(start[2]).toMatchObject({
++      kind: 'beginQuestion',
++      promptLineId: 'vo.ice-cream.ask.strawberry-chocolate',
++      retryLineId: 'vo.ice-cream.retry.strawberry',
++      correct: idsOf(round, ['strawberry', 'chocolate']),
++    });
++    expect(round.scoopStates()).toHaveLength(3);
++    const choc = scoopOf(round, 'chocolate');
++    const first = serve(round, 'chocolate');
++    expect(kinds(first)).toEqual(['snap', 'respawn', 'stepDone']);
++    expect(first[0]).toEqual({ kind: 'snap', id: choc.id, to: coneAt(0) });
++    const third = round.scoopStates().find((s) => s.flavour !== 'strawberry' && s.flavour !== 'chocolate')!;
++    expect(first[2]).toEqual({
++      kind: 'stepDone',
++      retryLineId: 'vo.ice-cream.retry.strawberry',
++      correct: idsOf(round, ['strawberry']),
++      distractors: expect.arrayContaining([third.id, scoopOf(round, 'chocolate').id]),
++    });
++    expect((first[2] as Extract<RoundCommand, { kind: 'stepDone' }>).distractors).toHaveLength(2);
++    expect(round.isCelebrating).toBe(false);
++    expect(round.progress()).toEqual({ questionIndex: 0, partial: { placed: ['chocolate'] } });
++    const last = serve(round, 'strawberry');
++    expect(kinds(last)).toEqual(['questionDone', 'snap', 'respawn', 'pickable', 'celebrate', 'nextLater']);
++    expect(last[1]).toMatchObject({ kind: 'snap', to: coneAt(1) });
++  });
++
++  it('Duplicate: the respawned copy of a placed flavour floats back with hintWrong; placed unchanged', () => {
++    const round = new IceCreamRound(GEO, seedFor(1, ['strawberry', 'chocolate']), 1);
++    round.start();
++    serve(round, 'strawberry');
++    const copy = scoopOf(round, 'strawberry');
++    expect(round.drop(copy.id, ON_CONE)).toEqual([{ kind: 'floatBack', id: copy.id, to: copy.at }, { kind: 'hintWrong' }]);
++    expect(round.progress().partial.placed).toEqual(['strawberry']);
++  });
++
++  it('Ordered ok (L3, [mint, vanilla, strawberry]): cone-1..3; retries order-first.mint → order-next.vanilla → order-next.strawberry', () => {
++    const round = new IceCreamRound(GEO, seedFor(3, ['mint', 'vanilla', 'strawberry']), 3);
++    const start = round.start();
++    const others = round.scoopStates().filter((s) => s.flavour !== 'mint').map((s) => s.id);
++    expect(start[2]).toEqual({
++      kind: 'beginQuestion',
++      promptLineId: 'vo.ice-cream.ask-order.mint-vanilla-strawberry',
++      retryLineId: 'vo.ice-cream.order-first.mint',
++      correct: idsOf(round, ['mint']),
++      distractors: others,
++    });
++    const a = serve(round, 'mint');
++    expect(a[0]).toMatchObject({ kind: 'snap', to: coneAt(0) });
++    expect(a[2]).toMatchObject({ kind: 'stepDone', retryLineId: 'vo.ice-cream.order-next.vanilla', correct: idsOf(round, ['vanilla']) });
++    expect((a[2] as Extract<RoundCommand, { kind: 'stepDone' }>).distractors).toHaveLength(3);
++    const b = serve(round, 'vanilla');
++    expect(b[0]).toMatchObject({ kind: 'snap', to: coneAt(1) });
++    expect(b[2]).toMatchObject({ kind: 'stepDone', retryLineId: 'vo.ice-cream.order-next.strawberry', correct: idsOf(round, ['strawberry']) });
++    const c = serve(round, 'strawberry');
++    expect(c[1]).toMatchObject({ kind: 'snap', to: coneAt(2) });
++    expect(kinds(c)).toEqual(['questionDone', 'snap', 'respawn', 'pickable', 'celebrate', 'nextLater']);
++  });
++
++  it('Wrong order (L3): a wanted flavour out of order floats back with hintWrong', () => {
++    const round = new IceCreamRound(GEO, seedFor(3, ['mint', 'vanilla', 'strawberry']), 3);
++    round.start();
++    const v = scoopOf(round, 'vanilla');
++    expect(round.drop(v.id, ON_CONE)).toEqual([{ kind: 'floatBack', id: v.id, to: v.at }, { kind: 'hintWrong' }]);
++    serve(round, 'mint');
++    const s = scoopOf(round, 'strawberry');
++    expect(round.drop(s.id, ON_CONE)).toEqual([{ kind: 'floatBack', id: s.id, to: s.at }, { kind: 'hintWrong' }]);
++    expect(round.progress().partial.placed).toEqual(['mint']);
++  });
++
++  it('Level-4 dim stage, unordered (L2, 1 of 3 placed): the two remaining wanted are correct; placed and non-wanted are distractors', () => {
++    const round = new IceCreamRound(GEO, 11, 2);
++    round.start();
++    const [w0, w1, w2] = round.wanted as [FlavourId, FlavourId, FlavourId];
++    const step = serve(round, w1)[2] as Extract<RoundCommand, { kind: 'stepDone' }>;
++    expect(step.correct).toEqual(idsOf(round, [w0, w2]));
++    const rest = round.scoopStates().filter((s) => s.flavour !== w0 && s.flavour !== w2);
++    expect([...step.distractors].sort()).toEqual(rest.map((s) => s.id).sort());
++    expect(step.retryLineId).toBe(`vo.ice-cream.retry.${w0}`);
++  });
++
++  it('Home mid-question (1 of 2 placed): the snapshot keeps the placed flavour', () => {
++    const round = new IceCreamRound(GEO, 7, 1);
++    round.start();
++    const f = round.wanted[1]!;
++    serve(round, f);
++    expect(round.snapshot()).toMatchObject({ questionIndex: 0, partial: { placed: [f] } });
++  });
++
++  it.each(ladder.map((l, i) => [l.id, i, l.questions] as const))('Last question (%s): %i → finishRound after 1500 ms after its %i questions; then inert', (_id, level, questions) => {
++    const round = new IceCreamRound(GEO, 7, level);
++    round.start();
++    for (let q = 0; q < questions - 1; q++) {
++      expect(answer(round).at(-1)).toEqual({ kind: 'nextLater', ms: 2000 });
++      round.next();
++    }
++    const last = answer(round);
++    expect(kinds(last)).toEqual(['questionDone', 'snap', 'respawn', 'pickable', 'celebrate', 'finishRound']);
++    expect(last.at(-1)).toEqual({ kind: 'finishRound', afterMs: 1500 });
++    expect(round.isFinished).toBe(true);
++    expect(round.next()).toEqual([]);
++    const s = round.scoopStates()[0]!;
++    expect(round.drop(s.id, ON_CONE)).toEqual([{ kind: 'floatBack', id: s.id, to: s.at }]);
++  });
++
++  it('an out-of-range level is clamped (snapshot level too)', () => {
++    const round = new IceCreamRound(GEO, 7, 9);
++    round.start();
++    expect(round.wanted).toHaveLength(3);
++    expect(round.snapshot().level).toBe(3);
++  });
++});
+diff --git a/app/src/games/ice-cream/IceCream.ts b/app/src/games/ice-cream/IceCream.ts
+new file mode 100644
+index 0000000..f89d2e0
+--- /dev/null
++++ b/app/src/games/ice-cream/IceCream.ts
+@@ -0,0 +1,456 @@
++// Tiệm kem (Stories 1.8, 1.10): drag the scoops Shiba asks for onto the cone (1–3, in order at the
++// top level; a round of 3–5 questions ends with round:complete). The scene only wires Phaser:
++// the plate `bg.ice-cream`, the full-frame sprites of `atlas.ice-cream` (Shiba on its ground pivot,
++// scoops on their trimmed centres), DragControllers for the scoops and tweens. Every decision (drop
++// resolution, outcomes, questions) is the pure round model (round.ts, questions.ts); prompts and
++// retries go through `hint` only; audio here is SFX only. Every position comes from
++// LAYOUTS['ice-cream']; timers are scene-clock events (removed on Home by MiniGameBase).
++import type { GameObjects, Time, Tweens } from 'phaser';
++import { ATLASES, BACKGROUNDS } from '../../content/assets';
++import {
++  CONE_ANCHOR,
++  CONE_SLOTS,
++  HITS,
++  SCOOP_RENDER_SLOT,
++  SFX,
++  SHIBA_ANCHOR,
++  SHIBA_FRAMES,
++  scoopFrame,
++  type FlavourId,
++} from '../../content/games/ice-cream';
++import type { Point, ScreenLayout } from '../../content/layout-types';
++import { LAYOUTS } from '../../content/layouts';
++import type { Snapshot } from '../../content/types';
++import { audio } from '../../core/audio-director';
++import type { HintStep } from '../../core/hint-director';
++import { createDraggable, defaultDragArea, type Draggable } from '../../core/input/drag-controller';
++import { createDropTarget, intersectRect, type DropTarget } from '../../core/input/drop';
++import { inputGuard } from '../../core/input/guard';
++import { boundingBox, pointInPolygon } from '../../core/input/polygon';
++import { createTapRouter, type TapRouter } from '../../core/input/tap-router';
++import { amplitude, prefersReducedMotion } from '../../core/reduced-motion';
++import type { Rect } from '../../core/safe-rect';
++import { Tokens } from '../../core/tokens';
++import { originFor, trimmedCentre, trimmedSize, type TrimmedRect } from '../../core/ui/sprite-pivot';
++import { MiniGameBase } from '../mini-game-base';
++import { IceCreamRound, type Area, type RoundCommand, type RoundGeometry, type ScoopState } from './round';
++
++const EASE_OUT = 'Quad.easeOut';
++const SINE = 'Sine.easeInOut';
++
++interface FrameData {
++  readonly spriteSourceSize?: { x: number; y: number; w: number; h: number };
++}
++
++interface ScoopView {
++  readonly id: string;
++  readonly flavour: FlavourId;
++  readonly image: GameObjects.Image | undefined;
++  readonly shadow: GameObjects.Ellipse;
++  /** Undefined once the scoop sits on the cone. */
++  drag: Draggable | undefined;
++  /** Hit radius and the drawn half size. */
++  readonly radius: number;
++  readonly half: number;
++  /** The scoop is drawn here (its trimmed centre). */
++  pos: Point;
++  tween: Tweens.Tween | undefined;
++  returnTimer: Time.TimerEvent | undefined;
++}
++
++const NO_AREA: Area = { contains: () => false };
++
++export class IceCream extends MiniGameBase {
++  private round: IceCreamRound | undefined;
++  private router: TapRouter | undefined;
++  private scoops = new Map<string, ScoopView>();
++  private coneScoops: ScoopView[] = [];
++  private shiba: GameObjects.Image | undefined;
++  private breath: Tweens.Tween | undefined;
++  private cone: DropTarget | undefined;
++  private reduced = false;
++  private layout: ScreenLayout = LAYOUTS['ice-cream'];
++  /** Missing frames already reported (one warning each). */
++  private warned = new Set<string>();
++
++  constructor() {
++    super('ice-cream');
++  }
++
++  // --- build ----------------------------------------------------------------------------------------
++
++  protected build(): void {
++    this.cameras.main.setBackgroundColor(Tokens.colors.sky.css);
++    this.reduced = prefersReducedMotion(window);
++    this.layout = LAYOUTS['ice-cream'];
++    this.scoops = new Map();
++    this.coneScoops = [];
++    const scale = 1 / this.layout.renderScale;
++
++    const bg = BACKGROUNDS['ice-cream'].key;
++    if (this.textures.exists(bg)) this.add.image(0, 0, bg).setOrigin(0).setScale(scale);
++    else console.warn(`ice-cream: texture "${bg}" is missing — plate skipped`);
++
++    this.addShiba();
++    this.router = createTapRouter(this);
++    const coneAt = this.slot(CONE_SLOTS[0]);
++    this.cone = createDropTarget({ id: CONE_ANCHOR, circle: { x: coneAt.x, y: coneAt.y, r: Tokens.components.dropTarget.snapRadius } });
++
++    this.round = new IceCreamRound(this.geometry(), this.seed, this.level);
++    this.applyAll(this.round.start());
++  }
++
++  snapshot(): Snapshot {
++    return this.round?.snapshot() ?? { v: 1, level: this.level, seed: this.seed, questionIndex: 0, partial: { placed: [] } };
++  }
++
++  private slot(id: string): Point {
++    const p = this.layout.slots[id];
++    if (!p) console.warn(`ice-cream: slot "${id}" is missing from the layout`);
++    return p ?? { x: this.layout.design.width / 2, y: this.layout.design.height / 2 };
++  }
++
++  private area(id: string): Area {
++    const poly = this.layout.hits[id];
++    if (!poly) {
++      console.warn(`ice-cream: hit "${id}" is missing from the layout`);
++      return NO_AREA;
++    }
++    return { contains: (p) => pointInPolygon(p, poly) };
++  }
++
++  /** Trimmed rect of an atlas frame (render px); undefined when the frame is missing. */
++  private frameRect(frame: string): TrimmedRect | undefined {
++    const key = ATLASES['ice-cream'].key;
++    if (!this.textures.exists(key) || !this.textures.get(key).has(frame)) return undefined;
++    const ss = (this.textures.get(key).get(frame).customData as FrameData | undefined)?.spriteSourceSize;
++    return ss ? { x: ss.x, y: ss.y, width: ss.w, height: ss.h } : undefined;
++  }
++
++  /** Scoop frames are rendered at slot.scoop-2: a scoop at home slot `id` is drawn this far from it. */
++  private scoopOffset(flavour: FlavourId): Point {
++    const rect = this.frameRect(scoopFrame(flavour));
++    const ref = this.slot(SCOOP_RENDER_SLOT);
++    if (!rect) return { x: 0, y: 0 };
++    const c = trimmedCentre(rect, this.layout.renderScale);
++    return { x: c.x - ref.x, y: c.y - ref.y };
++  }
++
++  private geometry(): RoundGeometry {
++    const counterBox = boundingBox(this.layout.hits[HITS.counter] ?? []);
++    const counterRect: Rect = { x: counterBox.x, y: counterBox.y, w: counterBox.width, h: counterBox.height };
++    // The offset is the same for every flavour up to a few px; the average keeps homes on one line.
++    const ref = this.scoopOffset('vanilla');
++    return {
++      homeCentre: (slot) => {
++        const p = this.slot(slot);
++        return { x: p.x + ref.x, y: p.y + ref.y };
++      },
++      coneCentre: (n) => this.slot(CONE_SLOTS[Math.min(n, CONE_SLOTS.length - 1)]!),
++      cone: { contains: (p) => this.cone?.contains(p) ?? false },
++      shiba: this.area(HITS.shiba),
++      counterUpper: this.area(HITS.counterUpper),
++      counter: this.area(HITS.counter),
++      restRect: () => {
++        const a = defaultDragArea();
++        return a ? intersectRect(counterRect, a.bounds) : counterRect;
++      },
++      snapRadius: Tokens.components.dropTarget.snapRadius,
++      minSize: Tokens.components.draggableItem.minSize,
++      offCounterDelayMs: Tokens.Timing.dragOffCounterReturnDelayMs,
++      nextQuestionDelayMs: Tokens.Timing.correctMusicMaxMs,
++      finishDelayMs: Tokens.Timing.roundCelebrationMs,
++    };
++  }
++
++  // --- Shiba ----------------------------------------------------------------------------------------
++
++  private addShiba(): void {
++    const key = ATLASES['ice-cream'].key;
++    const anchor = this.layout.anchors[SHIBA_ANCHOR];
++    if (!anchor || !this.frameRect(SHIBA_FRAMES.idle)) {
++      console.warn(`ice-cream: Shiba (frame "${SHIBA_FRAMES.idle}" or anchor "${SHIBA_ANCHOR}") is missing`);
++      return;
++    }
++    const o = originFor(anchor, this.layout.design);
++    this.shiba = this.add.image(anchor.x, anchor.y, key, SHIBA_FRAMES.idle).setOrigin(o.x, o.y).setScale(1 / this.layout.renderScale);
++    this.breathe();
++  }
++
++  /** Breathing: scaleY 1 ↔ shibaBreathScale around the ground pivot, yoyo. */
++  private breathe(): void {
++    const img = this.shiba;
++    if (!img) return;
++    const base = 1 / this.layout.renderScale;
++    img.setScale(base);
++    this.breath?.stop();
++    // Ambient (Story 1.9): the base pauses it while the hint ring shows or Shiba celebrates.
++    this.breath = this.addAmbient(
++      this.tweens.add({
++        targets: img,
++        scaleY: base * amplitude(Tokens.ui.shibaBreathScale, this.reduced),
++        duration: Tokens.Timing.shibaBreathMs / 2,
++        ease: SINE,
++        yoyo: true,
++        repeat: -1,
++      }),
++    );
++  }
++
++  /** Happy frames (wag + lick) and bounces through character.celebrate.scales; breathing pauses. */
++  private celebrate(): void {
++    audio.sfx(SFX.happy);
++    const img = this.shiba;
++    if (!img) return;
++    this.holdAmbient('celebrate', true);
++    const spec = Tokens.components.character.celebrate;
++    const scales = spec.scales.map((s) => amplitude(s, this.reduced));
++    const frames = SHIBA_FRAMES.happy.filter((f) => this.frameRect(f) !== undefined);
++    const base = 1 / this.layout.renderScale;
++    const steps = scales.length - 1;
++    this.tweens.addCounter({
++      from: 0,
++      to: 1,
++      duration: spec.durationMs,
++      onUpdate: (t) => {
++        const v = t.getValue() ?? 0;
++        // `repeat` bounces through the scale keys over the whole duration.
++        const cycle = (v * spec.repeat) % 1;
++        const k = Math.min(steps - 1, Math.floor(cycle * steps));
++        const local = cycle * steps - k;
++        const s = scales[k]! + (scales[k + 1]! - scales[k]!) * Math.sin((local * Math.PI) / 2);
++        img.setScale(base * s);
++        if (frames.length > 0) img.setFrame(frames[Math.floor(v * frames.length * spec.repeat) % frames.length]!, false, false);
++      },
++      onComplete: () => {
++        img.setFrame(SHIBA_FRAMES.idle, false, false);
++        this.holdAmbient('celebrate', false);
++        this.breathe();
++      },
++    });
++  }
++
++  // --- scoops ---------------------------------------------------------------------------------------
++
++  private addScoop(s: ScoopState, popIn: boolean): ScoopView {
++    const key = ATLASES['ice-cream'].key;
++    const frame = scoopFrame(s.flavour);
++    const rect = this.frameRect(frame);
++    const rs = this.layout.renderScale;
++    const item = Tokens.components.draggableItem;
++    const size = rect ? trimmedSize(rect, rs) : { w: item.minSize, h: item.minSize };
++    const half = Math.max(size.w, size.h) / 2;
++    const shadowSpec = item.liftShadow;
++    const shadow = this.add
++      .ellipse(s.at.x + shadowSpec.x, s.at.y + shadowSpec.y, size.w, size.h / 2, shadowSpec.color.value, shadowSpec.color.alpha)
++      .setVisible(false);
++    let image: GameObjects.Image | undefined;
++    if (rect) {
++      const o = originFor(trimmedCentre(rect, rs), this.layout.design);
++      image = this.add.image(s.at.x, s.at.y, key, frame).setOrigin(o.x, o.y).setScale(1 / rs);
++    } else if (!this.warned.has(frame)) {
++      this.warned.add(frame);
++      console.warn(`ice-cream: frame "${frame}" is missing — scoop drawn without an image`);
++    }
++    const view: ScoopView = {
++      id: s.id,
++      flavour: s.flavour,
++      image,
++      shadow,
++      drag: undefined,
++      radius: half + item.hitPad,
++      half,
++      pos: { ...s.at },
++      tween: undefined,
++      returnTimer: undefined,
++    };
++    if (this.router) {
++      view.drag = createDraggable(this.router, {
++        circle: { x: s.at.x, y: s.at.y, r: view.radius },
++        // The finger keeps the scoop's core (minSize/2) inside the play area, so the lower counter stays reachable.
++        itemRadius: item.minSize / 2,
++        onLift: () => this.lift(view),
++        onMove: (p) => this.place(view, p),
++        onDrop: (p) => this.settle(view, () => this.round?.drop(view.id, p) ?? []),
++        onCancel: () => this.settle(view, () => this.round?.cancel(view.id) ?? []),
++      });
++      view.drag.object = image;
++    }
++    if (popIn && image) {
++      image.setScale(0);
++      this.tweens.add({ targets: image, scale: 1 / rs, duration: item.return.durationMs, ease: 'Back.easeOut' });
++    }
++    this.scoops.set(s.id, view);
++    return view;
++  }
++
++  /** Draws the scoop at `p`; its hit circle follows (a scoop is lifted where it is seen). */
++  private place(view: ScoopView, p: Point): void {
++    view.pos = { ...p };
++    view.image?.setPosition(p.x, p.y);
++    view.drag?.setCircle({ x: p.x, y: p.y, r: view.radius });
++    const spec = Tokens.components.draggableItem.liftShadow;
++    view.shadow.setPosition(p.x + spec.x, p.y + spec.y);
++  }
++
++  /** Lift: 1.1× and a shadow in the same pointerdown handler; any running motion stops. */
++  private lift(view: ScoopView): void {
++    this.applyAll(this.round?.lift(view.id) ?? []);
++    view.tween?.stop();
++    view.tween = undefined;
++    const rs = this.layout.renderScale;
++    view.image?.setScale(Tokens.components.draggableItem.liftScale / rs);
++    view.shadow.setVisible(true);
++    this.children.bringToTop(view.shadow);
++    if (view.image) this.children.bringToTop(view.image);
++  }
++
++  private settle(view: ScoopView, outcome: () => RoundCommand[]): void {
++    view.image?.setScale(1 / this.layout.renderScale);
++    view.shadow.setVisible(false);
++    this.applyAll(outcome());
++  }
++
++  /** Tweens a scoop to `to`; its hit circle follows every frame (place). */
++  private moveTo(view: ScoopView, to: Point, durationMs: number, onDone?: () => void): void {
++    view.tween?.stop();
++    const from = { ...view.pos };
++    view.tween = this.tweens.addCounter({
++      from: 0,
++      to: 1,
++      duration: durationMs,
++      ease: EASE_OUT,
++      onUpdate: (t) => {
++        const v = t.getValue() ?? 0;
++        this.place(view, { x: from.x + (to.x - from.x) * v, y: from.y + (to.y - from.y) * v });
++      },
++      onComplete: () => {
++        view.tween = undefined;
++        this.place(view, to);
++        onDone?.();
++      },
++    });
++  }
++
++  private destroyScoop(view: ScoopView): void {
++    view.tween?.stop();
++    view.returnTimer?.remove();
++    view.drag?.destroy();
++    view.image?.destroy();
++    view.shadow.destroy();
++  }
++
++  // --- round commands -------------------------------------------------------------------------------
++
++  private applyAll(cmds: readonly RoundCommand[]): void {
++    if (this.inert) return;
++    for (const c of cmds) this.apply(c);
++  }
++
++  private apply(c: RoundCommand): void {
++    switch (c.kind) {
++      case 'build':
++        for (const v of this.scoops.values()) this.destroyScoop(v);
++        this.scoops = new Map();
++        for (const s of c.scoops) this.addScoop(s, false);
++        return;
++      case 'beginQuestion':
++        this.hint.beginQuestion({ promptLineId: c.promptLineId, retryLineId: c.retryLineId, step: this.step(c.correct, c.distractors) });
++        return;
++      case 'stepDone':
++        this.hint.stepDone(this.step(c.correct, c.distractors), { retryLineId: c.retryLineId });
++        return;
++      case 'finishRound':
++        this.scheduleFinish(c.afterMs);
++        return;
++      case 'snap':
++        this.snap(c.id, c.to);
++        return;
++      case 'floatBack': {
++        const v = this.scoops.get(c.id);
++        if (v) this.moveTo(v, c.to, Tokens.components.draggableItem.return.durationMs);
++        return;
++      }
++      case 'rest': {
++        const v = this.scoops.get(c.id);
++        if (v) this.moveTo(v, c.at, Tokens.components.dropTarget.snap.durationMs);
++        return;
++      }
++      case 'returnLater': {
++        const v = this.scoops.get(c.id);
++        if (!v) return;
++        v.returnTimer?.remove();
++        v.returnTimer = this.time.delayedCall(c.ms, () => {
++          v.returnTimer = undefined;
++          this.round?.returned(c.id);
++          this.moveTo(v, c.to, Tokens.components.draggableItem.return.durationMs);
++        });
++        return;
++      }
++      case 'cancelReturn': {
++        const v = this.scoops.get(c.id);
++        v?.returnTimer?.remove();
++        if (v) v.returnTimer = undefined;
++        return;
++      }
++      case 'respawn':
++        this.addScoop(c.scoop, true);
++        return;
++      case 'pickable':
++        for (const v of this.scoops.values()) if (v.drag) inputGuard.setPickable(v.drag, c.on);
++        return;
++      case 'celebrate':
++        this.celebrate();
++        return;
++      case 'hintWrong':
++        this.hint.wrong();
++        return;
++      case 'questionDone':
++        this.hint.questionDone();
++        return;
++      case 'nextLater':
++        this.time.delayedCall(c.ms, () => this.applyAll(this.round?.next() ?? []));
++        return;
++      case 'clear':
++        this.clearCone();
++        return;
++    }
++  }
++
++  /** The hint step of a stage: draggables by scoop id, the cone as the target. */
++  private step(correct: readonly string[], distractors: readonly string[]): HintStep {
++    const drags = (ids: readonly string[]): Draggable[] => ids.flatMap((id) => this.scoops.get(id)?.drag ?? []);
++    return { correct: drags(correct), distractors: drags(distractors), target: this.cone ?? null, action: 'drag' };
++  }
++
++  /** The correct scoop leaves the counter and snaps onto the cone with a small bounce. */
++  private snap(id: string, to: Point): void {
++    const v = this.scoops.get(id);
++    if (!v) return;
++    this.scoops.delete(id);
++    v.drag?.destroy();
++    v.drag = undefined;
++    v.returnTimer?.remove();
++    this.coneScoops.push(v);
++    audio.sfx(SFX.snap);
++    const snap = Tokens.components.dropTarget.snap;
++    this.moveTo(v, to, snap.durationMs);
++    if (v.image) {
++      const base = 1 / this.layout.renderScale;
++      this.tweens.add({ targets: v.image, scale: base * snap.scale, duration: snap.durationMs / 2, ease: EASE_OUT, yoyo: true, onComplete: () => v.image?.setScale(base) });
++    }
++  }
++
++  /** Shiba "ate" the cone scoops: they fade out. */
++  private clearCone(): void {
++    const eaten = this.coneScoops;
++    this.coneScoops = [];
++    for (const v of eaten) {
++      if (!v.image) {
++        this.destroyScoop(v);
++        continue;
++      }
++      this.tweens.add({ targets: v.image, alpha: 0, duration: Tokens.Timing.sceneFadeMs, onComplete: () => this.destroyScoop(v) });
++    }
++  }
++}
+diff --git a/app/src/games/mini-game-base.ts b/app/src/games/mini-game-base.ts
+new file mode 100644
+index 0000000..726174b
+--- /dev/null
++++ b/app/src/games/mini-game-base.ts
+@@ -0,0 +1,175 @@
++// MiniGame contract (Story 1.7, AD-1). Every game scene extends MiniGameBase:
++//   - the scene key is its GameId; `init(data)` stores the shell's `{ level, seed, resume? }`;
++//   - `create()` sets the Hud to 'game' mode (Home shows), fades the scene in, turns `hud:home` into
++//     `round:abandon` and then calls the subclass `build()`;
++//   - `complete(outcome)` / `abandon()` go through RoundGuard: exactly one terminal event per start,
++//     after which the game is inert (input disabled, a second Home tap ignored).
++// Story 1.8: `hint` (core/hint-director) is the only way a game reports questions and attempts; on
++// Home the base ends the hint question and removes the scene's timed events before `round:abandon`,
++// so no pending slide, next question or voice fires afterwards.
++// Story 1.9 (AD-5, UX-DR72): ambient motion (`addAmbient`) plays only while no reason is held
++// (`holdAmbient`); the base holds 'hint' while this game's hint level is ≥ 2, so the ring/bob/hand
++// are the only prominent motion.
++// Story 1.10: `hint` is a thin wrapper that also feeds a RoundTally (questions, first-try answers,
++// the max hint level). A game ends its round with `scheduleFinish(ms)` (after its celebration) or
++// `finishRound()`: `round:complete` with the tallied outcome, after the same cleanup as Home. A Home
++// tap while the round is finishing completes it at once instead of abandoning it.
++// Games never navigate (`scene.start/stop/…`) or load (`this.load`): Map owns both (ESLint enforces it).
++import { Scene, type Tweens } from 'phaser';
++import type { GameId, GameStartData, RoundOutcome, Snapshot } from '../content/types';
++import { bus } from '../core/bus';
++import { createHint, type Hint } from '../core/hint-director';
++import { setHudMode } from '../core/hud-mode';
++import { revealScene } from '../core/motion';
++import { RoundGuard } from '../core/round-guard';
++import { RoundTally } from '../core/round-tally';
++
++/** Ambient motion stops from this hint level (the ring and bob appear). */
++const AMBIENT_HINT_LEVEL = 2;
++
++export abstract class MiniGameBase extends Scene {
++  readonly gameId: GameId;
++  protected level = 0;
++  protected seed = 0;
++  protected resumeAt: Snapshot | undefined = undefined;
++  private guard: RoundGuard | undefined;
++  /** The raw hint system of this start (created in `create`, before `build`). */
++  private inner: Hint = createHint(undefined);
++  private tally = new RoundTally();
++  /** True between `scheduleFinish` and the terminal event. */
++  private finishing = false;
++  /** The hint system of this start, tallied (Story 1.10). */
++  protected readonly hint: Hint = this.talliedHint();
++  private ambient = new Set<Tweens.Tween>();
++  private holds = new Set<string>();
++
++  constructor(gameId: GameId) {
++    super(gameId);
++    this.gameId = gameId;
++  }
++
++  init(data: Partial<GameStartData> = {}): void {
++    this.level = data.level ?? 0;
++    this.seed = data.seed ?? 0;
++    this.resumeAt = data.resume;
++  }
++
++  create(): void {
++    this.guard = new RoundGuard(this.gameId, bus, () => {
++      this.input.enabled = false;
++    });
++    this.input.enabled = true;
++    this.ambient = new Set();
++    this.holds = new Set();
++    this.tally = new RoundTally();
++    this.finishing = false;
++    this.inner = this.createHintSystem();
++    setHudMode('game');
++    const scoped = bus.scoped(this);
++    scoped.on('hud:home', () => {
++      if (this.finishing) this.finishRound();
++      else this.abandon();
++    });
++    scoped.on('hint:level', ({ gameId, level }) => {
++      if (gameId !== this.gameId) return;
++      this.tally.level(level);
++      this.holdAmbient('hint', level >= AMBIENT_HINT_LEVEL);
++    });
++    this.build();
++    void revealScene(this);
++  }
++
++  /** True after the start's terminal event. */
++  protected get inert(): boolean {
++    return this.guard?.inert ?? false;
++  }
++
++  /** Registers an ambient (idle) tween: it plays only while no hold reason is set. */
++  protected addAmbient(tween: Tweens.Tween): Tweens.Tween {
++    this.pruneAmbient();
++    this.ambient.add(tween);
++    if (this.holds.size > 0) tween.pause();
++    return tween;
++  }
++
++  /** Holds (`on`) or releases one reason to stop the ambient tweens ('hint', 'celebrate', …). */
++  protected holdAmbient(reason: string, on: boolean): void {
++    const was = this.holds.size > 0;
++    if (on) this.holds.add(reason);
++    else this.holds.delete(reason);
++    const now = this.holds.size > 0;
++    if (was === now) return;
++    this.pruneAmbient();
++    for (const t of this.ambient) {
++      if (now) t.pause();
++      else t.resume();
++    }
++  }
++
++  private pruneAmbient(): void {
++    for (const t of this.ambient) if (t.isDestroyed()) this.ambient.delete(t);
++  }
++
++  /** Draws the game. */
++  protected abstract build(): void;
++
++  /** The resume snapshot of the current state (written by Map on `round:abandon` from Epic 2). */
++  abstract snapshot(): Snapshot;
++
++  /** The hint system this start uses (tests replace it). */
++  protected createHintSystem(): Hint {
++    return createHint(this);
++  }
++
++  /** `inner`, with every question and level also counted by the round tally. */
++  private talliedHint(): Hint {
++    const base = (): Hint => this.inner;
++    return {
++      beginQuestion: (q) => {
++        this.tally.beginQuestion();
++        base().beginQuestion(q);
++      },
++      stepDone: (next, lines) => base().stepDone(next, lines),
++      wrong: () => base().wrong(),
++      questionDone: () => {
++        this.tally.questionDone();
++        base().questionDone();
++      },
++      replayPrompt: () => base().replayPrompt(),
++      get level() {
++        return base().level;
++      },
++    };
++  }
++
++  /** The round's last question is answered: the round finishes after `ms` (scene clock); Home finishes it now. */
++  protected scheduleFinish(ms: number): void {
++    if (this.inert || this.finishing) return;
++    this.finishing = true;
++    this.time.delayedCall(ms, () => this.finishRound());
++  }
++
++  /** Ends the round with the tallied outcome (`round:complete`, once). */
++  protected finishRound(): void {
++    this.complete(this.tally.outcome(this.gameId));
++  }
++
++  protected complete(outcome: Omit<RoundOutcome, 'gameId'>): void {
++    if (!this.guard || this.guard.inert) return;
++    this.cleanup();
++    this.guard.complete({ ...outcome, gameId: this.gameId });
++  }
++
++  protected abandon(): void {
++    if (!this.guard || this.guard.inert) return;
++    this.cleanup();
++    this.guard.abandon(this.snapshot());
++  }
++
++  /** Before a terminal event: no hint question, no pending timed event. */
++  private cleanup(): void {
++    this.inner.questionDone();
++    this.time.removeAllEvents();
++    this.finishing = false;
++  }
++}
+diff --git a/app/src/games/registry.test.ts b/app/src/games/registry.test.ts
+new file mode 100644
+index 0000000..254d058
+--- /dev/null
++++ b/app/src/games/registry.test.ts
+@@ -0,0 +1,256 @@
++// Registry and MiniGame contract (Story 1.7) with Phaser's Scene stubbed (node has no canvas).
++import { describe, expect, it, vi } from 'vitest';
++
++vi.mock('phaser', () => {
++  class Scene {
++    readonly sys: { settings: { key: string } };
++    readonly input = { enabled: true };
++    readonly time = { removeAllEvents: vi.fn(), delayedCall: vi.fn() };
++    readonly cameras = {
++      main: {
++        setBackgroundColor: vi.fn(),
++        fadeIn: vi.fn(),
++        once: vi.fn(),
++      },
++    };
++    private readonly onceFns = new Map<string, () => void>();
++    readonly events = {
++      once: (ev: string, fn: () => void) => this.onceFns.set(ev, fn),
++      off: (ev: string) => this.onceFns.delete(ev),
++    };
++    constructor(key: string) {
++      this.sys = { settings: { key } };
++    }
++    shutdown(): void {
++      this.onceFns.get('shutdown')?.();
++    }
++  }
++  return { Scene };
++});
++
++const { GAME_CONTENT } = await import('../content/games/index');
++const { STATIONS } = await import('../content/stations');
++const { bus } = await import('../core/bus');
++const { getHudMode, setHudMode } = await import('../core/hud-mode');
++const { GAMES, GAME_SCENES, isGameId, ladderLength } = await import('./registry');
++const { IceCream } = await import('./ice-cream/IceCream');
++const { MiniGameBase } = await import('./mini-game-base');
++
++/** A minimal game: the base contract without the ice-cream scene (which needs a real Phaser). */
++class TestGame extends MiniGameBase {
++  readonly hints: string[] = [];
++  constructor() {
++    super('ice-cream');
++  }
++  protected override createHintSystem() {
++    return {
++      beginQuestion: () => this.hints.push('begin'),
++      stepDone: () => undefined,
++      wrong: () => this.hints.push('wrong'),
++      questionDone: () => this.hints.push('done'),
++      replayPrompt: () => undefined,
++      level: 0 as const,
++    };
++  }
++  protected build(): void {}
++  ask() {
++    this.hint.beginQuestion({ promptLineId: 'p', retryLineId: 'r', step: { correct: [], distractors: [], target: null, action: 'drag' } });
++  }
++  answer() {
++    this.hint.questionDone();
++  }
++  finishIn(ms: number) {
++    this.scheduleFinish(ms);
++  }
++  ambientAdd(t: unknown) {
++    return this.addAmbient(t as never);
++  }
++  ambientHold(reason: string, on: boolean) {
++    this.holdAmbient(reason, on);
++  }
++  snapshot() {
++    return { v: 1 as const, level: this.level, seed: this.seed, questionIndex: 0, partial: { placed: [] } };
++  }
++}
++
++describe('games/registry', () => {
++  it('GAMES lists exactly the games with content, each with its scene keyed by its id', () => {
++    expect(Object.keys(GAMES)).toEqual(Object.keys(GAME_CONTENT));
++    for (const [id, entry] of Object.entries(GAMES)) {
++      const scene = new entry!.scene();
++      expect(scene.gameId).toBe(id);
++      expect((scene as unknown as { sys: { settings: { key: string } } }).sys.settings.key).toBe(id);
++      expect(entry!.ladder).toBe(GAME_CONTENT[id as keyof typeof GAME_CONTENT]!.ladder);
++    }
++    expect(GAME_SCENES).toEqual([IceCream]);
++  });
++
++  it('awake stations are exactly the registered games', () => {
++    expect(STATIONS.filter((s) => s.awake).map((s) => s.id)).toEqual(Object.keys(GAMES));
++    expect(isGameId('ice-cream')).toBe(true);
++    expect(isGameId('pizza')).toBe(false);
++  });
++
++  it('ladderLength: the ladder length, 1 without a ladder', () => {
++    expect(ladderLength({ ladder: [1, 2, 3] })).toBe(3);
++    expect(ladderLength({})).toBe(1);
++  });
++});
++
++describe('MiniGameBase', () => {
++  function start(data = { level: 0, seed: 42 }) {
++    const game = new TestGame();
++    game.init(data);
++    game.create();
++    return game as TestGame & { input: { enabled: boolean }; time: { removeAllEvents: ReturnType<typeof vi.fn> }; shutdown(): void };
++  }
++
++  it('create: Hud in game mode; snapshot carries level and seed', () => {
++    setHudMode('map');
++    const game = start({ level: 0, seed: 42 });
++    expect(getHudMode()).toBe('game');
++    expect(game.snapshot()).toEqual({ v: 1, level: 0, seed: 42, questionIndex: 0, partial: { placed: [] } });
++    game.shutdown();
++  });
++
++  it('hud:home twice: one round:abandon, then inert (input disabled)', () => {
++    const game = start();
++    const abandon = vi.fn();
++    const off = bus.on('round:abandon', abandon);
++    bus.emit('hud:home');
++    bus.emit('hud:home');
++    expect(abandon).toHaveBeenCalledTimes(1);
++    expect(abandon).toHaveBeenCalledWith({ gameId: 'ice-cream', snapshot: game.snapshot() });
++    expect(game.input.enabled).toBe(false);
++    game.shutdown();
++    off();
++  });
++
++  it('Home (Story 1.8): the hint question ends and the timed events are removed before round:abandon, once', () => {
++    const game = start();
++    const order: string[] = [];
++    game.time.removeAllEvents.mockImplementation(() => order.push('timers'));
++    const off = bus.on('round:abandon', () => order.push(`abandon:${game.hints.join(',')}`));
++    bus.emit('hud:home');
++    bus.emit('hud:home');
++    expect(order).toEqual(['timers', 'abandon:done']);
++    expect(game.time.removeAllEvents).toHaveBeenCalledTimes(1);
++    game.shutdown();
++    off();
++  });
++
++  it('ambient (Story 1.9): paused while hint level ≥ 2 for this game or any hold reason; resumed when none is left', () => {
++    const game = start();
++    const tween = { pause: vi.fn(), resume: vi.fn(), isDestroyed: () => false };
++    game.ambientAdd(tween);
++    bus.emit('hint:level', { gameId: 'pizza', level: 2 });
++    expect(tween.pause).not.toHaveBeenCalled();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 1 });
++    expect(tween.pause).not.toHaveBeenCalled();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 2 });
++    expect(tween.pause).toHaveBeenCalledOnce();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 3 });
++    game.ambientHold('celebrate', true);
++    expect(tween.pause).toHaveBeenCalledOnce();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 0 });
++    expect(tween.resume).not.toHaveBeenCalled();
++    game.ambientHold('celebrate', false);
++    expect(tween.resume).toHaveBeenCalledOnce();
++    // A tween added while held starts paused.
++    game.ambientHold('celebrate', true);
++    const late = { pause: vi.fn(), resume: vi.fn(), isDestroyed: () => false };
++    game.ambientAdd(late);
++    expect(late.pause).toHaveBeenCalledOnce();
++    game.shutdown();
++  });
++
++  type Started = ReturnType<typeof start> & { time: { delayedCall: ReturnType<typeof vi.fn> } };
++
++  /** q1 clean; q2 one level-1; q3 idle to level 3 (the matrix tally row), then the finish is scheduled. */
++  function playRound(game: Started) {
++    game.ask();
++    game.answer();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 0 });
++    game.ask();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 1 });
++    game.answer();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 0 });
++    game.ask();
++    bus.emit('hint:level', { gameId: 'pizza', level: 4 });
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 2 });
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 3 });
++    game.answer();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 0 });
++    game.finishIn(1500);
++  }
++
++  it('finish (Story 1.10): after the scheduled delay, cleanup then exactly one tallied round:complete; inert after', () => {
++    const game = start() as Started;
++    const complete = vi.fn();
++    const abandon = vi.fn();
++    const offC = bus.on('round:complete', complete);
++    const offA = bus.on('round:abandon', abandon);
++    playRound(game);
++    expect(game.time.delayedCall).toHaveBeenCalledOnce();
++    expect(game.time.delayedCall.mock.calls[0]![0]).toBe(1500);
++    expect(complete).not.toHaveBeenCalled();
++    game.hints.length = 0;
++    (game.time.delayedCall.mock.calls[0]![1] as () => void)();
++    expect(complete).toHaveBeenCalledOnce();
++    expect(complete).toHaveBeenCalledWith({ gameId: 'ice-cream', questions: 3, firstTryCorrect: 1, maxHintLevel: 3 });
++    expect(game.hints).toEqual(['done']);
++    expect(game.time.removeAllEvents).toHaveBeenCalledOnce();
++    expect(game.input.enabled).toBe(false);
++    bus.emit('hud:home');
++    (game.time.delayedCall.mock.calls[0]![1] as () => void)();
++    expect(complete).toHaveBeenCalledOnce();
++    expect(abandon).not.toHaveBeenCalled();
++    game.shutdown();
++    offC();
++    offA();
++  });
++
++  it('Home while finishing completes the round at once (never round:abandon)', () => {
++    const game = start() as Started;
++    const complete = vi.fn();
++    const abandon = vi.fn();
++    const offC = bus.on('round:complete', complete);
++    const offA = bus.on('round:abandon', abandon);
++    playRound(game);
++    bus.emit('hud:home');
++    expect(complete).toHaveBeenCalledOnce();
++    expect(complete.mock.calls[0]![0]).toMatchObject({ questions: 3 });
++    expect(abandon).not.toHaveBeenCalled();
++    bus.emit('hud:home');
++    expect(complete).toHaveBeenCalledOnce();
++    game.shutdown();
++    offC();
++    offA();
++  });
++
++  it('Home before the finish is scheduled abandons as before', () => {
++    const game = start() as Started;
++    const complete = vi.fn();
++    const abandon = vi.fn();
++    const offC = bus.on('round:complete', complete);
++    const offA = bus.on('round:abandon', abandon);
++    game.ask();
++    game.answer();
++    bus.emit('hud:home');
++    expect(abandon).toHaveBeenCalledOnce();
++    expect(complete).not.toHaveBeenCalled();
++    game.shutdown();
++    offC();
++    offA();
++  });
++
++  it('after shutdown the scene no longer listens to hud:home', () => {
++    const game = start();
++    game.shutdown();
++    const abandon = vi.fn();
++    const off = bus.on('round:abandon', abandon);
++    bus.emit('hud:home');
++    expect(abandon).not.toHaveBeenCalled();
++    off();
++  });
++});
+diff --git a/app/src/scenes/Map.ts b/app/src/scenes/Map.ts
+new file mode 100644
+index 0000000..b71022f
+--- /dev/null
++++ b/app/src/scenes/Map.ts
+@@ -0,0 +1,485 @@
++// Map (Stories 1.5, 1.7): the island. Draws the plate `bg.map`, the 7 station sprites from `atlas.map`
++// (full-frame on their ground pivots, spec-1-4 contract), a static parent-facing label under each
++// station and the kart on the road. Taps go through core/input (one router per scene):
++//   - awake station (in games/registry GAMES) → core/kart-trip: bounce + name, the game's assets
++//     start loading, the kart drives along `paths.road` to the station's stop, the camera zooms in
++//     (core/motion; a fade under reduced motion) and the shell starts the game; Map sleeps;
++//   - sleeping station → bounce + happy sound; kart → bounce + beep (a boost while driving);
++//   - every tap resets idle (core/map-idle), which is suspended while the kart travels.
++// A terminal event (`round:complete` / `round:abandon`) of the running game stops it and wakes Map:
++// the island fades back with the kart parked at `SessionStore.lastStation`. The game's own assets are
++// removed when its scene shuts down (AR39). Story 1.10: on `round:complete` Map first records the round
++// (SessionStore.recordRound → core/difficulty nextLevel, memory only), so the next start uses the new level. Timing, routing and geometry are pure core code; this
++// scene only wires Phaser. The kart moves only in `update` (no timers or tweens), so a pause freezes it.
++import { Scene, type GameObjects } from 'phaser';
++import { ATLASES, BACKGROUNDS, MAP_KART } from '../content/assets';
++import type { Point } from '../content/layout-types';
++import type { GameId } from '../content/types';
++import { LAYOUTS } from '../content/layouts';
++import { KART_START_ANCHOR, ROAD_PATH, STATIONS, stopAnchor } from '../content/stations';
++import { inviteLine, islandPrompt, stationNameLine } from '../content/voice-lines';
++import { audio } from '../core/audio-director';
++import { bus } from '../core/bus';
++import { AssetTracker, loadPlan, releasePlan } from '../core/game-assets';
++import { createHintRing, type HintRing } from '../core/hint-visuals';
++import { setHudMode } from '../core/hud-mode';
++import { HotspotPolygon } from '../core/input/hotspot-polygon';
++import { boundingBox, pointInPolygon } from '../core/input/polygon';
++import { createTapRouter } from '../core/input/tap-router';
++import { createTapTarget, type TapTarget } from '../core/input/tap-target';
++import { KART_TARGET, KartTrip, type TripCommand } from '../core/kart-trip';
++import { createMapIdle, type MapIdle, type MapIdleEvent } from '../core/map-idle';
++import { planMap, type MapPlan, type PlannedKart, type PlannedStation } from '../core/map-plan';
++import { enterStation, revealScene } from '../core/motion';
++import { amplitude, prefersReducedMotion } from '../core/reduced-motion';
++import { createRoad } from '../core/road';
++import { session } from '../core/session-store';
++import { Tokens } from '../core/tokens';
++import { bob, bounce, isMoving, stopMotion } from '../core/ui/scale-motion';
++import { GAMES, isGameId, ladderLength } from '../games/registry';
++
++const HUD_KEY = 'Hud';
++const WAKE = 'wake';
++const SHUTDOWN = 'shutdown';
++const FILE_COMPLETE = 'filecomplete';
++const LOAD_ERROR = 'loaderror';
++const LOAD_COMPLETE = 'complete';
++
++interface StationView {
++  readonly plan: PlannedStation;
++  readonly image: GameObjects.Image | undefined;
++}
++
++interface FrameData {
++  readonly spriteSourceSize?: { x: number; y: number; w: number; h: number };
++}
++
++interface KartView {
++  readonly plan: PlannedKart;
++  readonly body: GameObjects.Container;
++  readonly image: GameObjects.Image | undefined;
++  readonly target: TapTarget;
++}
++
++export class MapScene extends Scene {
++  private idle: MapIdle | undefined;
++  private views = new Map<string, StationView>();
++  private ring: HintRing | undefined;
++  private reduced = false;
++  private plan: MapPlan | undefined;
++  private stops: Record<string, number> = {};
++  private trip: KartTrip | undefined;
++  private kart: KartView | undefined;
++  /** Sign of the last x travel (the kart's facing); starts as the art faces. */
++  private travelSign: number = MAP_KART.artFacing;
++  private tracker = new AssetTracker();
++  /** The MiniGame started from here and not yet terminal, with the level it started at. */
++  private running: { readonly id: GameId; readonly level: number } | undefined;
++  /** Games whose assets this Map loaded and has not released yet (a re-targeted trip loads more than one). */
++  private loadedGames = new Set<string>();
++
++  constructor() {
++    super('Map');
++  }
++
++  create(): void {
++    this.cameras.main.setBackgroundColor(Tokens.colors.sky.css);
++    this.reduced = prefersReducedMotion(window);
++    this.views = new Map();
++    this.ring = undefined;
++    this.tracker = new AssetTracker();
++    this.running = undefined;
++    this.loadedGames = new Set();
++
++    const layout = LAYOUTS.map;
++    const atlasKey = ATLASES.map.key;
++    const hasAtlas = this.textures.exists(atlasKey);
++    const labels = new Map<string, GameObjects.Text>();
++    const label = (text: string): GameObjects.Text => {
++      let t = labels.get(text);
++      if (!t) {
++        t = this.addLabel(text);
++        labels.set(text, t);
++      }
++      return t;
++    };
++
++    const plan = planMap(
++      layout,
++      // A station is awake only when its game is registered.
++      STATIONS.map((s) => ({ ...s, awake: s.awake && isGameId(s.id) })),
++      (frame) => hasAtlas && this.textures.get(atlasKey).has(frame),
++      (frame) => {
++        const data = this.textures.get(atlasKey).get(frame).customData as FrameData | undefined;
++        const ss = data?.spriteSourceSize;
++        return ss ? { x: ss.x, y: ss.y, width: ss.w, height: ss.h } : undefined;
++      },
++      {
++        atlasKey,
++        measureLabel: (text) => {
++          const t = label(text);
++          return { w: t.width, h: t.height };
++        },
++      },
++    );
++    this.plan = plan;
++    for (const w of plan.warnings) console.warn(w);
++
++    const bgKey = BACKGROUNDS.map.key;
++    if (this.textures.exists(bgKey)) {
++      this.add.image(plan.bg.x, plan.bg.y, bgKey).setOrigin(0).setScale(plan.bg.scale).setDepth(plan.bg.depth);
++    } else {
++      console.warn(`map: texture "${bgKey}" is missing — plate skipped`);
++    }
++
++    const router = createTapRouter(this);
++    router.onAnyTap = () => this.handle(this.idle?.tap() ?? []);
++
++    // Station hotspots register back to front (by depth), so the frontmost one wins an overlap.
++    for (const s of plan.stations) {
++      const image = s.image
++        ? this.add.image(s.image.x, s.image.y, atlasKey, s.image.frame).setOrigin(s.image.originX, s.image.originY).setScale(s.image.scale).setDepth(s.depth)
++        : undefined;
++      this.views.set(s.id, { plan: s, image });
++      new HotspotPolygon(router, s.hit, () => this.applyAll(this.trip?.tapStation(s.id) ?? []));
++      label(s.label).setPosition(s.labelPos.x, s.labelPos.y).setDepth(plan.labelDepth);
++    }
++
++    // The road and the kart (Story 1.7). The kart registers last: it is on top of the stations it passes.
++    const roadPoints = layout.paths[ROAD_PATH] ?? [];
++    if (roadPoints.length < 2) console.warn(`map: path "${ROAD_PATH}" is missing from the layout — the kart cannot drive`);
++    const road = createRoad(roadPoints);
++    this.stops = {};
++    for (const s of plan.stations) {
++      const stop = isGameId(s.id) ? layout.anchors[stopAnchor(s.id)] : undefined;
++      if (stop) this.stops[s.id] = road.project(stop);
++    }
++    const startAnchor: Point | undefined = layout.anchors[KART_START_ANCHOR];
++    const last = session.lastStation;
++    const startS = last !== undefined && this.stops[last] !== undefined ? this.stops[last] : startAnchor ? road.project(startAnchor) : 0;
++    this.trip = new KartTrip({
++      road,
++      stops: this.stops,
++      startS,
++      capMs: () => (session.kartTrips > 0 ? Tokens.Timing.kartDriveRepeatMaxMs : Tokens.Timing.kartDriveMaxMs),
++      isAwake: (id) => this.views.get(id)?.plan.awake ?? false,
++      nameLine: stationNameLine,
++      onArrive: () => {
++        session.kartTrips += 1;
++      },
++    });
++    this.kart = this.addKart(plan.kart, router, atlasKey, road.pointAt(startS));
++
++    this.idle = createMapIdle({
++      stations: plan.stations.map((s) => s.id),
++      awake: plan.stations.filter((s) => s.awake).map((s) => s.id),
++      timing: {
++        ambientMinMs: Tokens.Timing.mapAmbientMinMs,
++        ambientMaxMs: Tokens.Timing.mapAmbientMaxMs,
++        inviteFirstMs: Tokens.Timing.mapInviteFirstMs,
++        inviteGapMs: Tokens.Timing.mapInviteGapMs,
++        inviteMaxCount: Tokens.Timing.mapInviteMaxCount,
++        inviteHoldMs: Tokens.Timing.mapInviteHoldMs,
++      },
++    });
++
++    // Game assets load on Map's own loader while the kart drives.
++    const onFile = (key: string): void => this.tracker.fileDone(key);
++    const onError = (file: { key: string; src?: string }): void => {
++      console.warn(`map: failed to load "${file.key}" — the game starts without it`, file.src);
++      this.tracker.fileDone(file.key);
++    };
++    this.load.on(FILE_COMPLETE, onFile);
++    this.load.on(LOAD_ERROR, onError);
++    // A file that downloads but fails processing (bad JSON, undecodable audio) reports neither of the
++    // above; once the loader's queue is done, whatever is still pending is settled (AR51).
++    const onComplete = (): void => {
++      for (const key of this.tracker.flushPending()) console.warn(`map: "${key}" did not load — the game starts without it`);
++    };
++    this.load.on(LOAD_COMPLETE, onComplete);
++
++    // Scoped subscriptions stay alive while Map sleeps (they end on shutdown/destroy only).
++    const scoped = bus.scoped(this);
++    scoped.on('round:complete', (outcome) => {
++      const run = this.running;
++      const entry = run && run.id === outcome.gameId ? GAMES[run.id] : undefined;
++      if (run && entry) session.recordRound(run.id, run.level, outcome, ladderLength(entry));
++      this.returnFrom(outcome.gameId);
++    });
++    scoped.on('round:abandon', ({ gameId }) => this.returnFrom(gameId));
++    this.events.on(WAKE, this.onWake, this);
++
++    // Hud runs in parallel above Map and the games; launched once, never on Start.
++    if (!this.scene.isActive(HUD_KEY) && !this.scene.isPaused(HUD_KEY) && !this.scene.isSleeping(HUD_KEY)) {
++      this.scene.launch(HUD_KEY);
++    }
++    setHudMode('map');
++
++    this.events.once(SHUTDOWN, () => {
++      this.load.off(FILE_COMPLETE, onFile);
++      this.load.off(LOAD_ERROR, onError);
++      this.load.off(LOAD_COMPLETE, onComplete);
++      this.events.off(WAKE, this.onWake, this);
++      this.ring?.destroy();
++      this.ring = undefined;
++      this.idle = undefined;
++      this.trip = undefined;
++      this.kart = undefined;
++    });
++  }
++
++  override update(_time: number, delta: number): void {
++    if (this.idle) this.handle(this.idle.tick(delta));
++    if (!this.trip) return;
++    this.applyAll(this.trip.tick(delta));
++    for (const id of this.tracker.drainSettled()) this.applyAll(this.trip.assetsSettled(id));
++  }
++
++  // --- kart -------------------------------------------------------------------------------------
++
++  private addKart(plan: PlannedKart, router: ReturnType<typeof createTapRouter>, atlasKey: string, at: Point): KartView {
++    // The body (a container) takes the tap bounce; the image inside carries the facing mirror (scaleX),
++    // so a bounce never resets it. No flipX: it would shift the full-frame sprite.
++    const body = this.add.container(at.x, at.y).setDepth(at.y);
++    const image = plan.frame ? this.add.image(0, 0, atlasKey, plan.frame).setOrigin(plan.originX, plan.originY) : undefined;
++    if (image) body.add(image);
++    const target = createTapTarget(router, {
++      circle: { x: at.x + plan.centerOffset.x, y: at.y + plan.centerOffset.y, r: plan.hitRadius },
++      onPress: () => this.applyAll(this.trip?.tapKart() ?? []),
++      // A station drawn in front of the kart (deeper y) keeps its taps.
++      excludes: (p) => this.stationInFrontAt(p, body.depth),
++    });
++    const view: KartView = { plan, body, image, target };
++    this.faceKart(view);
++    return view;
++  }
++
++  private stationInFrontAt(p: Point, kartDepth: number): boolean {
++    for (const view of this.views.values()) {
++      if (view.plan.depth > kartDepth && pointInPolygon(p, view.plan.hit)) return true;
++    }
++    return false;
++  }
++
++  private faceKart(view: KartView): void {
++    view.image?.setScale(view.plan.scale * MAP_KART.artFacing * this.travelSign, view.plan.scale);
++  }
++
++  private placeKart(x: number, y: number, dx: number): void {
++    const view = this.kart;
++    if (!view) return;
++    if (dx !== 0) this.travelSign = Math.sign(dx);
++    view.body.setPosition(x, y).setDepth(y);
++    this.faceKart(view);
++    view.target.setCircle({ x: x + view.plan.centerOffset.x, y: y + view.plan.centerOffset.y, r: view.plan.hitRadius });
++  }
++
++  // --- trip commands -----------------------------------------------------------------------------
++
++  /** Feedback commands run inside the pointerdown handler (≤ Timing.feedbackMaxMs). */
++  private applyAll(cmds: readonly TripCommand[]): void {
++    for (const c of cmds) this.apply(c);
++    this.syncIdle();
++  }
++
++  private apply(c: TripCommand): void {
++    switch (c.kind) {
++      case 'bounce':
++        if (c.target === KART_TARGET) this.bounceKart();
++        else this.bounceStation(c.target);
++        return;
++      case 'say':
++        audio.say(c.lineId);
++        return;
++      case 'setPrompt':
++        audio.setPrompt(c.lineId);
++        return;
++      case 'sfx':
++        audio.sfx(c.id);
++        return;
++      case 'load':
++        this.loadGame(c.gameId);
++        return;
++      case 'move':
++        this.placeKart(c.x, c.y, c.dx);
++        return;
++      case 'enter':
++        void this.enterGame(c.gameId);
++        return;
++    }
++  }
++
++  /** Idle (ambient moves, invitations) pauses while the kart travels: one prominent motion (UX-DR72). */
++  private syncIdle(): void {
++    if (!this.idle || !this.trip) return;
++    if (this.trip.state === 'parked') this.idle.resume();
++    else this.handle(this.idle.suspend());
++  }
++
++  private bounceKart(): void {
++    if (!this.kart) return;
++    const react = Tokens.components.tappableProp.react;
++    bounce(this, this.kart.body, 1, amplitude(react.scale, this.reduced), react.durationMs);
++  }
++
++  private bounceStation(id: string): void {
++    const view = this.views.get(id);
++    if (!view?.image) return;
++    bounce(this, view.image, view.plan.image?.scale ?? 1, amplitude(Tokens.ui.stationTapScale, this.reduced), Tokens.Timing.stationTapMs);
++  }
++
++  // --- game assets, enter and return -------------------------------------------------------------
++
++  private loadGame(id: string): void {
++    const entry = isGameId(id) ? GAMES[id] : undefined;
++    if (!entry) {
++      this.tracker.track(id, []);
++      return;
++    }
++    const calls = loadPlan(entry.assets, (kind, key) => (kind === 'texture' ? this.textures.exists(key) : this.cache.audio.exists(key)));
++    this.tracker.track(id, calls.map((c) => c.key));
++    this.loadedGames.add(id);
++    if (calls.length === 0) return;
++    for (const c of calls) {
++      if (c.kind === 'atlas') this.load.atlas(c.key, c.png, c.json);
++      else if (c.kind === 'image') this.load.image(c.key, c.url);
++      else this.load.audio(c.key, c.url);
++    }
++    this.load.start();
++  }
++
++  private async enterGame(id: string): Promise<void> {
++    if (!isGameId(id)) return;
++    const entry = GAMES[id];
++    if (!entry) return;
++    session.lastStation = id;
++    const focus = LAYOUTS.map.anchors[id] ?? { x: this.kart?.body.x ?? 0, y: this.kart?.body.y ?? 0 };
++    await enterStation(this, focus, this.reduced);
++    if (!this.trip) return; // Map shut down meanwhile
++    const data = session.startData(id, ladderLength(entry));
++    // At most one MiniGame: stop any other one still around.
++    for (const other of Object.keys(GAMES)) {
++      if (this.scene.isActive(other) || this.scene.isPaused(other) || this.scene.isSleeping(other)) this.scene.stop(other);
++    }
++    this.running = { id, level: data.level };
++    this.scene.get(id).events.once(SHUTDOWN, () => this.releaseGame(id));
++    this.scene.manager.start(id, data);
++    this.scene.sleep();
++    this.trip.entered();
++    this.syncIdle();
++  }
++
++  private returnFrom(gameId: string): void {
++    if (gameId !== this.running?.id) return;
++    this.running = undefined;
++    this.scene.stop(gameId);
++    this.scene.wake();
++  }
++
++  /**
++   * The game scene shut down: drop its own textures and sounds (never the boot keys), plus those of
++   * every other game this visit loaded (a re-targeted trip) that is neither running nor the current target.
++   */
++  private releaseGame(id: string): void {
++    const ids = new Set([id, ...this.loadedGames]);
++    for (const gameId of ids) {
++      if (gameId === this.running?.id || gameId === this.trip?.target) continue;
++      this.loadedGames.delete(gameId);
++      this.releaseAssets(gameId);
++    }
++  }
++
++  private releaseAssets(id: string): void {
++    const entry = isGameId(id) ? GAMES[id] : undefined;
++    if (!entry) return;
++    for (const r of releasePlan(entry.assets)) {
++      if (r.kind === 'texture') {
++        if (this.textures.exists(r.key)) this.textures.remove(r.key);
++      } else {
++        this.cache.audio.remove(r.key);
++      }
++    }
++  }
++
++  private onWake(): void {
++    const cam = this.cameras.main;
++    cam.resetFX();
++    cam.setZoom(1);
++    cam.setScroll(0, 0);
++    void revealScene(this);
++    setHudMode('map');
++    // The game's request must not stay on the Speaker (its line may already be released).
++    const prompt = islandPrompt(session.lastStation);
++    if (prompt) audio.setPrompt(prompt);
++    else audio.clearPrompt();
++    if (this.idle) this.handle(this.idle.reset());
++    const last = session.lastStation;
++    const s = last !== undefined ? this.stops[last] : undefined;
++    if (this.trip && s !== undefined) this.applyAll(this.trip.parkAt(s));
++    else this.syncIdle();
++  }
++
++  // --- idle ---------------------------------------------------------------------------------------
++
++  private handle(events: readonly MapIdleEvent[]): void {
++    for (const ev of events) {
++      if (ev.kind === 'ambient') this.ambient(ev.id);
++      else if (ev.kind === 'invite') this.invite(ev.id);
++      else this.endInvite(ev.id);
++    }
++  }
++
++  private addLabel(text: string): GameObjects.Text {
++    const spec = Tokens.components.stationLabel;
++    const type = spec.typography;
++    return this.add
++      .text(0, 0, text, {
++        fontFamily: type.fontFamily,
++        fontSize: `${type.fontSize}px`,
++        fontStyle: String(type.fontWeight),
++        color: spec.color.css,
++        stroke: spec.outline.color.css,
++        strokeThickness: spec.outline.width,
++        align: 'center',
++      })
++      .setOrigin(0.5, 0)
++      .setAlpha(spec.opacity);
++  }
++
++  private ambient(id: string): void {
++    const view = this.views.get(id);
++    if (!view?.image || isMoving(view.image)) return;
++    bounce(this, view.image, view.plan.image?.scale ?? 1, amplitude(Tokens.ui.ambientScale, this.reduced), Tokens.Timing.mapAmbientMoveMs);
++  }
++
++  private invite(id: string): void {
++    const view = this.views.get(id);
++    if (!view) return;
++    // One prominent motion at a time: settle any ambient bounce still running on another station.
++    for (const other of this.views.values()) {
++      if (other.image) stopMotion(other.image, other.plan.image?.scale ?? 1);
++    }
++    this.ring = createHintRing(this, boundingBox(view.plan.hit), { reduced: this.reduced, depth: this.plan?.ringDepth });
++    if (view.image) {
++      const pulse = Tokens.components.stationHotspot.pulse;
++      bob(
++        this,
++        view.image,
++        view.plan.image?.scale ?? 1,
++        amplitude(pulse.from, this.reduced),
++        amplitude(pulse.to, this.reduced),
++        pulse.durationMs,
++      );
++    }
++    const line = inviteLine(id);
++    audio.sayChain([line, stationNameLine(id)]);
++    audio.setPrompt(line);
++  }
++
++  private endInvite(id: string): void {
++    this.ring?.destroy();
++    this.ring = undefined;
++    const view = this.views.get(id);
++    if (view?.image) stopMotion(view.image, view.plan.image?.scale ?? 1);
++  }
++}
+diff --git a/_bmad-output/implementation-artifacts/spec-1-10-tiem-kem-luot-3-5-cau-do-kho-tang-dan.md b/_bmad-output/implementation-artifacts/spec-1-10-tiem-kem-luot-3-5-cau-do-kho-tang-dan.md
+new file mode 100644
+index 0000000..2b33452
+--- /dev/null
++++ b/_bmad-output/implementation-artifacts/spec-1-10-tiem-kem-luot-3-5-cau-do-kho-tang-dan.md
+@@ -0,0 +1,276 @@
++---
++title: 'Story 1.10 — Tiệm kem: lượt 3–5 câu và độ khó tăng dần (FR5)'
++type: 'feature'
++created: '2026-10-08'
++status: 'in-review'
++baseline_revision: 'NO_VCS'
++baseline_commit: 'NO_VCS'
++review_loop_iteration: 0
++followup_review_recommended: false
++context:
++  - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-8-tiem-kem-keo-kem-dung-vi-cho-shiba.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-9-goi-y-leo-thang.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-7-kart-chay-toi-tram.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-3-be-nghe-giong-doc-tieng-viet.md'
++warnings: ['oversized']
++deferred: []
++---
++
++<intent-contract>
++
++## Intent
++
++**Problem:** After Stories 1.8 and 1.9, Tiệm kem has one ladder level (1 scoop out of 2 flavours), asks questions forever until Home, never emits `round:complete`, and the level never changes. FR5 (difficulty that grows from 1-of-2 to 2–3 scoops, with order enforced only at the top level), a finished 3–5 question round and AR8's `nextLevel` are all missing.
++
++**Approach:**
++- `content/games/ice-cream.ts` gets a 4-level ladder with a question count per level. Every multi-scoop and order request is enumerated as its own voice line.
++- The pure `questions.ts` / `round.ts` from spec-1-8 learn multi-scoop questions, ordered checking at the top level, `stepDone` after each correct scoop, and the end of the round.
++- A pure `core/round-tally.ts` behind `MiniGameBase` counts `questions`, `firstTryCorrect` and `maxHintLevel` from the hint protocol. The base emits `round:complete` after the celebration, then goes inert.
++- A pure `core/difficulty.ts › nextLevel` is called only by `Map` on `round:complete`. It writes the new level to `SessionStore.levels` (memory only).
++
++## Boundaries & Constraints
++
++**Always:**
++- **Ladder** (`content/games/ice-cream.ts`, data only). `IceCreamLevel = { id; flavours: 2|3|4; scoops: 1|2|3; ordered: boolean; questions: 3|4|5 }`:
++
++  | idx | id | flavours | scoops | ordered | questions |
++  |---|---|---|---|---|---|
++  | 0 | `one-of-2` | 2 | 1 | false | 3 |
++  | 1 | `two-of-3` | 3 | 2 | false | 4 |
++  | 2 | `three-of-4` | 4 | 3 | false | 5 |
++  | 3 | `three-in-order` | 4 | 3 | true | 5 |
++
++  A content test enforces the following:
++  - level 0 is 1-of-2;
++  - `flavours` and `scoops` never decrease;
++  - every level after 0 raises at least one of them, except the last, which adds `ordered`;
++  - `scoops ≤ min(flavours, 3)` (three `slot.cone-*` exist);
++  - questions are 3–5;
++  - only the last level is `ordered`.
++- **Questions** (`games/ice-cream/questions.ts › questionFor(seed, index, level)` → `{ counter: FlavourId[]; wanted: FlavourId[] }`, which replaces spec-1-8's `target`):
++  - Same rng and shuffle as spec-1-8. `counter` = the first `flavours` of the shuffle, placed on `HOME_SLOTS[flavours]`. `wanted` = `scoops` distinct flavours drawn from `counter`.
++  - Unordered levels sort `wanted` in `FLAVOURS` order (the spoken order). Ordered levels keep the drawn sequence.
++  - When `index > 0`, `wanted` differs from question `index − 1`'s: the set for unordered levels, the sequence for ordered levels. Re-derive with a salted rng; never loop unbounded.
++  - The result is deterministic for `(seed, index, level)`. An out-of-range `level` is clamped.
++- **Voice line ids** (`games/ice-cream/lines.ts`, pure):
++  - `askLineId(q)`: for 1 scoop, `vo.ice-cream.ask.<f>` (spec-1-8). For unordered 2–3 scoops, `vo.ice-cream.ask.<f1>-<f2>[-<f3>]`. For ordered, `vo.ice-cream.ask-order.<f1>-<f2>-<f3>`.
++  - `retryLineId(q, placedCount)`: unordered uses `vo.ice-cream.retry.<first remaining wanted>` (spec-1-8). Ordered uses `vo.ice-cream.order-first.<wanted[0]>` when nothing is placed, else `vo.ice-cream.order-next.<wanted[placed]>`.
++  - A test enumerates every reachable `wanted` for every level (6 pairs, 4 triples, 24 ordered triples) and asserts each ask and retry id is in `VOICE_LINES`.
++- **New voice lines** (listed literally in `content/voice-lines.ts`, unapproved, `keywordPauseMs: 300` where `|` appears; each must pass `voiceWords` ≤ 8, where sô-cô-la counts as 3 words and bạc hà as 2):
++
++  | id pattern | count | text template | worst case |
++  |---|---|---|---|
++  | `ask.<a>-<b>` | 6 | "Cho Shiba \| <a> và <b>!" | 8 |
++  | `ask.<a>-<b>-<c>` | 4 | "Cho Shiba \| <a>, <b>, <c>!" | 8 |
++  | `ask-order.<a>-<b>-<c>` | 24 | "<A>, rồi <b>, rồi <c>!" (no `\|`) | 8 |
++  | `order-first.<f>` | 4 | "Trước tiên là \| kem <vị>!" | 7 |
++  | `order-next.<f>` | 4 | "Tiếp theo là \| kem <vị>!" | 7 |
++
++  The vị words are dâu, sô-cô-la, vani and bạc hà. `assets.audio` keeps "every `vo.ice-cream.*` line", so the new lines load with the game.
++- **Drop resolution changes** (`round.ts`; spec-1-8's drop order and the `home`/`rest`/`off` outcomes are unchanged). A `serve` of flavour `f` with `placed` so far is:
++  - **correct** when `f ∈ wanted \ placed` and, on an ordered level, `f === wanted[placed.length]`;
++  - **wrong** otherwise. That includes a flavour that is already placed (its respawned copy) and, at the top level, a wanted flavour in the wrong order. A wrong serve floats back and calls `hint.wrong()` exactly as in spec-1-8, with no other effect.
++- **Correct serve that is not the last scoop:**
++  - The scoop snaps to `slot.cone-<placed.length+1>`, so the stack follows the child's order. `sfx.ice-cream.snap` plays and a fresh scoop respawns at home.
++  - Then `hint.stepDone(nextStep, { retryLineId: retryLineId(q, placed.length) })`. Shiba does not celebrate. The level is kept and the clock restarts (spec-1-9).
++- **Correct serve of the last scoop:** the spec-1-9 order applies: `questionDone` → lock scoops → celebrate. The model then advances `questionIndex` at once, so a snapshot taken during the celebration points at the next question with `placed: []`.
++  - If that was not the last question, the next question starts after `Timing.correctMusicMaxMs`, as in spec-1-8.
++  - If it was the last (`index + 1 === ladder[level].questions`), there is no fade and no next question. The command `finishRound` fires after `Timing.roundCelebrationMs`, on the scene clock.
++- **`HintStep` per stage:**
++  - Unordered: `correct` = the remaining wanted draggables in spoken order, `distractors` = every other counter draggable (already-placed flavours included), `target` = the cone.
++  - Ordered: `correct` = `[next in order]`, `distractors` = all the others.
++  - The level-4 dimming of spec-1-9 therefore never dims a scoop that is still wanted.
++- **Round tally** (`core/round-tally.ts`, pure, reusable by every game) with `beginQuestion()`, `level(l)`, `questionDone()` and `outcome(gameId): RoundOutcome`:
++  - `questions` = the number of questions closed by `questionDone`.
++  - `maxHintLevel` = the max level seen while any question was open.
++  - `firstTryCorrect` = the number of closed questions whose own max level stayed 0.
++  - `level()` with no open question is ignored, so the reset to 0 after `questionDone` cannot leak.
++- **`MiniGameBase` changes** (spec-1-7 and spec-1-9 base):
++  - `this.hint` becomes a thin wrapper over `createHint`. `beginQuestion` → `tally.beginQuestion()`. `questionDone` → `tally.questionDone()` before it is forwarded. The existing `hint:level` subscription (own key) feeds `tally.level`.
++  - Protected `finishRound()` → `complete(tally.outcome(key))`.
++  - `complete()` first runs the same cleanup as abandon (`hint.questionDone()`, `time.removeAllEvents()`), then the `RoundGuard` emits exactly one `round:complete` and the game is inert: input off, no hints, Home ignored.
++  - **Home while finishing** (between the last `questionDone` and `finishRound`): `hud:home` calls `finishRound()` at once instead of abandon. The round counts and the child goes home.
++- **`core/difficulty.ts › nextLevel(current, outcome, ladderLength)`** (pure, Vitest):
++  - Clamp `current` to the ladder first, then apply +1 if `outcome.questions > 0 && firstTryCorrect === questions`, else −1 if `maxHintLevel === 4`, else 0.
++  - Clamp the result to `[0, ladderLength − 1]`. `ladderLength < 1` gives 0.
++- **Map on `round:complete`** (wiring; spec-1-7's return path is unchanged):
++  - Synchronously on receipt, `SessionStore.recordRound(id, startedLevel, outcome, GAMES[id].ladder.length)`, which sets `levels[id] = nextLevel(...)`. `startedLevel` is the `level` Map passed in the start data, so Map keeps `{ id, level }` of the running game.
++  - Then stop the game, release its assets, wake, and park the kart at the truck.
++  - The next entry to the same game uses `levelFor(id)`, i.e. the new level. A cold start gives a fresh store, so level 0.
++
++**Never:**
++- No persistence of the level, no `ProgressStore.setDifficulty`, no decoration, camera pull-back, `PlayAgainOverlay` or resume (Epic 2).
++- No difficulty logic in games or in `Map` beyond calling `nextLevel`. No runtime concatenation of voice lines. No game calls `audio.say`.
++- No change to the HintDirector machine, the spec-1-4 layout format or the art. No new Blender render (three cone slots already exist).
++- No red, ✗, shake, wrong sound, praise or "sai". No text on screen. No `setTimeout`.
++- No git. No writing files that contain backslashes through a shell heredoc.
++
++**Decisions (auto-run defaults):**
++- **Ladder shape:** four levels, from the story's sequence "1-of-2 → more flavours and 2–3 scoops → order at the top". Order is enforced only once the child has mastered 3 unordered scoops.
++- **Scoops in one question are distinct flavours.** A repeated flavour would need "two strawberry" lines and counting, which is out of FR5.
++- **`firstTryCorrect` means the question's hint level stayed 0:** no wrong drop and no time-escalated ring. Level ≥ 1 comes only from a wrong drop or from ≥ 6 s of idle help, so +1 means the child solved every question unaided.
++- **Unordered prompts name the flavours in `FLAVOURS` order**, so 2- and 3-scoop prompts need 10 lines instead of 30. The retry names the first remaining flavour (EXPERIENCE Flow 2).
++- **"Giọng nhắc lại thứ tự"** is the `order-first` / `order-next` line for the flavour expected next. The Speaker still replays the full `ask-order` line.
++- **Multi-scoop prompts drop colour words** to fit the 8-word limit. The colour stays in the single-scoop and retry lines, and the scoop shapes carry the distinction.
++- **The full celebration runs only on the last scoop of a question.** Intermediate scoops get only the snap sound, so there is one prominent motion and no praise inflation.
++- **Home during the final celebration completes the round** rather than abandoning a finished round.
++
++## I/O & Edge-Case Matrix
++
++| Scenario | Input / State | Expected Output / Behavior | Error Handling |
++|----------|--------------|---------------------------|----------------|
++| Level 0 round | `{level:0, seed:7}` | 3 questions, 2 scoops on the counter, 1 wanted; `round:complete` after the 3rd | — |
++| Two any order | L1, wanted [strawberry, chocolate], child serves chocolate then strawberry | chocolate → cone-1, `stepDone(.., retry.strawberry)`; strawberry → cone-2, `questionDone`, celebrate | — |
++| Duplicate | L1, strawberry placed, its respawn served | float back; `hint.wrong()`; placed unchanged | — |
++| Ordered ok | L3, wanted [mint, vanilla, strawberry], served in order | cone-1..3; retries order-first.mint → order-next.vanilla → order-next.strawberry | — |
++| Wrong order | L3, nothing placed, vanilla served | float back; `wrong()` speaks `order-first.mint` (rate-limited by 1.9) | — |
++| Level-4 dim, unordered | L2, 1 of 3 placed, level 4 | only non-wanted and placed flavours dimmed; both remaining wanted pickable | — |
++| Last question | final scoop snaps | celebrate; after 1500 ms exactly one `round:complete {gameId:'ice-cream', questions:5, firstTryCorrect, maxHintLevel}`; inert | — |
++| Home while finishing | `hud:home` during that 1500 ms | `round:complete` now, never `round:abandon` | — |
++| Home mid-celebration (not last) | after the question's `questionDone` | `round:abandon`, snapshot `questionIndex = index+1`, `placed: []` | — |
++| Home mid-question | 1 of 2 placed | `round:abandon`, `partial.placed = [f]` | — |
++| Tally | q1 clean; q2 one wrong; q3 idle to level 3 | `questions 3, firstTryCorrect 1, maxHintLevel 3` | — |
++| nextLevel +1 | current 1, 4/4 first try, len 4 | 2 | — |
++| nextLevel −1 | current 2, maxHint 4 | 1 | — |
++| Clamp low | current 0, maxHint 4 | 0 | — |
++| Clamp high | current 3, all first try | 3 | — |
++| Neither | 3/4 first try, maxHint 3 | unchanged | — |
++| Bad current | current 9 or −2, len 4 | clamped first (3 / 0), then the rule | — |
++| Session level | complete at L0 with all first try, re-enter | started with `level: 1`; after reload `level: 0` | — |
++| Determinism | same `(seed, index, level)` | identical question; consecutive `wanted` differ | — |
++| Missing line | an `ask-order.*` combination absent | lines test and `npm run check` fail naming the id | exit 1 |
++
++</intent-contract>
++
++## Code Map
++
++- `app/src/content/games/ice-cream.ts` -- planned in spec-1-8: `FLAVOURS`, one-level `ladder`, `HOME_SLOTS`, `assets`, `screen`. The ladder and its type are extended.
++- `app/src/content/voice-lines.ts` -- real (literal `VOICE_LINES as const`); spec-1-8 adds `ask.<f>` / `retry.<f>`. Add the 42 lines. `app/src/content/validate.ts › voiceWords`, `MAX_VOICE_WORDS` -- real word rule; the id grammar `vo.<scope>.<intent>[.<subject>]` with kebab segments allows `ask.strawberry-chocolate`.
++- `app/src/games/ice-cream/{questions,round,IceCream}.ts` -- planned in spec-1-8 (pure question/drop model, scene wiring), changed in spec-1-9 (command order, ambient).
++- `app/src/games/mini-game-base.ts` -- planned in spec-1-7 (`RoundGuard`, `complete`, `abandon`, `hud:home`), spec-1-8 (`hint`, abandon cleanup) and spec-1-9 (`hint:level` subscription, ambient).
++- `app/src/core/round-guard.ts`, `app/src/core/session-store.ts` (`levels`, `levelFor`, `startData`) -- planned in spec-1-7.
++- `app/src/core/hint-director.ts` -- planned in spec-1-9 (`createHint`, `level`, `hint:level` emits).
++- `app/src/scenes/Map.ts` -- planned in spec-1-7: terminal-event return path, `startData`.
++- `app/src/content/types.ts` -- real `RoundOutcome`, `HintLevel`. `app/src/core/bus.ts` -- real `'round:complete'`. `app/src/core/timing.ts` -- real `roundCelebrationMs` (1500) and `correctMusicMaxMs`.
++
++## Tasks & Acceptance
++
++**Execution:**
++- `app/src/core/difficulty.ts` (+ `difficulty.test.ts`) -- `nextLevel` with every rule, clamp and bad-input row.
++- `app/src/core/round-tally.ts` (+ test) -- the tally, including the ignored post-close level 0 and the matrix tally row.
++- `app/src/core/session-store.ts` (+ test) -- `recordRound`. A test checks that the next `levelFor` returns the new level and that a fresh store returns 0.
++- `app/src/content/games/ice-cream.ts` (+ `ice-cream.test.ts` for the ladder rules) -- `IceCreamLevel` and the 4-level ladder.
++- `app/src/content/voice-lines.ts` -- the 42 literal lines. Generate them with `cd app && npm run tts`.
++- `app/src/games/ice-cream/lines.ts` (+ test) -- `askLineId` and `retryLineId`, with the exhaustive coverage test against `VOICE_LINES`.
++- `app/src/games/ice-cream/questions.ts` (+ test) -- counter, `wanted`, sorting, the differs-from-previous rule, clamping and determinism over seeds 0..99 for every level.
++- `app/src/games/ice-cream/round.ts` (+ test) -- multi-scoop and ordered serve rules, stage `HintStep`s, `stepDone` lines, last question → `finishRound` after `roundCelebrationMs`, the snapshot index advance. Cover every round row of the matrix.
++- `app/src/games/mini-game-base.ts` -- the tallied `hint` wrapper, `finishRound`, the complete cleanup and Home while finishing.
++- `app/src/games/ice-cream/IceCream.ts` -- apply the new commands: stacked slot index, `stepDone`, `finishRound`, scoops per `counter`.
++- `app/src/scenes/Map.ts` -- keep `{ id, level }` of the running game, and call `recordRound` on `round:complete` before stopping it.
++
++**Acceptance Criteria:**
++- Given a fresh `npm run dev`, when the child drives to Tiệm kem and answers three single-scoop requests, then after the third Shiba celebrates for about 1.5 s, the island fades back with the kart parked at the truck, and exactly one `round:complete` with `questions: 3` was emitted. No overlay or decoration appears.
++- Given the round was played with no wrong drop and no ring, when the child drives back to the truck, then the counter shows three flavours and the request names two ("Cho Shiba… dâu và vani!"). The scoops stack on the cone in the order the child places them.
++- Given level 3 (set `SessionStore.levels['ice-cream'] = 3` in dev), when the child places a wanted scoop out of the spoken order, then it glides back and "Trước tiên là… kem bạc hà!" (or `order-next`) plays. A ring appears after the usual escalation.
++- Given a round where one question reached hint level 4, when it completes, then re-entering starts one level lower (or stays at 0). After a page reload it starts at level 0.
++- Given `cd app && npm run check`, then it exits 0, with the `nextLevel`, tally, ladder, lines-coverage, questions and round tests passing, and validate:content accepts the 42 new voice files.
++
++## Spec Change Log
++
++- **2026-10-09: `retryLineId(q, placed)` takes the placed flavours, not a count.** The unordered retry names the first remaining wanted flavour. That depends on which flavours are on the cone, not only on how many.
++- **2026-10-09: the base finish API.**
++  - The base cannot see a round model. `MiniGameBase` therefore gained `protected scheduleFinish(ms)` beside `finishRound()`. It sets "finishing" and calls `finishRound()` through `time.delayedCall`.
++  - Tiệm kem's `finishRound` command calls `scheduleFinish(c.afterMs)`. A Home tap while finishing calls `finishRound()` at once.
++  - `hint` is now a read-only tallied wrapper over the hint system that `protected createHintSystem()` returns. Tests override that hook instead of assigning `hint`.
++  - Terminal cleanup ends the raw hint question, so an open (unanswered) question is never counted.
++- **2026-10-09: the re-draw.**
++  - ESLint bans magic numbers in game code, so the salt lives in `core/rng.ts › redrawSeed(qSeed)`.
++  - When the first draw repeats the previous request, one salted rng picks among the requests from the counter that differ. This is bounded, with no loop.
++  - As a result, level 0's targets differ from 1.8's for the same seed.
++- **2026-10-09: small shapes.**
++  - `Question` keeps `scoops` (the counter with its homes) and gains `ordered`.
++  - The `beginQuestion`/`stepDone` commands carry the line ids and the stage's scoop ids.
++  - `RoundGeometry` gains `finishDelayMs` (`Timing.roundCelebrationMs`).
++  - The round model clamps its level.
++  - `core/game-assets.test.ts` now expects 50 `vo.ice-cream.*` lines.
++
++## Review Triage Log
++
++## Design Notes
++
++**Why the tally sits behind `MiniGameBase`:** every game already reports its questions through `hint.beginQuestion` / `questionDone`, and its levels through `hint:level`. Counting there gives Epics 3–4 a correct `RoundOutcome` for free and keeps difficulty policy out of games (AD-1). The game only says when the round is over:
++
++```ts
++// round.ts command after the last questionDone
++{ kind: 'finishRound', afterMs: Timing.roundCelebrationMs }
++// IceCream.apply → this.time.delayedCall(c.afterMs, () => this.finishRound())
++```
++
++**Why questions advance on `questionDone`:** a Home tap during a celebration must not save an answered question as "in progress" for Epic 2's resume.
++
++## Verification
++
++**Commands:**
++- `cd app && npm run tts` -- expected: 42 new `vo.ice-cream.*` `.m4a` and `.hash` files are written; a second run skips them.
++- `cd app && npm run check` -- expected: exit 0.
++- `cd app && npm run build` -- expected: exit 0.
++
++**Manual checks:**
++- Run the AC walkthroughs at 1180×820 touch emulation. Listen to a sample of the `ask-order` lines and confirm the order reads clearly and slowly at rate 0.85.
++- At level 2, confirm three stacked scoops sit visibly on the cone (`slot.cone-1..3`) without covering Shiba's face.
++
++## Auto Run Result
++
++**Status:** in-review. `cd app && npm run check` exits 0: 54 test files, 638 tests. `validate:content` reports 60 voice lines OK. `npm run build` exits 0.
++
++**Summary:**
++- **Ladder:** `content/games/ice-cream.ts` has the 4-level ladder (`one-of-2`, `two-of-3`, `three-of-4`, `three-in-order`), with 3/4/5/5 questions. `assets.audio` loads every `vo.ice-cream.*` line.
++- **Voice lines:** 42 new literal lines in `content/voice-lines.ts` (6 pairs, 4 triples, 24 ordered triples, 4 `order-first`, 4 `order-next`). All are unapproved and all are at most 8 words. `npm run tts` wrote all 42 on its first run, and a second run skipped all 60.
++- **Questions:** `games/ice-cream/questions.ts` builds the counter and a distinct `wanted`. Unordered requests use the spoken order. Consecutive requests differ (one bounded salted re-draw), and the level is clamped. `games/ice-cream/lines.ts` holds `askLineId` and `retryLineId`.
++- **Round model:** `games/ice-cream/round.ts` handles multi-scoop and ordered serves.
++  - Placed or out-of-order flavours are wrong.
++  - Scoops stack on `cone-1..3`.
++  - Every scoop except the last sends `stepDone` with the next stage and its retry line.
++  - The last scoop sends `questionDone` and celebrates, and the index advances at once.
++  - After the last question, `finishRound` follows after 1500 ms.
++- **Core:** pure `core/round-tally.ts` and `core/difficulty.ts › nextLevel`. `SessionStore.recordRound` keeps levels in memory only.
++- **`MiniGameBase`:** a tallied `hint` wrapper, `scheduleFinish`/`finishRound`, and the shared terminal cleanup. A Home tap while finishing completes the round.
++- **Map:** keeps `{ id, level }` of the running game and calls `recordRound` on `round:complete` before it stops the game.
++
++**Files changed:** the list is in `.changed-1-10.txt`.
++- New:
++  - `app/src/core/difficulty.ts` and its test: `nextLevel`.
++  - `app/src/core/round-tally.ts` and its test: the tally.
++  - `app/src/content/games/ice-cream.test.ts`: the ladder rules and the audio list.
++  - `app/src/games/ice-cream/lines.ts` and its test: the line ids, with exhaustive coverage.
++- Changed:
++  - `core/session-store.ts` and its test: `recordRound`.
++  - `core/rng.ts`: `redrawSeed`.
++  - `content/games/ice-cream.ts`: the ladder and the audio list.
++  - `content/voice-lines.ts`: the 42 lines.
++  - `games/ice-cream/questions.ts`, `round.ts` and their tests: multi-scoop, order and the round end.
++  - `games/ice-cream/IceCream.ts`: applies `stepDone` and `finishRound`, and uses the line ids from the commands.
++  - `games/mini-game-base.ts` and `games/registry.test.ts`: the tally, the finish, and Home while finishing.
++  - `scenes/Map.ts`: `recordRound`.
++  - `core/game-assets.test.ts`: expects 50 ice-cream lines.
++- Assets: 42 `.m4a` and 42 `.hash` files in `app/public/assets/audio/vo/`.
++
++**Verification:**
++- `npm run tts`: 42 written. The re-run wrote 0 and skipped 60.
++- `npm run check`: exit 0, with 638 tests.
++- `npm run build`: exit 0.
++
++**Residual risks:**
++- `IceCream.ts` scene wiring (`stepDone` stage swaps, stacked cone slots, `scheduleFinish`) is covered only through the pure model and the base tests. There was no headless browser run this time.
++- Map's `recordRound` wiring has no unit test. It is one call before the existing return path.
++- The level stays in memory until Story 2.1.
++
++**Manual checks still due:**
++- Run the AC walkthroughs at 1180×820 touch emulation:
++  - a level 0 round ends after 3 questions and the island fades back;
++  - re-entering after a clean round shows 3 flavours and 2 requested scoops;
++  - at level 3 (`SessionStore.levels['ice-cream'] = 3` in dev) an out-of-order scoop glides back with the `order-first`/`order-next` line;
++  - a reload goes back to level 0.
++- Listen to a sample of the `ask-order` lines at rate 0.85.
++- At level 2, check that three stacked scoops on `slot.cone-1..3` do not cover Shiba's face.

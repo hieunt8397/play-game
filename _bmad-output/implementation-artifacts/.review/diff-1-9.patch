@@ -1,0 +1,4106 @@
+diff --git a/app/src/core/hint-machine.ts b/app/src/core/hint-machine.ts
+new file mode 100644
+index 0000000..483bb01
+--- /dev/null
++++ b/app/src/core/hint-machine.ts
+@@ -0,0 +1,296 @@
++// HintMachine (Story 1.9, AD-5, NFR4): the pure escalation state machine behind HintDirector.
++// Every decision (level, voice, rate limit, hand due, dim) lives here as state and port calls; the
++// adapter (hint-director.ts) only feeds `tick(ms)` from the scene clock and `speechEnded(token)` from
++// the Bus, and draws through the visuals port.
++// - Two clocks: `activeMs` advances on every tick (retry gap, hand loop); the quiet clocks advance only
++//   while no hint-owned utterance is awaited (escalation, voice repeat).
++// - Levels 0–4 are cumulative: ring + bob at ≥ 2, hand demo at ≥ 3, dim + unpick + snap ×2 at 4.
++//   `wrong()` lifts the level to min(wrongCount, 4); quiet time lifts 0/1 → 2 → 3; time never reaches 4.
++//   The level never drops within a question; `questionDone` resets everything to 0.
++import type { HintLevel } from '../content/types';
++import type { DropTarget } from './input/drop';
++import type { Point } from './input/polygon';
++import { Tokens } from './tokens';
++
++export type HintAction = 'drag' | 'tap' | 'trace';
++
++/** An item a hint can point at (a Draggable satisfies it). */
++export interface HintItem {
++  /** The drawn object (ring, bob, hand start, dim). */
++  readonly object?: unknown;
++  /** Subscribes to lift changes (true before onLift, false after drop/cancel); returns the unsubscribe. */
++  onLiftChange?(fn: (lifted: boolean) => void): () => void;
++  /** True while the item is held. */
++  isDragging?(): boolean;
++}
++
++/** What the hint system needs to demonstrate one step of a question. `correct[0]` is the hinted item. */
++export interface HintStep {
++  readonly correct: readonly HintItem[];
++  readonly distractors: readonly HintItem[];
++  readonly target: DropTarget | null;
++  readonly action: HintAction;
++  readonly path?: readonly Point[];
++}
++
++export interface HintQuestion {
++  readonly promptLineId: string;
++  readonly retryLineId: string;
++  readonly step: HintStep;
++}
++
++export interface StepLines {
++  readonly promptLineId?: string;
++  readonly retryLineId?: string;
++}
++
++/** What the machine draws (core/hint-visuals in the adapter). */
++export interface HintVisualsPort {
++  /** Ring + bob on `item` (replacing any previous one); `undefined` removes them. */
++  ring(item: HintItem | undefined): void;
++  /** One hand demonstration of `step`. */
++  hand(step: HintStep): void;
++  /** Removes a running hand demo. */
++  clearHand(): void;
++  /** Level 4 fade of a distractor (`on`) or its restore to alpha 1. */
++  dim(item: HintItem, on: boolean): void;
++}
++
++export interface HintPorts {
++  readonly audio: {
++    say(id: string): number;
++    setPrompt(id: string): void;
++    /** Restarts the prompt from the start with a new token (the Speaker); falls back to `say`. */
++    replayPrompt?(): number | undefined;
++  };
++  readonly guard: {
++    setPickable(item: object, on: boolean): void;
++    setSnapScale(target: object, k: number): void;
++    isDragging(): boolean;
++  };
++  readonly visuals: HintVisualsPort;
++  emitLevel(level: HintLevel): void;
++}
++
++/** The timings the machine uses (defaults from Tokens.Timing / Tokens.ui). */
++export interface HintTimings {
++  readonly level2IdleMs: number;
++  readonly level3ExtraIdleMs: number;
++  readonly handLoopMs: number;
++  readonly voiceRepeatMs: number;
++  readonly voiceGapMs: number;
++  readonly snapScale: number;
++}
++
++export function defaultHintTimings(): HintTimings {
++  const t = Tokens.Timing;
++  return {
++    level2IdleMs: t.hintLevel2IdleMs,
++    level3ExtraIdleMs: t.hintLevel3ExtraIdleMs,
++    handLoopMs: t.hintHandLoopMs,
++    voiceRepeatMs: t.hintVoiceRepeatMs,
++    voiceGapMs: t.voiceRetryMinGapMs,
++    snapScale: Tokens.ui.hintSnapScale,
++  };
++}
++
++const MAX_LEVEL = 4;
++const RING_LEVEL = 2;
++const HAND_LEVEL = 3;
++
++export class HintMachine {
++  private readonly ports: HintPorts;
++  private readonly t: HintTimings;
++  private question: HintQuestion | undefined;
++  private step: HintStep | null = null;
++  private prompt = '';
++  private retry = '';
++  private lvl: HintLevel = 0;
++  private wrongs = 0;
++  /** Every tick. */
++  private activeMs = 0;
++  /** Quiet time since the later of the last idle restart and the last level change (escalation). */
++  private levelIdleMs = 0;
++  /** Quiet time since the last idle restart or hint-voice request (voice repeat at level ≥ 3). */
++  private voiceIdleMs = 0;
++  /** Active time since the last hand demo. */
++  private handMs = 0;
++  private handPending = false;
++  private lastVoiceAt = Number.NEGATIVE_INFINITY;
++  private awaited: number | undefined;
++  private dimmed: HintItem[] = [];
++  private snapped: object | undefined;
++
++  constructor(ports: HintPorts, timings: HintTimings = defaultHintTimings()) {
++    this.ports = ports;
++    this.t = timings;
++  }
++
++  get level(): HintLevel {
++    return this.lvl;
++  }
++
++  get isActive(): boolean {
++    return this.question !== undefined;
++  }
++
++  /** The awaited hint-owned token (tests, adapter). */
++  get awaitedToken(): number | undefined {
++    return this.awaited;
++  }
++
++  beginQuestion(q: HintQuestion): void {
++    if (this.question) this.questionDone();
++    this.question = q;
++    this.step = q.step;
++    this.prompt = q.promptLineId;
++    this.retry = q.retryLineId;
++    this.playPrompt(false);
++  }
++
++  wrong(): void {
++    if (!this.question) return;
++    this.wrongs += 1;
++    const spoke = this.hintVoice();
++    const next = Math.max(this.lvl, Math.min(this.wrongs, MAX_LEVEL)) as HintLevel;
++    if (next > this.lvl) this.setLevel(next);
++    if (!spoke && this.awaited === undefined) this.restartIdle();
++  }
++
++  stepDone(next: HintStep | null, lines?: StepLines): void {
++    if (!this.question) return;
++    this.restoreDim();
++    this.ports.visuals.clearHand();
++    this.step = next;
++    if (lines?.retryLineId !== undefined) this.retry = lines.retryLineId;
++    if (this.lvl >= RING_LEVEL) this.ports.visuals.ring(next?.correct[0]);
++    if (this.lvl >= MAX_LEVEL) this.applyDim();
++    if (lines?.promptLineId !== undefined) {
++      this.prompt = lines.promptLineId;
++      this.playPrompt(false);
++    } else if (this.awaited === undefined) {
++      this.restartIdle();
++    }
++  }
++
++  questionDone(): void {
++    if (!this.question) return;
++    this.restoreDim();
++    this.ports.visuals.ring(undefined);
++    this.ports.visuals.clearHand();
++    const was = this.lvl;
++    this.question = undefined;
++    this.step = null;
++    this.prompt = '';
++    this.retry = '';
++    this.lvl = 0;
++    this.wrongs = 0;
++    this.activeMs = 0;
++    this.levelIdleMs = 0;
++    this.voiceIdleMs = 0;
++    this.handMs = 0;
++    this.handPending = false;
++    this.lastVoiceAt = Number.NEGATIVE_INFINITY;
++    this.awaited = undefined;
++    if (was > 0) this.ports.emitLevel(0);
++  }
++
++  /** The Speaker: the current prompt from the start; keeps the level and the wrong count. */
++  replayPrompt(): number | undefined {
++    if (!this.question) return undefined;
++    this.playPrompt(true);
++    return this.awaited;
++  }
++
++  speechEnded(token: number): void {
++    if (!this.question || token !== this.awaited) return;
++    this.awaited = undefined;
++    this.restartIdle();
++  }
++
++  tick(ms: number): void {
++    if (!this.question) return;
++    this.activeMs += ms;
++    this.handMs += ms;
++    const quiet = this.awaited === undefined;
++    if (quiet) {
++      this.levelIdleMs += ms;
++      this.voiceIdleMs += ms;
++      if (this.lvl < RING_LEVEL && this.levelIdleMs >= this.t.level2IdleMs) this.setLevel(RING_LEVEL);
++      else if (this.lvl === RING_LEVEL && this.levelIdleMs >= this.t.level3ExtraIdleMs) this.setLevel(HAND_LEVEL);
++    }
++    if (this.lvl < HAND_LEVEL) return;
++    if (this.handPending || this.handMs >= this.t.handLoopMs) this.tryHand();
++    if (this.awaited === undefined && this.voiceIdleMs >= this.t.voiceRepeatMs) this.hintVoice();
++  }
++
++  // --- internals ------------------------------------------------------------------------------------
++
++  private playPrompt(replay: boolean): void {
++    const a = this.ports.audio;
++    a.setPrompt(this.prompt);
++    const token = replay && a.replayPrompt ? (a.replayPrompt() ?? a.say(this.prompt)) : a.say(this.prompt);
++    this.awaited = token;
++  }
++
++  /** Requests the retry voice; returns whether it played (the rate limit drops it otherwise). */
++  private hintVoice(): boolean {
++    this.voiceIdleMs = 0;
++    if (this.activeMs - this.lastVoiceAt < this.t.voiceGapMs) return false;
++    this.lastVoiceAt = this.activeMs;
++    this.awaited = this.ports.audio.say(this.retry);
++    return true;
++  }
++
++  private restartIdle(): void {
++    this.levelIdleMs = 0;
++    this.voiceIdleMs = 0;
++  }
++
++  private setLevel(next: HintLevel): void {
++    const prev = this.lvl;
++    this.lvl = next;
++    this.levelIdleMs = 0;
++    this.ports.emitLevel(next);
++    if (prev < RING_LEVEL && next >= RING_LEVEL) this.ports.visuals.ring(this.step?.correct[0]);
++    if (prev < HAND_LEVEL && next >= HAND_LEVEL) {
++      this.tryHand();
++      this.hintVoice();
++    }
++    if (prev < MAX_LEVEL && next >= MAX_LEVEL) this.applyDim();
++  }
++
++  private tryHand(): void {
++    if (this.ports.guard.isDragging()) {
++      this.handPending = true;
++      return;
++    }
++    this.handPending = false;
++    this.handMs = 0;
++    if (this.step) this.ports.visuals.hand(this.step);
++  }
++
++  private applyDim(): void {
++    const step = this.step;
++    if (!step) return;
++    for (const d of step.distractors) {
++      this.ports.guard.setPickable(d, false);
++      this.ports.visuals.dim(d, true);
++      this.dimmed.push(d);
++    }
++    if (step.target) {
++      this.ports.guard.setSnapScale(step.target, this.t.snapScale);
++      this.snapped = step.target;
++    }
++  }
++
++  private restoreDim(): void {
++    for (const d of this.dimmed) {
++      this.ports.guard.setPickable(d, true);
++      this.ports.visuals.dim(d, false);
++    }
++    this.dimmed = [];
++    if (this.snapped) this.ports.guard.setSnapScale(this.snapped, 1);
++    this.snapped = undefined;
++  }
++}
+diff --git a/app/src/core/hint-machine.test.ts b/app/src/core/hint-machine.test.ts
+new file mode 100644
+index 0000000..be9215e
+--- /dev/null
++++ b/app/src/core/hint-machine.test.ts
+@@ -0,0 +1,349 @@
++// Story 1.9: the HintMachine against a fake clock (every I/O matrix row and the AC 7/8 sequences).
++import { describe, expect, it, vi } from 'vitest';
++import { HintMachine, type HintItem, type HintQuestion, type HintStep } from './hint-machine';
++import { createDropTarget } from './input/drop';
++import { InputGuard } from './input/guard';
++import { Tokens } from './tokens';
++
++const T = Tokens.Timing;
++const TICK = T.hintTickMs;
++
++function item(name: string): HintItem & { name: string } {
++  return { name, object: { name } };
++}
++
++function setup() {
++  let token = 0;
++  const said: { id: string; token: number }[] = [];
++  const guard = new InputGuard();
++  let dragging = false;
++  const audio = {
++    say: vi.fn((id: string) => {
++      token += 1;
++      said.push({ id, token });
++      return token;
++    }),
++    setPrompt: vi.fn(),
++    replayPrompt: vi.fn(() => {
++      token += 1;
++      said.push({ id: 'replay', token });
++      return token;
++    }),
++  };
++  const visuals = { ring: vi.fn(), hand: vi.fn(), clearHand: vi.fn(), dim: vi.fn() };
++  const levels: number[] = [];
++  const m = new HintMachine({
++    audio,
++    guard: {
++      setPickable: (o, on) => guard.setPickable(o, on),
++      setSnapScale: (o, k) => guard.setSnapScale(o, k),
++      isDragging: () => dragging,
++    },
++    visuals,
++    emitLevel: (l) => levels.push(l),
++  });
++  const target = createDropTarget({ id: 'cone', circle: { x: 500, y: 400, r: 100 } }, guard);
++  const ask = item('ask');
++  const other = item('other');
++  const step: HintStep = { correct: [ask], distractors: [other], target, action: 'drag' };
++  const q: HintQuestion = { promptLineId: 'P0', retryLineId: 'R0', step };
++  /** Ticks `ms` of scene time. */
++  const run = (ms: number): void => {
++    for (let t = 0; t < ms; t += TICK) m.tick(TICK);
++  };
++  /** The awaited utterance ends. */
++  const end = (completed = true): void => {
++    void completed;
++    const a = m.awaitedToken;
++    if (a !== undefined) m.speechEnded(a);
++  };
++  const setDragging = (on: boolean): void => {
++    dragging = on;
++  };
++  return { m, audio, said, visuals, levels, guard, target, ask, other, step, q, run, end, setDragging };
++}
++
++describe('HintMachine — voice and clocks', () => {
++  it('Begin: setPrompt + say(ask); idle stays 0 until speech:ended of that token', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    expect(s.audio.setPrompt).toHaveBeenCalledWith('P0');
++    expect(s.said).toEqual([{ id: 'P0', token: 1 }]);
++    s.run(20000);
++    expect(s.m.level).toBe(0);
++    s.m.speechEnded(1);
++    s.run(T.hintLevel2IdleMs - TICK);
++    expect(s.m.level).toBe(0);
++    s.run(TICK);
++    expect(s.m.level).toBe(2);
++  });
++
++  it('Foreign token: ignored, the clock stays paused', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.m.speechEnded(9);
++    s.run(20000);
++    expect(s.m.level).toBe(0);
++  });
++
++  it('Cut prompt (completed false) also starts the clock', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end(false);
++    s.run(T.hintLevel2IdleMs);
++    expect(s.m.level).toBe(2);
++  });
++
++  it('1 wrong + 6 s: level 1 (retry voice), then 2 with ring', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.m.wrong();
++    expect(s.m.level).toBe(1);
++    expect(s.said.at(-1)?.id).toBe('R0');
++    s.run(3000); // the retry is still speaking: no quiet time
++    s.end();
++    s.run(T.hintLevel2IdleMs);
++    expect(s.m.level).toBe(2);
++    expect(s.levels).toEqual([1, 2]);
++    expect(s.visuals.ring).toHaveBeenLastCalledWith(s.ask);
++  });
++
++  it('Idle only: level 2 after 6 s, level 3 after 6 s more with hand + retry voice', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.run(T.hintLevel2IdleMs);
++    expect(s.m.level).toBe(2);
++    expect(s.visuals.hand).not.toHaveBeenCalled();
++    s.run(T.hintLevel3ExtraIdleMs);
++    expect(s.m.level).toBe(3);
++    expect(s.visuals.hand).toHaveBeenCalledExactlyOnceWith(s.step);
++    expect(s.said.at(-1)?.id).toBe('R0');
++    s.end();
++    s.run(60000);
++    expect(s.m.level).toBe(3); // time never reaches 4
++  });
++
++  it('4 wrongs fast: 1→2→3→4, one retry voice, distractor dimmed + unpickable, cone snap ×2', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    for (let i = 0; i < 4; i++) {
++      s.m.wrong();
++      s.run(700);
++    }
++    expect(s.levels).toEqual([1, 2, 3, 4]);
++    expect(s.said.filter((x) => x.id === 'R0')).toHaveLength(1);
++    expect(s.visuals.dim).toHaveBeenCalledExactlyOnceWith(s.other, true);
++    expect(s.guard.isPickable(s.other)).toBe(false);
++    expect(s.guard.isPickable(s.ask)).toBe(true);
++    expect(s.target.circle()?.r).toBe(200);
++    expect(s.visuals.hand).toHaveBeenCalledOnce();
++  });
++
++  it('Rate limit: a wrong within 10 s of the last hint voice is silent; after 10 s it speaks', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.m.wrong();
++    s.end();
++    s.run(T.voiceRetryMinGapMs - TICK);
++    s.m.wrong();
++    expect(s.said.filter((x) => x.id === 'R0')).toHaveLength(1);
++    s.run(TICK);
++    s.m.wrong();
++    expect(s.said.filter((x) => x.id === 'R0')).toHaveLength(2);
++  });
++
++  it('Level 3 loop: 60 s with no event → hand at 0, 15, 30, 45 s; voice at entry, 30 s, 60 s of quiet', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.run(T.hintLevel2IdleMs + T.hintLevel3ExtraIdleMs);
++    expect(s.m.level).toBe(3);
++    const handAt: number[] = [];
++    const voiceAt: number[] = [];
++    let voices = s.said.filter((x) => x.id === 'R0').length;
++    expect(voices).toBe(1);
++    voiceAt.push(0);
++    s.visuals.hand.mockClear();
++    handAt.push(0);
++    for (let t = TICK; t <= 60000; t += TICK) {
++      // Hint voices end at once (quiet time = active time).
++      s.end();
++      s.m.tick(TICK);
++      if (s.visuals.hand.mock.calls.length > 0) {
++        handAt.push(t);
++        s.visuals.hand.mockClear();
++      }
++      const n = s.said.filter((x) => x.id === 'R0').length;
++      if (n > voices) {
++        voiceAt.push(t);
++        voices = n;
++      }
++    }
++    expect(handAt.slice(0, 4)).toEqual([0, 15000, 30000, 45000]);
++    expect(voiceAt.map((v) => Math.round(v / 1000))).toEqual([0, 30, 60]);
++  });
++
++  it('Hand while dragging: deferred until the drag ends', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.run(T.hintLevel2IdleMs);
++    s.setDragging(true);
++    s.run(T.hintLevel3ExtraIdleMs);
++    expect(s.m.level).toBe(3);
++    expect(s.visuals.hand).not.toHaveBeenCalled();
++    s.run(2000);
++    expect(s.visuals.hand).not.toHaveBeenCalled();
++    s.setDragging(false);
++    s.run(TICK);
++    expect(s.visuals.hand).toHaveBeenCalledOnce();
++  });
++
++  it('Speaker at level 3: prompt restarts with a new token; level and wrong count kept; idle waits for its end', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.m.wrong();
++    s.end();
++    s.run(T.hintLevel2IdleMs + T.hintLevel3ExtraIdleMs);
++    expect(s.m.level).toBe(3);
++    s.end();
++    const tok = s.m.replayPrompt();
++    expect(s.audio.setPrompt).toHaveBeenLastCalledWith('P0');
++    expect(s.audio.replayPrompt).toHaveBeenCalledOnce();
++    expect(tok).toBe(s.said.at(-1)?.token);
++    expect(s.m.level).toBe(3);
++    // Wrong count unchanged: the next wrong lifts to max(3, 2) = 3, not 4.
++    s.run(T.voiceRetryMinGapMs);
++    s.m.wrong();
++    expect(s.m.level).toBe(3);
++    expect(s.levels.at(-1)).toBe(3);
++  });
++
++  it('Before a question: wrong, stepDone and replayPrompt are no-ops', () => {
++    const s = setup();
++    s.m.wrong();
++    s.m.stepDone(s.step);
++    expect(s.m.replayPrompt()).toBeUndefined();
++    s.m.tick(TICK);
++    expect(s.said).toEqual([]);
++    expect(s.levels).toEqual([]);
++  });
++
++  it('beginQuestion while active runs questionDone first', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.run(T.hintLevel2IdleMs);
++    s.m.beginQuestion({ ...s.q, promptLineId: 'P1' });
++    expect(s.levels).toEqual([2, 0]);
++    expect(s.visuals.ring).toHaveBeenLastCalledWith(undefined);
++    expect(s.said.at(-1)?.id).toBe('P1');
++  });
++});
++
++describe('HintMachine — steps and restore', () => {
++  it('stepDone plain: level kept, idle 0, ring re-targets', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.run(T.hintLevel2IdleMs);
++    const b = item('b');
++    const s2: HintStep = { correct: [b], distractors: [], target: s.target, action: 'drag' };
++    s.run(T.hintLevel3ExtraIdleMs - 1000);
++    s.m.stepDone(s2);
++    expect(s.m.level).toBe(2);
++    expect(s.visuals.ring).toHaveBeenLastCalledWith(b);
++    s.run(T.hintLevel3ExtraIdleMs - TICK);
++    expect(s.m.level).toBe(2); // idle restarted at stepDone
++    s.run(TICK);
++    expect(s.m.level).toBe(3);
++  });
++
++  it('stepDone retry: a later wrong says the override', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.m.stepDone(s.step, { retryLineId: 'X' });
++    s.m.wrong();
++    expect(s.said.at(-1)?.id).toBe('X');
++  });
++
++  it('stepDone prompt: says P, replay says P, the clock waits for P', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.m.stepDone(s.step, { promptLineId: 'P' });
++    expect(s.said.at(-1)?.id).toBe('P');
++    expect(s.audio.setPrompt).toHaveBeenLastCalledWith('P');
++    s.run(20000);
++    expect(s.m.level).toBe(0);
++    s.end();
++    s.m.replayPrompt();
++    expect(s.audio.setPrompt).toHaveBeenLastCalledWith('P');
++  });
++
++  it('stepDone at level 4 restores the old step, then dims the new one', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    for (let i = 0; i < 4; i++) s.m.wrong();
++    const d2 = item('d2');
++    const s2: HintStep = { correct: [s.ask], distractors: [d2], target: null, action: 'drag' };
++    s.m.stepDone(s2);
++    expect(s.guard.isPickable(s.other)).toBe(true);
++    expect(s.visuals.dim).toHaveBeenCalledWith(s.other, false);
++    expect(s.guard.isPickable(d2)).toBe(false);
++    expect(s.target.circle()?.r).toBe(100);
++  });
++
++  it('questionDone at level 4: ring, hand, dim restored; hint:level 0; overrides cleared', () => {
++    const s = setup();
++    const untouched = item('untouched');
++    s.guard.setPickable(untouched, false);
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.m.stepDone(s.step, { retryLineId: 'X' });
++    for (let i = 0; i < 4; i++) s.m.wrong();
++    s.m.questionDone();
++    expect(s.visuals.ring).toHaveBeenLastCalledWith(undefined);
++    expect(s.visuals.clearHand).toHaveBeenCalled();
++    expect(s.visuals.dim).toHaveBeenLastCalledWith(s.other, false);
++    expect(s.guard.isPickable(s.other)).toBe(true);
++    expect(s.guard.isPickable(untouched)).toBe(false);
++    expect(s.target.circle()?.r).toBe(100);
++    expect(s.levels.at(-1)).toBe(0);
++    expect(s.m.level).toBe(0);
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.m.wrong();
++    expect(s.said.at(-1)?.id).toBe('R0');
++    expect(s.m.level).toBe(1);
++  });
++
++  it('questionDone at level 0 emits nothing', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.m.questionDone();
++    expect(s.levels).toEqual([]);
++  });
++
++  it('Paused: no ticks → no escalation; resume continues where it stopped (AC: level 1, hidden 30 s)', () => {
++    const s = setup();
++    s.m.beginQuestion(s.q);
++    s.end();
++    s.m.wrong();
++    s.end();
++    s.run(3000);
++    // Hidden / overlay: no ticks for 30 s.
++    expect(s.m.level).toBe(1);
++    s.run(T.hintLevel2IdleMs - 3000 - TICK);
++    expect(s.m.level).toBe(1);
++    s.run(TICK);
++    expect(s.m.level).toBe(2);
++  });
++});
+diff --git a/app/src/core/hint-director.ts b/app/src/core/hint-director.ts
+new file mode 100644
+index 0000000..8644e86
+--- /dev/null
++++ b/app/src/core/hint-director.ts
+@@ -0,0 +1,146 @@
++// HintDirector (AD-5, NFR4; Story 1.8 API, Story 1.9 behaviour). A game reports each question and its
++// outcome here and never plays a prompt or retry line itself, never runs a hint timer and never draws
++// a hint. The decisions live in the pure `HintMachine` (hint-machine.ts); this adapter wires it to:
++//   - the scene's pausable clock: one looping `time.addEvent` of Timing.hintTickMs while a question is
++//     active (scene pause and a hidden page stop it, so hint time resumes where it stopped);
++//   - `speech:ended` through `bus.scoped(scene)` (the awaited token pauses the quiet clock);
++//   - `core/hint-visuals` (ring follow + bob, hand demo, dim), the InputGuard (unpick, snap ×2) and
++//     `hint:level { gameId: scene key, level }`.
++// One module-level active director serves the Hud Speaker (`speakerReplay`). Scene SHUTDOWN ends the
++// question and restores everything it changed.
++import type { GameId, HintLevel } from '../content/types';
++import { audio as audioDirector } from './audio-director';
++import { bus as globalBus, SCENE_SHUTDOWN, type Bus, type SceneLike } from './bus';
++import { HintMachine, type HintPorts, type HintQuestion, type HintStep, type HintVisualsPort, type StepLines } from './hint-machine';
++import { createHintVisuals, type HintVisuals } from './hint-visuals';
++import { inputGuard } from './input/guard';
++import { prefersReducedMotion } from './reduced-motion';
++import { Tokens } from './tokens';
++
++export type { HintAction, HintItem, HintQuestion, HintStep } from './hint-machine';
++
++export interface Hint {
++  beginQuestion(q: HintQuestion): void;
++  /** The current step is done; `next` is the following one (multi-step questions, Story 1.10). */
++  stepDone(next: HintStep | null, lines?: StepLines): void;
++  /** A wrong attempt: the retry voice (rate-limited) and the escalation. */
++  wrong(): void;
++  questionDone(): void;
++  /** Replays the current prompt from the start (the Speaker); `undefined` with no active question. */
++  replayPrompt(): number | undefined;
++  readonly level: HintLevel;
++}
++
++/** The audio slice the hint system uses. */
++export interface HintAudio {
++  setPrompt(id: string): void;
++  say(id: string): number;
++  replayPrompt?(): number | undefined;
++}
++
++/** The slice of a scene's clock the adapter uses. */
++export interface HintTimeEvent {
++  remove(dispatchCallback?: boolean): void;
++}
++
++export interface HintSceneLike extends SceneLike {
++  readonly time: { addEvent(cfg: { delay: number; loop: boolean; callback: () => void }): HintTimeEvent };
++  readonly scene?: { readonly key: string };
++}
++
++export interface HintDeps {
++  readonly audio: HintAudio;
++  readonly guard?: HintPorts['guard'];
++  readonly bus?: Bus;
++  /** Visuals (tests); default `createHintVisuals(scene)` for a real scene, nothing without one. */
++  readonly visuals?: HintVisualsPort & { destroy?(): void };
++}
++
++const NO_VISUALS: HintVisualsPort = { ring: () => undefined, hand: () => undefined, clearHand: () => undefined, dim: () => undefined };
++
++let activeDirector: Hint | undefined;
++
++/** The director of the active question, if any (tests, Hud). */
++export function activeHint(): Hint | undefined {
++  return activeDirector;
++}
++
++/** The Speaker: the active question's prompt, else the AudioDirector's stored prompt. */
++export function speakerReplay(audio: { replayPrompt(): number | undefined } = audioDirector): number | undefined {
++  return activeDirector?.replayPrompt() ?? audio.replayPrompt();
++}
++
++function isRealScene(scene: unknown): scene is Parameters<typeof createHintVisuals>[0] {
++  return typeof scene === 'object' && scene !== null && 'add' in scene && 'tweens' in scene;
++}
++
++function reducedMotion(): boolean {
++  return typeof window === 'undefined' ? false : prefersReducedMotion(window);
++}
++
++/** The hint system of a game scene (`MiniGameBase.hint`). Without a scene it only speaks (no clock). */
++export function createHint(scene: HintSceneLike | undefined, deps: HintDeps = { audio: audioDirector }): Hint {
++  const visuals: HintVisualsPort & { destroy?(): void } =
++    deps.visuals ?? (isRealScene(scene) ? (createHintVisuals(scene, { reduced: reducedMotion() }) as HintVisuals) : NO_VISUALS);
++  const gameId = scene?.scene?.key as GameId | undefined;
++  const bus = deps.bus ?? globalBus;
++  const machine = new HintMachine({
++    audio: {
++      say: (id) => deps.audio.say(id),
++      setPrompt: (id) => deps.audio.setPrompt(id),
++      ...(deps.audio.replayPrompt ? { replayPrompt: () => deps.audio.replayPrompt!() } : {}),
++    },
++    guard: deps.guard ?? inputGuard,
++    visuals,
++    emitLevel: (level) => {
++      if (gameId) bus.emit('hint:level', { gameId, level });
++    },
++  });
++  let tick: HintTimeEvent | undefined;
++  let closed = false;
++
++  const stopTick = (): void => {
++    tick?.remove(false);
++    tick = undefined;
++  };
++
++  const hint: Hint = {
++    beginQuestion(q) {
++      if (closed) return;
++      machine.beginQuestion(q);
++      activeDirector = hint;
++      if (!tick && scene) {
++        const ms = Tokens.Timing.hintTickMs;
++        tick = scene.time.addEvent({ delay: ms, loop: true, callback: () => machine.tick(ms) });
++      }
++    },
++    stepDone(next, lines) {
++      machine.stepDone(next, lines);
++    },
++    wrong() {
++      machine.wrong();
++    },
++    questionDone() {
++      machine.questionDone();
++      stopTick();
++      if (activeDirector === hint) activeDirector = undefined;
++    },
++    replayPrompt() {
++      return machine.replayPrompt();
++    },
++    get level() {
++      return machine.level;
++    },
++  };
++
++  if (scene) {
++    bus.scoped(scene).on('speech:ended', ({ token }) => machine.speechEnded(token));
++    scene.events.once(SCENE_SHUTDOWN, () => {
++      // Visuals first: the restore then sets alpha directly instead of tweening on a closing scene.
++      visuals.destroy?.();
++      hint.questionDone();
++      closed = true;
++    });
++  }
++  return hint;
++}
+diff --git a/app/src/core/hint-director.test.ts b/app/src/core/hint-director.test.ts
+new file mode 100644
+index 0000000..575e0a7
+--- /dev/null
++++ b/app/src/core/hint-director.test.ts
+@@ -0,0 +1,158 @@
++// Story 1.9: the HintDirector adapter with a fake scene clock, fake Bus and fake visuals.
++import { describe, expect, it, vi } from 'vitest';
++import { Bus } from './bus';
++import { activeHint, createHint, speakerReplay, type HintQuestion, type HintSceneLike } from './hint-director';
++import { createDropTarget } from './input/drop';
++import { InputGuard } from './input/guard';
++import { Tokens } from './tokens';
++
++const T = Tokens.Timing;
++
++function fakeScene(key = 'ice-cream') {
++  const handlers = new Map<string, Set<() => void>>();
++  const events: { cb: () => void; removed: boolean; delay: number; loop: boolean }[] = [];
++  const scene: HintSceneLike & { emit(ev: string): void } = {
++    scene: { key },
++    events: {
++      once: (ev: string, fn: () => void) => {
++        let set = handlers.get(ev);
++        if (!set) handlers.set(ev, (set = new Set()));
++        const wrap = (): void => {
++          set!.delete(wrap);
++          fn();
++        };
++        set.add(wrap);
++        (fn as { wrap?: () => void }).wrap = wrap;
++      },
++      off: (ev: string, fn: () => void) => {
++        const w = (fn as { wrap?: () => void }).wrap;
++        if (w) handlers.get(ev)?.delete(w);
++      },
++    },
++    time: {
++      addEvent: (cfg) => {
++        const e = { cb: cfg.callback, removed: false, delay: cfg.delay, loop: cfg.loop };
++        events.push(e);
++        return { remove: () => void (e.removed = true) };
++      },
++    },
++    emit: (ev: string) => {
++      for (const fn of [...(handlers.get(ev) ?? [])]) fn();
++    },
++  };
++  /** Advances the scene clock by `ms` (only live events fire). */
++  const advance = (ms: number): void => {
++    for (let t = 0; t < ms; t += T.hintTickMs) for (const e of events) if (!e.removed) e.cb();
++  };
++  return { scene, events, advance };
++}
++
++function setup() {
++  const s = fakeScene();
++  const bus = new Bus();
++  let token = 0;
++  const audio = {
++    setPrompt: vi.fn(),
++    say: vi.fn(() => ++token),
++    replayPrompt: vi.fn(() => ++token),
++  };
++  const guard = new InputGuard();
++  const visuals = { ring: vi.fn(), hand: vi.fn(), clearHand: vi.fn(), dim: vi.fn(), destroy: vi.fn() };
++  const levels: number[] = [];
++  bus.on('hint:level', ({ gameId, level }) => {
++    expect(gameId).toBe('ice-cream');
++    levels.push(level);
++  });
++  const hint = createHint(s.scene, { audio, bus, guard, visuals });
++  const target = createDropTarget({ id: 'cone', circle: { x: 1, y: 1, r: 100 } }, guard);
++  const ask = { object: {} };
++  const other = { object: {} };
++  const q: HintQuestion = { promptLineId: 'P', retryLineId: 'R', step: { correct: [ask], distractors: [other], target, action: 'drag' } };
++  const end = (t: number): void => bus.emit('speech:ended', { token: t, completed: true });
++  return { ...s, bus, audio, guard, visuals, levels, hint, target, ask, other, q, end };
++}
++
++describe('HintDirector adapter (Story 1.9)', () => {
++  it('one looping tick event of hintTickMs while a question is active; removed by questionDone', () => {
++    const s = setup();
++    s.hint.beginQuestion(s.q);
++    expect(s.events).toHaveLength(1);
++    expect(s.events[0]).toMatchObject({ delay: T.hintTickMs, loop: true, removed: false });
++    s.hint.questionDone();
++    expect(s.events[0]!.removed).toBe(true);
++  });
++
++  it('speech:ended of the prompt starts the quiet clock; ticks escalate and emit hint:level with the scene key', () => {
++    const s = setup();
++    s.hint.beginQuestion(s.q);
++    s.advance(T.hintLevel2IdleMs);
++    expect(s.hint.level).toBe(0);
++    s.end(1);
++    s.advance(T.hintLevel2IdleMs);
++    expect(s.hint.level).toBe(2);
++    expect(s.levels).toEqual([2]);
++    expect(s.visuals.ring).toHaveBeenLastCalledWith(s.ask);
++  });
++
++  it('ticks stop when the time event stops (scene paused): no escalation until it runs again', () => {
++    const s = setup();
++    s.hint.beginQuestion(s.q);
++    s.end(1);
++    s.hint.wrong();
++    s.end(2);
++    s.advance(3000);
++    s.events[0]!.removed = true; // paused: Phaser stops the scene clock
++    s.advance(30000);
++    expect(s.hint.level).toBe(1);
++    s.events[0]!.removed = false;
++    s.advance(T.hintLevel2IdleMs - 3000);
++    expect(s.hint.level).toBe(2);
++  });
++
++  it('SHUTDOWN restores pickable, snap scale and the visuals, and clears the active director', () => {
++    const s = setup();
++    s.hint.beginQuestion(s.q);
++    s.end(1);
++    for (let i = 0; i < 4; i++) s.hint.wrong();
++    expect(s.guard.isPickable(s.other)).toBe(false);
++    expect(s.target.circle()?.r).toBe(200);
++    expect(activeHint()).toBe(s.hint);
++    s.scene.emit('shutdown');
++    expect(s.guard.isPickable(s.other)).toBe(true);
++    expect(s.target.circle()?.r).toBe(100);
++    expect(s.visuals.destroy).toHaveBeenCalled();
++    expect(s.visuals.ring).toHaveBeenLastCalledWith(undefined);
++    expect(s.events[0]!.removed).toBe(true);
++    expect(activeHint()).toBeUndefined();
++    expect(s.levels.at(-1)).toBe(0);
++    // After shutdown the director is inert, and speech:ended no longer reaches it.
++    s.hint.beginQuestion(s.q);
++    expect(s.events).toHaveLength(1);
++    expect(s.bus.listenerCount('speech:ended')).toBe(0);
++  });
++
++  it('speakerReplay: the active question replays its prompt; without one, audio.replayPrompt()', () => {
++    const s = setup();
++    const fallback = { replayPrompt: vi.fn(() => 42) };
++    s.hint.beginQuestion(s.q);
++    s.end(1);
++    const tok = speakerReplay(fallback);
++    expect(s.audio.replayPrompt).toHaveBeenCalledOnce();
++    expect(s.audio.setPrompt).toHaveBeenLastCalledWith('P');
++    expect(tok).toBe(2);
++    expect(fallback.replayPrompt).not.toHaveBeenCalled();
++    s.hint.questionDone();
++    expect(speakerReplay(fallback)).toBe(42);
++  });
++
++  it('without a scene it speaks but has no clock (the base field before create)', () => {
++    const audio = { setPrompt: vi.fn(), say: vi.fn(() => 1) };
++    const hint = createHint(undefined, { audio });
++    hint.beginQuestion({ promptLineId: 'P', retryLineId: 'R', step: { correct: [], distractors: [], target: null, action: 'drag' } });
++    expect(audio.say).toHaveBeenCalledWith('P');
++    hint.wrong();
++    expect(audio.say).toHaveBeenLastCalledWith('R');
++    hint.questionDone();
++    expect(hint.replayPrompt()).toBeUndefined();
++  });
++});
+diff --git a/app/src/core/hint-visuals.ts b/app/src/core/hint-visuals.ts
+new file mode 100644
+index 0000000..3e17f9a
+--- /dev/null
++++ b/app/src/core/hint-visuals.ts
+@@ -0,0 +1,415 @@
++// Hint visuals (Story 1.5; Story 1.9 adds follow, item bob, hand demo and dim). The `hint-ring`
++// (DESIGN components.hint-ring): three ellipse strokes — white halo outside, white core, purple line
++// on the core — pulsing .95 ↔ 1.05 over pulse.durationMs. One live ring app-wide: creating a new
++// ring destroys the previous one.
++// Story 1.9 (HintDirector's visuals port, `createHintVisuals`):
++//   - ring(item): a ring around the item's bounds + ui.hintRingPad that follows it every frame, and
++//     the item bob 1 ↔ ui.hintItemBobScale (paused while lifted, while another tween runs on the item
++//     or during a hand demo; the captured scale is restored on every pause);
++//   - hand(step): the 72 px hint hand (Graphics: white fill, hint-line outline, shadow ellipse) presses
++//     on the item, moves to the target centre (drag) or along the path (trace), lifts and fades. Only
++//     the hand moves; reduced motion leaves its path unchanged (it is the instruction);
++//   - dim(item, on): alpha → ui.hintDimAlpha over Timing.hintDimFadeMs, or back to 1.
++import type { GameObjects, Scene, Tweens } from 'phaser';
++import type { HintItem, HintStep, HintVisualsPort } from './hint-machine';
++import type { Box, Point } from './input/polygon';
++import { amplitude } from './reduced-motion';
++import { Tokens } from './tokens';
++
++export interface HintRing {
++  destroy(): void;
++  /** Moves the ring's centre (design px). */
++  setCentre(x: number, y: number): void;
++}
++
++export interface HintRingOptions {
++  /** prefers-reduced-motion: pulse amplitude × Tokens.ui.reducedMotionAmplitude. */
++  readonly reduced?: boolean;
++  readonly depth?: number | undefined;
++}
++
++let live: HintRing | undefined;
++
++/** Ellipse radii of the ring around `box` (inscribed in the box; hit polygons are already padded). */
++export function ringRadii(box: Box): { cx: number; cy: number; rx: number; ry: number } {
++  return { cx: box.x + box.width / 2, cy: box.y + box.height / 2, rx: box.width / 2, ry: box.height / 2 };
++}
++
++/** The ring box of a game item: its bounds grown by `pad` on every side (Story 1.9). */
++export function itemRingBox(bounds: Box, pad: number = Tokens.ui.hintRingPad): Box {
++  return { x: bounds.x - pad, y: bounds.y - pad, width: bounds.width + 2 * pad, height: bounds.height + 2 * pad };
++}
++
++/** Draws the hint ring around `box` (design px) and starts its pulse. */
++export function createHintRing(scene: Scene, box: Box, opts: HintRingOptions = {}): HintRing {
++  live?.destroy();
++  const spec = Tokens.components.hintRing;
++  const { cx, cy, rx, ry } = ringRadii(box);
++  const g: GameObjects.Graphics = scene.add.graphics({ x: cx, y: cy });
++  if (opts.depth !== undefined) g.setDepth(opts.depth);
++
++  const haloOffset = spec.core.width / 2 + spec.halo.width / 2;
++  g.lineStyle(spec.halo.width, spec.halo.color.value, spec.halo.color.alpha);
++  g.strokeEllipse(0, 0, 2 * (rx + haloOffset), 2 * (ry + haloOffset));
++  g.lineStyle(spec.core.width, spec.core.color.value, spec.core.color.alpha);
++  g.strokeEllipse(0, 0, 2 * rx, 2 * ry);
++  g.lineStyle(spec.line.width, spec.line.color.value, spec.line.color.alpha);
++  g.strokeEllipse(0, 0, 2 * rx, 2 * ry);
++
++  const reduced = opts.reduced ?? false;
++  const from = amplitude(spec.pulse.from, reduced);
++  const to = amplitude(spec.pulse.to, reduced);
++  g.setScale(from);
++  const tween: Tweens.Tween = scene.tweens.add({
++    targets: g,
++    scale: to,
++    duration: spec.pulse.durationMs,
++    ease: 'Sine.easeInOut',
++    yoyo: true,
++    repeat: -1,
++  });
++
++  let destroyed = false;
++  const ring: HintRing = {
++    destroy() {
++      if (destroyed) return;
++      destroyed = true;
++      tween.stop();
++      g.destroy();
++      if (live === ring) live = undefined;
++    },
++    setCentre(x, y) {
++      if (!destroyed) g.setPosition(x, y);
++    },
++  };
++  live = ring;
++  scene.events.once('shutdown', () => ring.destroy());
++  return ring;
++}
++
++// --- Story 1.9: pure geometry -------------------------------------------------------------------------
++
++/** The slice of a Phaser game object the hint visuals use. */
++export interface ItemObject {
++  x: number;
++  y: number;
++  scaleX: number;
++  scaleY: number;
++  alpha: number;
++  /** Falsy once the object is destroyed. */
++  readonly scene?: unknown;
++  setScale(x: number, y?: number): unknown;
++  setAlpha(a: number): unknown;
++  getBounds?(): Box;
++  /** Phaser size, origin and frame: a trimmed full-frame sprite's drawn part is its trim rect. */
++  readonly width?: number;
++  readonly height?: number;
++  readonly originX?: number;
++  readonly originY?: number;
++  readonly frame?: { readonly data?: { readonly trim?: boolean; readonly spriteSourceSize?: { readonly x: number; readonly y: number; readonly w: number; readonly h: number } } };
++}
++
++function isItemObject(o: unknown): o is ItemObject {
++  return typeof o === 'object' && o !== null && typeof (o as ItemObject).setScale === 'function' && typeof (o as ItemObject).x === 'number';
++}
++
++function alive(o: ItemObject): boolean {
++  return Boolean(o.scene);
++}
++
++/**
++ * The drawn bounds of an item: the trim rect of a trimmed (full-frame) sprite, else `getBounds`, else
++ * its position as a point. Rotation is ignored (game items are upright).
++ */
++export function itemBounds(o: ItemObject): Box {
++  const ss = o.frame?.data?.trim ? o.frame.data.spriteSourceSize : undefined;
++  if (ss && o.width !== undefined && o.height !== undefined && o.originX !== undefined && o.originY !== undefined) {
++    const left = o.x - o.originX * o.width * o.scaleX;
++    const top = o.y - o.originY * o.height * o.scaleY;
++    return { x: left + ss.x * o.scaleX, y: top + ss.y * o.scaleY, width: ss.w * o.scaleX, height: ss.h * o.scaleY };
++  }
++  const b = o.getBounds?.();
++  return b ? { x: b.x, y: b.y, width: b.width, height: b.height } : { x: o.x, y: o.y, width: 0, height: 0 };
++}
++
++export function boxCentre(b: Box): Point {
++  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
++}
++
++/** Bob scale factor at phase `v` (0..1 of a half cycle); its amplitude goes through `amplitude`. */
++export function bobFactor(v: number, reduced: boolean, peak: number = Tokens.ui.hintItemBobScale): number {
++  return 1 + (amplitude(peak, reduced) - 1) * v;
++}
++
++export interface HandTiming {
++  readonly pressMs: number;
++  readonly moveMs: number;
++  readonly fadeMs: number;
++  readonly pressScale: number;
++}
++
++export function defaultHandTiming(): HandTiming {
++  const t = Tokens.Timing;
++  return { pressMs: t.hintHandPressMs, moveMs: t.hintHandMoveMs, fadeMs: t.hintHandFadeMs, pressScale: Tokens.ui.pressScale };
++}
++
++/**
++ * The fingertip's route of a demo: drag → item, target centre; trace → the path (from the item when
++ * it has none of its own start); tap, or a drag/trace without target/path → the item only.
++ */
++export function handRoute(step: Pick<HintStep, 'action' | 'path'>, from: Point, to: Point | undefined): Point[] {
++  if (step.action === 'drag' && to) return [from, to];
++  if (step.action === 'trace' && step.path && step.path.length > 1) return step.path.map((p) => ({ x: p.x, y: p.y }));
++  return [from];
++}
++
++export function handDuration(route: readonly Point[], t: HandTiming = defaultHandTiming()): number {
++  return t.pressMs + (route.length > 1 ? t.moveMs : 0) + t.fadeMs;
++}
++
++const easeInOut = (u: number): number => 0.5 - Math.cos(Math.PI * u) / 2;
++const clamp01 = (u: number): number => Math.min(1, Math.max(0, u));
++
++/** The point at fraction `u` of the polyline's length. */
++export function alongRoute(route: readonly Point[], u: number): Point {
++  if (route.length === 1) return route[0]!;
++  const seg: number[] = [];
++  let total = 0;
++  for (let i = 1; i < route.length; i++) {
++    const d = Math.hypot(route[i]!.x - route[i - 1]!.x, route[i]!.y - route[i - 1]!.y);
++    seg.push(d);
++    total += d;
++  }
++  if (total === 0) return route[0]!;
++  let left = clamp01(u) * total;
++  for (let i = 0; i < seg.length; i++) {
++    const d = seg[i]!;
++    if (left <= d || i === seg.length - 1) {
++      const k = d === 0 ? 0 : Math.min(1, left / d);
++      const a = route[i]!;
++      const b = route[i + 1]!;
++      return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
++    }
++    left -= d;
++  }
++  return route[route.length - 1]!;
++}
++
++export interface HandPose {
++  readonly x: number;
++  readonly y: number;
++  readonly scale: number;
++  readonly alpha: number;
++}
++
++/** Pose of the hand `tMs` into a demo: press on the start, move (ease in-out), lift and fade at the end. */
++export function handPose(route: readonly Point[], tMs: number, t: HandTiming = defaultHandTiming()): HandPose {
++  const start = route[0]!;
++  const end = route[route.length - 1]!;
++  const moveMs = route.length > 1 ? t.moveMs : 0;
++  if (tMs < t.pressMs) {
++    const u = clamp01(tMs / t.pressMs);
++    return { ...start, scale: 1 + (t.pressScale - 1) * u, alpha: 1 };
++  }
++  if (tMs < t.pressMs + moveMs) {
++    const u = easeInOut(clamp01((tMs - t.pressMs) / moveMs));
++    return { ...alongRoute(route, u), scale: t.pressScale, alpha: 1 };
++  }
++  const u = clamp01((tMs - t.pressMs - moveMs) / t.fadeMs);
++  return { ...end, scale: t.pressScale + (1 - t.pressScale) * u, alpha: 1 - u };
++}
++
++// --- Story 1.9: drawing -------------------------------------------------------------------------------
++
++const HAND_DEPTH = 10000;
++
++/** Draws the 72 px hint hand with its fingertip at (0, 0), pointing up. */
++function drawHand(g: GameObjects.Graphics): void {
++  const spec = Tokens.components.hintHand;
++  const ring = Tokens.components.hintRing;
++  const s = spec.size;
++  const finger = { w: s * 0.25, h: s * 0.5 };
++  const palm = { w: s * 0.62, h: s * 0.5 };
++  const palmX = -finger.w / 2 - s * 0.06;
++  const palmY = s * 0.42;
++  const r = finger.w / 2;
++  // Shadow ellipse under the palm.
++  g.fillStyle(spec.shadow.color.value, spec.shadow.color.alpha);
++  g.fillEllipse(palmX + palm.w / 2 + spec.shadow.x, palmY + palm.h / 2 + spec.shadow.y, palm.w + spec.shadow.blur, palm.h * 0.8);
++  const shape = (fill: boolean): void => {
++    if (fill) {
++      g.fillRoundedRect(-finger.w / 2, 0, finger.w, finger.h + r, r);
++      g.fillRoundedRect(palmX, palmY, palm.w, palm.h, r);
++      g.fillRoundedRect(palmX - s * 0.1, palmY + palm.h * 0.15, s * 0.22, palm.h * 0.45, r * 0.8);
++    } else {
++      g.strokeRoundedRect(-finger.w / 2, 0, finger.w, finger.h + r, r);
++      g.strokeRoundedRect(palmX, palmY, palm.w, palm.h, r);
++      g.strokeRoundedRect(palmX - s * 0.1, palmY + palm.h * 0.15, s * 0.22, palm.h * 0.45, r * 0.8);
++    }
++  };
++  g.lineStyle(ring.line.width, ring.line.color.value, ring.line.color.alpha);
++  shape(false);
++  g.fillStyle(ring.core.color.value, ring.core.color.alpha);
++  shape(true);
++}
++
++export interface HintVisuals extends HintVisualsPort {
++  /** Removes everything and restores alpha 1 directly (scene shutdown). */
++  destroy(): void;
++}
++
++export interface HintVisualsOptions {
++  readonly reduced?: boolean;
++}
++
++/** The HintDirector's visuals for one game scene. */
++export function createHintVisuals(scene: Scene, opts: HintVisualsOptions = {}): HintVisuals {
++  const reduced = opts.reduced ?? false;
++  let ring: HintRing | undefined;
++  let follow: (() => void) | undefined;
++  let bob: { tween: Tweens.Tween; pause(reason: string, on: boolean): void; stop(): void } | undefined;
++  let hand: { g: GameObjects.Graphics; tween: Tweens.Tween } | undefined;
++  const dims = new Map<ItemObject, Tweens.Tween | undefined>();
++  let closed = false;
++
++  const stopFollow = (): void => {
++    if (follow) scene.events.off('postupdate', follow);
++    follow = undefined;
++  };
++
++  const startBob = (item: HintItem, obj: ItemObject): void => {
++    const held = new Set<string>();
++    let base = { x: obj.scaleX, y: obj.scaleY };
++    let running = true;
++    const otherTween = (): boolean => scene.tweens.getTweensOf(obj).length > 0;
++    const setRunning = (on: boolean): void => {
++      if (on === running) return;
++      running = on;
++      if (!alive(obj)) return;
++      // Entering a pause: restore the captured scale (unless another tween owns it); leaving: recapture.
++      if (!on && !otherTween()) obj.setScale(base.x, base.y);
++      if (on) base = { x: obj.scaleX, y: obj.scaleY };
++    };
++    if (item.isDragging?.()) {
++      held.add('lift');
++      running = false;
++    }
++    const unsubscribe = item.onLiftChange?.((lifted) => pause('lift', lifted));
++    function pause(reason: string, on: boolean): void {
++      if (on) held.add(reason);
++      else held.delete(reason);
++      setRunning(held.size === 0 && !otherTween());
++    }
++    const tween = scene.tweens.addCounter({
++      from: 0,
++      to: 1,
++      duration: Tokens.components.hintRing.pulse.durationMs,
++      ease: 'Sine.easeInOut',
++      yoyo: true,
++      repeat: -1,
++      onUpdate: (t) => {
++        if (!alive(obj)) return;
++        setRunning(held.size === 0 && !otherTween());
++        if (!running) return;
++        const k = bobFactor(t.getValue() ?? 0, reduced);
++        obj.setScale(base.x * k, base.y * k);
++      },
++    });
++    bob = {
++      tween,
++      pause,
++      stop() {
++        unsubscribe?.();
++        tween.stop();
++        if (running && alive(obj) && !otherTween()) obj.setScale(base.x, base.y);
++      },
++    };
++  };
++
++  const clearRing = (): void => {
++    stopFollow();
++    bob?.stop();
++    bob = undefined;
++    ring?.destroy();
++    ring = undefined;
++  };
++
++  const clearHand = (): void => {
++    if (!hand) return;
++    hand.tween.stop();
++    hand.g.destroy();
++    hand = undefined;
++    bob?.pause('hand', false);
++  };
++
++  const visuals: HintVisuals = {
++    ring(item) {
++      clearRing();
++      if (closed || !item || !isItemObject(item.object)) return;
++      const obj = item.object;
++      if (!alive(obj)) return;
++      const start = itemBounds(obj);
++      const r = createHintRing(scene, itemRingBox(start), { reduced });
++      ring = r;
++      follow = () => {
++        if (!alive(obj)) return;
++        const c = boxCentre(itemBounds(obj));
++        r.setCentre(c.x, c.y);
++      };
++      scene.events.on('postupdate', follow);
++      startBob(item, obj);
++    },
++    hand(step) {
++      clearHand();
++      if (closed) return;
++      const obj = step.correct[0]?.object;
++      if (!isItemObject(obj) || !alive(obj)) return;
++      const c = step.target?.circle();
++      const route = handRoute(step, boxCentre(itemBounds(obj)), c ? { x: c.x, y: c.y } : undefined);
++      const timing = defaultHandTiming();
++      const g = scene.add.graphics().setDepth(HAND_DEPTH);
++      drawHand(g);
++      const apply = (ms: number): void => {
++        const pose = handPose(route, ms, timing);
++        g.setPosition(pose.x, pose.y).setScale(pose.scale).setAlpha(pose.alpha);
++      };
++      apply(0);
++      bob?.pause('hand', true);
++      const total = handDuration(route, timing);
++      const tween = scene.tweens.addCounter({
++        from: 0,
++        to: total,
++        duration: total,
++        onUpdate: (t) => apply(t.getValue() ?? 0),
++        onComplete: () => clearHand(),
++      });
++      hand = { g, tween };
++    },
++    clearHand,
++    dim(item, on) {
++      const obj = item.object;
++      if (!isItemObject(obj)) return;
++      dims.get(obj)?.stop();
++      dims.delete(obj);
++      if (!alive(obj)) return;
++      const to = on ? Tokens.ui.hintDimAlpha : 1;
++      if (closed) {
++        obj.setAlpha(to);
++        return;
++      }
++      const tween = scene.tweens.add({ targets: obj, alpha: to, duration: Tokens.Timing.hintDimFadeMs, ease: 'Quad.easeOut' });
++      if (on) dims.set(obj, tween);
++    },
++    destroy() {
++      clearRing();
++      clearHand();
++      for (const [obj, tween] of dims) {
++        tween?.stop();
++        if (alive(obj)) obj.setAlpha(1);
++      }
++      dims.clear();
++      closed = true;
++    },
++  };
++  return visuals;
++}
+diff --git a/app/src/core/hint-visuals.test.ts b/app/src/core/hint-visuals.test.ts
+new file mode 100644
+index 0000000..06ca645
+--- /dev/null
++++ b/app/src/core/hint-visuals.test.ts
+@@ -0,0 +1,100 @@
++// Story 1.9: pure geometry of the hint visuals (ring rect, hand path, bob amplitude).
++import { describe, expect, it } from 'vitest';
++import { alongRoute, bobFactor, itemBounds, handDuration, handPose, handRoute, itemRingBox, ringRadii, type HandTiming } from './hint-visuals';
++import { Tokens } from './tokens';
++
++const TIMING: HandTiming = { pressMs: 250, moveMs: 1200, fadeMs: 300, pressScale: 0.9 };
++
++describe('hint ring box', () => {
++  it('is the item bounds grown by ui.hintRingPad on every side; the ring is inscribed', () => {
++    const box = itemRingBox({ x: 100, y: 200, width: 90, height: 80 });
++    const pad = Tokens.ui.hintRingPad;
++    expect(box).toEqual({ x: 100 - pad, y: 200 - pad, width: 90 + 2 * pad, height: 80 + 2 * pad });
++    expect(ringRadii(box)).toEqual({ cx: 145, cy: 240, rx: 45 + pad, ry: 40 + pad });
++  });
++});
++
++describe('itemBounds', () => {
++  const base = { x: 300, y: 500, scaleX: 0.5, scaleY: 0.5, alpha: 1, setScale: () => undefined, setAlpha: () => undefined };
++
++  it('a trimmed full-frame sprite: the trim rect, not the whole frame', () => {
++    const o = {
++      ...base,
++      width: 2048,
++      height: 1536,
++      originX: 0.3,
++      originY: 0.6,
++      frame: { data: { trim: true, spriteSourceSize: { x: 544, y: 908, w: 230, h: 168 } } },
++      getBounds: () => ({ x: 0, y: 0, width: 1024, height: 768 }),
++    };
++    const left = 300 - 0.3 * 2048 * 0.5;
++    const top = 500 - 0.6 * 1536 * 0.5;
++    expect(itemBounds(o)).toEqual({ x: left + 272, y: top + 454, width: 115, height: 84 });
++  });
++
++  it('otherwise getBounds, else the point', () => {
++    expect(itemBounds({ ...base, getBounds: () => ({ x: 1, y: 2, width: 3, height: 4 }) })).toEqual({ x: 1, y: 2, width: 3, height: 4 });
++    expect(itemBounds(base)).toEqual({ x: 300, y: 500, width: 0, height: 0 });
++  });
++});
++
++describe('hand route and pose', () => {
++  const from = { x: 100, y: 500 };
++  const to = { x: 512, y: 400 };
++
++  it('drag: item → target centre; tap or no target: the item only; trace: the path', () => {
++    expect(handRoute({ action: 'drag' }, from, to)).toEqual([from, to]);
++    expect(handRoute({ action: 'drag' }, from, undefined)).toEqual([from]);
++    expect(handRoute({ action: 'tap' }, from, to)).toEqual([from]);
++    const path = [
++      { x: 0, y: 0 },
++      { x: 10, y: 0 },
++      { x: 10, y: 10 },
++    ];
++    expect(handRoute({ action: 'trace', path }, from, to)).toEqual(path);
++    expect(handRoute({ action: 'trace' }, from, to)).toEqual([from]);
++  });
++
++  it('press on the item, move to the target (ease in-out), lift and fade there', () => {
++    const route = [from, to];
++    expect(handDuration(route, TIMING)).toBe(1750);
++    expect(handPose(route, 0, TIMING)).toEqual({ ...from, scale: 1, alpha: 1 });
++    const pressed = handPose(route, 249.999, TIMING);
++    expect(pressed.scale).toBeCloseTo(0.9);
++    expect(pressed).toMatchObject(from);
++    const mid = handPose(route, 250 + 600, TIMING);
++    expect(mid.x).toBeCloseTo((from.x + to.x) / 2);
++    expect(mid.y).toBeCloseTo((from.y + to.y) / 2);
++    // Ease in-out: a quarter of the time covers less than a quarter of the way.
++    const q = handPose(route, 250 + 300, TIMING);
++    expect((q.x - from.x) / (to.x - from.x)).toBeLessThan(0.25);
++    const end = handPose(route, 1750, TIMING);
++    expect(end).toEqual({ ...to, scale: 1, alpha: 0 });
++  });
++
++  it('tap: press and fade on the item, no move', () => {
++    const route = [from];
++    expect(handDuration(route, TIMING)).toBe(550);
++    expect(handPose(route, 400, TIMING)).toMatchObject(from);
++    expect(handPose(route, 550, TIMING).alpha).toBe(0);
++  });
++
++  it('alongRoute walks the polyline by length', () => {
++    const route = [
++      { x: 0, y: 0 },
++      { x: 10, y: 0 },
++      { x: 10, y: 30 },
++    ];
++    expect(alongRoute(route, 0.25)).toEqual({ x: 10, y: 0 });
++    expect(alongRoute(route, 1)).toEqual({ x: 10, y: 30 });
++    expect(alongRoute(route, 0.5)).toEqual({ x: 10, y: 10 });
++  });
++});
++
++describe('item bob', () => {
++  it('1 ↔ ui.hintItemBobScale; reduced motion halves the amplitude', () => {
++    expect(bobFactor(0, false)).toBe(1);
++    expect(bobFactor(1, false)).toBeCloseTo(Tokens.ui.hintItemBobScale);
++    expect(bobFactor(1, true) - 1).toBeCloseTo((Tokens.ui.hintItemBobScale - 1) * Tokens.ui.reducedMotionAmplitude);
++  });
++});
+diff --git a/app/src/core/input/drag-controller.ts b/app/src/core/input/drag-controller.ts
+new file mode 100644
+index 0000000..c0080fc
+--- /dev/null
++++ b/app/src/core/input/drag-controller.ts
+@@ -0,0 +1,138 @@
++// DragController (Story 1.8, AD-4): one draggable item on a TapRouter, built on the InputGuard.
++// - Lift: a primary press that hits the item's circle while `guard.isPickable(item)` marks the press
++//   as dragging (`guard.setDragging`), stores the grab offset and runs `onLift` in the same
++//   pointerdown handler (feedback within NFR5).
++// - Move: the router forwards the primary's pointermove; the item centre is
++//   `clampDrag(point − offset, bounds, exclusions, itemRadius)` (the visible rect minus the dead strips,
++//   outside the Hud buttons).
++// - Release: the primary's release anywhere → the hit circle moves to the drop point, then
++//   `onDrop(last centre)`. A primary that self-heals
++//   (pause, lost up, scene switch) → `onCancel()` instead.
++// A second finger never lifts anything while a drag runs (the guard ignores it).
++import type { Rect } from '../safe-rect';
++import { clampDrag, dragBounds, hudExclusions, type Circle } from './drop';
++import { inputGuard, type InputGuard } from './guard';
++import type { Point } from './polygon';
++import { currentView } from './space';
++import { inCircle } from './tap-target';
++import type { TapRouter } from './tap-router';
++
++/** Where a dragged centre may go. */
++export interface DragArea {
++  readonly bounds: Rect;
++  readonly exclusions: readonly Circle[];
++}
++
++export interface DraggableOptions {
++  /** Hit circle in design px (its centre is the item centre). */
++  readonly circle: Circle;
++  readonly onLift: (p: Point) => void;
++  readonly onMove: (p: Point) => void;
++  readonly onDrop: (p: Point) => void;
++  readonly onCancel: () => void;
++  /** Radius kept inside the bounds and outside the exclusions (default: the circle radius). */
++  readonly itemRadius?: number;
++  /** The drag area; default from the live view (`dragBounds`, `hudExclusions`), none without a DOM. */
++  readonly area?: () => DragArea | undefined;
++  /** The guard (tests); default the app-wide `inputGuard`. */
++  readonly guard?: InputGuard;
++}
++
++export interface Draggable {
++  /** Moves the hit circle (the scene calls it when the item settles somewhere). */
++  setCircle(circle: Circle): Draggable;
++  circle(): Circle;
++  /** True between lift and drop/cancel. */
++  isDragging(): boolean;
++  /** Unregisters the item; it never fires again. */
++  destroy(): void;
++  /** The drawn object, for hint visuals (Story 1.9). */
++  object?: unknown;
++  /**
++   * Story 1.9: subscribes to lift changes — `true` right before `onLift`, `false` right after
++   * `onDrop`/`onCancel`. Returns the unsubscribe function.
++   */
++  onLiftChange(fn: (lifted: boolean) => void): () => void;
++}
++
++export function defaultDragArea(): DragArea | undefined {
++  const view = currentView();
++  return view ? { bounds: dragBounds(view), exclusions: hudExclusions(view) } : undefined;
++}
++
++export function createDraggable(router: TapRouter, opts: DraggableOptions): Draggable {
++  const guard = opts.guard ?? inputGuard;
++  const areaOf = opts.area ?? defaultDragArea;
++  let circle: Circle = { ...opts.circle };
++  let alive = true;
++  let dragging = false;
++  let offset: Point = { x: 0, y: 0 };
++  let last: Point = { x: circle.x, y: circle.y };
++  let area: DragArea | undefined;
++  const liftListeners = new Set<(lifted: boolean) => void>();
++  const notifyLift = (lifted: boolean): void => {
++    for (const fn of [...liftListeners]) fn(lifted);
++  };
++
++  const draggable: Draggable = {
++    setCircle(c) {
++      circle = { ...c };
++      return draggable;
++    },
++    circle: () => circle,
++    isDragging: () => dragging,
++    destroy() {
++      if (!alive) return;
++      alive = false;
++      dragging = false;
++      liftListeners.clear();
++      remove();
++    },
++    onLiftChange(fn) {
++      liftListeners.add(fn);
++      return () => {
++        liftListeners.delete(fn);
++      };
++    },
++  };
++
++  const centreFor = (p: Point): Point => {
++    const raw = { x: p.x - offset.x, y: p.y - offset.y };
++    return area ? clampDrag(raw, area.bounds, area.exclusions, opts.itemRadius ?? circle.r) : raw;
++  };
++
++  const remove = router.add({
++    contains: (p) => inCircle(p, circle) && guard.isPickable(draggable),
++    isEnabled: () => alive,
++    onPress(p, pointer) {
++      if (pointer) guard.setDragging(pointer, true);
++      dragging = true;
++      offset = { x: p.x - circle.x, y: p.y - circle.y };
++      last = { x: circle.x, y: circle.y };
++      area = areaOf();
++      notifyLift(true);
++      opts.onLift(last);
++    },
++    onMove(p) {
++      if (!dragging) return;
++      last = centreFor(p);
++      opts.onMove(last);
++    },
++    onEnd(p) {
++      if (!dragging) return;
++      dragging = false;
++      last = centreFor(p);
++      // The item now lies where it was dropped: it can be lifted there (the scene moves it on later).
++      circle = { ...circle, x: last.x, y: last.y };
++      opts.onDrop(last);
++      notifyLift(false);
++    },
++    onCancel() {
++      if (!dragging) return;
++      dragging = false;
++      opts.onCancel();
++      notifyLift(false);
++    },
++  });
++  return draggable;
++}
+diff --git a/app/src/core/input/drag.test.ts b/app/src/core/input/drag.test.ts
+new file mode 100644
+index 0000000..5d66d0a
+--- /dev/null
++++ b/app/src/core/input/drag.test.ts
+@@ -0,0 +1,238 @@
++// Story 1.8: DragController, drop maths and the guard's drag API (I/O matrix input rows).
++import { describe, expect, it, vi } from 'vitest';
++import { hudLayout } from '../hud';
++import { createDraggable, type DragArea } from './drag-controller';
++import { clampDrag, createDropTarget, dragBounds, hudExclusions, intersectRect, nudgeApart } from './drop';
++import { fakeScene, press } from './fakes';
++import { InputGuard } from './guard';
++import { locate, NO_INSETS, visibleDesignRect } from './space';
++import { createTapRouter } from './tap-router';
++import { createTapTarget } from './tap-target';
++
++const VIEW = { w: 1024, h: 768, rotated: false, insets: NO_INSETS };
++const WIDE = { w: 1180, h: 820, rotated: false, insets: NO_INSETS };
++
++function world(area?: DragArea) {
++  const guard = new InputGuard((p) => locate(p, undefined, VIEW));
++  const scene = fakeScene();
++  const router = createTapRouter(scene, { guard });
++  const hudScene = fakeScene();
++  const hud = createTapRouter(hudScene, { guard, layer: 'hud' });
++  const cb = { onLift: vi.fn(), onMove: vi.fn(), onDrop: vi.fn(), onCancel: vi.fn() };
++  const item = createDraggable(router, { circle: { x: 300, y: 500, r: 70 }, itemRadius: 45, guard, area: () => area, ...cb });
++  return { guard, scene, router, hud, hudScene, cb, item };
++}
++
++describe('dragBounds / hudExclusions', () => {
++  it('4:3: the design frame inset by the dead strips', () => {
++    expect(dragBounds(VIEW)).toEqual({ x: 24, y: 32, w: 1024 - 48, h: 768 - 72 });
++  });
++
++  it('wider screens: the visible rect inset by (dead + inset) / s', () => {
++    const b = dragBounds({ ...WIDE, insets: { top: 0, right: 0, bottom: 20, left: 0 } });
++    const v = visibleDesignRect(WIDE);
++    const s = 1180 / 1024;
++    expect(b.x).toBeCloseTo(v.x + 24 / s);
++    expect(b.y + b.h).toBeCloseTo(v.y + v.h - (40 + 20) / s);
++  });
++
++  it('the Hud circles, r = size/2 + hitPad', () => {
++    const ex = hudExclusions(VIEW);
++    const hud = hudLayout(visibleDesignRect(VIEW), NO_INSETS);
++    expect(ex).toEqual([hud.home, hud.speaker]);
++    expect(ex[0]!.r).toBe(44 + 24);
++  });
++});
++
++describe('clampDrag', () => {
++  const bounds = { x: 24, y: 32, w: 976, h: 696 };
++  it('Clamp: (5, 400) is held inside the bounds shrunk by the item radius', () => {
++    expect(clampDrag({ x: 5, y: 400 }, bounds, [], 45)).toEqual({ x: 69, y: 400 });
++  });
++
++  it('Clamp: over the Speaker it is pushed out of the Hud circle grown by the item radius', () => {
++    const speaker = hudExclusions(VIEW)[1]!;
++    const q = clampDrag({ x: speaker.x - 10, y: speaker.y }, bounds, [speaker], 45);
++    expect(Math.hypot(q.x - speaker.x, q.y - speaker.y)).toBeGreaterThanOrEqual(speaker.r + 45 - 1e-9);
++  });
++});
++
++describe('createDropTarget / snap scale', () => {
++  it('Snap scale: setSnapScale(cone, 2) → radius 200', () => {
++    const guard = new InputGuard();
++    const cone = createDropTarget({ id: 'cone', circle: { x: 500, y: 500, r: 100 } }, guard);
++    expect(cone.contains({ x: 650, y: 500 })).toBe(false);
++    guard.setSnapScale(cone, 2);
++    expect(guard.snapScale(cone)).toBe(2);
++    expect(cone.circle()).toEqual({ x: 500, y: 500, r: 200 });
++    expect(cone.contains({ x: 650, y: 500 })).toBe(true);
++  });
++
++  it('polygon targets do not scale', () => {
++    const guard = new InputGuard();
++    const t = createDropTarget({ id: 'p', polygon: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] }, guard);
++    guard.setSnapScale(t, 3);
++    expect(t.contains({ x: 5, y: 5 })).toBe(true);
++    expect(t.contains({ x: 15, y: 5 })).toBe(false);
++    expect(t.circle()).toBeUndefined();
++  });
++});
++
++describe('nudgeApart / intersectRect', () => {
++  const rect = { x: 50, y: 500, w: 900, h: 200 };
++  it('moves a point at least minDist from every other, inside the rect', () => {
++    const q = nudgeApart({ x: 305, y: 600 }, [{ x: 300, y: 600 }], 90, rect);
++    expect(Math.hypot(q.x - 300, q.y - 600)).toBeGreaterThanOrEqual(90 - 1e-9);
++    const c = nudgeApart({ x: 300, y: 600 }, [{ x: 300, y: 600 }], 90, rect);
++    expect(c).toEqual({ x: 390, y: 600 });
++  });
++
++  it('a clear point stays put', () => {
++    expect(nudgeApart({ x: 500, y: 600 }, [{ x: 300, y: 600 }], 90, rect)).toEqual({ x: 500, y: 600 });
++  });
++
++  it('intersectRect', () => {
++    expect(intersectRect({ x: 0, y: 0, w: 100, h: 100 }, { x: 50, y: 20, w: 100, h: 20 })).toEqual({ x: 50, y: 20, w: 50, h: 20 });
++  });
++});
++
++describe('DragController', () => {
++  it('Lift: the first finger lifts in the same pointerdown, then follows the finger (grab offset kept)', () => {
++    const { scene, cb, item, guard } = world();
++    const p = press(310, 520);
++    scene.down(p);
++    expect(cb.onLift).toHaveBeenCalledExactlyOnceWith({ x: 300, y: 500 });
++    expect(guard.isDragging()).toBe(true);
++    expect(item.isDragging()).toBe(true);
++    scene.move(p, 410, 420);
++    expect(cb.onMove).toHaveBeenLastCalledWith({ x: 400, y: 400 });
++    scene.up(p);
++    expect(cb.onDrop).toHaveBeenCalledExactlyOnceWith({ x: 400, y: 400 });
++    expect(item.isDragging()).toBe(false);
++  });
++
++  it('after a drop the item is lifted where it was dropped, not at its old spot (Story 1.8 review)', () => {
++    const { scene, cb, item } = world();
++    const p = press(300, 500);
++    scene.down(p);
++    scene.move(p, 600, 200);
++    scene.up(p);
++    expect(item.circle()).toMatchObject({ x: 600, y: 200 });
++    scene.tap(300, 500);
++    expect(cb.onLift).toHaveBeenCalledTimes(1);
++    scene.tap(600, 200);
++    expect(cb.onLift).toHaveBeenCalledTimes(2);
++    expect(cb.onLift).toHaveBeenLastCalledWith({ x: 600, y: 200 });
++  });
++
++  it('the move is clamped by the drag area', () => {
++    const { scene, cb } = world({ bounds: { x: 24, y: 32, w: 976, h: 696 }, exclusions: [] });
++    const p = press(300, 500);
++    scene.down(p);
++    scene.move(p, 5, 400);
++    expect(cb.onMove).toHaveBeenLastCalledWith({ x: 69, y: 400 });
++  });
++
++  it('Second finger (incl. Home) during a drag is ignored; the drag continues', () => {
++    const { scene, hud, cb, guard } = world();
++    const home = vi.fn();
++    createTapTarget(hud, { circle: { x: 64, y: 84, r: 68 }, onPress: home });
++    const p = press(300, 500, 1);
++    scene.down(p);
++    expect(guard.press(press(64, 84, 2))).toBe('ignored');
++    expect(home).not.toHaveBeenCalled();
++    scene.move(p, 350, 500);
++    scene.up(p);
++    expect(cb.onDrop).toHaveBeenCalledOnce();
++  });
++
++  it('a second finger moving is not forwarded', () => {
++    const { scene, cb } = world();
++    const p = press(300, 500, 1);
++    scene.down(p);
++    const other = press(600, 600, 2);
++    scene.down(other);
++    scene.move(other, 700, 700);
++    expect(cb.onMove).not.toHaveBeenCalled();
++  });
++
++  it('Pause mid-drag: the release reaches the guard while the scene is paused → onCancel, no drop', () => {
++    const { scene, hudScene, cb } = world();
++    const p = press(300, 500);
++    scene.down(p);
++    scene.state.active = false;
++    hudScene.up(p);
++    expect(cb.onCancel).toHaveBeenCalledOnce();
++    expect(cb.onDrop).not.toHaveBeenCalled();
++  });
++
++  it('lost pointerup: the guard self-heals on the next press and cancels the drag', () => {
++    const { scene, cb, guard } = world();
++    const p = press(300, 500);
++    scene.down(p);
++    p.isDown = false; // the up never arrives
++    expect(guard.press(press(800, 600, 2))).toBe('primary');
++    expect(cb.onCancel).toHaveBeenCalledOnce();
++    expect(cb.onDrop).not.toHaveBeenCalled();
++  });
++
++  it('Not pickable: a press hits nothing; a running drag continues', () => {
++    const { scene, cb, item, guard } = world();
++    guard.setPickable(item, false);
++    expect(guard.isPickable(item)).toBe(false);
++    scene.tap(300, 500);
++    expect(cb.onLift).not.toHaveBeenCalled();
++    guard.setPickable(item, true);
++    const p = press(300, 500, 3);
++    scene.down(p);
++    guard.setPickable(item, false);
++    scene.move(p, 320, 500);
++    scene.up(p);
++    expect(cb.onDrop).toHaveBeenCalledOnce();
++  });
++
++  it('setCircle moves the hit area; destroy unregisters', () => {
++    const { scene, cb, item } = world();
++    item.setCircle({ x: 700, y: 500, r: 70 });
++    scene.tap(300, 500);
++    expect(cb.onLift).not.toHaveBeenCalled();
++    scene.tap(700, 500);
++    expect(cb.onLift).toHaveBeenCalledOnce();
++    item.destroy();
++    scene.tap(700, 500);
++    expect(cb.onLift).toHaveBeenCalledOnce();
++  });
++
++  it('onLiftChange (Story 1.9): true before onLift, false after onDrop / onCancel; unsubscribe works', () => {
++    const { scene, cb, item } = world();
++    const order: string[] = [];
++    cb.onLift.mockImplementation(() => order.push('lift'));
++    cb.onDrop.mockImplementation(() => order.push('drop'));
++    cb.onCancel.mockImplementation(() => order.push('cancel'));
++    const off = item.onLiftChange((on) => order.push(on ? 'lifted' : 'settled'));
++    const p = press(300, 500);
++    scene.down(p);
++    scene.up(p);
++    expect(order).toEqual(['lifted', 'lift', 'drop', 'settled']);
++    order.length = 0;
++    const q = press(300, 500, 2);
++    scene.down(q);
++    q.isDown = false;
++    scene.tap(800, 600, 3); // self-heal → cancel
++    expect(order).toEqual(['lifted', 'lift', 'cancel', 'settled']);
++    off();
++    order.length = 0;
++    scene.tap(300, 500);
++    expect(order).toEqual(['lift', 'drop']);
++  });
++
++  it('a router destroyed mid-drag never delivers the drop', () => {
++    const { scene, router, cb } = world();
++    const p = press(300, 500);
++    scene.down(p);
++    router.destroy();
++    p.isDown = false;
++    scene.up(p);
++    expect(cb.onDrop).not.toHaveBeenCalled();
++  });
++});
+diff --git a/app/src/core/timing.ts b/app/src/core/timing.ts
+new file mode 100644
+index 0000000..b8e6903
+--- /dev/null
++++ b/app/src/core/timing.ts
+@@ -0,0 +1,121 @@
++// Every behavioural duration named in EXPERIENCE.md (AD-8). Exposed as `Tokens.Timing.*`.
++// All values are milliseconds unless the name says otherwise. EXPERIENCE marks the hint and
++// invitation timings as "to be tuned with the child" (Open Questions 3) — tune them here only.
++// Visual-component motions that DESIGN.md defines (pulse, snap, return, celebrate, react) live in
++// the generated design tokens, not here.
++
++export const Timing = {
++  /** NFR5: every tap gets visible/audible feedback within this budget. */
++  feedbackMaxMs: 100,
++
++  // --- Start screen (State 'Đang tải', loading-strip, button-play, button-round) ---
++  /** loading-strip: one kart lap along the short road (EXPERIENCE: 'Kart chạy vòng liên tục khi đang tải'; tuned value). */
++  loadingKartLapMs: 1600,
++  /** loading-strip: kart tween time-scale while a failed load waits (EXPERIENCE: 'mất mạng → kart chậm lại đứng chờ'); a factor, not ms. */
++  loadingKartWaitTimeScale: 0.25,
++  /** Failed first load retries on its own this often, besides on window 'online' (EXPERIENCE: 'tự thử lại khi có mạng'). */
++  loadRetryMs: 5000,
++  /** button-play 'Nhún chậm' (slow bob): one up-or-down half cycle; matches the 1.4 s invitation bob of DESIGN station invite. */
++  playBobMs: 1400,
++  /** button-round press: spring back from 0.9× (epic UX › Base button 'presses to 0.9× and springs back'); well inside feedbackMaxMs for the visual start. */
++  buttonPressMs: 180,
++
++  // --- Map (State "Mời chơi", station-hotspot, kart) ---
++  /** One station gently moves every 4–6 s while idle. */
++  mapAmbientMinMs: 4000,
++  mapAmbientMaxMs: 6000,
++  /** First invitation (hint ring + invite + station name) after ~8 s idle. */
++  mapInviteFirstMs: 8000,
++  /** Later invitations at least 20 s apart … */
++  mapInviteGapMs: 20000,
++  /** … at most this many times, then only the ambient bob remains. */
++  mapInviteMaxCount: 3,
++  /** Ambient station motion: one 1 → ambientScale → 1 yoyo takes this long (Story 1.5). */
++  mapAmbientMoveMs: 800,
++  /** An invitation (ring + bob) shows this long unless a tap ends it: 4 bob half-cycles of 1.4 s. */
++  mapInviteHoldMs: 5600,
++  /** Station bounce + name readout before the kart drives (~0.5 s). */
++  stationTapMs: 500,
++  /** Hard cap on kart drive regardless of distance (first trip in session). */
++  kartDriveMaxMs: 2000,
++  /** Hard cap on later trips in the same session. */
++  kartDriveRepeatMaxMs: 1500,
++  /** Shortest kart drive (Story 1.7): a short hop still reads as a drive, not a jump. */
++  kartDriveMinMs: 400,
++  /** Camera pan + zoom onto the station before its game starts (Story 1.7). */
++  cameraZoomInMs: 600,
++  /** Scene fade: the reduced-motion enter, every game reveal and the return to the island (Story 1.7). */
++  sceneFadeMs: 300,
++
++  // --- Drag & drop (draggable-item) ---
++  /** Dropped off the counter → slides back after this delay. */
++  dragOffCounterReturnDelayMs: 1500,
++
++  // --- Hints (State "Gợi ý") ---
++  /** Level 2 after this long idle (clock starts when the prompt finishes). */
++  hintLevel2IdleMs: 6000,
++  /** Level 3 after this much further idle. */
++  hintLevel3ExtraIdleMs: 6000,
++  /** Hint hand demonstration loops every ~15 s. */
++  hintHandLoopMs: 15000,
++  /** At level 3 the voice repeats every ~30 s. */
++  hintVoiceRepeatMs: 30000,
++  /** A voice retry plays at most once per 10 s. */
++  voiceRetryMinGapMs: 10000,
++  /** Story 1.9: the HintDirector's scene-clock tick (both hint clocks advance by this per tick). */
++  hintTickMs: 100,
++  /** Story 1.9 hint hand: press on the item. */
++  hintHandPressMs: 250,
++  /** Story 1.9 hint hand: move from the item to the target centre (ease in-out). */
++  hintHandMoveMs: 1200,
++  /** Story 1.9 hint hand: lift and fade out. */
++  hintHandFadeMs: 300,
++  /** Story 1.9 level 4: a distractor fades to ui.hintDimAlpha over this long. */
++  hintDimFadeMs: 300,
++
++  // --- Voice channel (Interaction Primitives) ---
++  /** A new line waits for the current one if it has less than this left. */
++  voiceQueueTailMs: 500,
++
++  // --- Audio mix (Voice and Tone › Âm thanh) ---
++  musicDuckDownMs: 150,
++  musicDuckRestoreDelayMs: 500,
++  sfxFadeInMinMs: 50,
++  characterSoundMaxMs: 800,
++
++  // --- Correct answer / round end (States "Đúng", "Xong lượt") ---
++  correctMusicMinMs: 1000,
++  correctMusicMaxMs: 2000,
++  roundCelebrationMs: 1500,
++  cameraPullBackMaxMs: 1500,
++  decorationFlyInMs: 1000,
++  /** Total from round end to the two Play-again buttons appearing. */
++  roundEndToOverlayMaxMs: 4000,
++
++  // --- Play-again overlay (State "Hỏi chơi tiếp", button-replay) ---
++  playAgainRepromptMs: 10000,
++  playAgainAutoCloseMs: 30000,
++  replayZoomInMs: 1500,
++
++  // --- Accessibility floor ---
++  /** Flashing ≤ 1 Hz → one flash cycle takes at least this long. */
++  flashMinPeriodMs: 1000,
++
++  // --- Per-game table ---
++  /** Làm pizza: bake time after tapping the oven. */
++  pizzaBakeMs: 2000,
++  /** Làm pizza: all toppings placed but oven not tapped → ring + hand. */
++  pizzaOvenIdleHintMs: 6000,
++  /** Tiệm kem: one Shiba breath (1 → ui.shibaBreathScale, yoyo) takes this long (Story 1.8). */
++  shibaBreathMs: 2400,
++  /** Câu cá: wrong fish dives and resurfaces after ~3 s. */
++  fishResurfaceMs: 3000,
++  /** Câu cá: hit test also against fish positions this long ago (latency compensation). */
++  fishHitLookbackMs: 150,
++  /** Chạm là nói: idle → one random prop wiggles silently. */
++  touchTalkIdleWiggleMs: 15000,
++  /** Chạm là nói: scene-bubble slide between scenes. */
++  touchTalkSceneSlideMs: 600,
++} as const;
++
++export type TimingTable = typeof Timing;
+diff --git a/app/src/core/tokens.ts b/app/src/core/tokens.ts
+new file mode 100644
+index 0000000..4c806fc
+--- /dev/null
++++ b/app/src/core/tokens.ts
+@@ -0,0 +1,89 @@
++// The only way code reads design values (AD-7, AD-8): `Tokens.*` and `Tokens.Timing.*`.
++import { designTokens } from './tokens.generated.ts';
++import { Timing } from './timing.ts';
++import { computeSafeRect } from './safe-rect.ts';
++
++/** Design space: 1024×768 px (4:3) at 1× (AD-7). */
++const design = { width: 1024, height: 768 } as const;
++
++/**
++ * Supported iPad landscape aspect ratios (w/h). 4:3 (1024×768, 1366×1024) up to ≈1.46
++ * (1180×820 ≈ 1.439, 1210×834 ≈ 1.451) — see spec Design Notes.
++ */
++const supportedAspect = { min: 4 / 3, max: 1.46 } as const;
++
++/**
++ * UI motion values DESIGN.md does not define (Story 1.2 adds them in core, DESIGN.md unchanged).
++ * Source: epic UX › Base button (press to 0.9× and spring back) and EXPERIENCE button-play 'Nhún chậm'.
++ */
++const ui = {
++  /** button-round press scale. */
++  pressScale: 0.9,
++  /** button-play slow bob amplitude (px, design space). */
++  playBobPx: 10,
++  /** Map station tap bounce peak (Story 1.5: 1 → 1.1 → 1 over Timing.stationTapMs). */
++  stationTapScale: 1.1,
++  /** Map ambient station motion peak (1 → 1.04 → 1 over Timing.mapAmbientMoveMs). */
++  ambientScale: 1.04,
++  /** prefers-reduced-motion: every scale amplitude (scale − 1) is multiplied by this. */
++  reducedMotionAmplitude: 0.5,
++  /** Speaker wave ring peak scale (Story 1.6: each ring 1 → 1.6 while fading out, buttonSpeaker.wave). */
++  speakerWaveScale: 1.6,
++  /** Kart cruise speed along the road (Story 1.7, design px per ms); drives are clamped to Timing.kartDrive*Ms. */
++  kartCruisePxPerMs: 0.6,
++  /** Kart tap while driving: the remaining drive time is multiplied by this (a visible speed-up). */
++  kartBoostTimeScale: 0.6,
++  /** Camera zoom onto a station before its game starts (Story 1.7). */
++  cameraZoomScale: 1.8,
++  /** Tiệm kem Shiba breathing: scaleY 1 ↔ this around its ground pivot (Story 1.8). */
++  shibaBreathScale: 1.02,
++  /** Tiệm kem row: centre gap (design px) between neighbours of scoop, scoop, cone, scoop, scoop (Story 1.8). */
++  iceCreamRowGap: 180,
++  /** Allowed deviation from iceCreamRowGap (design px). */
++  iceCreamRowTolerance: 20,
++  /** Story 1.9 hint ring around a game item: its bounds plus this (design px) on every side. */
++  hintRingPad: 12,
++  /** Story 1.9 hint item bob: scale 1 ↔ this, yoyo over components.hintRing.pulse.durationMs. */
++  hintItemBobScale: 1.06,
++  /** Story 1.9 level 4: distractors fade to this alpha ("mờ 60%" read as 60 % opacity). */
++  hintDimAlpha: 0.6,
++  /** Story 1.9 level 4: the drop target's snap radius factor. */
++  hintSnapScale: 2,
++} as const;
++
++/** A colour in the generated-token shape (`css`, `value`, `alpha`). */
++function colour(css: string): { readonly css: string; readonly value: number; readonly alpha: 1 } {
++  return { css, value: Number.parseInt(css.slice(1), 16), alpha: 1 };
++}
++
++/**
++ * Art colours DESIGN.md does not define (Story 1.8, kept in core). Used by the Blender builders
++ * (through tools/render/build.ts) and by the content checks; games read them only through Tokens.
++ */
++const art = {
++  /** Tiệm kem scoop colours; their relative luminances differ pairwise by at least 0.1 (tested). */
++  flavour: {
++    strawberry: colour('#FF8CC6'),
++    chocolate: colour('#6B3E26'),
++    vanilla: colour('#FFF3D6'),
++    mint: colour('#3FA86A'),
++  },
++  /** Shape details on the scoops: the chocolate chips. */
++  flavourDetail: { chip: colour('#3A2318') },
++  /** Light fur of the creatures (Shiba's face and belly). */
++  creatureLight: colour('#FFF8EE'),
++} as const;
++
++export const Tokens = {
++  ...designTokens,
++  design,
++  supportedAspect,
++  /** Design-space rect visible on every supported iPad ratio; interactive items must lie inside it. */
++  safeRect: computeSafeRect(design.width, design.height, supportedAspect.min, supportedAspect.max),
++  ui,
++  art,
++  Timing,
++} as const;
++
++export type TokensType = typeof Tokens;
++export type { Rect } from './safe-rect.ts';
+diff --git a/app/src/scenes/Hud.ts b/app/src/scenes/Hud.ts
+new file mode 100644
+index 0000000..b8e28df
+--- /dev/null
++++ b/app/src/scenes/Hud.ts
+@@ -0,0 +1,125 @@
++// Hud (Story 1.6): a parallel scene above Map and the games. Speaker (top-right, every mode) replays
++// the current prompt with a two-ring wave until that line ends; Home (top-left, 'game' mode only)
++// says "Về đảo nào!" and emits `hud:home`. Launched once by Map, never on Start. Wiring only: the
++// layout, wave maths and tap logic live in core/hud.ts; taps go through InputGuard on the `hud` layer.
++import { Scene, type GameObjects, type Tweens } from 'phaser';
++import { audio } from '../core/audio-director';
++import { bus } from '../core/bus';
++import { speakerReplay } from '../core/hint-director';
++import { HudController, hudLayout, waveFrame, wavePeriodMs, type HudLayout } from '../core/hud';
++import { getHudMode } from '../core/hud-mode';
++import { createTapRouter } from '../core/input/tap-router';
++import { createTapTarget } from '../core/input/tap-target';
++import { currentView, designInsets, NO_INSETS, visibleDesignRect } from '../core/input/space';
++import { prefersReducedMotion } from '../core/reduced-motion';
++import { Tokens } from '../core/tokens';
++import { createRoundButton, pressButton } from '../core/ui/round-button';
++
++const RESIZE = 'resize';
++
++function currentLayout(): HudLayout {
++  const view = currentView();
++  const { width, height } = Tokens.design;
++  if (!view) return hudLayout({ x: 0, y: 0, w: width, h: height }, NO_INSETS);
++  return hudLayout(visibleDesignRect(view), designInsets(view));
++}
++
++export class Hud extends Scene {
++  private waveTween: Tweens.Tween | undefined;
++
++  constructor() {
++    super('Hud');
++  }
++
++  create(): void {
++    const reduced = prefersReducedMotion(window);
++    const layout = currentLayout();
++    const speakerSpec = Tokens.components.buttonSpeaker;
++    const wave = speakerSpec.wave;
++
++    const rings: GameObjects.Arc[] = [];
++    for (let i = 0; i < wave.rings; i++) {
++      rings.push(this.add.circle(layout.speaker.x, layout.speaker.y, layout.size / 2, wave.color.value, 1).setVisible(false));
++    }
++    const speaker = createRoundButton(this, {
++      x: layout.speaker.x,
++      y: layout.speaker.y,
++      size: layout.size,
++      fill: speakerSpec.background,
++      icon: 'speaker',
++    });
++    const home = createRoundButton(this, {
++      x: layout.home.x,
++      y: layout.home.y,
++      size: layout.size,
++      fill: Tokens.components.buttonHome.background,
++      icon: 'home',
++    });
++
++    const applyWave = (tMs: number): void => {
++      const frame = waveFrame(tMs, reduced);
++      rings.forEach((ring, i) => {
++        const f = frame[i];
++        if (f) ring.setScale(f.scale).setAlpha(f.alpha);
++      });
++    };
++    const stopWave = (): void => {
++      this.waveTween?.stop();
++      this.waveTween = undefined;
++      for (const ring of rings) ring.setVisible(false);
++    };
++    const startWave = (): void => {
++      stopWave();
++      const period = wavePeriodMs();
++      applyWave(0);
++      for (const ring of rings) ring.setVisible(true);
++      this.waveTween = this.tweens.addCounter({
++        from: 0,
++        to: period,
++        duration: period,
++        repeat: -1,
++        onUpdate: (t) => applyWave(t.getValue() ?? 0),
++      });
++    };
++
++    const router = createTapRouter(this, { layer: 'hud' });
++    const controller = new HudController({
++      // Story 1.9: the active hint question replays its prompt (keeping its level); else the stored prompt.
++      replay: () => speakerReplay(audio),
++      say: (id) => audio.say(id),
++      sfx: (id) => audio.sfx(id),
++      emitHome: () => bus.emit('hud:home'),
++      view: {
++        pressSpeaker: () => pressButton(this, speaker),
++        pressHome: () => pressButton(this, home),
++        showWave: (on) => (on ? startWave() : stopWave()),
++        showHome: (on) => {
++          home.setVisible(on);
++          // Only called from setMode below, after homeTarget exists.
++          homeTarget.setEnabled(on);
++        },
++      },
++    });
++    const speakerTarget = createTapTarget(router, { circle: layout.speaker, onPress: () => controller.speaker() });
++    const homeTarget = createTapTarget(router, { circle: layout.home, onPress: () => controller.home() });
++    controller.setMode(getHudMode());
++
++    const relayout = (): void => {
++      const next = currentLayout();
++      speaker.setPosition(next.speaker.x, next.speaker.y);
++      for (const ring of rings) ring.setPosition(next.speaker.x, next.speaker.y);
++      home.setPosition(next.home.x, next.home.y);
++      speakerTarget.setCircle(next.speaker);
++      homeTarget.setCircle(next.home);
++    };
++    this.scale.on(RESIZE, relayout);
++
++    const scoped = bus.scoped(this);
++    scoped.on('hud:mode', ({ mode }) => controller.setMode(mode));
++    scoped.on('speech:ended', ({ token }) => controller.speechEnded(token));
++    this.events.once('shutdown', () => {
++      this.scale.off(RESIZE, relayout);
++      stopWave();
++    });
++  }
++}
+diff --git a/app/src/games/mini-game-base.ts b/app/src/games/mini-game-base.ts
+new file mode 100644
+index 0000000..dbbac1c
+--- /dev/null
++++ b/app/src/games/mini-game-base.ts
+@@ -0,0 +1,112 @@
++// MiniGame contract (Story 1.7, AD-1). Every game scene extends MiniGameBase:
++//   - the scene key is its GameId; `init(data)` stores the shell's `{ level, seed, resume? }`;
++//   - `create()` sets the Hud to 'game' mode (Home shows), fades the scene in, turns `hud:home` into
++//     `round:abandon` and then calls the subclass `build()`;
++//   - `complete(outcome)` / `abandon()` go through RoundGuard: exactly one terminal event per start,
++//     after which the game is inert (input disabled, a second Home tap ignored).
++// Story 1.8: `hint` (core/hint-director) is the only way a game reports questions and attempts; on
++// Home the base ends the hint question and removes the scene's timed events before `round:abandon`,
++// so no pending slide, next question or voice fires afterwards.
++// Story 1.9 (AD-5, UX-DR72): ambient motion (`addAmbient`) plays only while no reason is held
++// (`holdAmbient`); the base holds 'hint' while this game's hint level is ≥ 2, so the ring/bob/hand
++// are the only prominent motion.
++// Games never navigate (`scene.start/stop/…`) or load (`this.load`): Map owns both (ESLint enforces it).
++import { Scene, type Tweens } from 'phaser';
++import type { GameId, GameStartData, RoundOutcome, Snapshot } from '../content/types';
++import { bus } from '../core/bus';
++import { createHint, type Hint } from '../core/hint-director';
++import { setHudMode } from '../core/hud-mode';
++import { revealScene } from '../core/motion';
++import { RoundGuard } from '../core/round-guard';
++
++/** Ambient motion stops from this hint level (the ring and bob appear). */
++const AMBIENT_HINT_LEVEL = 2;
++
++export abstract class MiniGameBase extends Scene {
++  readonly gameId: GameId;
++  protected level = 0;
++  protected seed = 0;
++  protected resumeAt: Snapshot | undefined = undefined;
++  private guard: RoundGuard | undefined;
++  /** The hint system of this start (created in `create`, before `build`). */
++  protected hint: Hint = createHint(undefined);
++  private ambient = new Set<Tweens.Tween>();
++  private holds = new Set<string>();
++
++  constructor(gameId: GameId) {
++    super(gameId);
++    this.gameId = gameId;
++  }
++
++  init(data: Partial<GameStartData> = {}): void {
++    this.level = data.level ?? 0;
++    this.seed = data.seed ?? 0;
++    this.resumeAt = data.resume;
++  }
++
++  create(): void {
++    this.guard = new RoundGuard(this.gameId, bus, () => {
++      this.input.enabled = false;
++    });
++    this.input.enabled = true;
++    this.ambient = new Set();
++    this.holds = new Set();
++    this.hint = createHint(this);
++    setHudMode('game');
++    const scoped = bus.scoped(this);
++    scoped.on('hud:home', () => this.abandon());
++    scoped.on('hint:level', ({ gameId, level }) => {
++      if (gameId === this.gameId) this.holdAmbient('hint', level >= AMBIENT_HINT_LEVEL);
++    });
++    this.build();
++    void revealScene(this);
++  }
++
++  /** True after the start's terminal event. */
++  protected get inert(): boolean {
++    return this.guard?.inert ?? false;
++  }
++
++  /** Registers an ambient (idle) tween: it plays only while no hold reason is set. */
++  protected addAmbient(tween: Tweens.Tween): Tweens.Tween {
++    this.pruneAmbient();
++    this.ambient.add(tween);
++    if (this.holds.size > 0) tween.pause();
++    return tween;
++  }
++
++  /** Holds (`on`) or releases one reason to stop the ambient tweens ('hint', 'celebrate', …). */
++  protected holdAmbient(reason: string, on: boolean): void {
++    const was = this.holds.size > 0;
++    if (on) this.holds.add(reason);
++    else this.holds.delete(reason);
++    const now = this.holds.size > 0;
++    if (was === now) return;
++    this.pruneAmbient();
++    for (const t of this.ambient) {
++      if (now) t.pause();
++      else t.resume();
++    }
++  }
++
++  private pruneAmbient(): void {
++    for (const t of this.ambient) if (t.isDestroyed()) this.ambient.delete(t);
++  }
++
++  /** Draws the game. */
++  protected abstract build(): void;
++
++  /** The resume snapshot of the current state (written by Map on `round:abandon` from Epic 2). */
++  abstract snapshot(): Snapshot;
++
++  protected complete(outcome: Omit<RoundOutcome, 'gameId'>): void {
++    this.guard?.complete({ ...outcome, gameId: this.gameId });
++  }
++
++  protected abandon(): void {
++    if (!this.guard || this.guard.inert) return;
++    this.hint.questionDone();
++    this.time.removeAllEvents();
++    this.guard.abandon(this.snapshot());
++  }
++}
+diff --git a/app/src/games/registry.test.ts b/app/src/games/registry.test.ts
+new file mode 100644
+index 0000000..c901dbe
+--- /dev/null
++++ b/app/src/games/registry.test.ts
+@@ -0,0 +1,166 @@
++// Registry and MiniGame contract (Story 1.7) with Phaser's Scene stubbed (node has no canvas).
++import { describe, expect, it, vi } from 'vitest';
++
++vi.mock('phaser', () => {
++  class Scene {
++    readonly sys: { settings: { key: string } };
++    readonly input = { enabled: true };
++    readonly time = { removeAllEvents: vi.fn() };
++    readonly cameras = {
++      main: {
++        setBackgroundColor: vi.fn(),
++        fadeIn: vi.fn(),
++        once: vi.fn(),
++      },
++    };
++    private readonly onceFns = new Map<string, () => void>();
++    readonly events = {
++      once: (ev: string, fn: () => void) => this.onceFns.set(ev, fn),
++      off: (ev: string) => this.onceFns.delete(ev),
++    };
++    constructor(key: string) {
++      this.sys = { settings: { key } };
++    }
++    shutdown(): void {
++      this.onceFns.get('shutdown')?.();
++    }
++  }
++  return { Scene };
++});
++
++const { GAME_CONTENT } = await import('../content/games/index');
++const { STATIONS } = await import('../content/stations');
++const { bus } = await import('../core/bus');
++const { getHudMode, setHudMode } = await import('../core/hud-mode');
++const { GAMES, GAME_SCENES, isGameId, ladderLength } = await import('./registry');
++const { IceCream } = await import('./ice-cream/IceCream');
++const { MiniGameBase } = await import('./mini-game-base');
++
++/** A minimal game: the base contract without the ice-cream scene (which needs a real Phaser). */
++class TestGame extends MiniGameBase {
++  readonly hints: string[] = [];
++  constructor() {
++    super('ice-cream');
++  }
++  protected build(): void {
++    this.hint = {
++      beginQuestion: () => this.hints.push('begin'),
++      stepDone: () => undefined,
++      wrong: () => this.hints.push('wrong'),
++      questionDone: () => this.hints.push('done'),
++      replayPrompt: () => undefined,
++      level: 0,
++    };
++  }
++  ambientAdd(t: unknown) {
++    return this.addAmbient(t as never);
++  }
++  ambientHold(reason: string, on: boolean) {
++    this.holdAmbient(reason, on);
++  }
++  snapshot() {
++    return { v: 1 as const, level: this.level, seed: this.seed, questionIndex: 0, partial: { placed: [] } };
++  }
++}
++
++describe('games/registry', () => {
++  it('GAMES lists exactly the games with content, each with its scene keyed by its id', () => {
++    expect(Object.keys(GAMES)).toEqual(Object.keys(GAME_CONTENT));
++    for (const [id, entry] of Object.entries(GAMES)) {
++      const scene = new entry!.scene();
++      expect(scene.gameId).toBe(id);
++      expect((scene as unknown as { sys: { settings: { key: string } } }).sys.settings.key).toBe(id);
++      expect(entry!.ladder).toBe(GAME_CONTENT[id as keyof typeof GAME_CONTENT]!.ladder);
++    }
++    expect(GAME_SCENES).toEqual([IceCream]);
++  });
++
++  it('awake stations are exactly the registered games', () => {
++    expect(STATIONS.filter((s) => s.awake).map((s) => s.id)).toEqual(Object.keys(GAMES));
++    expect(isGameId('ice-cream')).toBe(true);
++    expect(isGameId('pizza')).toBe(false);
++  });
++
++  it('ladderLength: the ladder length, 1 without a ladder', () => {
++    expect(ladderLength({ ladder: [1, 2, 3] })).toBe(3);
++    expect(ladderLength({})).toBe(1);
++  });
++});
++
++describe('MiniGameBase', () => {
++  function start(data = { level: 0, seed: 42 }) {
++    const game = new TestGame();
++    game.init(data);
++    game.create();
++    return game as TestGame & { input: { enabled: boolean }; time: { removeAllEvents: ReturnType<typeof vi.fn> }; shutdown(): void };
++  }
++
++  it('create: Hud in game mode; snapshot carries level and seed', () => {
++    setHudMode('map');
++    const game = start({ level: 0, seed: 42 });
++    expect(getHudMode()).toBe('game');
++    expect(game.snapshot()).toEqual({ v: 1, level: 0, seed: 42, questionIndex: 0, partial: { placed: [] } });
++    game.shutdown();
++  });
++
++  it('hud:home twice: one round:abandon, then inert (input disabled)', () => {
++    const game = start();
++    const abandon = vi.fn();
++    const off = bus.on('round:abandon', abandon);
++    bus.emit('hud:home');
++    bus.emit('hud:home');
++    expect(abandon).toHaveBeenCalledTimes(1);
++    expect(abandon).toHaveBeenCalledWith({ gameId: 'ice-cream', snapshot: game.snapshot() });
++    expect(game.input.enabled).toBe(false);
++    game.shutdown();
++    off();
++  });
++
++  it('Home (Story 1.8): the hint question ends and the timed events are removed before round:abandon, once', () => {
++    const game = start();
++    const order: string[] = [];
++    game.time.removeAllEvents.mockImplementation(() => order.push('timers'));
++    const off = bus.on('round:abandon', () => order.push(`abandon:${game.hints.join(',')}`));
++    bus.emit('hud:home');
++    bus.emit('hud:home');
++    expect(order).toEqual(['timers', 'abandon:done']);
++    expect(game.time.removeAllEvents).toHaveBeenCalledTimes(1);
++    game.shutdown();
++    off();
++  });
++
++  it('ambient (Story 1.9): paused while hint level ≥ 2 for this game or any hold reason; resumed when none is left', () => {
++    const game = start();
++    const tween = { pause: vi.fn(), resume: vi.fn(), isDestroyed: () => false };
++    game.ambientAdd(tween);
++    bus.emit('hint:level', { gameId: 'pizza', level: 2 });
++    expect(tween.pause).not.toHaveBeenCalled();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 1 });
++    expect(tween.pause).not.toHaveBeenCalled();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 2 });
++    expect(tween.pause).toHaveBeenCalledOnce();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 3 });
++    game.ambientHold('celebrate', true);
++    expect(tween.pause).toHaveBeenCalledOnce();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 0 });
++    expect(tween.resume).not.toHaveBeenCalled();
++    game.ambientHold('celebrate', false);
++    expect(tween.resume).toHaveBeenCalledOnce();
++    // A tween added while held starts paused.
++    game.ambientHold('celebrate', true);
++    const late = { pause: vi.fn(), resume: vi.fn(), isDestroyed: () => false };
++    game.ambientAdd(late);
++    expect(late.pause).toHaveBeenCalledOnce();
++    game.shutdown();
++  });
++
++  it('after shutdown the scene no longer listens to hud:home', () => {
++    const game = start();
++    game.shutdown();
++    const abandon = vi.fn();
++    const off = bus.on('round:abandon', abandon);
++    bus.emit('hud:home');
++    expect(abandon).not.toHaveBeenCalled();
++    off();
++  });
++});
+diff --git a/app/src/games/ice-cream/IceCream.ts b/app/src/games/ice-cream/IceCream.ts
+new file mode 100644
+index 0000000..be6c4b9
+--- /dev/null
++++ b/app/src/games/ice-cream/IceCream.ts
+@@ -0,0 +1,449 @@
++// Tiệm kem (Story 1.8): drag the scoop Shiba asks for onto the cone. The scene only wires Phaser:
++// the plate `bg.ice-cream`, the full-frame sprites of `atlas.ice-cream` (Shiba on its ground pivot,
++// scoops on their trimmed centres), DragControllers for the scoops and tweens. Every decision (drop
++// resolution, outcomes, questions) is the pure round model (round.ts, questions.ts); prompts and
++// retries go through `hint` only; audio here is SFX only. Every position comes from
++// LAYOUTS['ice-cream']; timers are scene-clock events (removed on Home by MiniGameBase).
++import type { GameObjects, Time, Tweens } from 'phaser';
++import { ATLASES, BACKGROUNDS } from '../../content/assets';
++import {
++  CONE_ANCHOR,
++  CONE_SLOTS,
++  HITS,
++  SCOOP_RENDER_SLOT,
++  SFX,
++  SHIBA_ANCHOR,
++  SHIBA_FRAMES,
++  askLine,
++  retryLine,
++  scoopFrame,
++  type FlavourId,
++} from '../../content/games/ice-cream';
++import type { Point, ScreenLayout } from '../../content/layout-types';
++import { LAYOUTS } from '../../content/layouts';
++import type { Snapshot } from '../../content/types';
++import { audio } from '../../core/audio-director';
++import { createDraggable, defaultDragArea, type Draggable } from '../../core/input/drag-controller';
++import { createDropTarget, intersectRect, type DropTarget } from '../../core/input/drop';
++import { inputGuard } from '../../core/input/guard';
++import { boundingBox, pointInPolygon } from '../../core/input/polygon';
++import { createTapRouter, type TapRouter } from '../../core/input/tap-router';
++import { amplitude, prefersReducedMotion } from '../../core/reduced-motion';
++import type { Rect } from '../../core/safe-rect';
++import { Tokens } from '../../core/tokens';
++import { originFor, trimmedCentre, trimmedSize, type TrimmedRect } from '../../core/ui/sprite-pivot';
++import { MiniGameBase } from '../mini-game-base';
++import { IceCreamRound, type Area, type RoundCommand, type RoundGeometry, type ScoopState } from './round';
++
++const EASE_OUT = 'Quad.easeOut';
++const SINE = 'Sine.easeInOut';
++
++interface FrameData {
++  readonly spriteSourceSize?: { x: number; y: number; w: number; h: number };
++}
++
++interface ScoopView {
++  readonly id: string;
++  readonly flavour: FlavourId;
++  readonly image: GameObjects.Image | undefined;
++  readonly shadow: GameObjects.Ellipse;
++  /** Undefined once the scoop sits on the cone. */
++  drag: Draggable | undefined;
++  /** Hit radius and the drawn half size. */
++  readonly radius: number;
++  readonly half: number;
++  /** The scoop is drawn here (its trimmed centre). */
++  pos: Point;
++  tween: Tweens.Tween | undefined;
++  returnTimer: Time.TimerEvent | undefined;
++}
++
++const NO_AREA: Area = { contains: () => false };
++
++export class IceCream extends MiniGameBase {
++  private round: IceCreamRound | undefined;
++  private router: TapRouter | undefined;
++  private scoops = new Map<string, ScoopView>();
++  private coneScoops: ScoopView[] = [];
++  private shiba: GameObjects.Image | undefined;
++  private breath: Tweens.Tween | undefined;
++  private cone: DropTarget | undefined;
++  private reduced = false;
++  private layout: ScreenLayout = LAYOUTS['ice-cream'];
++  /** Missing frames already reported (one warning each). */
++  private warned = new Set<string>();
++
++  constructor() {
++    super('ice-cream');
++  }
++
++  // --- build ----------------------------------------------------------------------------------------
++
++  protected build(): void {
++    this.cameras.main.setBackgroundColor(Tokens.colors.sky.css);
++    this.reduced = prefersReducedMotion(window);
++    this.layout = LAYOUTS['ice-cream'];
++    this.scoops = new Map();
++    this.coneScoops = [];
++    const scale = 1 / this.layout.renderScale;
++
++    const bg = BACKGROUNDS['ice-cream'].key;
++    if (this.textures.exists(bg)) this.add.image(0, 0, bg).setOrigin(0).setScale(scale);
++    else console.warn(`ice-cream: texture "${bg}" is missing — plate skipped`);
++
++    this.addShiba();
++    this.router = createTapRouter(this);
++    const coneAt = this.slot(CONE_SLOTS[0]);
++    this.cone = createDropTarget({ id: CONE_ANCHOR, circle: { x: coneAt.x, y: coneAt.y, r: Tokens.components.dropTarget.snapRadius } });
++
++    this.round = new IceCreamRound(this.geometry(), this.seed, this.level);
++    this.applyAll(this.round.start());
++  }
++
++  snapshot(): Snapshot {
++    return this.round?.snapshot() ?? { v: 1, level: this.level, seed: this.seed, questionIndex: 0, partial: { placed: [] } };
++  }
++
++  private slot(id: string): Point {
++    const p = this.layout.slots[id];
++    if (!p) console.warn(`ice-cream: slot "${id}" is missing from the layout`);
++    return p ?? { x: this.layout.design.width / 2, y: this.layout.design.height / 2 };
++  }
++
++  private area(id: string): Area {
++    const poly = this.layout.hits[id];
++    if (!poly) {
++      console.warn(`ice-cream: hit "${id}" is missing from the layout`);
++      return NO_AREA;
++    }
++    return { contains: (p) => pointInPolygon(p, poly) };
++  }
++
++  /** Trimmed rect of an atlas frame (render px); undefined when the frame is missing. */
++  private frameRect(frame: string): TrimmedRect | undefined {
++    const key = ATLASES['ice-cream'].key;
++    if (!this.textures.exists(key) || !this.textures.get(key).has(frame)) return undefined;
++    const ss = (this.textures.get(key).get(frame).customData as FrameData | undefined)?.spriteSourceSize;
++    return ss ? { x: ss.x, y: ss.y, width: ss.w, height: ss.h } : undefined;
++  }
++
++  /** Scoop frames are rendered at slot.scoop-2: a scoop at home slot `id` is drawn this far from it. */
++  private scoopOffset(flavour: FlavourId): Point {
++    const rect = this.frameRect(scoopFrame(flavour));
++    const ref = this.slot(SCOOP_RENDER_SLOT);
++    if (!rect) return { x: 0, y: 0 };
++    const c = trimmedCentre(rect, this.layout.renderScale);
++    return { x: c.x - ref.x, y: c.y - ref.y };
++  }
++
++  private geometry(): RoundGeometry {
++    const counterBox = boundingBox(this.layout.hits[HITS.counter] ?? []);
++    const counterRect: Rect = { x: counterBox.x, y: counterBox.y, w: counterBox.width, h: counterBox.height };
++    // The offset is the same for every flavour up to a few px; the average keeps homes on one line.
++    const ref = this.scoopOffset('vanilla');
++    return {
++      homeCentre: (slot) => {
++        const p = this.slot(slot);
++        return { x: p.x + ref.x, y: p.y + ref.y };
++      },
++      coneCentre: (n) => this.slot(CONE_SLOTS[Math.min(n, CONE_SLOTS.length - 1)]!),
++      cone: { contains: (p) => this.cone?.contains(p) ?? false },
++      shiba: this.area(HITS.shiba),
++      counterUpper: this.area(HITS.counterUpper),
++      counter: this.area(HITS.counter),
++      restRect: () => {
++        const a = defaultDragArea();
++        return a ? intersectRect(counterRect, a.bounds) : counterRect;
++      },
++      snapRadius: Tokens.components.dropTarget.snapRadius,
++      minSize: Tokens.components.draggableItem.minSize,
++      offCounterDelayMs: Tokens.Timing.dragOffCounterReturnDelayMs,
++      nextQuestionDelayMs: Tokens.Timing.correctMusicMaxMs,
++    };
++  }
++
++  // --- Shiba ----------------------------------------------------------------------------------------
++
++  private addShiba(): void {
++    const key = ATLASES['ice-cream'].key;
++    const anchor = this.layout.anchors[SHIBA_ANCHOR];
++    if (!anchor || !this.frameRect(SHIBA_FRAMES.idle)) {
++      console.warn(`ice-cream: Shiba (frame "${SHIBA_FRAMES.idle}" or anchor "${SHIBA_ANCHOR}") is missing`);
++      return;
++    }
++    const o = originFor(anchor, this.layout.design);
++    this.shiba = this.add.image(anchor.x, anchor.y, key, SHIBA_FRAMES.idle).setOrigin(o.x, o.y).setScale(1 / this.layout.renderScale);
++    this.breathe();
++  }
++
++  /** Breathing: scaleY 1 ↔ shibaBreathScale around the ground pivot, yoyo. */
++  private breathe(): void {
++    const img = this.shiba;
++    if (!img) return;
++    const base = 1 / this.layout.renderScale;
++    img.setScale(base);
++    this.breath?.stop();
++    // Ambient (Story 1.9): the base pauses it while the hint ring shows or Shiba celebrates.
++    this.breath = this.addAmbient(
++      this.tweens.add({
++        targets: img,
++        scaleY: base * amplitude(Tokens.ui.shibaBreathScale, this.reduced),
++        duration: Tokens.Timing.shibaBreathMs / 2,
++        ease: SINE,
++        yoyo: true,
++        repeat: -1,
++      }),
++    );
++  }
++
++  /** Happy frames (wag + lick) and bounces through character.celebrate.scales; breathing pauses. */
++  private celebrate(): void {
++    audio.sfx(SFX.happy);
++    const img = this.shiba;
++    if (!img) return;
++    this.holdAmbient('celebrate', true);
++    const spec = Tokens.components.character.celebrate;
++    const scales = spec.scales.map((s) => amplitude(s, this.reduced));
++    const frames = SHIBA_FRAMES.happy.filter((f) => this.frameRect(f) !== undefined);
++    const base = 1 / this.layout.renderScale;
++    const steps = scales.length - 1;
++    this.tweens.addCounter({
++      from: 0,
++      to: 1,
++      duration: spec.durationMs,
++      onUpdate: (t) => {
++        const v = t.getValue() ?? 0;
++        // `repeat` bounces through the scale keys over the whole duration.
++        const cycle = (v * spec.repeat) % 1;
++        const k = Math.min(steps - 1, Math.floor(cycle * steps));
++        const local = cycle * steps - k;
++        const s = scales[k]! + (scales[k + 1]! - scales[k]!) * Math.sin((local * Math.PI) / 2);
++        img.setScale(base * s);
++        if (frames.length > 0) img.setFrame(frames[Math.floor(v * frames.length * spec.repeat) % frames.length]!, false, false);
++      },
++      onComplete: () => {
++        img.setFrame(SHIBA_FRAMES.idle, false, false);
++        this.holdAmbient('celebrate', false);
++        this.breathe();
++      },
++    });
++  }
++
++  // --- scoops ---------------------------------------------------------------------------------------
++
++  private addScoop(s: ScoopState, popIn: boolean): ScoopView {
++    const key = ATLASES['ice-cream'].key;
++    const frame = scoopFrame(s.flavour);
++    const rect = this.frameRect(frame);
++    const rs = this.layout.renderScale;
++    const item = Tokens.components.draggableItem;
++    const size = rect ? trimmedSize(rect, rs) : { w: item.minSize, h: item.minSize };
++    const half = Math.max(size.w, size.h) / 2;
++    const shadowSpec = item.liftShadow;
++    const shadow = this.add
++      .ellipse(s.at.x + shadowSpec.x, s.at.y + shadowSpec.y, size.w, size.h / 2, shadowSpec.color.value, shadowSpec.color.alpha)
++      .setVisible(false);
++    let image: GameObjects.Image | undefined;
++    if (rect) {
++      const o = originFor(trimmedCentre(rect, rs), this.layout.design);
++      image = this.add.image(s.at.x, s.at.y, key, frame).setOrigin(o.x, o.y).setScale(1 / rs);
++    } else if (!this.warned.has(frame)) {
++      this.warned.add(frame);
++      console.warn(`ice-cream: frame "${frame}" is missing — scoop drawn without an image`);
++    }
++    const view: ScoopView = {
++      id: s.id,
++      flavour: s.flavour,
++      image,
++      shadow,
++      drag: undefined,
++      radius: half + item.hitPad,
++      half,
++      pos: { ...s.at },
++      tween: undefined,
++      returnTimer: undefined,
++    };
++    if (this.router) {
++      view.drag = createDraggable(this.router, {
++        circle: { x: s.at.x, y: s.at.y, r: view.radius },
++        // The finger keeps the scoop's core (minSize/2) inside the play area, so the lower counter stays reachable.
++        itemRadius: item.minSize / 2,
++        onLift: () => this.lift(view),
++        onMove: (p) => this.place(view, p),
++        onDrop: (p) => this.settle(view, () => this.round?.drop(view.id, p) ?? []),
++        onCancel: () => this.settle(view, () => this.round?.cancel(view.id) ?? []),
++      });
++      view.drag.object = image;
++    }
++    if (popIn && image) {
++      image.setScale(0);
++      this.tweens.add({ targets: image, scale: 1 / rs, duration: item.return.durationMs, ease: 'Back.easeOut' });
++    }
++    this.scoops.set(s.id, view);
++    return view;
++  }
++
++  /** Draws the scoop at `p`; its hit circle follows (a scoop is lifted where it is seen). */
++  private place(view: ScoopView, p: Point): void {
++    view.pos = { ...p };
++    view.image?.setPosition(p.x, p.y);
++    view.drag?.setCircle({ x: p.x, y: p.y, r: view.radius });
++    const spec = Tokens.components.draggableItem.liftShadow;
++    view.shadow.setPosition(p.x + spec.x, p.y + spec.y);
++  }
++
++  /** Lift: 1.1× and a shadow in the same pointerdown handler; any running motion stops. */
++  private lift(view: ScoopView): void {
++    this.applyAll(this.round?.lift(view.id) ?? []);
++    view.tween?.stop();
++    view.tween = undefined;
++    const rs = this.layout.renderScale;
++    view.image?.setScale(Tokens.components.draggableItem.liftScale / rs);
++    view.shadow.setVisible(true);
++    this.children.bringToTop(view.shadow);
++    if (view.image) this.children.bringToTop(view.image);
++  }
++
++  private settle(view: ScoopView, outcome: () => RoundCommand[]): void {
++    view.image?.setScale(1 / this.layout.renderScale);
++    view.shadow.setVisible(false);
++    this.applyAll(outcome());
++  }
++
++  /** Tweens a scoop to `to`; its hit circle follows every frame (place). */
++  private moveTo(view: ScoopView, to: Point, durationMs: number, onDone?: () => void): void {
++    view.tween?.stop();
++    const from = { ...view.pos };
++    view.tween = this.tweens.addCounter({
++      from: 0,
++      to: 1,
++      duration: durationMs,
++      ease: EASE_OUT,
++      onUpdate: (t) => {
++        const v = t.getValue() ?? 0;
++        this.place(view, { x: from.x + (to.x - from.x) * v, y: from.y + (to.y - from.y) * v });
++      },
++      onComplete: () => {
++        view.tween = undefined;
++        this.place(view, to);
++        onDone?.();
++      },
++    });
++  }
++
++  private destroyScoop(view: ScoopView): void {
++    view.tween?.stop();
++    view.returnTimer?.remove();
++    view.drag?.destroy();
++    view.image?.destroy();
++    view.shadow.destroy();
++  }
++
++  // --- round commands -------------------------------------------------------------------------------
++
++  private applyAll(cmds: readonly RoundCommand[]): void {
++    if (this.inert) return;
++    for (const c of cmds) this.apply(c);
++  }
++
++  private apply(c: RoundCommand): void {
++    switch (c.kind) {
++      case 'build':
++        for (const v of this.scoops.values()) this.destroyScoop(v);
++        this.scoops = new Map();
++        for (const s of c.scoops) this.addScoop(s, false);
++        return;
++      case 'beginQuestion': {
++        const drags = (ids: readonly string[]): Draggable[] => ids.flatMap((id) => this.scoops.get(id)?.drag ?? []);
++        this.hint.beginQuestion({
++          promptLineId: askLine(c.target),
++          retryLineId: retryLine(c.target),
++          step: { correct: drags(c.correct), distractors: drags(c.distractors), target: this.cone ?? null, action: 'drag' },
++        });
++        return;
++      }
++      case 'snap':
++        this.snap(c.id, c.to);
++        return;
++      case 'floatBack': {
++        const v = this.scoops.get(c.id);
++        if (v) this.moveTo(v, c.to, Tokens.components.draggableItem.return.durationMs);
++        return;
++      }
++      case 'rest': {
++        const v = this.scoops.get(c.id);
++        if (v) this.moveTo(v, c.at, Tokens.components.dropTarget.snap.durationMs);
++        return;
++      }
++      case 'returnLater': {
++        const v = this.scoops.get(c.id);
++        if (!v) return;
++        v.returnTimer?.remove();
++        v.returnTimer = this.time.delayedCall(c.ms, () => {
++          v.returnTimer = undefined;
++          this.round?.returned(c.id);
++          this.moveTo(v, c.to, Tokens.components.draggableItem.return.durationMs);
++        });
++        return;
++      }
++      case 'cancelReturn': {
++        const v = this.scoops.get(c.id);
++        v?.returnTimer?.remove();
++        if (v) v.returnTimer = undefined;
++        return;
++      }
++      case 'respawn':
++        this.addScoop(c.scoop, true);
++        return;
++      case 'pickable':
++        for (const v of this.scoops.values()) if (v.drag) inputGuard.setPickable(v.drag, c.on);
++        return;
++      case 'celebrate':
++        this.celebrate();
++        return;
++      case 'hintWrong':
++        this.hint.wrong();
++        return;
++      case 'questionDone':
++        this.hint.questionDone();
++        return;
++      case 'nextLater':
++        this.time.delayedCall(c.ms, () => this.applyAll(this.round?.next() ?? []));
++        return;
++      case 'clear':
++        this.clearCone();
++        return;
++    }
++  }
++
++  /** The correct scoop leaves the counter and snaps onto the cone with a small bounce. */
++  private snap(id: string, to: Point): void {
++    const v = this.scoops.get(id);
++    if (!v) return;
++    this.scoops.delete(id);
++    v.drag?.destroy();
++    v.drag = undefined;
++    v.returnTimer?.remove();
++    this.coneScoops.push(v);
++    audio.sfx(SFX.snap);
++    const snap = Tokens.components.dropTarget.snap;
++    this.moveTo(v, to, snap.durationMs);
++    if (v.image) {
++      const base = 1 / this.layout.renderScale;
++      this.tweens.add({ targets: v.image, scale: base * snap.scale, duration: snap.durationMs / 2, ease: EASE_OUT, yoyo: true, onComplete: () => v.image?.setScale(base) });
++    }
++  }
++
++  /** Shiba "ate" the cone scoops: they fade out. */
++  private clearCone(): void {
++    const eaten = this.coneScoops;
++    this.coneScoops = [];
++    for (const v of eaten) {
++      if (!v.image) {
++        this.destroyScoop(v);
++        continue;
++      }
++      this.tweens.add({ targets: v.image, alpha: 0, duration: Tokens.Timing.sceneFadeMs, onComplete: () => this.destroyScoop(v) });
++    }
++  }
++}
+diff --git a/app/src/games/ice-cream/round.ts b/app/src/games/ice-cream/round.ts
+new file mode 100644
+index 0000000..d42c763
+--- /dev/null
++++ b/app/src/games/ice-cream/round.ts
+@@ -0,0 +1,231 @@
++// Tiệm kem round model (Story 1.8), pure: the scoops on the counter, the cone, drop resolution and
++// the outcome commands. The scene (IceCream.ts) only applies the commands with Phaser.
++// Drop resolution of a scoop, first match wins:
++//   1. inside the cone target (circle at slot.cone-1, r = snapRadius × snapScale) → serve
++//   2. inside hit.shiba → serve
++//   3. within snapRadius/2 of its own pre-lift position → home (settles back, no hint)
++//   4. inside hit.counter-upper → serve
++//   5. inside hit.counter → rest (nudged clear of the other scoops; its new pre-lift position)
++//   6. anywhere else → off (slides back after a delay; a new lift cancels the slide)
++// A correct serve snaps onto the cone, a fresh scoop of that flavour pops in at its home and Shiba
++// celebrates (every scoop unpickable meanwhile); a wrong serve floats back and reports `hintWrong`.
++// The cone contents and the question survive every outcome.
++import type { FlavourId } from '../../content/games/ice-cream';
++import type { Point } from '../../content/layout-types';
++import type { Snapshot } from '../../content/types';
++import { nudgeApart } from '../../core/input/drop';
++import type { Rect } from '../../core/safe-rect';
++import { questionFor, type Question } from './questions';
++
++export interface Area {
++  contains(p: Point): boolean;
++}
++
++export interface RoundGeometry {
++  /** Centre of a scoop resting at home slot `slot`. */
++  homeCentre(slot: string): Point;
++  /** Centre of the n-th scoop on the cone (0-based; clamped to the last slot). */
++  coneCentre(n: number): Point;
++  readonly cone: Area;
++  readonly shiba: Area;
++  readonly counterUpper: Area;
++  readonly counter: Area;
++  /** Where a resting scoop may lie: the counter's box ∩ the drag bounds. */
++  restRect(): Rect;
++  /** dropTarget.snapRadius (design px). */
++  readonly snapRadius: number;
++  /** draggableItem.minSize: resting scoops stay this far apart. */
++  readonly minSize: number;
++  readonly offCounterDelayMs: number;
++  /** After a correct snap, the next question starts this much later. */
++  readonly nextQuestionDelayMs: number;
++}
++
++export interface ScoopState {
++  readonly id: string;
++  readonly flavour: FlavourId;
++  /** Pre-lift position (centre). */
++  readonly at: Point;
++}
++
++export type RoundCommand =
++  | { readonly kind: 'build'; readonly scoops: readonly ScoopState[] }
++  | { readonly kind: 'beginQuestion'; readonly target: FlavourId; readonly correct: readonly string[]; readonly distractors: readonly string[] }
++  | { readonly kind: 'snap'; readonly id: string; readonly to: Point }
++  | { readonly kind: 'floatBack'; readonly id: string; readonly to: Point }
++  | { readonly kind: 'rest'; readonly id: string; readonly at: Point }
++  | { readonly kind: 'returnLater'; readonly id: string; readonly to: Point; readonly ms: number }
++  | { readonly kind: 'cancelReturn'; readonly id: string }
++  | { readonly kind: 'respawn'; readonly scoop: ScoopState }
++  | { readonly kind: 'pickable'; readonly on: boolean }
++  | { readonly kind: 'celebrate' }
++  | { readonly kind: 'hintWrong' }
++  | { readonly kind: 'questionDone' }
++  | { readonly kind: 'nextLater'; readonly ms: number }
++  | { readonly kind: 'clear' };
++
++export type DropOutcome = 'serve' | 'home' | 'rest' | 'off';
++
++export interface IceCreamProgress {
++  readonly questionIndex: number;
++  readonly partial: { readonly placed: FlavourId[] };
++}
++
++export class IceCreamRound {
++  private readonly geo: RoundGeometry;
++  private readonly seed: number;
++  private readonly level: number;
++  private index: number;
++  private question: Question;
++  private scoops = new Map<string, ScoopState>();
++  private placed: FlavourId[] = [];
++  private pendingReturn = new Set<string>();
++  private celebrating = false;
++  private nextId = 1;
++
++  constructor(geo: RoundGeometry, seed: number, level: number, startIndex = 0) {
++    this.geo = geo;
++    this.seed = seed;
++    this.level = level;
++    this.index = startIndex;
++    this.question = questionFor(seed, startIndex, level);
++  }
++
++  get questionIndex(): number {
++    return this.index;
++  }
++
++  get target(): FlavourId {
++    return this.question.target;
++  }
++
++  get isCelebrating(): boolean {
++    return this.celebrating;
++  }
++
++  /** Current scoops on the counter (not the ones on the cone). */
++  scoopStates(): ScoopState[] {
++    return [...this.scoops.values()];
++  }
++
++  conePlaced(): readonly FlavourId[] {
++    return this.placed;
++  }
++
++  /** Lays out the current question: its scoops and the hint question. */
++  start(): RoundCommand[] {
++    this.scoops = new Map();
++    this.pendingReturn = new Set();
++    this.celebrating = false;
++    for (const s of this.question.scoops) this.add(s.flavour, this.geo.homeCentre(s.home));
++    return [{ kind: 'build', scoops: this.scoopStates() }, { kind: 'pickable', on: true }, this.begin()];
++  }
++
++  /** A finger lifted scoop `id`: a pending slide back is cancelled. */
++  lift(id: string): RoundCommand[] {
++    if (!this.pendingReturn.delete(id)) return [];
++    return [{ kind: 'cancelReturn', id }];
++  }
++
++  /** Where a drop at `p` of scoop `id` resolves (no state change). */
++  resolve(id: string, p: Point): DropOutcome {
++    const item = this.scoops.get(id);
++    const g = this.geo;
++    if (g.cone.contains(p) || g.shiba.contains(p)) return 'serve';
++    if (item && Math.hypot(p.x - item.at.x, p.y - item.at.y) <= g.snapRadius / 2) return 'home';
++    if (g.counterUpper.contains(p)) return 'serve';
++    if (g.counter.contains(p)) return 'rest';
++    return 'off';
++  }
++
++  /** Scoop `id` released at `p` (its centre). */
++  drop(id: string, p: Point): RoundCommand[] {
++    const item = this.scoops.get(id);
++    if (!item) return [];
++    // While Shiba celebrates every scoop is unpickable; a drag already running just goes back.
++    if (this.celebrating) return [{ kind: 'floatBack', id, to: item.at }];
++    switch (this.resolve(id, p)) {
++      case 'serve':
++        return item.flavour === this.question.target
++          ? this.serveCorrect(item)
++          : [{ kind: 'floatBack', id, to: item.at }, { kind: 'hintWrong' }];
++      case 'home':
++        return [{ kind: 'floatBack', id, to: item.at }];
++      case 'rest': {
++        const others = this.scoopStates()
++          .filter((s) => s.id !== id)
++          .map((s) => s.at);
++        const at = nudgeApart(p, others, this.geo.minSize, this.geo.restRect());
++        this.scoops.set(id, { ...item, at });
++        return [{ kind: 'rest', id, at }];
++      }
++      case 'off':
++        this.pendingReturn.add(id);
++        return [{ kind: 'returnLater', id, to: item.at, ms: this.geo.offCounterDelayMs }];
++    }
++  }
++
++  /** The drag of `id` ended without a release (pause, lost up): back to its pre-lift spot. */
++  cancel(id: string): RoundCommand[] {
++    const item = this.scoops.get(id);
++    return item ? [{ kind: 'floatBack', id, to: item.at }] : [];
++  }
++
++  /** A delayed slide back ran. */
++  returned(id: string): void {
++    this.pendingReturn.delete(id);
++  }
++
++  /** Next question (the scene calls it `nextLater.ms` after a correct snap). */
++  next(): RoundCommand[] {
++    this.index += 1;
++    this.question = questionFor(this.seed, this.index, this.level);
++    this.placed = [];
++    return [{ kind: 'clear' }, ...this.start()];
++  }
++
++  /** The resumable state (AD-2). */
++  progress(): IceCreamProgress {
++    return { questionIndex: this.index, partial: { placed: [...this.placed] } };
++  }
++
++  snapshot(): Snapshot {
++    return { v: 1, level: this.level, seed: this.seed, questionIndex: this.index, partial: { placed: [...this.placed] } };
++  }
++
++  private serveCorrect(item: ScoopState): RoundCommand[] {
++    const to = this.geo.coneCentre(this.placed.length);
++    this.placed.push(item.flavour);
++    this.scoops.delete(item.id);
++    this.pendingReturn.delete(item.id);
++    const home = this.question.scoops.find((s) => s.flavour === item.flavour)?.home;
++    const fresh = this.add(item.flavour, home ? this.geo.homeCentre(home) : item.at);
++    this.celebrating = true;
++    // Story 1.9: the hint question ends first (the ring, hand and fade vanish on the correct answer),
++    // so its restore (pickable true) cannot unlock the scoops during the celebration.
++    return [
++      { kind: 'questionDone' },
++      { kind: 'snap', id: item.id, to },
++      { kind: 'respawn', scoop: fresh },
++      { kind: 'pickable', on: false },
++      { kind: 'celebrate' },
++      { kind: 'nextLater', ms: this.geo.nextQuestionDelayMs },
++    ];
++  }
++
++  private begin(): RoundCommand {
++    const all = this.scoopStates();
++    return {
++      kind: 'beginQuestion',
++      target: this.question.target,
++      correct: all.filter((s) => s.flavour === this.question.target).map((s) => s.id),
++      distractors: all.filter((s) => s.flavour !== this.question.target).map((s) => s.id),
++    };
++  }
++
++  private add(flavour: FlavourId, at: Point): ScoopState {
++    const s: ScoopState = { id: `scoop-${this.nextId++}`, flavour, at };
++    this.scoops.set(s.id, s);
++    return s;
++  }
++}
+diff --git a/app/src/games/ice-cream/round.test.ts b/app/src/games/ice-cream/round.test.ts
+new file mode 100644
+index 0000000..19b8b4c
+--- /dev/null
++++ b/app/src/games/ice-cream/round.test.ts
+@@ -0,0 +1,175 @@
++import { describe, expect, it } from 'vitest';
++import type { Point } from '../../content/layout-types';
++import { pointInPolygon } from '../../core/input/polygon';
++import { IceCreamRound, type RoundCommand, type RoundGeometry } from './round';
++
++const rect = (x0: number, y0: number, x1: number, y1: number): Point[] => [
++  { x: x0, y: y0 },
++  { x: x1, y: y0 },
++  { x: x1, y: y1 },
++  { x: x0, y: y1 },
++];
++const poly = (pts: Point[]) => ({ contains: (p: Point) => pointInPolygon(p, pts) });
++
++const HOMES: Record<string, Point> = {
++  'scoop-1': { x: 152, y: 560 },
++  'scoop-2': { x: 332, y: 560 },
++  'scoop-3': { x: 692, y: 560 },
++  'scoop-4': { x: 872, y: 560 },
++};
++const CONE = { x: 512, y: 450, r: 100 };
++
++const GEO: RoundGeometry = {
++  homeCentre: (slot) => HOMES[slot]!,
++  coneCentre: (n) => ({ x: 512, y: 430 - 40 * Math.min(n, 2) }),
++  cone: { contains: (p) => Math.hypot(p.x - CONE.x, p.y - CONE.y) <= CONE.r },
++  shiba: poly(rect(420, 150, 600, 340)),
++  counterUpper: poly(rect(50, 500, 970, 620)),
++  counter: poly(rect(50, 500, 970, 760)),
++  restRect: () => ({ x: 50, y: 500, w: 920, h: 230 }),
++  snapRadius: 100,
++  minSize: 90,
++  offCounterDelayMs: 1500,
++  nextQuestionDelayMs: 2000,
++};
++
++function setup(seed = 7) {
++  const round = new IceCreamRound(GEO, seed, 0);
++  const cmds = round.start();
++  const scoops = round.scoopStates();
++  const target = scoops.find((s) => s.flavour === round.target)!;
++  const other = scoops.find((s) => s.flavour !== round.target)!;
++  return { round, cmds, target, other };
++}
++
++const kinds = (cmds: readonly RoundCommand[]) => cmds.map((c) => c.kind);
++
++describe('IceCreamRound', () => {
++  it('Enter {level 0, seed 7}: two scoops at scoop-2/3 and a beginQuestion for the target', () => {
++    const { round, cmds, target, other } = setup(7);
++    expect(kinds(cmds)).toEqual(['build', 'pickable', 'beginQuestion']);
++    const build = cmds[0] as Extract<RoundCommand, { kind: 'build' }>;
++    expect(build.scoops.map((s) => s.at)).toEqual([HOMES['scoop-2'], HOMES['scoop-3']]);
++    expect(cmds[2]).toEqual({ kind: 'beginQuestion', target: round.target, correct: [target.id], distractors: [other.id] });
++    expect(round.snapshot()).toEqual({ v: 1, level: 0, seed: 7, questionIndex: 0, partial: { placed: [] } });
++  });
++
++  it('correct scoop dropped 80 px from cone-1: questionDone first (Story 1.9), then snap, respawn at home, unpickable, celebrate, next in 2 s', () => {
++    const { round, target } = setup();
++    const cmds = round.drop(target.id, { x: CONE.x + 80, y: CONE.y });
++    expect(cmds).toEqual([
++      { kind: 'questionDone' },
++      { kind: 'snap', id: target.id, to: { x: 512, y: 430 } },
++      { kind: 'respawn', scoop: { id: expect.any(String), flavour: target.flavour, at: target.at } },
++      { kind: 'pickable', on: false },
++      { kind: 'celebrate' },
++      { kind: 'nextLater', ms: 2000 },
++    ]);
++    expect(round.isCelebrating).toBe(true);
++    expect(round.progress()).toEqual({ questionIndex: 0, partial: { placed: [target.flavour] } });
++    expect(round.scoopStates()).toHaveLength(2);
++  });
++
++  it.each([
++    ['Shiba', { x: 500, y: 250 }],
++    ['the upper counter', { x: 900, y: 600 }],
++  ])('correct scoop dropped on %s is served the same way', (_name, p) => {
++    const { round, target } = setup();
++    expect(round.resolve(target.id, p)).toBe('serve');
++    expect(kinds(round.drop(target.id, p))).toEqual(['questionDone', 'snap', 'respawn', 'pickable', 'celebrate', 'nextLater']);
++  });
++
++  it('wrong scoop on the cone floats back to its pre-lift spot and reports hintWrong only', () => {
++    const { round, other } = setup();
++    expect(round.drop(other.id, { x: CONE.x, y: CONE.y })).toEqual([{ kind: 'floatBack', id: other.id, to: other.at }, { kind: 'hintWrong' }]);
++    expect(round.progress().partial.placed).toEqual([]);
++    expect(round.isCelebrating).toBe(false);
++  });
++
++  it('own home: dropped within snapRadius/2 of its pre-lift spot settles with no hint', () => {
++    const { round, other } = setup();
++    const p = { x: other.at.x + 30, y: other.at.y + 30 };
++    expect(round.drop(other.id, p)).toEqual([{ kind: 'floatBack', id: other.id, to: other.at }]);
++  });
++
++  it('rest: lower counter on top of another scoop stays, nudged ≥ minSize apart; the new spot is its home for floats', () => {
++    const { round, other, target } = setup();
++    const onTop = { x: target.at.x + 10, y: 690 };
++    const lowNeighbour = { ...target.at, y: 690 };
++    // Put the target low first so both rest on the lower counter.
++    round.drop(target.id, lowNeighbour);
++    const cmds = round.drop(other.id, onTop);
++    expect(cmds).toHaveLength(1);
++    const rest = cmds[0] as Extract<RoundCommand, { kind: 'rest' }>;
++    expect(rest.kind).toBe('rest');
++    const t = round.scoopStates().find((s) => s.id === target.id)!;
++    expect(Math.hypot(rest.at.x - t.at.x, rest.at.y - t.at.y)).toBeGreaterThanOrEqual(90 - 1e-9);
++    // A later wrong serve floats back to the resting spot.
++    expect(round.drop(other.id, { x: CONE.x, y: CONE.y })[0]).toEqual({ kind: 'floatBack', id: other.id, to: rest.at });
++  });
++
++  it('off the counter: slides back after 1500 ms; lifting again cancels the slide', () => {
++    const { round, other } = setup();
++    expect(round.drop(other.id, { x: 500, y: 60 })).toEqual([{ kind: 'returnLater', id: other.id, to: other.at, ms: 1500 }]);
++    expect(round.lift(other.id)).toEqual([{ kind: 'cancelReturn', id: other.id }]);
++    expect(round.lift(other.id)).toEqual([]);
++  });
++
++  it('pause mid-drag (cancel): back to the pre-lift spot', () => {
++    const { round, other } = setup();
++    expect(round.cancel(other.id)).toEqual([{ kind: 'floatBack', id: other.id, to: other.at }]);
++  });
++
++  it('celebrating: a drag still running just floats back (no second serve, no hint)', () => {
++    const { round, target, other } = setup();
++    round.drop(target.id, { x: CONE.x, y: CONE.y });
++    expect(round.drop(other.id, { x: CONE.x, y: CONE.y })).toEqual([{ kind: 'floatBack', id: other.id, to: other.at }]);
++    expect(round.progress().partial.placed).toHaveLength(1);
++  });
++
++  it('next(): clears the cone, lays out question 1 with a different target', () => {
++    const { round, target } = setup();
++    const first = round.target;
++    round.drop(target.id, { x: CONE.x, y: CONE.y });
++    const cmds = round.next();
++    expect(kinds(cmds)).toEqual(['clear', 'build', 'pickable', 'beginQuestion']);
++    expect(round.questionIndex).toBe(1);
++    expect(round.target).not.toBe(first);
++    expect(round.isCelebrating).toBe(false);
++    expect(round.snapshot()).toMatchObject({ questionIndex: 1, partial: { placed: [] } });
++  });
++
++  it('the cone and the question survive wrong, home, rest and off outcomes', () => {
++    const { round, target, other } = setup();
++    const outcomes: Array<[string, Point]> = [
++      ['wrong', { x: CONE.x, y: CONE.y }],
++      ['home', { x: other.at.x + 20, y: other.at.y }],
++      ['rest', { x: 600, y: 700 }],
++      ['off', { x: 500, y: 60 }],
++    ];
++    const expectSurvives = (placed: string[]) => {
++      expect(round.target).toBe(target.flavour);
++      expect(round.questionIndex).toBe(0);
++      expect(round.progress().partial.placed).toEqual(placed);
++    };
++    // Before any serve: every outcome of the distractor keeps the question and an empty cone.
++    for (const [kind, p] of outcomes) {
++      expect(round.resolve(other.id, p), kind).toBe(kind === 'wrong' ? 'serve' : kind);
++      round.drop(other.id, p);
++      round.lift(other.id);
++      expectSurvives([]);
++    }
++    // After the target is served, the cone keeps it through the distractor's outcomes (they only float back).
++    round.drop(target.id, { x: CONE.x, y: CONE.y });
++    for (const [, p] of outcomes) {
++      round.drop(other.id, p);
++      expectSurvives([target.flavour]);
++    }
++  });
++
++  it('unknown scoop ids are ignored', () => {
++    const { round } = setup();
++    expect(round.drop('nope', { x: 0, y: 0 })).toEqual([]);
++    expect(round.cancel('nope')).toEqual([]);
++  });
++});
+diff --git a/app/tools/lint/hint-contrast.ts b/app/tools/lint/hint-contrast.ts
+new file mode 100644
+index 0000000..dfd9e1a
+--- /dev/null
++++ b/app/tools/lint/hint-contrast.ts
+@@ -0,0 +1,201 @@
++// Hint ring contrast on the real render (Story 1.9, run inside `npm run validate:content`).
++// For every place a hint ring can show on a plate, 32 pixels of the background just outside the ring
++// (past the halo) must reach ≥ 3:1 against the ring core (white) or the ring line (purple):
++//   - `ice-cream`: around every scoop home `slot.scoop-*`. The ring is the runtime one — the scoop's
++//     trimmed bounds (vanilla frame of `atlas.ice-cream`, rendered at slot.scoop-2) + ui.hintRingPad;
++//     without the atlas, a circle of diameter draggableItem.minSize + 2·hintRingPad at the slot;
++//   - `map`: the ellipse inscribed in every station's `hits` bbox (the Map invitation ring).
++// The plates are read with sharp; `ringContrastProblems` is the pure part (unit-tested).
++import { readFileSync } from 'node:fs';
++import { join, resolve } from 'node:path';
++import sharp from 'sharp';
++import { ATLASES, BACKGROUNDS } from '../../src/content/assets.ts';
++import { SCOOP_RENDER_SLOT, scoopFrame } from '../../src/content/games/ice-cream.ts';
++import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
++import { Tokens } from '../../src/core/tokens.ts';
++
++export type Rgb = readonly [number, number, number];
++
++/** Samples per ring. */
++export const RING_SAMPLES = 32;
++/** WCAG non-text contrast. */
++export const MIN_RING_CONTRAST = 3;
++/** Extra design px between the halo's outer edge and the sampled pixels. */
++const OUTSIDE_GAP = 2;
++
++export function rgbOf(value: number): Rgb {
++  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
++}
++
++/** WCAG relative luminance of an sRGB colour (0–255 channels). */
++export function relativeLuminance([r, g, b]: Rgb): number {
++  const lin = (c: number): number => {
++    const s = c / 255;
++    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
++  };
++  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
++}
++
++export function contrastRatio(a: Rgb, b: Rgb): number {
++  const la = relativeLuminance(a);
++  const lb = relativeLuminance(b);
++  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
++}
++
++export interface RingSample {
++  /** e.g. `slot.scoop-1`, `station ice-cream`. */
++  readonly label: string;
++  readonly pixels: readonly Rgb[];
++}
++
++export interface RingLayers {
++  readonly core: Rgb;
++  readonly line: Rgb;
++}
++
++export function ringLayers(): RingLayers {
++  const spec = Tokens.components.hintRing;
++  return { core: rgbOf(spec.core.color.value), line: rgbOf(spec.line.color.value) };
++}
++
++/** Problems: every pixel must reach `min` against the core or against the line. */
++export function ringContrastProblems(screen: string, samples: readonly RingSample[], layers: RingLayers = ringLayers(), min = MIN_RING_CONTRAST): string[] {
++  const problems: string[] = [];
++  for (const s of samples) {
++    let failing = 0;
++    let worst = Number.POSITIVE_INFINITY;
++    for (const px of s.pixels) {
++      const best = Math.max(contrastRatio(px, layers.core), contrastRatio(px, layers.line));
++      if (best < min) failing += 1;
++      worst = Math.min(worst, best);
++    }
++    if (failing > 0) {
++      problems.push(`hint contrast "${screen}" ${s.label}: ${failing}/${s.pixels.length} background samples next to the ring are below ${min}:1 against both the ring core and line (worst ${worst.toFixed(2)}:1)`);
++    }
++  }
++  return problems;
++}
++
++/** A ring ellipse in design px (centre and radii of the core stroke). */
++export interface RingEllipse {
++  readonly cx: number;
++  readonly cy: number;
++  readonly rx: number;
++  readonly ry: number;
++}
++
++/** How far past the core radius the ring draws (half the core, the halo) plus a small gap. */
++export function ringReach(): number {
++  const spec = Tokens.components.hintRing;
++  return spec.core.width / 2 + spec.halo.width + OUTSIDE_GAP;
++}
++
++/** `n` design points just outside the ring (pulse at its largest, 1.05×). */
++export function outsidePoints(e: RingEllipse, n = RING_SAMPLES): Point[] {
++  const k = Tokens.components.hintRing.pulse.to;
++  const out = ringReach();
++  const pts: Point[] = [];
++  for (let i = 0; i < n; i++) {
++    const a = (2 * Math.PI * i) / n;
++    pts.push({ x: e.cx + Math.cos(a) * (e.rx * k + out), y: e.cy + Math.sin(a) * (e.ry * k + out) });
++  }
++  return pts;
++}
++
++interface Plate {
++  readonly data: Buffer;
++  readonly width: number;
++  readonly height: number;
++  readonly channels: number;
++}
++
++function pixelAt(plate: Plate, p: Point, renderScale: number): Rgb {
++  const x = Math.min(plate.width - 1, Math.max(0, Math.round(p.x * renderScale)));
++  const y = Math.min(plate.height - 1, Math.max(0, Math.round(p.y * renderScale)));
++  const i = (y * plate.width + x) * plate.channels;
++  return [plate.data[i]!, plate.data[i + 1]!, plate.data[i + 2]!];
++}
++
++async function readPlate(file: string): Promise<Plate | undefined> {
++  try {
++    const { data, info } = await sharp(file).removeAlpha().raw().toBuffer({ resolveWithObject: true });
++    return { data, width: info.width, height: info.height, channels: info.channels };
++  } catch {
++    return undefined;
++  }
++}
++
++function readJson<T>(file: string): T | undefined {
++  try {
++    return JSON.parse(readFileSync(file, 'utf8')) as T;
++  } catch {
++    return undefined;
++  }
++}
++
++interface FrameJson {
++  readonly spriteSourceSize?: { x: number; y: number; w: number; h: number };
++}
++
++/** The ice-cream scoop rings: the runtime ring of the vanilla frame moved to each home slot. */
++export function iceCreamRings(layout: ScreenLayout, atlas: { frames?: Record<string, FrameJson> } | undefined): { label: string; ring: RingEllipse }[] {
++  const pad = Tokens.ui.hintRingPad;
++  const rs = layout.renderScale;
++  const ss = atlas?.frames?.[scoopFrame('vanilla')]?.spriteSourceSize;
++  const ref = layout.slots[SCOOP_RENDER_SLOT];
++  const rings: { label: string; ring: RingEllipse }[] = [];
++  for (const [id, slot] of Object.entries(layout.slots)) {
++    if (!id.startsWith('scoop-')) continue;
++    if (ss && ref) {
++      const cx = (ss.x + ss.w / 2) / rs - ref.x + slot.x;
++      const cy = (ss.y + ss.h / 2) / rs - ref.y + slot.y;
++      rings.push({ label: `slot.${id}`, ring: { cx, cy, rx: ss.w / rs / 2 + pad, ry: ss.h / rs / 2 + pad } });
++    } else {
++      const r = Tokens.components.draggableItem.minSize / 2 + pad;
++      rings.push({ label: `slot.${id}`, ring: { cx: slot.x, cy: slot.y, rx: r, ry: r } });
++    }
++  }
++  return rings;
++}
++
++/** The Map invitation rings: inscribed in each station's hit bbox. */
++export function mapRings(layout: ScreenLayout): { label: string; ring: RingEllipse }[] {
++  return Object.entries(layout.hits).map(([id, poly]) => {
++    const xs = poly.map((p) => p.x);
++    const ys = poly.map((p) => p.y);
++    const x0 = Math.min(...xs);
++    const x1 = Math.max(...xs);
++    const y0 = Math.min(...ys);
++    const y1 = Math.max(...ys);
++    return { label: `station ${id}`, ring: { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, rx: (x1 - x0) / 2, ry: (y1 - y0) / 2 } };
++  });
++}
++
++export interface HintContrastReport {
++  readonly problems: string[];
++  /** Rings sampled per screen. */
++  readonly rings: Readonly<Record<string, number>>;
++}
++
++/** Reads the plates under `publicDir` and the layouts in `layoutDir`. Missing files are reported elsewhere. */
++export async function hintContrastProblems(publicDir: string, layoutDir: string): Promise<HintContrastReport> {
++  const problems: string[] = [];
++  const rings: Record<string, number> = {};
++  const screens: { id: 'ice-cream' | 'map'; rings: (l: ScreenLayout) => { label: string; ring: RingEllipse }[] }[] = [
++    { id: 'ice-cream', rings: (l) => iceCreamRings(l, readJson(resolve(publicDir, ATLASES['ice-cream'].json))) },
++    { id: 'map', rings: mapRings },
++  ];
++  for (const s of screens) {
++    const layout = readJson<ScreenLayout>(join(layoutDir, `${s.id}.layout.json`));
++    const plate = await readPlate(resolve(publicDir, BACKGROUNDS[s.id].path));
++    if (!layout || !plate) {
++      problems.push(`hint contrast "${s.id}": the plate or the layout cannot be read`);
++      continue;
++    }
++    const list = s.rings(layout);
++    rings[s.id] = list.length;
++    const samples = list.map(({ label, ring }) => ({ label, pixels: outsidePoints(ring).map((p) => pixelAt(plate, p, layout.renderScale)) }));
++    problems.push(...ringContrastProblems(s.id, samples));
++  }
++  return { problems, rings };
++}
+diff --git a/app/tools/lint/hint-contrast.test.ts b/app/tools/lint/hint-contrast.test.ts
+new file mode 100644
+index 0000000..fb868d0
+--- /dev/null
++++ b/app/tools/lint/hint-contrast.test.ts
+@@ -0,0 +1,71 @@
++// Story 1.9: the hint ring contrast rule (pure part) and its ring geometry.
++import { describe, expect, it } from 'vitest';
++import { Tokens } from '../../src/core/tokens.ts';
++import { contrastRatio, iceCreamRings, mapRings, outsidePoints, ringContrastProblems, ringLayers, ringReach, RING_SAMPLES, type Rgb } from './hint-contrast.ts';
++
++const PINK: Rgb = [0xff, 0xc6, 0xe4];
++const GRASS: Rgb = [0x5c, 0xb8, 0x4a];
++/** Mid grey: just under 3:1 against white and against the purple line. */
++const GREY: Rgb = [149, 149, 149];
++
++describe('ringContrastProblems', () => {
++  it('contrast ratios follow WCAG', () => {
++    expect(contrastRatio([255, 255, 255], [0, 0, 0])).toBeCloseTo(21);
++    expect(contrastRatio(GREY, ringLayers().core)).toBeLessThan(3);
++    expect(contrastRatio(GREY, ringLayers().line)).toBeLessThan(3);
++  });
++
++  it('a counter or grass pixel passes (against the line or the core)', () => {
++    expect(ringContrastProblems('ice-cream', [{ label: 'slot.scoop-1', pixels: [PINK, GRASS, [255, 255, 255]] }])).toEqual([]);
++  });
++
++  it('a pixel below 3:1 on both layers fails, naming the screen and the slot', () => {
++    const problems = ringContrastProblems('ice-cream', [{ label: 'slot.scoop-2', pixels: [PINK, GREY] }]);
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toContain('"ice-cream" slot.scoop-2');
++    expect(problems[0]).toContain('1/2');
++  });
++});
++
++describe('ring geometry', () => {
++  it('samples 32 points just outside the halo at the largest pulse', () => {
++    const pts = outsidePoints({ cx: 100, cy: 100, rx: 50, ry: 40 });
++    expect(pts).toHaveLength(RING_SAMPLES);
++    expect(pts[0]!.x).toBeCloseTo(100 + 50 * Tokens.components.hintRing.pulse.to + ringReach());
++  });
++
++  it('ice-cream: one ring per slot.scoop-*, from the frame bounds + pad, or the minSize circle without an atlas', () => {
++    const layout = {
++      v: 1 as const,
++      screenId: 'ice-cream',
++      design: { width: 1024, height: 768 },
++      renderScale: 2,
++      anchors: {},
++      hits: {},
++      paths: {},
++      slots: { 'scoop-1': { x: 152, y: 520 }, 'scoop-2': { x: 332, y: 520 }, 'cone-1': { x: 512, y: 400 } },
++    };
++    const pad = Tokens.ui.hintRingPad;
++    const bare = iceCreamRings(layout, undefined);
++    expect(bare.map((r) => r.label)).toEqual(['slot.scoop-1', 'slot.scoop-2']);
++    expect(bare[0]!.ring).toEqual({ cx: 152, cy: 520, rx: 45 + pad, ry: 45 + pad });
++    const atlas = { frames: { 'scoop-vanilla/idle/00': { spriteSourceSize: { x: 544, y: 908, w: 230, h: 168 } } } };
++    const withAtlas = iceCreamRings(layout, atlas);
++    expect(withAtlas[1]!.ring).toEqual({ cx: 329.5, cy: 496, rx: 57.5 + pad, ry: 42 + pad });
++    expect(withAtlas[0]!.ring.cx).toBeCloseTo(149.5);
++  });
++
++  it('map: the ellipse inscribed in each hit bbox', () => {
++    const rings = mapRings({
++      v: 1,
++      screenId: 'map',
++      design: { width: 1024, height: 768 },
++      renderScale: 2,
++      anchors: {},
++      slots: {},
++      paths: {},
++      hits: { pizza: [{ x: 10, y: 20 }, { x: 110, y: 20 }, { x: 60, y: 80 }] },
++    });
++    expect(rings).toEqual([{ label: 'station pizza', ring: { cx: 60, cy: 50, rx: 50, ry: 30 } }]);
++  });
++});
+diff --git a/app/tools/lint/validate-content.ts b/app/tools/lint/validate-content.ts
+new file mode 100644
+index 0000000..2b51ae4
+--- /dev/null
++++ b/app/tools/lint/validate-content.ts
+@@ -0,0 +1,156 @@
++// `npm run validate:content` — runs the content validators (AD-12): GameIds, the audio catalog
++// (id grammar, path convention, the file existing under public/) and the voice lines (rules of
++// content/validate.ts with the real filesystem and `lineHash`, including stray files), the screen
++// layouts (src/content/generated/<screen>.layout.json against stations and touch rules) and the image
++// assets (atlases, backgrounds, 8 MiB cap on every file under public/assets) — Story 1.4 — and the
++// station rules (label, name line, invite line of awake stations) — Story 1.5 — and the game content
++// (awake ⇔ GAME_CONTENT, game audio ids exist) — Story 1.7 — and the hint ring contrast on the real
++// plates (tools/lint/hint-contrast.ts) — Story 1.9.
++import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
++import { dirname, join, relative, resolve, sep } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { ATLASES, BACKGROUNDS, SCREEN_IDS } from '../../src/content/assets.ts';
++import { AUDIO_CATALOG } from '../../src/content/audio-catalog.ts';
++import { GAME_CONTENT } from '../../src/content/games/index.ts';
++import type { ScreenLayout } from '../../src/content/layout-types.ts';
++import { KART_FRAME, STATIONS, stationFrame } from '../../src/content/stations.ts';
++import { Tokens } from '../../src/core/tokens.ts';
++import { RENDER_SCALE, iceCreamLimits, layoutLimits, pngSizeOf, validateAssets, validateIceCream, validateLayout, type AtlasJsonLike } from '../layout/rules.ts';
++import { screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
++import { GAME_IDS } from '../../src/content/types.ts';
++import { validateContent } from '../../src/content/validate.ts';
++import { VOICE_LINES } from '../../src/content/voice-lines.ts';
++import { lineHash } from '../tts/line-hash.ts';
++import { hintContrastProblems } from './hint-contrast.ts';
++
++const VOICE_DIR = 'assets/audio/vo';
++
++const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
++/** Where `npm run render` writes `<screen>.layout.json`. */
++export const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
++
++/** Frames each screen's atlas must hold. */
++export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
++  map: [...STATIONS.map((s) => stationFrame(s.id)), KART_FRAME],
++  'ice-cream': iceCreamScreen.frames,
++};
++
++function listFiles(dir: string): string[] {
++  if (!existsSync(dir)) return [];
++  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? listFiles(join(dir, e.name)) : [join(dir, e.name)]));
++}
++
++/** The id → geometry records of a layout. */
++const LAYOUT_RECORDS = ['anchors', 'hits', 'slots', 'paths'] as const;
++
++function readAtlas(publicDir: string | undefined, screen: (typeof SCREEN_IDS)[number]): AtlasJsonLike | undefined {
++  if (!publicDir) return undefined;
++  try {
++    return JSON.parse(readFileSync(resolve(publicDir, ATLASES[screen].json), 'utf8')) as AtlasJsonLike;
++  } catch {
++    return undefined; // assetProblems reports a missing atlas
++  }
++}
++
++/** Layout problems of every screen (missing or invalid JSON included); `publicDir` adds the atlas-based rules. */
++export function layoutProblems(layoutDir: string, publicDir?: string): string[] {
++  const problems: string[] = [];
++  for (const screen of SCREEN_IDS) {
++    const file = join(layoutDir, `${screen}.layout.json`);
++    let layout: ScreenLayout;
++    try {
++      layout = JSON.parse(readFileSync(file, 'utf8')) as ScreenLayout;
++    } catch {
++      problems.push(`layout "${screen}": ${screen}.layout.json is missing or invalid (run npm run render -- ${screen})`);
++      continue;
++    }
++    if (layout === null || typeof layout !== 'object') {
++      problems.push(`layout "${screen}": not a JSON object`);
++      continue;
++    }
++    if (layout.v !== 1 || layout.screenId !== screen) problems.push(`layout "${screen}": not a v1 layout of screen "${screen}"`);
++    const missing = LAYOUT_RECORDS.filter((k) => layout[k] === null || typeof layout[k] !== 'object' || Array.isArray(layout[k]));
++    for (const k of missing) problems.push(`layout "${screen}": missing "${k}"`);
++    if (missing.length > 0) continue;
++    if (screen === 'map') {
++      for (const p of validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, limits: layoutLimits() })) problems.push(`layout "${screen}": ${p}`);
++    } else if (screen === 'ice-cream') {
++      for (const p of validateIceCream(layout, iceCreamLimits(iceCreamScreen), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
++    }
++  }
++  return problems;
++}
++
++/** Asset problems under `publicDir` (atlases, backgrounds, size caps). */
++export function assetProblems(publicDir: string): string[] {
++  const scale = RENDER_SCALE;
++  return validateAssets({
++    atlases: SCREEN_IDS.map((id) => ({ ...ATLASES[id], frames: REQUIRED_FRAMES[id] ?? [] })),
++    backgrounds: SCREEN_IDS.map((id) => ({ ...BACKGROUNDS[id], width: Tokens.design.width * scale, height: Tokens.design.height * scale })),
++    files: listFiles(join(publicDir, 'assets')).map((f) => ({ path: relative(publicDir, f).split(sep).join('/'), bytes: statSync(f).size })),
++    pngSize: (path) => {
++      try {
++        return pngSizeOf(readFileSync(resolve(publicDir, path)));
++      } catch {
++        return undefined;
++      }
++    },
++    readJson: (path) => {
++      try {
++        return JSON.parse(readFileSync(resolve(publicDir, path), 'utf8')) as unknown;
++      } catch {
++        return undefined;
++      }
++    },
++  });
++}
++
++/** Validates the real content against the files under `publicDir` and the layouts in `layoutDir`; returns the problems. */
++export function run(publicDir: string, layoutDir: string = LAYOUT_DIR): string[] {
++  const fileExists = (path: string): boolean => existsSync(resolve(publicDir, path));
++  const content = validateContent({
++    gameIds: GAME_IDS,
++    audio: AUDIO_CATALOG,
++    fileExists,
++    stations: { stations: STATIONS, voiceIds: VOICE_LINES.map((l) => l.id), playable: Object.keys(GAME_CONTENT) },
++    games: {
++      games: Object.entries(GAME_CONTENT).map(([id, c]) => ({ id, audio: c?.assets.audio ?? [] })),
++      voiceIds: VOICE_LINES.map((l) => l.id),
++      audioIds: Object.keys(AUDIO_CATALOG),
++    },
++    voice: {
++      lines: VOICE_LINES,
++      hashLine: lineHash,
++      fileExists,
++      listVoiceFiles: () => {
++        const dir = resolve(publicDir, VOICE_DIR);
++        return existsSync(dir) ? readdirSync(dir) : [];
++      },
++      readHash: (path) => {
++        try {
++          return readFileSync(resolve(publicDir, path), 'utf8');
++        } catch {
++          return undefined;
++        }
++      },
++    },
++  });
++  return [...content, ...layoutProblems(layoutDir, publicDir), ...assetProblems(publicDir)];
++}
++
++async function main(): Promise<void> {
++  const publicDir = join(APP_DIR, 'public');
++  const contrast = await hintContrastProblems(publicDir, LAYOUT_DIR);
++  const problems = [...run(publicDir), ...contrast.problems];
++  if (problems.length > 0) {
++    for (const p of problems) console.error(`content: ${p}`);
++    process.exit(1);
++  }
++  console.log(
++    `content: OK (${GAME_IDS.length} game ids, ${Object.keys(AUDIO_CATALOG).length} audio ids, ${VOICE_LINES.length} voice lines, ${SCREEN_IDS.length} layout(s) with ${STATIONS.length} stations, ${SCREEN_IDS.length} atlas(es), ${listFiles(join(publicDir, 'assets')).length} asset files; hint contrast ${Object.entries(contrast.rings)
++      .map(([s, n]) => `${s} ${n} rings`)
++      .join(', ')})`,
++  );
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
+diff --git a/_bmad-output/implementation-artifacts/spec-1-9-goi-y-leo-thang.md b/_bmad-output/implementation-artifacts/spec-1-9-goi-y-leo-thang.md
+new file mode 100644
+index 0000000..11d9b4d
+--- /dev/null
++++ b/_bmad-output/implementation-artifacts/spec-1-9-goi-y-leo-thang.md
+@@ -0,0 +1,250 @@
++---
++title: 'Story 1.9 — Gợi ý leo thang (NFR4)'
++type: 'feature'
++created: '2026-10-08'
++status: 'in-review'
++baseline_revision: 'NO_VCS'
++baseline_commit: 'NO_VCS'
++review_loop_iteration: 0
++followup_review_recommended: false
++context:
++  - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-8-tiem-kem-keo-kem-dung-vi-cho-shiba.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-6-nut-nha-va-loa-chong-cham-nham.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-5-man-con-duong-7-tram-nhan-loi-moi-tram-ngu.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-3-be-nghe-giong-doc-tieng-viet.md'
++warnings: ['oversized']
++deferred: []
++---
++
++<intent-contract>
++
++## Intent
++
++**Problem:** After Story 1.8, Tiệm kem talks to a stub `hint.*`. The stub plays the prompt and the retry line and does nothing else. A child who is stuck never gets a ring, a hand or easier targets. The Speaker ignores the active question. Nothing escalates on time or on wrong attempts, so NFR4 ("never stuck, never done for the child") is unmet.
++
++**Approach:**
++- A pure, node-tested `HintMachine` in core owns levels, clocks and voice decisions. It talks to injected ports for audio, guard, visuals and the Bus.
++- `core/hint-director.ts › createHint(scene, deps)` replaces the stub behind the same factory and signatures. It wires the machine to the scene's pausable `time`, to `speech:ended` through `bus.scoped(scene)`, and to `core/hint-visuals`.
++- `core/hint-visuals` gains the ring follow, the item bob, the 72 px hand demo and the dim effect. The Map invitation keeps its existing call.
++- The Hud Speaker routes through the active hint. `MiniGameBase` stops ambient motion at level ≥ 2. Tiệm kem changes only to register its ambient tween and to send `questionDone` before it locks the scoops for the celebration.
++
++## Boundaries & Constraints
++
++**Always:**
++- **Protocol** (AD-5 signatures from spec-1-8, unchanged): `beginQuestion({promptLineId, retryLineId, step})`, `wrong()`, `stepDone(nextStep, {promptLineId?, retryLineId?}?)`, `questionDone()`, `replayPrompt(): number | undefined`, plus a read-only `level: HintLevel`.
++  - `wrong`, `stepDone` and `questionDone` are no-ops when no question is active. `replayPrompt` then returns `undefined`.
++  - `beginQuestion` while a question is active first runs `questionDone`.
++- **Voice** (HintDirector is the only caller of `audio.say` for prompt and hint lines):
++  - **Prompt plays:** `beginQuestion`, `replayPrompt` and a `stepDone` that carries `promptLineId`. Each calls `audio.setPrompt(p)`, then `say(p)`, and sets the awaited token to the returned token.
++  - **Hint voice:** `say(currentRetry)`. It is requested by every `wrong()`, on entering level 3, and every `Timing.hintVoiceRepeatMs` of quiet time while at level ≥ 3.
++  - **Rate limit:** hint voice plays only if `Timing.voiceRetryMinGapMs` has passed on the active clock since the last hint voice started. Otherwise it is dropped. Prompt plays are never rate-limited and do not reset the gap.
++  - **Awaited token:** the token of the latest hint-owned utterance. The quiet clock is paused while one is awaited. `speech:ended` for exactly that token, `completed` true or false, clears it and restarts idle at 0. Any other token is ignored.
++- **Clocks** (no `setTimeout`):
++  - One `scene.time.addEvent({ delay: Timing.hintTickMs, loop: true })` runs while a question is active and is removed by `questionDone`. Each callback is `machine.tick(Timing.hintTickMs)`.
++  - Scene pause (AudioUnlockOverlay) and a hidden page (Phaser's loop pause) stop the ticks, so time resumes exactly where it stopped.
++  - **`activeMs`** advances on every tick. It drives the retry gap.
++  - **`idleMs`** advances only when no awaited token exists. It drives escalation, the hand loop and the voice repeat.
++- **Levels** (`HintLevel` 0–4; ring at ≥ 2, hand at ≥ 3, dim at 4; levels are cumulative):
++  - **Effective level:** `level = max(level, min(wrongCount, 4))` after each `wrong()`.
++  - **Time escalation:** once `idleMs` since the later of the last idle restart and the last level change reaches `T(level)`, the level rises. From 0 or 1 it goes to 2 after `hintLevel2IdleMs`. From 2 it goes to 3 after `hintLevel3ExtraIdleMs`. Time never reaches 4.
++  - **Idle restarts:** the awaited speech ends; `wrong()` with no hint voice and nothing awaited; `stepDone` with nothing awaited.
++  - The level never drops within a question. `questionDone` resets it to 0 and clears `wrongCount` and the per-step line overrides.
++  - Every change emits `hint:level { gameId: scene key, level }`, including the reset to 0 (emitted only if the level was > 0).
++- **`stepDone(next, lines?)`:**
++  - The level is kept. `step` becomes `next` and visuals re-target to it.
++  - `retryLineId` overrides the retry line. `promptLineId` overrides the prompt and plays it, and becomes what `replayPrompt` and the Speaker replay.
++  - Without `promptLineId`, idle restarts now, unless a hint utterance is still awaited.
++- **Visuals per level** (all from `core/hint-visuals`; `correct[0]` is the hinted item):
++  - **Level ≥ 2:**
++    - One ring around `correct[0].object`: its bounds plus `ui.hintRingPad`, using the spec-1-5 three layers and pulse. The ring follows the object every frame.
++    - The item bobs `1 ↔ ui.hintItemBobScale`, yoyo over `hintRing.pulse.durationMs`. The bob pauses while the item is lifted (via `Draggable.onLiftChange`, called before `onLift` and after `onDrop`/`onCancel`) or while a tween runs on it, and it restores the captured scale.
++    - The ring stays through taps and drags on other items until `stepDone` or `questionDone`.
++  - **Level ≥ 3, hand demo** (72 px `hintHand`, drawn in core with Graphics: white fill and a `hintLine` outline, plus the shadow ellipse from `hintHand.shadow`):
++    - It plays on entering level 3 and every `Timing.hintHandLoopMs` of `activeMs` after that.
++    - `drag`: the hand presses on the item (`hintHandPressMs`, `ui.pressScale`), moves to the target centre (`hintHandMoveMs`, ease in-out), lifts and fades (`hintHandFadeMs`).
++    - `tap`: press and fade on the item. `trace`: follow `step.path`. With no target or no path it falls back to `tap`.
++    - Only the hand moves; the item never moves. A demo that falls due while `inputGuard.isDragging()` waits until the drag ends. The item bob pauses during a demo (one prominent motion).
++  - **Level 4:** for each `distractor`, `inputGuard.setPickable(d, false)` and alpha tweens to `ui.hintDimAlpha` over `hintDimFadeMs`. Then `inputGuard.setSnapScale(step.target, ui.hintSnapScale)` when a target exists. A `stepDone` restores the old step, then applies to the new one.
++  - **Restore:** `questionDone` (and scene SHUTDOWN) removes the ring, bob and hand, and restores pickable `true`, snap scale 1 and alpha 1 for every object it changed. It never touches others.
++- **Reduced motion:** the ring pulse and bob amplitudes go through spec-1-5's `amplitude(…, reduced)`. The hand path is unchanged because it is the instruction.
++- **Speaker:** `core/hint-director.ts` keeps one module-level active director, set by `beginQuestion` and cleared by `questionDone`/SHUTDOWN. `speakerReplay(audio) = active?.replayPrompt() ?? audio.replayPrompt()` replaces spec-1-6's default `replay` in `scenes/Hud.ts`.
++  - A replay keeps the level, does not count as wrong, pauses the quiet clock while speaking, and restarts idle at its `speech:ended`.
++- **Ambient (AD-5, UX-DR72):** `MiniGameBase` gains `addAmbient(tween)` and `holdAmbient(reason, on)`. Ambient tweens play only while no reason is held. The base subscribes to `hint:level` for its own key and holds `'hint'` while level ≥ 2.
++- **Tiệm kem edits (only these):**
++  - The Shiba breath registers with `addAmbient`, and the celebration uses `holdAmbient('celebrate', …)`.
++  - The `round.ts` correct-serve command order becomes `questionDone` → lock scoops → celebrate. The ring vanishes on the correct answer, and the restore cannot unlock scoops during the celebration.
++
++**Never:**
++- No auto-solving: no item moves by itself, and no drop is ever completed for the child.
++- No per-game timers or retry voice in games. No `setTimeout`/`setInterval`. No `this.sound`.
++- No red, shake, wrong sound, flashing above 1 Hz, or text.
++- No `round:complete`, multi-scoop questions or `nextLevel` (Story 1.10). No overlay re-ask (Epic 2).
++- No new voice lines. No change to the spec-1-4 JSON or to the Map invitation behaviour.
++- No git. No writing files that contain backslashes through a shell heredoc.
++
++**Decisions (auto-run defaults):**
++- **What "idle" means:** time without a protocol event (`wrong`, `stepDone`, the end of a hint utterance). Lifting or moving items does not reset it, because the protocol has no activity call. A child dragging slowly may see the ring early, which only adds help.
++- **The hand never moves the scoop.** A ghost scoop could read as the app doing the task, so the hand goes alone.
++- **Repeated voice uses the retry line** (short, names the target) rather than the full prompt.
++- **Dim alpha is 0.6**: "mờ 60%" read as 60 % opacity.
++- **New values:**
++  - `Timing.hintTickMs: 100`, `hintHandPressMs: 250`, `hintHandMoveMs: 1200`, `hintHandFadeMs: 300`, `hintDimFadeMs: 300`.
++  - `ui.hintRingPad: 12`, `hintItemBobScale: 1.06`, `hintDimAlpha: 0.6`, `hintSnapScale: 2`.
++- **Contrast "on the real render":** `tools/lint/hint-contrast.ts` reads `bg.ice-cream` and `bg.map` with sharp (pinned in spec-1-4).
++  - It samples 32 pixels just outside the ring ellipse at every `slot.scoop-*`. The ellipse diameter is `draggableItem.minSize + 2·hintRingPad`, × renderScale. It also samples around every Map station `hits` bbox.
++  - Each sample must reach ≥ 3:1 against `hintRing.core` or against `hintRing.line`.
++  - It runs inside `validate:content`. A pure `ringContrastProblems` is unit-tested.
++
++## I/O & Edge-Case Matrix
++
++| Scenario | Input / State | Expected Output / Behavior | Error Handling |
++|----------|--------------|---------------------------|----------------|
++| Begin | `beginQuestion(q)` | `setPrompt(ask)`, `say(ask)` → t1; idle stays 0 until `speech:ended{t1}` | — |
++| Foreign token | `speech:ended{t9}` while t1 awaited | ignored; clock still paused | — |
++| Cut prompt | t1 ends `completed:false` | clock starts | — |
++| 1 wrong + 6 s | wrong at 0 s; retry ends; 6000 ms idle | level 1, then 2 (ring + bob); `hint:level` 1, 2 | — |
++| Idle only | 6 s, then 6 s more | level 2, then level 3: hand + retry voice | — |
++| 4 wrongs fast | four `wrong()` within 3 s | levels 1→2→3→4; one retry voice (gap 10 s); level 4 dims and unpicks the distractor; cone snap ×2 | — |
++| Level 3 loop | at level 3, 60 s with no event | hand at 0, 15, 30, 45 s; voice at entry, 30, 60 s (quiet time) | — |
++| Hand while dragging | demo due during a drag | deferred until the drag ends | — |
++| Speaker at level 3 | `speakerReplay()` | prompt restarts, new token; level 3 kept; wrongCount unchanged; idle resumes after its end | — |
++| Speaker, no question | no active hint | `audio.replayPrompt()` | — |
++| stepDone plain | `stepDone(s2)` | level kept; idle 0; ring re-targets to `s2.correct[0]` | — |
++| stepDone retry | `stepDone(s2,{retryLineId:'X'})`, then `wrong()` | says `X` | — |
++| stepDone prompt | `stepDone(s2,{promptLineId:'P'})` | says `P`; replay says `P`; clock waits for P's end | — |
++| questionDone | at level 4 | ring, hand and bob gone; pickable, snap 1 and alpha 1 restored; `hint:level 0`; overrides cleared; tick event removed | — |
++| Paused | scene paused 20 s at level 1 | no ticks; no escalation; resume continues | — |
++| Before question | `wrong()`, `stepDone()`, `replayPrompt()` | no-op; `undefined` | — |
++| Ring vs others | level 2, child drags a distractor | ring stays on the target and follows it if lifted | — |
++| Contrast | a bg pixel next to the ring below 3:1 on both layers | `validate:content` fails naming screen + slot | exit 1 |
++
++</intent-contract>
++
++## Code Map
++
++- `app/src/core/hint-director.ts` -- planned in spec-1-8 as the stub plus `createHint(scene, deps)` and the `HintStep` type. It becomes the real adapter: machine, tick event, `bus.scoped` `speech:ended`, visuals, active registry, `speakerReplay`.
++- `app/src/core/hint-visuals.ts` -- planned in spec-1-5 (`createHintRing(scene, rect)`, one live ring). Add `follow`, `createItemBob`, `playHandDemo`, `dimItems`.
++- `app/src/core/reduced-motion.ts` -- planned in spec-1-5 (`amplitude`).
++- `app/src/core/input/{guard,drag-controller,drop}.ts` -- planned in spec-1-8 (`setPickable`, `setSnapScale`, `isDragging`, `Draggable.object`). Add `Draggable.onLiftChange`.
++- `app/src/core/hud.ts`, `app/src/scenes/Hud.ts` -- planned in spec-1-6; `HudController({replay,…})` with an `audio.replayPrompt()` default.
++- `app/src/games/mini-game-base.ts`, `app/src/games/ice-cream/{IceCream,round}.ts` -- planned in spec-1-7/1-8.
++- `app/src/core/audio-director.ts` -- real: `say(id): number`, `setPrompt`, `replayPrompt(): number | undefined`.
++- `app/src/core/bus.ts` -- real: `'hint:level'` and `'speech:ended'` exist. `app/src/content/types.ts` -- real: `HintLevel`.
++- `app/src/core/timing.ts` -- real: `hintLevel2IdleMs`, `hintLevel3ExtraIdleMs`, `hintHandLoopMs`, `hintVoiceRepeatMs`, `voiceRetryMinGapMs`. `core/tokens.ts` (`ui`), `tokens.generated.ts` (`hintRing`, `hintHand`).
++- `app/tools/lint/validate-content.ts` -- real `run(publicDir)`; it adds the contrast check.
++
++## Tasks & Acceptance
++
++**Execution:**
++- `app/src/core/timing.ts`, `app/src/core/tokens.ts` -- add the new values.
++- `app/src/core/hint-machine.ts` (+ `hint-machine.test.ts`) -- the pure state machine with ports `{audio:{say,setPrompt}, guard:{setPickable,setSnapScale,isDragging}, visuals, emitLevel}` and `tick(ms)`. The tests use a fake clock for every matrix row and for every AC 7/8 sequence in the story.
++- `app/src/core/input/drag-controller.ts` (+ test) -- `onLiftChange(fn)`, ordered before `onLift` and after drop/cancel.
++- `app/src/core/hint-visuals.ts` (+ a pure geometry test for the ring rect, hand path and bob amplitude) -- follow, bob, hand, dim. Map calls still compile and behave the same.
++- `app/src/core/hint-director.ts` (+ test with fake scene/time/bus) -- replace the stub. The adapter test covers ticks stopping when the time event stops, SHUTDOWN restore, the active registry and `speakerReplay`.
++- `app/src/scenes/Hud.ts` -- `replay: () => speakerReplay(audio)`.
++- `app/src/games/mini-game-base.ts` -- `addAmbient`/`holdAmbient` and the `hint:level` subscription.
++- `app/src/games/ice-cream/round.ts` (+ test), `IceCream.ts` -- the command order, the ambient registration and the celebration hold.
++- `app/tools/lint/hint-contrast.ts` (+ test), `app/tools/lint/validate-content.ts` -- the render contrast check.
++
++**Acceptance Criteria:**
++- Given `npm run dev` in Tiệm kem, when the prompt finishes and the child does nothing, then after about 6 s a white–purple ring pulses around the asked scoop and it bobs while Shiba stops breathing. About 6 s later a hand shows the drag from that scoop to the cone, and the retry voice plays. The hand repeats about every 15 s.
++- Given a fresh question, when the child drops the wrong scoop four times, then it floats back each time, the retry voice plays at most once in 10 s, the ring and hand appear, and finally the wrong scoop turns 60 % faded and cannot be lifted. The asked scoop still has to be dragged by the child, and it snaps from up to 200 px away.
++- Given the ring is showing, when the child lifts the asked scoop and drops it on the lower counter, then the ring follows it and stays. When the scoop is served, the ring, hand and fade disappear at once and the next question starts calm at level 0.
++- Given level 3, when the child taps the Speaker, then the prompt replays from the start with the wave, and the hints neither drop nor jump.
++- Given level 1, when the app is hidden for 30 s (or the unlock overlay shows) and then resumed, then the ring has not yet appeared and arrives about 6 s of play time after the retry ended.
++- Given `cd app && npm run check`, then it exits 0 with the machine, adapter and contrast tests passing.
++
++## Spec Change Log
++
++- **2026-10-09: the hint types live in `core/hint-machine.ts`.** `HintStep`, `HintQuestion`, `HintAction` and a structural `HintItem { object?, onLiftChange?, isDragging? }` are defined there and re-exported from `hint-director.ts`, so the pure machine needs no import from the adapter. `HintStep.correct`/`distractors` are `HintItem[]`; a `Draggable` satisfies it. This is the shape spec-3-1/4-1 plan, so they can reuse it.
++- **2026-10-09: the Speaker replay restarts through `audio.replayPrompt()`.** `AudioDirector.say(id)` of the line that is already playing returns the playing token instead of restarting it. The machine's prompt replay therefore calls `setPrompt(p)` and then `replayPrompt()`, falling back to `say(p)`. `beginQuestion` and a `stepDone` prompt still use `say`.
++- **2026-10-09: the ring box of a game item is the trim rect of its frame.** The ice-cream sprites are full-frame (2048×1536 source size), so Phaser's `getBounds()` covered the whole plate. The headless smoke showed a screen-sized ring. `hint-visuals › itemBounds` uses `frame.data.spriteSourceSize` when the frame is trimmed, and `getBounds()` otherwise.
++- **2026-10-09: the contrast lint samples around the runtime ring.** For `ice-cream` it uses the vanilla scoop's trimmed bounds + `hintRingPad`, moved from `slot.scoop-2` to each `slot.scoop-*`. It falls back to the specified `minSize + 2·pad` circle when the atlas cannot be read. Samples sit just outside the halo at the pulse's largest scale. `run()` stays synchronous, because sharp is async; `main()` awaits `hintContrastProblems` and adds its problems.
++- **2026-10-09: small API shapes.**
++  - `Hint.replayPrompt()` returns `number | undefined`, and `Hint` gained the read-only `level`.
++  - `createHint(undefined, deps)` (the base's field before `create`) speaks but has no clock or visuals.
++  - `stepDone` also clears a running hand demo.
++  - The voice repeat counts quiet time since the last hint-voice request (played or dropped) or idle restart, so a dropped repeat is not retried on every tick.
++  - `MiniGameBase.addAmbient` returns the tween. Tiệm kem still restarts its breath after the celebration, as in 1.8, besides the `'celebrate'` hold.
++
++## Review Triage Log
++
++## Design Notes
++
++**Why a pure machine plus an adapter:** the AC demands fake-clock tests of the escalation table. Every decision (level, voice, gap, hand due) lives in `hint-machine.ts` as state and port calls. The adapter only turns `scene.time` ticks and `speech:ended` into `tick` and `speechEnded(token)` and draws.
++
++```ts
++m.beginQuestion(q);        // ports.audio.setPrompt('ask'); say → 1
++m.speechEnded(1); m.wrong(); // level 1; say('retry') → 2
++m.speechEnded(2); m.tick(6000); // level 2 → visuals.showRing(correct[0]); emitLevel(2)
++```
++
++**Why two clocks:** the retry gap protects the child's ears in real (pausable) time. Escalation must not run while the app is speaking, or a long prompt would eat the child's thinking time.
++
++## Verification
++
++**Commands:**
++- `cd app && npm run check` -- expected: exit 0. Vitest covers every matrix row, and validate:content reports the hint contrast samples for `ice-cream` and `map`.
++- `cd app && npm run build` -- expected: exit 0.
++
++**Manual checks:**
++- Run the AC walkthroughs at 1180×820 touch emulation, with and without `prefers-reduced-motion`: smaller pulse and bob, the same hand path, and only one prominent motion at a time.
++- Screenshot the level 2 ring over the pink counter and the grass. It is clearly visible, with no flashing.
++
++## Auto Run Result
++
++**Status:** in-review. `cd app && npm run check` exits 0: 50 test files, 601 tests. `validate:content` reports "hint contrast ice-cream 4 rings, map 7 rings". `npm run build` exits 0.
++
++**Summary:**
++- **`core/hint-machine.ts`** is the pure state machine. It has two clocks (`activeMs` for the retry gap and the hand loop, quiet time for escalation and the voice repeat), the awaited token, levels 0–4 (wrong count and time) and the 10 s rate limit. It shows the ring at ≥ 2 and the hand plus retry voice at ≥ 3, and at level 4 it unpicks the distractors and sets snap ×2. `questionDone` restores everything it changed.
++- **`core/hint-director.ts`** is the adapter. It runs one looping `scene.time` tick of `hintTickMs` while a question is active, listens to `speech:ended` through `bus.scoped`, and emits `hint:level` with the scene key. It keeps the module-level active director and `speakerReplay`, and SHUTDOWN restores everything.
++- **`core/hint-visuals.ts`:**
++  - `createHintVisuals`: a ring that follows the item every frame, and the item bob. The bob pauses while the item is lifted (`onLiftChange`), while another tween runs on it or during a hand demo.
++  - The 72 px Graphics hand: press, ease in-out move to the cone, then lift and fade. Only the hand moves.
++  - The level 4 dim.
++  - Pure `itemBounds`, `itemRingBox`, `handRoute`, `handPose` and `bobFactor`. The Map ring API is unchanged (it gained `setCentre`).
++- **`Draggable.onLiftChange`** fires before `onLift` and after `onDrop`/`onCancel`.
++- **The Hud Speaker** uses `speakerReplay(audio)`.
++- **`MiniGameBase`** gained `addAmbient`/`holdAmbient`, and holds `'hint'` while its level is ≥ 2.
++- **Tiệm kem:** the breath is ambient and the celebration holds `'celebrate'`. A correct serve now sends `questionDone` first.
++- **`tools/lint/hint-contrast.ts`** runs in `validate:content`.
++
++**Files changed:** the list is in `.changed-1-9.txt`.
++- New:
++  - `app/src/core/hint-machine.ts` and its test: the machine.
++  - `app/src/core/hint-visuals.test.ts`: the geometry tests.
++  - `app/tools/lint/hint-contrast.ts` and its test: the render contrast check.
++- Changed:
++  - `hint-director.ts` and its test: the adapter.
++  - `hint-visuals.ts`: follow, bob, hand and dim.
++  - `input/drag-controller.ts` and `drag.test.ts`: `onLiftChange`.
++  - `timing.ts` and `tokens.ts`: the new values.
++  - `scenes/Hud.ts`: `speakerReplay`.
++  - `games/mini-game-base.ts` and `registry.test.ts`: ambient.
++  - `games/ice-cream/IceCream.ts`, `round.ts` and `round.test.ts`: the ambient registration and the command order.
++  - `tools/lint/validate-content.ts`: the async main with the contrast check.
++
++**Verification:**
++- `npm run check`: exit 0, with 601 tests. `npm run build`: exit 0.
++- **Headless Chrome smoke** (raw CDP, 1180×820 touch, `vite preview`; the scripts are kept outside the project in the temp dir `h19/`):
++  - The ring appears around the asked scoop about 7.5 s after the game shows (prompt about 1.5 s, then 6 s). Shiba stops breathing; the screenshot diffs change only around the ring.
++  - The hand demo starts about 6 s later, with the hand at the cone. It repeats at about 15 s intervals (seen at 14.9 s, 29.5 s and 44.5 s).
++  - A Speaker tap at level 3 kept the ring and the hand loop.
++  - Four wrong drops of the distractor on the cone: it floats back each time, then shows at 60 % and could not be lifted.
++  - The asked scoop dropped 170 px from the cone snapped onto it (snap ×2). The ring and fade vanished at once, and the next question started with no ring.
++  - The same run with `prefers-reduced-motion: reduce` behaved the same.
++  - No exceptions, failed requests or HTTP errors were logged.
++
++**Residual risks:**
++- With a white core and a purple line, almost any background colour reaches 3:1 against one of the two layers. The contrast rule can only fail for mid-greys with luminance near 0.30, so it is a weak guard.
++- "Idle" counts only protocol events. A child who drags slowly without dropping still escalates, which only adds help.
++- The pause on a hidden page and on the unlock overlay is unit-tested only (fake clock). CDP cannot hide the page.
++- The hand is a simple Graphics glyph (finger, palm and thumb). It has not been art-reviewed.
++- The bob's capture and restore of the scale was checked in screenshots, not through a lift at level 2 on a device.
++
++**Manual checks still due:**
++- The AC walkthroughs at 1180×820 touch, with and without reduced motion. With reduced motion the pulse and bob should be smaller, the hand path the same, and only one prominent motion at a time.
++- A level 2 screenshot over the pink counter and the grass: the ring should be clearly visible and should not flash.
++- On a device: hide the app for 30 s at level 1. The ring should not appear early.
++- The hand art by eye.

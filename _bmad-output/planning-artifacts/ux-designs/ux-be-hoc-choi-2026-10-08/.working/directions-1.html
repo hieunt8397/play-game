@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bé Học Chơi — Hướng thiết kế (vòng 1)</title>
+<style>
+/* =====================================================================
+   BÉ HỌC CHƠI — 4 HƯỚNG THIẾT KẾ "3D MỀM MẠI NHƯ ĐỒ CHƠI ĐẤT SÉT"
+   Chỉ CSS, không JS, không mạng. Emoji = placeholder nhân vật/đồ vật.
+
+   A · KẸO NGỌT NHÚN NHẢY (candy-toy, bão hoà cao)
+     sky        #38BDF8 -> #7DD3FC     confetti  #FF4FA3 #FFD43B #22C55E #A855F7
+     road       #FF6FB5 (viền #E0438F) dash #FFF3B0
+     station    #FF5C8A #FFB020 #3DDC84 #4CC9F0 #B57BFF #FF8A3D #2EC4B6
+     sticker    #FFD43B   ui-home #FF5C8A  ui-speaker #4CC9F0
+     shop bg    #FFD1E8   awning #FF4FA3/#FFFFFF  floor #FFB3D6
+     scoop dâu  #FF7EB6   scoop sô-cô-la #8B5A3C  cone #E8A75A/#C9803A
+
+   B · PHÒNG CHƠI PASTEL DỊU (calm, ít kích thích)
+     wall       #F7F1E8    floor     #EFE4D3     path #E6D6BF (chấm #D4BFA0)
+     station    #F6C9CF #F9DDB1 #CDE7D8 #C9DDF2 #E2D3EE #F3E3A9 #D7E8E3
+     text/icon  #6B5B4E    sticker #F3E3A9  ui #FFFFFF / #E9DFD2
+     shop wall  #DDEFE6   shelf #EAD8C3   scoop dâu #F4A7B9   sô-cô-la #A47B62
+
+   C · BẢN ĐỒ PHIÊU LƯU (một thế giới liền mạch)
+     sky        #BFE9FF   sea #2A9DF4 -> #1565C0 (sóng #8FD3FF)
+     land       #9BE07A   city ground #F2D7A6   dino park #4FAE5B / núi #7A5C46
+     road       #E9C27A  (viền #B9873E, vạch #FFF6DD)
+     pin        #FFFFFF viền #FF7A45   avatar xe #E63946
+     sticker    #FFC93C   ui #FFFFFF  ui-shadow #1B4E7A
+     cart       #FF7A45/#FFF  boardwalk #C98B52  sand #F6DFA9
+
+   D · KHỐI TO TỐI GIẢN (cực ít, cực to, rõ ràng tối đa)
+     bg         #FFE7C7   road #F7C98B (viền #E8AE63)
+     station    #FF6B4A (đang chọn) #4DA3FF #3CC48A
+     ui         #FFFFFF   ui-icon #7A3E1D   dots #E8AE63 / active #FF6B4A
+     scoop dâu  #FF86B0   sô-cô-la #7B4A30   cone #E9A85C
+   ===================================================================== */
+
+:root{
+  --page:#ECEAE6; --ink:#2A2724; --muted:#6E6862; --card:#F7F6F3; --line:#D9D5CF;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --page:#1E1D1C; --ink:#EEEAE4; --muted:#A8A29B; --card:#2A2928; --line:#3A3836; }
+}
+:root[data-theme="dark"]{ --page:#1E1D1C; --ink:#EEEAE4; --muted:#A8A29B; --card:#2A2928; --line:#3A3836; }
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding:32px 16px 80px}
+header.top h1{font-size:28px;margin:0 0 6px}
+header.top p{margin:0;color:var(--muted);max-width:760px}
+section.dir{margin-top:44px;padding:24px;background:var(--card);border:1px solid var(--line);border-radius:22px}
+.dir h2{margin:0;font-size:22px;display:flex;align-items:center;gap:12px}
+.dir h2 .tag{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--ink);color:var(--page);font-size:20px}
+.dir .why{margin:10px 0 18px;color:var(--muted);max-width:900px}
+.dir .chips{display:flex;flex-wrap:wrap;gap:6px;margin:-6px 0 18px}
+.dir .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 8px 3px 4px;border:1px solid var(--line);border-radius:99px;color:var(--muted)}
+.dir .chip i{width:16px;height:16px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.12)}
+.row{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.cap{font-size:13px;color:var(--muted);margin:8px 0 0 4px}
+
+/* ---------- iPad frame (1024x768 scaled) ---------- */
+.dev{--s:.62;padding:14px;background:#1C1C1E;border-radius:34px;box-shadow:0 18px 40px rgba(0,0,0,.25), inset 0 0 0 2px #3A3A3C;display:inline-block;max-width:100%}
+.dev.sm{--s:.4;padding:10px;border-radius:24px}
+.vp{width:calc(1024px * var(--s));height:calc(768px * var(--s));overflow:hidden;border-radius:18px;position:relative}
+.dev.sm .vp{border-radius:12px}
+.scr{width:1024px;height:768px;transform:scale(var(--s));transform-origin:0 0;position:absolute;left:0;top:0;overflow:hidden}
+.scr svg.bg{position:absolute;inset:0;width:1024px;height:768px}
+
+/* ---------- clay primitives ---------- */
+.clay{position:absolute;display:grid;place-items:center;border-radius:38%;
+  background:
+    radial-gradient(55% 45% at 32% 24%, rgba(255,255,255,.78), rgba(255,255,255,0) 62%),
+    radial-gradient(80% 70% at 72% 88%, rgba(0,0,0,.20), rgba(0,0,0,0) 70%),
+    var(--c,#ddd);
+  box-shadow: inset -8px -11px 18px rgba(0,0,0,.16), inset 8px 10px 16px rgba(255,255,255,.5), 0 18px 26px -8px var(--sh,rgba(70,30,30,.38));}
+.clay.round{border-radius:50%}
+.emo{display:block;line-height:1;filter:drop-shadow(0 6px 4px rgba(0,0,0,.22))}
+.sil{filter:brightness(0) drop-shadow(0 0 0 #000);opacity:.55}
+.lbl{position:absolute;white-space:nowrap;transform:translateX(-50%);font-weight:700}
+
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes wob{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+@keyframes ring{0%{transform:scale(.85);opacity:.9}100%{transform:scale(1.45);opacity:0}}
+@keyframes tap{0%,100%{transform:translate(0,0)}50%{transform:translate(-10px,-14px)}}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 var(--g), inset -8px -11px 18px rgba(0,0,0,.16), inset 8px 10px 16px rgba(255,255,255,.5)}50%{box-shadow:0 0 50px 18px var(--g), inset -8px -11px 18px rgba(0,0,0,.16), inset 8px 10px 16px rgba(255,255,255,.5)}}
+@keyframes drift{0%,100%{transform:translateX(0)}50%{transform:translateX(18px)}}
+@keyframes wave{0%,100%{transform:translateX(0)}50%{transform:translateX(-24px)}}
+@media (prefers-reduced-motion: reduce){ *{animation:none !important} }
+
+/* ---------- shared game parts ---------- */
+.cone{position:absolute;filter:drop-shadow(0 18px 14px rgba(0,0,0,.25))}
+.cone .c{width:100%;height:100%;clip-path:polygon(0 0,100% 0,52% 100%,48% 100%);
+  background:
+   radial-gradient(60% 40% at 35% 15%, rgba(255,255,255,.45), rgba(255,255,255,0) 70%),
+   repeating-linear-gradient(55deg, rgba(0,0,0,0) 0 18px, rgba(120,60,10,.28) 18px 22px),
+   repeating-linear-gradient(-55deg, rgba(0,0,0,0) 0 18px, rgba(120,60,10,.28) 18px 22px),
+   var(--cone,#E8A75A)}
+.cone .rim{position:absolute;left:-8px;right:-8px;top:-14px;height:34px;border-radius:20px;
+  background:radial-gradient(60% 60% at 35% 30%,rgba(255,255,255,.55),rgba(255,255,255,0) 70%),var(--rim,#D9914A);
+  box-shadow:inset -4px -6px 10px rgba(0,0,0,.18)}
+.ghost{position:absolute;border-radius:50%;border:5px dashed rgba(0,0,0,.18)}
+.scoop{position:absolute;border-radius:50% 50% 44% 44% / 56% 56% 44% 44%;
+  background:
+    radial-gradient(40% 32% at 34% 26%, rgba(255,255,255,.85), rgba(255,255,255,0) 70%),
+    radial-gradient(90% 70% at 70% 90%, rgba(0,0,0,.22), rgba(0,0,0,0) 70%),
+    var(--c);
+  box-shadow: inset -10px -14px 22px rgba(0,0,0,.16), inset 8px 10px 16px rgba(255,255,255,.4), 0 20px 26px -10px rgba(0,0,0,.35)}
+.scoop::after{content:"";position:absolute;left:12%;right:12%;bottom:-10px;height:26px;border-radius:0 0 30px 30px;
+  background:radial-gradient(18px 18px at 20% 30%, var(--c) 98%, transparent),radial-gradient(22px 22px at 55% 40%, var(--c) 98%, transparent),radial-gradient(16px 16px at 85% 25%, var(--c) 98%, transparent)}
+.scoop.hint{animation:glow 1.6s ease-in-out infinite}
+.halo{position:absolute;border-radius:50%;border:8px solid var(--g);animation:ring 1.6s ease-out infinite}
+.hand{position:absolute;font-size:96px;animation:tap 1.2s ease-in-out infinite;filter:drop-shadow(0 8px 6px rgba(0,0,0,.3))}
+.bubble{position:absolute;background:#fff;border-radius:40px;box-shadow:0 12px 24px -8px rgba(0,0,0,.25);display:grid;place-items:center}
+.bubble::after{content:"";position:absolute;width:40px;height:40px;background:#fff;border-radius:6px;transform:rotate(45deg)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <h1>Bé Học Chơi — 4 hướng thiết kế (vòng 1)</h1>
+  <p>Cùng phong cách "3D mềm mại như đồ chơi đất sét", nhưng khác nhau về cảm xúc, mật độ, độ rực màu, kích thước và chuyển động. Mỗi hướng gồm màn hình chính <b>"Con đường"</b> (7 trạm + Bộ sưu tập) và màn chơi <b>"Tiệm kem"</b> đang ở trạng thái gợi ý (viên kem đúng phát sáng, có bàn tay chỉ). Hình emoji chỉ là đồ tạm thay cho nhân vật đất sét thật.</p>
+</header>
+
+<!-- ============================== A ============================== -->
+<section class="dir">
+  <h2><span class="tag">A</span> Kẹo Ngọt Nhún Nhảy</h2>
+  <p class="why">Thế giới như một hộp kẹo đồ chơi: màu rực, mọi trạm đều nhún nhảy, con đường hồng sọc vàng như que kẹo. Hợp với giai đoạn bé đang hào hứng, thích nhiều thứ để nhìn và chạm. Đổi lại, màn hình khá "đông vui" — có thể hơi nhiều kích thích nếu bé dễ bị phân tán.</p>
+  <div class="chips">
+    <span class="chip"><i style="background:#38BDF8"></i>#38BDF8</span><span class="chip"><i style="background:#FF6FB5"></i>#FF6FB5</span><span class="chip"><i style="background:#FFD43B"></i>#FFD43B</span><span class="chip"><i style="background:#3DDC84"></i>#3DDC84</span><span class="chip"><i style="background:#B57BFF"></i>#B57BFF</span><span class="chip"><i style="background:#FF8A3D"></i>#FF8A3D</span>
+  </div>
+  <div class="row">
+    <div>
+      <div class="dev"><div class="vp"><div class="scr" style="background:linear-gradient(180deg,#38BDF8 0%,#7DD3FC 55%,#A7F3D0 100%)">
+        <svg class="bg" viewBox="0 0 1024 768">
+          <!-- confetti -->
+          <g opacity=".85">
+            <circle cx="60" cy="90" r="9" fill="#FFD43B"/><circle cx="240" cy="60" r="7" fill="#FF4FA3"/><circle cx="470" cy="110" r="8" fill="#22C55E"/><circle cx="640" cy="70" r="6" fill="#A855F7"/><circle cx="980" cy="160" r="9" fill="#FFD43B"/><circle cx="930" cy="640" r="8" fill="#FF4FA3"/><circle cx="40" cy="420" r="7" fill="#A855F7"/><circle cx="560" cy="720" r="9" fill="#FFD43B"/><circle cx="210" cy="720" r="6" fill="#22C55E"/>
+            <rect x="380" y="40" width="20" height="8" rx="4" fill="#FF4FA3" transform="rotate(30 390 44)"/><rect x="820" y="240" width="20" height="8" rx="4" fill="#22C55E" transform="rotate(-25 830 244)"/><rect x="120" y="300" width="20" height="8" rx="4" fill="#FFD43B" transform="rotate(60 130 304)"/>
+          </g>
+          <!-- clouds -->
+          <g fill="#fff" opacity=".9"><ellipse cx="760" cy="90" rx="70" ry="30"/><ellipse cx="800" cy="72" rx="45" ry="32"/><ellipse cx="160" cy="170" rx="55" ry="22"/><ellipse cx="190" cy="156" rx="34" ry="24"/></g>
+          <!-- candy road -->
+          <path d="M40 690 C160 680 200 540 300 530 S430 600 510 580 S650 520 730 570 S920 480 870 380 S700 280 600 290 S440 210 360 210 S220 150 150 140" fill="none" stroke="#E0438F" stroke-width="104" stroke-linecap="round"/>
+          <path d="M40 690 C160 680 200 540 300 530 S430 600 510 580 S650 520 730 570 S920 480 870 380 S700 280 600 290 S440 210 360 210 S220 150 150 140" fill="none" stroke="#FF6FB5" stroke-width="88" stroke-linecap="round"/>
+          <path d="M40 690 C160 680 200 540 300 530 S430 600 510 580 S650 520 730 570 S920 480 870 380 S700 280 600 290 S440 210 360 210 S220 150 150 140" fill="none" stroke="#FFF3B0" stroke-width="14" stroke-dasharray="26 22" stroke-linecap="round"/>
+          <path d="M40 690 C160 680 200 540 300 530 S430 600 510 580 S650 520 730 570 S920 480 870 380 S700 280 600 290 S440 210 360 210 S220 150 150 140" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="20" stroke-linecap="round" transform="translate(-10 -14)"/>
+        </svg>
+        <!-- balloons / lollipops -->
+        <div style="position:absolute;left:930px;top:420px;font-size:64px;animation:bob 2.4s ease-in-out infinite">🎈</div>
+        <div style="position:absolute;left:24px;top:220px;font-size:58px;animation:wob 2s ease-in-out infinite">🍭</div>
+        <div style="position:absolute;left:470px;top:640px;font-size:52px;animation:bob 2.8s ease-in-out infinite">🌟</div>
+        <!-- stations (no labels: candy is loud) -->
+        <div class="clay" style="--c:#FF5C8A;left:224px;top:450px;width:150px;height:150px;animation:bob 2s ease-in-out infinite"><span class="emo" style="font-size:84px">🍦</span></div>
+        <div class="clay" style="--c:#FFB020;left:440px;top:500px;width:140px;height:140px;animation:bob 2.3s ease-in-out .3s infinite"><span class="emo" style="font-size:78px">🍕</span></div>
+        <div class="clay" style="--c:#3DDC84;left:660px;top:490px;width:140px;height:140px;animation:bob 2.1s ease-in-out .6s infinite"><span class="emo" style="font-size:78px">🏎️</span></div>
+        <div class="clay" style="--c:#4CC9F0;left:800px;top:300px;width:140px;height:140px;animation:bob 2.4s ease-in-out .2s infinite"><span class="emo" style="font-size:78px">🐟</span></div>
+        <div class="clay" style="--c:#B57BFF;left:530px;top:215px;width:140px;height:140px;animation:bob 2.2s ease-in-out .5s infinite"><span class="emo" style="font-size:78px">🐶</span></div>
+        <div class="clay" style="--c:#FF8A3D;left:290px;top:135px;width:140px;height:140px;animation:bob 2.5s ease-in-out .1s infinite"><span class="emo" style="font-size:78px">🦖</span></div>
+        <div class="clay" style="--c:#2EC4B6;left:80px;top:70px;width:140px;height:140px;animation:bob 2.0s ease-in-out .4s infinite"><span class="emo sil" style="font-size:78px">🚗</span></div>
+        <!-- player car at start -->
+        <div style="position:absolute;left:30px;top:620px;font-size:82px;transform:scaleX(-1);filter:drop-shadow(0 8px 4px rgba(0,0,0,.3))">🚙</div>
+        <!-- ui -->
+        <div class="clay round" style="--c:#4CC9F0;right:150px;top:24px;width:104px;height:104px"><span class="emo" style="font-size:54px">🔊</span></div>
+        <div class="clay" style="--c:#FFD43B;right:24px;top:20px;width:112px;height:112px;animation:wob 2.6s ease-in-out infinite"><span class="emo" style="font-size:62px">⭐</span></div>
+      </div></div></div>
+      <div class="cap">Hero — Con đường: 7 trạm nhún nhảy trên đường kẹo, nút Bộ sưu tập ⭐ góc phải.</div>
+    </div>
+    <div>
+      <div class="dev sm"><div class="vp"><div class="scr" style="background:radial-gradient(circle at 20% 30%,#FFE3F1 0 6px,transparent 7px) 0 0/80px 80px,radial-gradient(circle at 60% 70%,#FFF3B0 0 6px,transparent 7px) 0 0/90px 90px,#FFD1E8">
+        <!-- awning -->
+        <div style="position:absolute;left:0;right:0;top:0;height:120px;background:repeating-linear-gradient(90deg,#FF4FA3 0 90px,#FFFFFF 90px 180px);border-radius:0 0 50px 50px;box-shadow:0 14px 20px -6px rgba(200,40,110,.35), inset 0 -16px 18px rgba(0,0,0,.08)"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:190px;background:linear-gradient(#FFB3D6,#FF9CCB)"></div>
+        <!-- bear -->
+        <div style="position:absolute;left:40px;top:300px;font-size:230px;line-height:1;filter:drop-shadow(0 18px 10px rgba(0,0,0,.25));animation:wob 2.4s ease-in-out infinite">🐻</div>
+        <div class="bubble" style="left:220px;top:180px;width:150px;height:130px"><div class="scoop" style="--c:#FF7EB6;width:80px;height:72px;position:relative"></div></div>
+        <!-- cone -->
+        <div class="ghost" style="left:415px;top:250px;width:170px;height:150px"></div>
+        <div class="cone" style="left:420px;top:390px;width:160px;height:250px;--cone:#E8A75A;--rim:#C9803A"><div class="rim"></div><div class="c"></div></div>
+        <!-- scoops -->
+        <div class="halo" style="--g:rgba(255,79,163,.7);left:700px;top:160px;width:220px;height:220px"></div>
+        <div class="scoop hint" style="--c:#FF7EB6;--g:rgba(255,126,182,.85);left:720px;top:180px;width:180px;height:165px"></div>
+        <div class="scoop" style="--c:#8B5A3C;left:720px;top:440px;width:180px;height:165px"></div>
+        <div class="hand" style="left:850px;top:300px">👆</div>
+        <svg class="bg" viewBox="0 0 1024 768" style="pointer-events:none"><path d="M720 270 Q620 200 560 300" fill="none" stroke="#fff" stroke-width="10" stroke-dasharray="4 22" stroke-linecap="round"/></svg>
+        <!-- ui -->
+        <div class="clay round" style="--c:#FF5C8A;left:24px;top:140px;width:104px;height:104px"><span class="emo" style="font-size:54px">🏠</span></div>
+        <div class="clay round" style="--c:#4CC9F0;right:24px;top:140px;width:104px;height:104px"><span class="emo" style="font-size:54px">🔊</span></div>
+      </div></div></div>
+      <div class="cap">Tiệm kem — gợi ý: viên kem dâu sáng nhấp nháy, bàn tay chỉ, đường kéo chấm.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== B ============================== -->
+<section class="dir">
+  <h2><span class="tag">B</span> Phòng Chơi Pastel Dịu</h2>
+  <p class="why">Như một căn phòng chơi buổi chiều: màu phấn nhạt, nền kem ấm, nhiều khoảng trống để mắt bé được nghỉ. Các trạm chỉ "thở" nhẹ thay vì nhảy, nên bé tập trung vào giọng hướng dẫn hơn là hình ảnh. Phù hợp nếu bố mẹ muốn app êm, ít kích thích, chơi trước giờ ngủ cũng được.</p>
+  <div class="chips">
+    <span class="chip"><i style="background:#F7F1E8"></i>#F7F1E8</span><span class="chip"><i style="background:#F6C9CF"></i>#F6C9CF</span><span class="chip"><i style="background:#F9DDB1"></i>#F9DDB1</span><span class="chip"><i style="background:#CDE7D8"></i>#CDE7D8</span><span class="chip"><i style="background:#C9DDF2"></i>#C9DDF2</span><span class="chip"><i style="background:#E2D3EE"></i>#E2D3EE</span><span class="chip"><i style="background:#6B5B4E"></i>#6B5B4E</span>
+  </div>
+  <div class="row">
+    <div>
+      <div class="dev"><div class="vp"><div class="scr" style="background:linear-gradient(180deg,#F7F1E8 0 70%,#EFE4D3 70%)">
+        <svg class="bg" viewBox="0 0 1024 768">
+          <!-- soft window & rug -->
+          <rect x="770" y="70" width="170" height="130" rx="30" fill="#E3EEF5"/><path d="M855 70 V200 M770 135 H940" stroke="#F7F1E8" stroke-width="10"/>
+          <ellipse cx="512" cy="650" rx="420" ry="80" fill="#EADBC6"/>
+          <!-- dotted sand path -->
+          <path d="M110 600 C250 600 260 470 400 470 S600 600 700 560 S900 420 820 330 S580 300 470 270 S260 230 180 260" fill="none" stroke="#E6D6BF" stroke-width="70" stroke-linecap="round"/>
+          <path d="M110 600 C250 600 260 470 400 470 S600 600 700 560 S900 420 820 330 S580 300 470 270 S260 230 180 260" fill="none" stroke="#D4BFA0" stroke-width="10" stroke-dasharray="2 26" stroke-linecap="round"/>
+        </svg>
+        <!-- stations: smaller, airy, tiny labels -->
+        <div class="clay" style="--c:#F6C9CF;--sh:rgba(120,90,70,.22);left:60px;top:540px;width:110px;height:110px;animation:breathe 4s ease-in-out infinite"><span class="emo" style="font-size:58px">🍦</span></div>
+        <div class="clay" style="--c:#F9DDB1;--sh:rgba(120,90,70,.22);left:330px;top:410px;width:110px;height:110px;animation:breathe 4s ease-in-out .5s infinite"><span class="emo" style="font-size:58px">🍕</span></div>
+        <div class="clay" style="--c:#CDE7D8;--sh:rgba(120,90,70,.22);left:640px;top:500px;width:110px;height:110px;animation:breathe 4s ease-in-out 1s infinite"><span class="emo" style="font-size:58px">🚗</span></div>
+        <div class="clay" style="--c:#C9DDF2;--sh:rgba(120,90,70,.22);left:790px;top:285px;width:110px;height:110px;animation:breathe 4s ease-in-out 1.5s infinite"><span class="emo" style="font-size:58px">🐟</span></div>
+        <div class="clay" style="--c:#E2D3EE;--sh:rgba(120,90,70,.22);left:560px;top:240px;width:110px;height:110px;animation:breathe 4s ease-in-out 2s infinite"><span class="emo" style="font-size:58px">🐻</span></div>
+        <div class="clay" style="--c:#F3E3A9;--sh:rgba(120,90,70,.22);left:340px;top:200px;width:110px;height:110px;animation:breathe 4s ease-in-out 2.5s infinite"><span class="emo" style="font-size:58px">🦕</span></div>
+        <div class="clay" style="--c:#D7E8E3;--sh:rgba(120,90,70,.22);left:120px;top:200px;width:110px;height:110px;animation:breathe 4s ease-in-out 3s infinite"><span class="emo sil" style="font-size:58px">🐟</span></div>
+        <div style="color:#8C7B6C;font-size:16px">
+          <span class="lbl" style="left:115px;top:660px">Tiệm kem</span><span class="lbl" style="left:385px;top:530px">Làm pizza</span><span class="lbl" style="left:695px;top:620px">Đường đua</span><span class="lbl" style="left:845px;top:405px">Câu cá</span><span class="lbl" style="left:615px;top:360px">Chạm là nói</span><span class="lbl" style="left:395px;top:320px">Ghép khủng long</span><span class="lbl" style="left:175px;top:320px">Tìm bóng</span>
+        </div>
+        <!-- ui -->
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(120,90,70,.2);left:28px;top:28px;width:96px;height:96px"><span class="emo" style="font-size:46px;filter:grayscale(.3)">🔊</span></div>
+        <div class="clay" style="--c:#F3E3A9;--sh:rgba(120,90,70,.2);left:150px;top:28px;width:96px;height:96px"><span class="emo" style="font-size:50px">📒</span></div>
+      </div></div></div>
+      <div class="cap">Hero — Con đường: đường cát chấm nhẹ, trạm nhỏ hơn và "thở" chậm, nhãn chữ nhỏ cho bố mẹ.</div>
+    </div>
+    <div>
+      <div class="dev sm"><div class="vp"><div class="scr" style="background:linear-gradient(180deg,#DDEFE6 0 66%,#EFE4D3 66%)">
+        <!-- shelf -->
+        <div style="position:absolute;left:640px;top:610px;width:340px;height:36px;border-radius:20px;background:#EAD8C3;box-shadow:0 14px 18px -8px rgba(120,90,70,.3)"></div>
+        <!-- bear -->
+        <div style="position:absolute;left:70px;top:330px;font-size:200px;line-height:1;filter:drop-shadow(0 16px 10px rgba(120,90,70,.25));animation:breathe 4s ease-in-out infinite">🐻</div>
+        <div class="bubble" style="left:240px;top:210px;width:130px;height:110px"><div class="scoop" style="--c:#F4A7B9;width:66px;height:60px;position:relative"></div></div>
+        <!-- cone in holder -->
+        <div class="ghost" style="left:425px;top:265px;width:160px;height:140px;border-color:rgba(107,91,78,.18)"></div>
+        <div class="cone" style="left:430px;top:395px;width:150px;height:235px;--cone:#EBC08E;--rim:#DDA971"><div class="rim"></div><div class="c"></div></div>
+        <!-- scoops -->
+        <div class="halo" style="--g:rgba(244,167,185,.55);left:690px;top:210px;width:210px;height:210px;animation-duration:2.6s"></div>
+        <div class="scoop hint" style="--c:#F4A7B9;--g:rgba(244,167,185,.7);left:710px;top:230px;width:170px;height:155px;animation-duration:2.6s"></div>
+        <div class="scoop" style="--c:#A47B62;left:710px;top:450px;width:170px;height:155px"></div>
+        <div class="hand" style="left:830px;top:340px;font-size:84px;animation-duration:2s">👆</div>
+        <!-- ui -->
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(120,90,70,.2);left:28px;top:28px;width:96px;height:96px"><span class="emo" style="font-size:46px">🏠</span></div>
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(120,90,70,.2);right:28px;top:28px;width:96px;height:96px"><span class="emo" style="font-size:46px">🔊</span></div>
+      </div></div></div>
+      <div class="cap">Tiệm kem — gợi ý êm: quầng sáng chậm (2.6s), tay chỉ nhẹ, không lấp lánh.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== C ============================== -->
+<section class="dir">
+  <h2><span class="tag">C</span> Bản Đồ Phiêu Lưu</h2>
+  <p class="why">Cả app là một hòn đảo đất sét liền mạch: biển để câu cá, thành phố có tiệm kem, tiệm pizza và đường đua, công viên khủng long có núi lửa. Chiếc ô tô của bé chạy trên con đường xuyên qua các vùng, mỗi trò chơi là một "nơi chốn" chứ không phải một nút bấm. Giàu trí tưởng tượng và dễ mở rộng thêm vùng mới, nhưng tốn công vẽ minh họa nhất.</p>
+  <div class="chips">
+    <span class="chip"><i style="background:#2A9DF4"></i>#2A9DF4</span><span class="chip"><i style="background:#9BE07A"></i>#9BE07A</span><span class="chip"><i style="background:#F2D7A6"></i>#F2D7A6</span><span class="chip"><i style="background:#4FAE5B"></i>#4FAE5B</span><span class="chip"><i style="background:#E9C27A"></i>#E9C27A</span><span class="chip"><i style="background:#FF7A45"></i>#FF7A45</span><span class="chip"><i style="background:#E63946"></i>#E63946</span>
+  </div>
+  <div class="row">
+    <div>
+      <div class="dev"><div class="vp"><div class="scr" style="background:#BFE9FF">
+        <svg class="bg" viewBox="0 0 1024 768">
+          <defs>
+            <radialGradient id="cSea" cx=".3" cy=".3" r=".9"><stop offset="0" stop-color="#5CB8FF"/><stop offset="1" stop-color="#1565C0"/></radialGradient>
+            <radialGradient id="cLand" cx=".4" cy=".3" r=".9"><stop offset="0" stop-color="#B8F09A"/><stop offset="1" stop-color="#78C85A"/></radialGradient>
+            <radialGradient id="cDino" cx=".4" cy=".3" r=".9"><stop offset="0" stop-color="#6CC777"/><stop offset="1" stop-color="#3C8F48"/></radialGradient>
+          </defs>
+          <!-- sea -->
+          <path d="M0 400 C120 380 200 470 260 560 C300 640 300 720 340 768 L0 768 Z" fill="url(#cSea)"/>
+          <g stroke="#8FD3FF" stroke-width="7" fill="none" stroke-linecap="round" opacity=".9"><path d="M30 500 q20 -14 40 0 t40 0"/><path d="M110 620 q20 -14 40 0 t40 0"/><path d="M40 700 q20 -14 40 0 t40 0"/></g>
+          <!-- land -->
+          <path d="M0 400 C120 380 200 470 260 560 C300 640 300 720 340 768 L1024 768 L1024 120 C900 90 760 130 640 110 C480 80 360 150 240 130 C140 115 60 150 0 170 Z" fill="url(#cLand)"/>
+          <!-- city ground -->
+          <path d="M330 360 C430 320 640 330 720 380 C790 430 760 600 640 640 C520 680 380 650 340 580 C300 510 270 400 330 360 Z" fill="#F2D7A6"/>
+          <!-- dino park -->
+          <path d="M760 110 C860 90 1024 110 1024 110 L1024 470 C960 500 860 470 820 420 C760 340 720 180 760 110 Z" fill="url(#cDino)"/>
+          <path d="M860 230 L920 120 L980 230 Z" fill="#7A5C46"/><path d="M905 128 q15 -30 30 0" fill="#FF7A45"/>
+          <!-- forest top-left -->
+          <ellipse cx="130" cy="230" rx="120" ry="60" fill="#5FB55A"/>
+          <!-- road -->
+          <path d="M260 700 C330 620 300 560 380 520 S540 600 600 560 S700 420 620 380 S470 380 420 330 S300 260 200 260 M620 380 C700 330 760 300 860 330" fill="none" stroke="#B9873E" stroke-width="66" stroke-linecap="round"/>
+          <path d="M260 700 C330 620 300 560 380 520 S540 600 600 560 S700 420 620 380 S470 380 420 330 S300 260 200 260 M620 380 C700 330 760 300 860 330" fill="none" stroke="#E9C27A" stroke-width="54" stroke-linecap="round"/>
+          <path d="M260 700 C330 620 300 560 380 520 S540 600 600 560 S700 420 620 380 S470 380 420 330 S300 260 200 260 M620 380 C700 330 760 300 860 330" fill="none" stroke="#FFF6DD" stroke-width="6" stroke-dasharray="18 18"/>
+          <!-- clouds -->
+          <g fill="#fff"><ellipse cx="520" cy="50" rx="60" ry="22"/><ellipse cx="550" cy="38" rx="36" ry="22"/></g>
+        </svg>
+        <!-- scenery props -->
+        <div style="position:absolute;left:30px;top:180px;font-size:58px">🌳🌲🌳</div>
+        <div style="position:absolute;left:430px;top:380px;font-size:60px;filter:drop-shadow(0 6px 4px rgba(0,0,0,.2))">🏠🏢</div>
+        <div style="position:absolute;left:940px;top:300px;font-size:54px">🌴</div>
+        <div style="position:absolute;left:820px;top:380px;font-size:46px">🦕</div>
+        <div style="position:absolute;left:150px;top:560px;font-size:56px;animation:drift 4s ease-in-out infinite">⛵</div>
+        <div style="position:absolute;left:600px;top:120px;font-size:50px;animation:drift 6s ease-in-out infinite">🏡</div>
+        <!-- pins -->
+        <style>
+          .pin{position:absolute;width:118px;height:118px}
+          .pin .clay{inset:0;border-radius:50%;--c:#FFFFFF;box-shadow:0 0 0 7px #FF7A45, inset -6px -8px 14px rgba(0,0,0,.12), inset 6px 8px 12px rgba(255,255,255,.6), 0 18px 20px -6px rgba(27,78,122,.45)}
+          .pin::after{content:"";position:absolute;left:46px;bottom:-24px;border:13px solid transparent;border-top:20px solid #FF7A45}
+          .sign{position:absolute;transform:translateX(-50%);background:#FFF6DD;color:#7A5C46;font:700 15px/1 system-ui,sans-serif;padding:6px 10px;border-radius:10px;box-shadow:0 4px 0 #B9873E;white-space:nowrap}
+        </style>
+        <div class="pin" style="left:80px;top:420px;animation:bob 2.6s ease-in-out infinite"><div class="clay"><span class="emo" style="font-size:64px">🐟</span></div></div><span class="sign" style="left:139px;top:395px">Câu cá</span>
+        <div class="pin" style="left:330px;top:410px"><div class="clay"><span class="emo" style="font-size:64px">🍦</span></div></div><span class="sign" style="left:389px;top:385px">Tiệm kem</span>
+        <div class="pin" style="left:560px;top:450px"><div class="clay"><span class="emo" style="font-size:64px">🍕</span></div></div><span class="sign" style="left:619px;top:425px">Làm pizza</span>
+        <div class="pin" style="left:640px;top:600px"><div class="clay"><span class="emo" style="font-size:64px">🏁</span></div></div><span class="sign" style="left:699px;top:735px">Đường đua</span>
+        <div class="pin" style="left:450px;top:180px"><div class="clay"><span class="emo" style="font-size:64px">🐮</span></div></div><span class="sign" style="left:509px;top:155px">Chạm là nói</span>
+        <div class="pin" style="left:840px;top:180px"><div class="clay"><span class="emo" style="font-size:64px">🦖</span></div></div><span class="sign" style="left:899px;top:155px">Ghép khủng long</span>
+        <div class="pin" style="left:160px;top:110px"><div class="clay"><span class="emo sil" style="font-size:64px">🦒</span></div></div><span class="sign" style="left:219px;top:85px">Tìm bóng</span>
+        <!-- avatar car -->
+        <div style="position:absolute;left:250px;top:610px;font-size:80px;filter:drop-shadow(0 8px 4px rgba(0,0,0,.3));animation:bob 1.6s ease-in-out infinite">🚗</div>
+        <!-- ui -->
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(27,78,122,.45);right:140px;top:22px;width:100px;height:100px"><span class="emo" style="font-size:50px">🔊</span></div>
+        <div class="clay" style="--c:#FFC93C;--sh:rgba(27,78,122,.45);right:22px;top:20px;width:104px;height:104px"><span class="emo" style="font-size:56px">🧳</span></div>
+      </div></div></div>
+      <div class="cap">Hero — Con đường: đảo phiêu lưu (biển, phố, công viên khủng long), trạm là ghim trên cảnh, xe của bé trên đường; Bộ sưu tập là chiếc vali ⭐.</div>
+    </div>
+    <div>
+      <div class="dev sm"><div class="vp"><div class="scr" style="background:linear-gradient(180deg,#BFE9FF 0 34%,#2A9DF4 34% 48%,#F6DFA9 48%)">
+        <svg class="bg" viewBox="0 0 1024 768"><g stroke="#8FD3FF" stroke-width="8" fill="none" stroke-linecap="round" style="animation:wave 3s ease-in-out infinite"><path d="M60 300 q24 -16 48 0 t48 0"/><path d="M420 320 q24 -16 48 0 t48 0"/><path d="M800 300 q24 -16 48 0 t48 0"/></g>
+          <rect x="0" y="560" width="1024" height="208" fill="#C98B52"/><g stroke="#A86E3C" stroke-width="6"><path d="M0 610 H1024 M0 665 H1024 M0 720 H1024"/></g></svg>
+        <div style="position:absolute;left:880px;top:60px;font-size:90px">☀️</div>
+        <!-- cart with bear vendor -->
+        <div style="position:absolute;left:20px;top:150px;width:330px;height:80px;background:repeating-linear-gradient(90deg,#FF7A45 0 55px,#FFF 55px 110px);border-radius:40px 40px 20px 20px;box-shadow:0 12px 16px -6px rgba(0,0,0,.3)"></div>
+        <div style="position:absolute;left:60px;top:250px;font-size:190px;line-height:1">🐻</div>
+        <div class="clay" style="--c:#FF7A45;left:30px;top:430px;width:310px;height:150px;border-radius:40px"></div>
+        <div style="position:absolute;left:70px;top:590px;font-size:70px">⚪</div><div style="position:absolute;left:230px;top:590px;font-size:70px">⚪</div>
+        <!-- cone -->
+        <div class="ghost" style="left:440px;top:255px;width:160px;height:140px;border-color:rgba(120,70,30,.25)"></div>
+        <div class="cone" style="left:445px;top:385px;width:150px;height:240px;--cone:#E8A75A;--rim:#C9803A"><div class="rim"></div><div class="c"></div></div>
+        <!-- scoops in tubs -->
+        <div class="halo" style="--g:rgba(255,126,182,.7);left:690px;top:200px;width:210px;height:210px"></div>
+        <div class="scoop hint" style="--c:#FF7EB6;--g:rgba(255,126,182,.8);left:710px;top:220px;width:170px;height:155px"></div>
+        <div class="scoop" style="--c:#8B5A3C;left:710px;top:430px;width:170px;height:155px"></div>
+        <div class="hand" style="left:835px;top:330px">👆</div>
+        <!-- ui -->
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(27,78,122,.45);left:380px;top:24px;width:100px;height:100px"><span class="emo" style="font-size:50px">🏠</span></div>
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(27,78,122,.45);left:510px;top:24px;width:100px;height:100px"><span class="emo" style="font-size:50px">🔊</span></div>
+      </div></div></div>
+      <div class="cap">Tiệm kem — xe kem bên bờ biển, gấu là người bán; cảnh nối tiếp từ bản đồ.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== D ============================== -->
+<section class="dir">
+  <h2><span class="tag">D</span> Khối To Tối Giản</h2>
+  <p class="why">Ít thứ nhất có thể, to nhất có thể: nền cam đào trơn, mỗi lúc chỉ thấy khoảng 3 trạm khổng lồ trên một đoạn đường cong, vuốt hoặc chạm mũi tên để đi tiếp. Bé 3 tuổi gần như không thể chạm nhầm, và giọng nói luôn rõ nghĩa vì chỉ có một thứ đang được nói tới. Đổi lại, cảm giác "cả thế giới" yếu hơn, phải lướt mới thấy đủ 7 trạm.</p>
+  <div class="chips">
+    <span class="chip"><i style="background:#FFE7C7"></i>#FFE7C7</span><span class="chip"><i style="background:#F7C98B"></i>#F7C98B</span><span class="chip"><i style="background:#FF6B4A"></i>#FF6B4A</span><span class="chip"><i style="background:#4DA3FF"></i>#4DA3FF</span><span class="chip"><i style="background:#3CC48A"></i>#3CC48A</span><span class="chip"><i style="background:#7A3E1D"></i>#7A3E1D</span>
+  </div>
+  <div class="row">
+    <div>
+      <div class="dev"><div class="vp"><div class="scr" style="background:#FFE7C7">
+        <svg class="bg" viewBox="0 0 1024 768">
+          <path d="M-60 560 C160 430 340 600 520 520 S860 380 1100 470" fill="none" stroke="#E8AE63" stroke-width="128" stroke-linecap="round"/>
+          <path d="M-60 560 C160 430 340 600 520 520 S860 380 1100 470" fill="none" stroke="#F7C98B" stroke-width="112" stroke-linecap="round"/>
+        </svg>
+        <!-- prev station peeking -->
+        <div class="clay" style="--c:#4DA3FF;--sh:rgba(122,62,29,.3);left:-120px;top:330px;width:220px;height:220px;opacity:.9"><span class="emo" style="font-size:120px">🐟</span></div>
+        <!-- current: big -->
+        <div class="clay" style="--c:#FF6B4A;--sh:rgba(122,62,29,.4);left:300px;top:240px;width:300px;height:300px;border-radius:34%;animation:bob 2.4s ease-in-out infinite"><span class="emo" style="font-size:180px">🍦</span></div>
+        <div style="position:absolute;left:450px;top:575px;transform:translateX(-50%);font:800 30px/1 system-ui,sans-serif;color:#7A3E1D">Tiệm kem</div>
+        <!-- next -->
+        <div class="clay" style="--c:#3CC48A;--sh:rgba(122,62,29,.3);left:720px;top:230px;width:220px;height:220px"><span class="emo" style="font-size:124px">🍕</span></div>
+        <!-- arrows -->
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(122,62,29,.3);left:28px;top:610px;width:120px;height:120px;color:#7A3E1D;font:900 64px/1 system-ui">◀</div>
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(122,62,29,.3);right:28px;top:610px;width:120px;height:120px;color:#7A3E1D;font:900 64px/1 system-ui">▶</div>
+        <!-- progress dots with tiny station icons -->
+        <div style="position:absolute;left:50%;top:680px;transform:translateX(-50%);display:flex;gap:16px;align-items:center">
+          <span style="width:22px;height:22px;border-radius:50%;background:#E8AE63"></span><span style="width:22px;height:22px;border-radius:50%;background:#E8AE63"></span><span style="width:22px;height:22px;border-radius:50%;background:#E8AE63"></span><span style="width:40px;height:22px;border-radius:11px;background:#FF6B4A"></span><span style="width:22px;height:22px;border-radius:50%;background:#E8AE63"></span><span style="width:22px;height:22px;border-radius:50%;background:#E8AE63"></span><span style="width:22px;height:22px;border-radius:50%;background:#E8AE63"></span>
+        </div>
+        <!-- ui -->
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(122,62,29,.3);left:28px;top:28px;width:120px;height:120px"><span class="emo" style="font-size:62px">🔊</span></div>
+        <div class="clay" style="--c:#FFFFFF;--sh:rgba(122,62,29,.3);right:28px;top:28px;width:120px;height:120px"><span class="emo" style="font-size:66px">⭐</span></div>
+      </div></div></div>
+      <div class="cap">Hero — Con đường dạng băng chuyền: 1 trạm chính khổng lồ + 2 trạm hé lộ, 7 chấm tiến trình; thứ tự: Tìm bóng · Ghép khủng long · Câu cá · <b>Tiệm kem</b> · Làm pizza · Đường đua · Chạm là nói.</div>
+    </div>
+    <div>
+      <div class="dev sm"><div class="vp"><div class="scr" style="background:#FFE7C7">
+        <!-- bear small peeking -->
+        <div style="position:absolute;left:-10px;top:560px;font-size:200px;line-height:1;filter:drop-shadow(0 10px 8px rgba(122,62,29,.25))">🐻</div>
+        <!-- cone huge -->
+        <div class="ghost" style="left:240px;top:150px;width:240px;height:210px;border-color:rgba(122,62,29,.22);border-width:7px"></div>
+        <div class="cone" style="left:250px;top:345px;width:220px;height:340px;--cone:#E9A85C;--rim:#CF8B43"><div class="rim"></div><div class="c"></div></div>
+        <!-- scoops huge -->
+        <div class="halo" style="--g:rgba(255,107,74,.6);left:600px;top:110px;width:290px;height:290px"></div>
+        <div class="scoop hint" style="--c:#FF86B0;--g:rgba(255,134,176,.8);left:620px;top:130px;width:250px;height:230px"></div>
+        <div class="scoop" style="--c:#7B4A30;left:620px;top:450px;width:250px;height:230px"></div>
+        <div class="hand" style="left:810px;top:290px;font-size:120px">👆</div>
+        <!-- ui -->
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(122,62,29,.3);left:28px;top:28px;width:120px;height:120px"><span class="emo" style="font-size:62px">🏠</span></div>
+        <div class="clay round" style="--c:#FFFFFF;--sh:rgba(122,62,29,.3);left:28px;top:170px;width:120px;height:120px"><span class="emo" style="font-size:62px">🔊</span></div>
+      </div></div></div>
+      <div class="cap">Tiệm kem — chỉ 3 vật thể chính, viên kem 250px, nút 120px dồn về cột trái.</div>
+    </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

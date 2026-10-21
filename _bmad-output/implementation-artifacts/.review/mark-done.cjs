@@ -1,0 +1,22 @@
+// Usage: node mark-done.cjs <E>-<S> "<review note>"  — sets spec status done, appends the note, marks sprint-status done.
+const fs = require('fs');
+const path = require('path');
+const art = 'C:/Users/nguyentrunghieu/Desktop/workspace/play/_bmad-output/implementation-artifacts';
+const [id, note] = process.argv.slice(2);
+const spec = fs.readdirSync(art).find((f) => f.startsWith(`spec-${id}-`) && f.endsWith('.md'));
+if (!spec) throw new Error(`no spec for ${id}`);
+const p = path.join(art, spec);
+let s = fs.readFileSync(p, 'utf8');
+s = s.replace(/^status: .*$/m, "status: 'done'");
+if (note) s += `\n**Review (lean loop, 2026-10-08):** ${note}\n`;
+fs.writeFileSync(p, s);
+const ss = path.join(art, 'sprint-status.yaml');
+let y = fs.readFileSync(ss, 'utf8');
+const key = new RegExp(`^(  ${id}-[^:]*): [a-z-]+$`, 'm');
+if (!key.test(y)) throw new Error(`no sprint key for ${id}`);
+y = y.replace(key, '$1: done');
+const now = new Date();
+const pad = (n) => String(n).padStart(2, '0');
+y = y.replace(/^last_updated: .*$/m, `last_updated: ${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`);
+fs.writeFileSync(ss, y);
+console.log(`${spec}: done; sprint ${y.match(key)[0]}`);

@@ -1,0 +1,2613 @@
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/content/games/dino-puzzle.test.ts b/app/src/content/games/dino-puzzle.test.ts
+index e779d7a..2267418 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/content/games/dino-puzzle.test.ts
++++ b/app/src/content/games/dino-puzzle.test.ts
+@@ -3,16 +3,47 @@ import { ATLASES, BACKGROUNDS } from '../assets';
+ import { AUDIO_CATALOG } from '../audio-catalog';
+ import { VOICE_LINES } from '../voice-lines';
+ import { SCARY_PATTERN } from '../../../tools/lint/validate-content.ts';
+-import { PIECES, SFX, SPECIES, assets, callSfx, ladder, screen } from './dino-puzzle';
++import { BAY_ANCHORS, DINO_BAYS, DROP_ORDER, PIECES, PIECE_IDS, SFX, SPECIES, assets, callSfx, ladder, screen } from './dino-puzzle';
++
++const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+ 
+ // The one pattern of the no-meat-eater rule (tools/lint/validate-content.ts).
+ const SCARY = SCARY_PATTERN;
+ 
++describe('dino-puzzle content (Story 3.4)', () => {
++  it('the ladder: 3 levels of 3 → 4 → 6 pieces, 3 dinos each', () => {
++    expect(ladder.length).toBe(3);
++    expect(ladder.map((l) => l.pieces)).toEqual([3, 4, 6]);
++    for (const l of ladder) expect(l.dinos).toBe(3);
++  });
++
++  it('every cut PIECES[k] has k distinct kebab ids; the 6-piece cut is đầu, cổ, thân, chân trước, chân sau, đuôi', () => {
++    for (const [k, ids] of Object.entries(PIECES)) {
++      expect(ids).toHaveLength(Number(k));
++      expect(new Set(ids).size).toBe(ids.length);
++      for (const id of ids) expect(id).toMatch(KEBAB);
++    }
++    expect(PIECES[3]).toEqual(['head-neck', 'body-legs', 'tail']);
++    expect(PIECES[4]).toEqual(['head-neck', 'front', 'back', 'tail']);
++    expect(PIECES[6]).toEqual(['head', 'neck', 'body', 'front-legs', 'back-legs', 'tail']);
++  });
++
++  it('PIECE_IDS is the deduplicated union of the cuts (10 ids)', () => {
++    expect(PIECE_IDS).toHaveLength(10);
++    expect(new Set(PIECE_IDS)).toEqual(new Set(Object.values(PIECES).flat()));
++  });
++
++  it('8 bays; drops resolve own slot first ("ô đúng thắng")', () => {
++    expect(DINO_BAYS).toBe(8);
++    expect(BAY_ANCHORS).toEqual(['dino-bay-1', 'dino-bay-2', 'dino-bay-3', 'dino-bay-4', 'dino-bay-5', 'dino-bay-6', 'dino-bay-7', 'dino-bay-8']);
++    expect(DROP_ORDER[0]).toBe('own');
++    expect(DROP_ORDER).toEqual(['own', 'home', 'other', 'rest', 'off']);
++  });
++});
++
+ describe('dino-puzzle content (Story 3.3)', () => {
+-  it('three gentle species, the 3-piece cut in hint order, one temporary level', () => {
++  it('three gentle species', () => {
+     expect(SPECIES).toEqual(['apatosaurus', 'triceratops', 'stegosaurus']);
+-    expect(PIECES).toEqual({ 3: ['head-neck', 'body-legs', 'tail'] });
+-    expect(ladder).toEqual([{ id: 'pieces-3', pieces: 3, dinos: 3 }]);
+   });
+ 
+   it.each(ladder.map((l, i) => [i, l] as const))('level %i: its piece count is a PIECES key and dinos ≤ SPECIES', (_i, l) => {
+@@ -35,14 +66,17 @@ describe('dino-puzzle content (Story 3.3)', () => {
+     for (const s of SPECIES) expect(AUDIO_CATALOG[callSfx(s) as keyof typeof AUDIO_CATALOG].creature).toBe(true);
+   });
+ 
+-  it('the screen: ids and frames generated from SPECIES × PIECES[3]', () => {
++  it('the screen: ids and frames generated from SPECIES × PIECE_IDS, plus the 8 bays (Story 3.4)', () => {
+     expect(screen.hits).toEqual(['grass']);
+-    expect(screen.slots).toHaveLength(9);
+-    expect(screen.slots).toContain('triceratops-body-legs');
+-    expect(screen.anchors).toEqual(expect.arrayContaining(['apatosaurus', 'apatosaurus-walk', 'stegosaurus-tail-start', 'cloud-1', 'cloud-2']));
+-    expect(screen.anchors).toHaveLength(3 * 5 + 2);
+-    expect(screen.frames).toEqual(expect.arrayContaining(['stegosaurus/ghost/00', 'apatosaurus/walk/03', 'triceratops/happy/01', 'triceratops-tail/ghost/00', 'cloud-2/idle/00']));
+-    expect(screen.frames).toHaveLength(3 * (9 + 6) + 2);
++    expect(screen.slots).toHaveLength(30);
++    expect(screen.slots).toEqual(expect.arrayContaining(['triceratops-body-legs', 'apatosaurus-front-legs', 'stegosaurus-neck']));
++    expect(screen.anchors).toEqual(expect.arrayContaining(['apatosaurus', 'apatosaurus-walk', 'dino-bay-1', 'dino-bay-8', 'cloud-1', 'cloud-2']));
++    expect(screen.anchors.filter((a) => a.endsWith('-start'))).toEqual([]);
++    expect(screen.anchors).toHaveLength(3 * 2 + 8 + 2);
++    expect(screen.frames).toEqual(expect.arrayContaining(['stegosaurus/ghost/00', 'apatosaurus/walk/01', 'triceratops/happy/01', 'triceratops-neck/ghost/00', 'stegosaurus-back-legs/idle/00', 'cloud-2/idle/00']));
++    expect(screen.frames).not.toContain('apatosaurus/walk/02');
++    // idle, blink, 2 happy, 2 walk, ghost + 10 pieces × (idle, ghost), per species.
++    expect(screen.frames).toHaveLength(3 * (7 + 20) + 2);
+   });
+ });
+ 
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/content/games/dino-puzzle.ts b/app/src/content/games/dino-puzzle.ts
+index d5addca..8833564 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/content/games/dino-puzzle.ts
++++ b/app/src/content/games/dino-puzzle.ts
+@@ -1,6 +1,7 @@
+-// Ghép khủng long content (Story 3.3): the three gentle species, the piece cuts, the (temporary
+-// one-level) ladder, the screen's layout ids and frames, the voice and SFX ids, and the assets Map
+-// loads while the kart drives here. Data only. Never a meat-eater: the species list is the whole cast.
++// Ghép khủng long content (Stories 3.3 and 3.4): the three gentle species, the 3-, 4- and 6-piece cuts,
++// the 3-level ladder, the start bays, the drop order, the screen's layout ids and frames, the voice and
++// SFX ids, and the assets Map loads while the kart drives here. Data only. Never a meat-eater: the
++// species list is the whole cast.
+ import { ATLASES, BACKGROUNDS } from '../assets.ts';
+ import { VOICE_LINES } from '../voice-lines.ts';
+ import type { GameAssets, ScreenRequirements } from './types.ts';
+@@ -12,22 +13,46 @@ export type SpeciesId = (typeof SPECIES)[number];
+ /**
+  * The piece cuts by piece count; each array is also the hint order (the first unplaced piece is
+  * hinted). The builder cuts every species by bone groups per piece id (build_dino_puzzle.py ›
+- * PIECE_BONES). Story 3.4 adds the 4- and 6-piece cuts.
++ * PIECE_BONES). A piece id in several cuts is the same frame and slot. 6 = đầu, cổ, thân, chân trước,
++ * chân sau, đuôi; 4 keeps each piece one connected chunk (head-neck, front, back, tail).
+  */
+-export const PIECES = { 3: ['head-neck', 'body-legs', 'tail'] } as const;
++export const PIECES = {
++  3: ['head-neck', 'body-legs', 'tail'],
++  4: ['head-neck', 'front', 'back', 'tail'],
++  6: ['head', 'neck', 'body', 'front-legs', 'back-legs', 'tail'],
++} as const;
+ export type PieceCount = keyof typeof PIECES;
+ export type PieceId = (typeof PIECES)[PieceCount][number];
+ 
++/** Every piece id of every cut, in cut order and once each (10 ids). */
++export const PIECE_IDS: readonly PieceId[] = [...new Set<PieceId>(Object.values(PIECES).flat())];
++
+ export interface DinoLevel {
+   readonly id: string;
+   /** Pieces per dino (a key of PIECES). */
+-  readonly pieces: 3 | 4 | 6;
++  readonly pieces: PieceCount;
+   /** Dinos per round (≤ SPECIES.length). */
+   readonly dinos: 3;
+ }
+ 
+-/** Story 3.3: one temporary level (3 pieces, 3 dinos); Story 3.4 extends it to 3 → 4 → 6 pieces. */
+-export const ladder: readonly DinoLevel[] = [{ id: 'pieces-3', pieces: 3, dinos: 3 }];
++/** Story 3.4: 3 → 4 → 6 pieces, 3 dinos each. Only Map's nextLevel moves along it. */
++export const ladder: readonly DinoLevel[] = [
++  { id: 'pieces-3', pieces: 3, dinos: 3 },
++  { id: 'pieces-4', pieces: 4, dinos: 3 },
++  { id: 'pieces-6', pieces: 6, dinos: 3 },
++];
++
++/** Story 3.4: the lawn bays where loose pieces start (`anchor.dino-bay-1..8`); each dino's pieces are shuffled into them. */
++export const DINO_BAYS = 8;
++/** Story 3.4: start-arrangement shuffles tried before the identity fallback (games/dino-puzzle/starts.ts). */
++export const START_ATTEMPTS = 64;
++/**
++ * Story 3.4: how a drop of a loose piece resolves, first match wins (round.ts follows this order).
++ * `own` first is the "ô đúng thắng" rule: the validator allows slots closer than the snap radius only
++ * while it holds.
++ */
++export const DROP_ORDER = ['own', 'home', 'other', 'rest', 'off'] as const;
++export type DropOutcome = (typeof DROP_ORDER)[number];
+ 
+ /** The piece ids of a level's cut (empty for a count PIECES does not hold). */
+ export function piecesOf(pieces: number): readonly PieceId[] {
+@@ -38,8 +63,10 @@ export function piecesOf(pieces: number): readonly PieceId[] {
+ export const pieceObject = (s: SpeciesId, p: PieceId): string => `${s}-${p}`;
+ /** The snap centre of a piece (`slot.<s>-<p>`). */
+ export const pieceSlot = (s: SpeciesId, p: PieceId): string => pieceObject(s, p);
+-/** Where a piece waits at the start of a dino (`anchor.<s>-<p>-start`). */
+-export const pieceStart = (s: SpeciesId, p: PieceId): string => `${pieceObject(s, p)}-start`;
++/** Story 3.4: start bay `i` (1-based; `anchor.dino-bay-<i>`). */
++export const bayAnchor = (i: number): string => `dino-bay-${i}`;
++/** Every bay anchor id, bay 1 first. */
++export const BAY_ANCHORS: readonly string[] = Array.from({ length: DINO_BAYS }, (_, i) => bayAnchor(i + 1));
+ /** The dino's ground pivot (`anchor.<s>`). */
+ export const dinoAnchor = (s: SpeciesId): string => s;
+ /** Where the come-alive walk ends (`anchor.<s>-walk`). */
+@@ -48,7 +75,8 @@ export const walkAnchor = (s: SpeciesId): string => `${s}-walk`;
+ export const GRASS_HIT = 'grass';
+ export const CLOUDS = ['cloud-1', 'cloud-2'] as const;
+ 
+-export const DINO_WALK_FRAMES = 4;
++/** Story 3.4: 2 walk frames (the atlas stays within 4 pages). */
++export const DINO_WALK_FRAMES = 2;
+ export const DINO_HAPPY_FRAMES = 2;
+ const nn = (i: number): string => String(i).padStart(2, '0');
+ export const dinoFrames = (s: SpeciesId) =>
+@@ -62,21 +90,15 @@ export const dinoFrames = (s: SpeciesId) =>
+ export const pieceFrames = (s: SpeciesId, p: PieceId) => ({ idle: `${pieceObject(s, p)}/idle/00`, ghost: `${pieceObject(s, p)}/ghost/00` }) as const;
+ export const cloudFrame = (c: (typeof CLOUDS)[number]): string => `${c}/idle/00`;
+ 
+-/** Every piece id of every PIECES cut, in order and once each. */
+-const ALL_PIECES: readonly PieceId[] = [...new Set(Object.values(PIECES).flat())];
+-
+-/** What `dino-puzzle.layout.json` and `atlas.dino-puzzle` must hold (generated from SPECIES × PIECES). */
++/** What `dino-puzzle.layout.json` and `atlas.dino-puzzle` must hold (generated from SPECIES × PIECE_IDS, plus the bays). */
+ export const screen: ScreenRequirements = {
+-  anchors: [
+-    ...SPECIES.flatMap((s) => [dinoAnchor(s), walkAnchor(s), ...ALL_PIECES.map((p) => pieceStart(s, p))]),
+-    ...CLOUDS,
+-  ],
++  anchors: [...SPECIES.flatMap((s) => [dinoAnchor(s), walkAnchor(s)]), ...BAY_ANCHORS, ...CLOUDS],
+   hits: [GRASS_HIT],
+-  slots: SPECIES.flatMap((s) => ALL_PIECES.map((p) => pieceSlot(s, p))),
++  slots: SPECIES.flatMap((s) => PIECE_IDS.map((p) => pieceSlot(s, p))),
+   frames: [
+     ...SPECIES.flatMap((s) => {
+       const f = dinoFrames(s);
+-      return [f.idle, f.blink, ...f.happy, ...f.walk, f.ghost, ...ALL_PIECES.flatMap((p) => Object.values(pieceFrames(s, p)))];
++      return [f.idle, f.blink, ...f.happy, ...f.walk, f.ghost, ...PIECE_IDS.flatMap((p) => Object.values(pieceFrames(s, p)))];
+     }),
+     ...CLOUDS.map(cloudFrame),
+   ],
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/content/generated/dino-puzzle.layout.json b/app/src/content/generated/dino-puzzle.layout.json
+index 023d008..44282e8 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/content/generated/dino-puzzle.layout.json
++++ b/app/src/content/generated/dino-puzzle.layout.json
+@@ -1,21 +1,20 @@
+ {
+   "anchors": {
+     "apatosaurus": { "x": 512, "y": 360 },
+-    "apatosaurus-body-legs-start": { "x": 512, "y": 560 },
+-    "apatosaurus-head-neck-start": { "x": 151.8, "y": 478.2 },
+-    "apatosaurus-tail-start": { "x": 872.2, "y": 478.2 },
+     "apatosaurus-walk": { "x": 606.7, "y": 383.9 },
+     "cloud-1": { "x": 225.1, "y": 49.7 },
+     "cloud-2": { "x": 820.6, "y": 43.4 },
++    "dino-bay-1": { "x": 180.1, "y": 330 },
++    "dino-bay-2": { "x": 874.1, "y": 386.1 },
++    "dino-bay-3": { "x": 400, "y": 560 },
++    "dino-bay-4": { "x": 640.2, "y": 560 },
++    "dino-bay-5": { "x": 159.9, "y": 560 },
++    "dino-bay-6": { "x": 860.2, "y": 560 },
++    "dino-bay-7": { "x": 180.3, "y": 450 },
++    "dino-bay-8": { "x": 873.9, "y": 480.1 },
+     "stegosaurus": { "x": 512, "y": 360 },
+-    "stegosaurus-body-legs-start": { "x": 512, "y": 560 },
+-    "stegosaurus-head-neck-start": { "x": 151.8, "y": 478.2 },
+-    "stegosaurus-tail-start": { "x": 872.2, "y": 478.2 },
+     "stegosaurus-walk": { "x": 606.7, "y": 383.9 },
+     "triceratops": { "x": 512, "y": 360 },
+-    "triceratops-body-legs-start": { "x": 512, "y": 560 },
+-    "triceratops-head-neck-start": { "x": 151.8, "y": 478.2 },
+-    "triceratops-tail-start": { "x": 872.2, "y": 478.2 },
+     "triceratops-walk": { "x": 606.7, "y": 383.9 }
+   },
+   "design": {
+@@ -34,14 +33,35 @@
+   "renderScale": 2,
+   "screenId": "dino-puzzle",
+   "slots": {
++    "apatosaurus-back": { "x": 502.1, "y": 311.4 },
++    "apatosaurus-back-legs": { "x": 502.1, "y": 317 },
++    "apatosaurus-body": { "x": 555.5, "y": 298.1 },
+     "apatosaurus-body-legs": { "x": 546.4, "y": 318.8 },
++    "apatosaurus-front": { "x": 565.8, "y": 323.5 },
++    "apatosaurus-front-legs": { "x": 555.9, "y": 341.3 },
++    "apatosaurus-head": { "x": 689.5, "y": 298.7 },
+     "apatosaurus-head-neck": { "x": 659.3, "y": 301.9 },
++    "apatosaurus-neck": { "x": 646.8, "y": 301.9 },
+     "apatosaurus-tail": { "x": 434, "y": 298.4 },
++    "stegosaurus-back": { "x": 548.4, "y": 260.8 },
++    "stegosaurus-back-legs": { "x": 532.5, "y": 267.2 },
++    "stegosaurus-body": { "x": 598.6, "y": 237.2 },
+     "stegosaurus-body-legs": { "x": 568.9, "y": 274.5 },
++    "stegosaurus-front": { "x": 613.6, "y": 290.1 },
++    "stegosaurus-front-legs": { "x": 635.2, "y": 347.6 },
++    "stegosaurus-head": { "x": 693.5, "y": 331.7 },
+     "stegosaurus-head-neck": { "x": 678.1, "y": 302.4 },
++    "stegosaurus-neck": { "x": 664.7, "y": 295.9 },
+     "stegosaurus-tail": { "x": 462, "y": 232.7 },
+-    "triceratops-body-legs": { "x": 520.4, "y": 284.9 },
++    "triceratops-back": { "x": 489.4, "y": 272 },
++    "triceratops-back-legs": { "x": 479.3, "y": 274.5 },
++    "triceratops-body": { "x": 536.6, "y": 243.1 },
++    "triceratops-body-legs": { "x": 511.4, "y": 284.9 },
++    "triceratops-front": { "x": 546.8, "y": 291.2 },
++    "triceratops-front-legs": { "x": 572, "y": 321.3 },
++    "triceratops-head": { "x": 678.7, "y": 256.1 },
+     "triceratops-head-neck": { "x": 636.4, "y": 242.7 },
++    "triceratops-neck": { "x": 616.8, "y": 242.7 },
+     "triceratops-tail": { "x": 433.9, "y": 233 }
+   },
+   "v": 1
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/core/rng.test.ts b/app/src/core/rng.test.ts
+index 414f61a..532232c 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/core/rng.test.ts
++++ b/app/src/core/rng.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from 'vitest';
+-import { candidateSeed, mulberry32, questionSeed, randInt, shuffled } from './rng';
++import { candidateSeed, mulberry32, questionSeed, randInt, shuffled, startSeed } from './rng';
+ 
+ describe('mulberry32', () => {
+   it('is deterministic per seed and stays in [0, 1)', () => {
+@@ -52,3 +52,15 @@ describe('candidateSeed (Story 3.2)', () => {
+     }
+   });
+ });
++
++describe('startSeed (Story 3.4)', () => {
++  it('(seed, 0, 0) is the seed; every question index and attempt gives its own seed, as uint32', () => {
++    for (const seed of [0, 1, 7, 123456, 0xffffffff]) {
++      expect(startSeed(seed, 0, 0)).toBe(seed >>> 0);
++      const all = new Set<number>();
++      for (let q = 0; q < 3; q++) for (let a = 0; a < 64; a++) all.add(startSeed(seed, q, a));
++      expect(all.size).toBe(3 * 64);
++      for (const v of all) expect(Number.isInteger(v) && v >= 0 && v <= 0xffffffff).toBe(true);
++    }
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/core/rng.ts b/app/src/core/rng.ts
+index fba6d76..ebf1128 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/core/rng.ts
++++ b/app/src/core/rng.ts
+@@ -53,3 +53,15 @@ const CANDIDATE_SALT = 0x85ebca6b;
+ export function candidateSeed(seed: number, attempt: number): number {
+   return (seed + Math.imul(attempt, CANDIDATE_SALT)) >>> 0;
+ }
++
++/** Story 3.4: salts of a dino's start arrangement (games/dino-puzzle/starts.ts). */
++const START_Q_SALT = 0x27d4eb2f;
++const START_A_SALT = 0x165667b1;
++
++/**
++ * The seed of start-arrangement `attempt` of dino `questionIndex`:
++ * `(seed + questionIndex × 0x27D4EB2F + attempt × 0x165667B1) >>> 0`.
++ */
++export function startSeed(seed: number, questionIndex: number, attempt: number): number {
++  return (seed + Math.imul(questionIndex, START_Q_SALT) + Math.imul(attempt, START_A_SALT)) >>> 0;
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/core/timing.ts b/app/src/core/timing.ts
+index 53a3c90..59fda87 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/core/timing.ts
++++ b/app/src/core/timing.ts
+@@ -143,8 +143,8 @@ export const Timing = {
+   dinoBlinkMs: 160,
+   /** Story 3.3: the come-alive walk to `anchor.<s>-walk` takes this long. */
+   dinoWalkMs: 1200,
+-  /** Story 3.3: each walk frame (`<s>/walk/00..03`) shows this long. */
+-  dinoWalkFrameMs: 150,
++  /** Story 3.3 / 3.4: each walk frame (`<s>/walk/00..01`; 2 frames since Story 3.4) shows this long. */
++  dinoWalkFrameMs: 300,
+   /** Story 3.3: the dino's happy call plays this long before its name is said. */
+   dinoCallMs: 800,
+   /** Story 3.3: the next dino's ghost and pieces fade in over this. */
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/core/tokens.test.ts b/app/src/core/tokens.test.ts
+index a334dad..8100eae 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/core/tokens.test.ts
++++ b/app/src/core/tokens.test.ts
+@@ -204,6 +204,14 @@ describe('resume mark (Story 2.5)', () => {
+   });
+ });
+ 
++describe('Story 3.4 values', () => {
++  it('ui.dinoPieceMinRawPx caps the loose-piece enlargement at 2.25×; a walk frame lasts 300 ms', () => {
++    expect(Tokens.ui.dinoPieceMinRawPx).toBe(40);
++    expect(Tokens.components.draggableItem.minSize / Tokens.ui.dinoPieceMinRawPx).toBe(2.25);
++    expect(Tokens.Timing.dinoWalkFrameMs).toBe(300);
++  });
++});
++
+ describe('Story 3.3 values', () => {
+   it('art.dino, the dino ui values and timings', () => {
+     expect(Tokens.art.dino.apatosaurusBelly.css).toBe('#CFEFFF');
+@@ -211,11 +219,12 @@ describe('Story 3.3 values', () => {
+     expect(Tokens.art.dino.stegosaurusBelly.css).toBe('#FFE2C2');
+     expect(Tokens.art.dino.horn.css).toBe('#FFF3D6');
+     expect(Tokens.ui).toMatchObject({ dinoSizePx: 360, dinoSizeTolerance: 40, dinoWalkMaxPx: 120, dinoSlotTolerancePx: 3, dinoCloudDriftPx: 24, dinoReducedHopScale: 1.04, ghostDash: [12, 8] });
+-    expect(Tokens.Timing).toMatchObject({ dinoBlinkMs: 160, dinoWalkMs: 1200, dinoWalkFrameMs: 150, dinoCallMs: 800, dinoNextFadeMs: 500, dinoCloudDriftMs: 8000 });
++    expect(Tokens.Timing).toMatchObject({ dinoBlinkMs: 160, dinoWalkMs: 1200, dinoCallMs: 800, dinoNextFadeMs: 500, dinoCloudDriftMs: 8000 });
+   });
+ 
+-  it('the walk shows every walk frame at least once and the cloud drift is slower than 1 Hz', () => {
+-    expect(Tokens.Timing.dinoWalkMs / Tokens.Timing.dinoWalkFrameMs).toBeGreaterThanOrEqual(4);
++  it('the walk shows every walk frame at least twice and the cloud drift is slower than 1 Hz', () => {
++    // Story 3.4: 2 walk frames.
++    expect(Tokens.Timing.dinoWalkMs / Tokens.Timing.dinoWalkFrameMs).toBeGreaterThanOrEqual(2 * 2);
+     expect(Tokens.Timing.dinoCloudDriftMs).toBeGreaterThanOrEqual(Tokens.Timing.flashMinPeriodMs);
+   });
+ });
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/core/tokens.ts b/app/src/core/tokens.ts
+index 58f9d2d..9241c33 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/core/tokens.ts
++++ b/app/src/core/tokens.ts
+@@ -105,6 +105,11 @@ const ui = {
+   dinoReducedHopScale: 1.04,
+   /** Story 3.3: the ghost outline dash and gap (design px; × renderScale in the rendered frame). */
+   ghostDash: [12, 8],
++  /**
++   * Story 3.4: a dino piece's trimmed longest side ÷ renderScale must be at least this (design px). A
++   * loose piece is drawn enlarged to draggableItem.minSize, so this caps the enlargement at 2.25×.
++   */
++  dinoPieceMinRawPx: 40,
+ } as const;
+ 
+ /** A colour in the generated-token shape (`css`, `value`, `alpha`). */
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/games/dino-puzzle/DinoPuzzle.ts b/app/src/games/dino-puzzle/DinoPuzzle.ts
+index 49d22f6..26121de 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/games/dino-puzzle/DinoPuzzle.ts
++++ b/app/src/games/dino-puzzle/DinoPuzzle.ts
+@@ -7,9 +7,14 @@
+ // next dino, the round end) is the pure round model (round.ts, questions.ts); prompts and retries go
+ // through `hint` only; the game speaks only each dino's name (`say`). Every position comes from
+ // LAYOUTS['dino-puzzle']; timers are scene-clock events and tweens (removed or frozen with the scene).
++// Story 3.4: 3, 4 or 6 pieces per the level's cut (draggables and slot targets only for that cut); a
++// loose piece is drawn enlarged to draggableItem.minSize (starts.ts › pieceScale) and eases to scale 1
++// as it snaps; loose pieces start at the seeded bays (starts.ts › arrangeStarts); a resumed dino shows
++// its placed pieces at once, in place and real-coloured (`restorePieces`, no tween, no sfx).
+ import type { GameObjects, Time, Tweens } from 'phaser';
+ import { ATLASES, BACKGROUNDS } from '../../content/assets';
+ import {
++  BAY_ANCHORS,
+   CLOUDS,
+   GRASS_HIT,
+   SFX,
+@@ -18,7 +23,6 @@ import {
+   dinoFrames,
+   pieceFrames,
+   pieceSlot,
+-  pieceStart,
+   walkAnchor,
+   type PieceId,
+   type SpeciesId,
+@@ -39,6 +43,7 @@ import { Tokens } from '../../core/tokens';
+ import { originFor, trimmedCentre, trimmedSize, type TrimmedRect } from '../../core/ui/sprite-pivot';
+ import { MiniGameBase } from '../mini-game-base';
+ import { DinoRound, startCommands, type Area, type DinoCommand, type DinoGeometry, type DinoProgress, type PieceState, type SpeechTag } from './round';
++import { displayedSize, hitRadius, pieceScale, type Size } from './starts';
+ 
+ const EASE_OUT = 'Quad.easeOut';
+ const SINE = 'Sine.easeInOut';
+@@ -61,11 +66,15 @@ interface PieceView {
+   readonly shadow: GameObjects.Ellipse;
+   /** Undefined once the piece is placed. */
+   drag: Draggable | undefined;
+-  /** Hit radius (r + draggableItem.hitPad). */
++  /** Hit radius (displayed longest side / 2 + draggableItem.hitPad). */
+   readonly hitR: number;
++  /** The loose scale (pieceScale; 1 = true size) × 1/renderScale is the image scale while loose. */
++  readonly looseScale: number;
+   /** The piece is drawn here (its trimmed centre). */
+   pos: Point;
+   tween: Tweens.Tween | undefined;
++  /** The snap scale tween (loose scale → true size → 1.05× → 1). */
++  scaleTween: Tweens.Tween | undefined;
+   returnTimer: Time.TimerEvent | undefined;
+ }
+ 
+@@ -212,19 +221,26 @@ export class DinoPuzzle extends MiniGameBase<'dino-puzzle'> {
+     return rect ? trimmedCentre(rect, this.layout.renderScale) : this.slot(pieceSlot(s, p));
+   }
+ 
+-  /** A piece's r: its trimmed longest side / 2 (else half the item minimum). */
+-  private pieceR(s: SpeciesId, p: PieceId): number {
++  /** A piece's trimmed size (design px; else the item minimum square). */
++  private pieceSize(s: SpeciesId, p: PieceId): Size {
+     const rect = this.frameRect(pieceFrames(s, p).idle);
+-    if (!rect) return Tokens.components.draggableItem.minSize / 2;
+-    const size = trimmedSize(rect, this.layout.renderScale);
+-    return Math.max(size.w, size.h) / 2;
++    const min = Tokens.components.draggableItem.minSize;
++    return rect ? trimmedSize(rect, this.layout.renderScale) : { w: min, h: min };
++  }
++
++  /** A loose piece's r: its displayed longest side / 2. */
++  private pieceR(s: SpeciesId, p: PieceId): number {
++    const d = displayedSize(this.pieceSize(s, p));
++    return Math.max(d.w, d.h) / 2;
+   }
+ 
+   private geometry(): DinoGeometry {
+     const box = boundingBox(this.layout.hits[GRASS_HIT] ?? []);
+     const grassRect: Rect = { x: box.x, y: box.y, w: box.width, h: box.height };
+     return {
+-      start: (s, p) => this.anchor(pieceStart(s, p)),
++      bays: BAY_ANCHORS.map((id) => this.anchor(id)),
++      slot: (s, p) => this.slot(pieceSlot(s, p)),
++      size: (s, p) => this.pieceSize(s, p),
+       placed: (s, p) => this.placedAt(s, p),
+       radius: (s, p) => this.pieceR(s, p),
+       inSlot: (p, pt) => this.dino?.targets.get(p)?.contains(pt) ?? false,
+@@ -256,16 +272,16 @@ export class DinoPuzzle extends MiniGameBase<'dino-puzzle'> {
+ 
+   // --- one dino ----------------------------------------------------------------------------------------
+ 
+-  /** The ghost (full frame), one slot target per piece and the loose pieces at their starts. */
+-  private buildDino(s: SpeciesId, pieces: readonly PieceState[], fade: boolean): void {
++  /** The ghost (full frame), one slot target per piece of the cut and the loose pieces at their starts. */
++  private buildDino(s: SpeciesId, cut: readonly PieceId[], pieces: readonly PieceState[], fade: boolean): void {
+     const ghost = this.hasFrame(dinoFrames(s).ghost) ? this.fullFrame(dinoFrames(s).ghost).setDepth(Depth.ghost) : undefined;
+     const targets = new Map<PieceId, DropTarget>();
+     const view: DinoView = { species: s, ghost, pieces: new Map(), targets, alive: undefined };
+     this.dino = view;
+     const snapR = Tokens.components.dropTarget.snapRadius;
+-    for (const p of pieces) {
+-      const at = this.slot(pieceSlot(s, p.id));
+-      targets.set(p.id, createDropTarget({ id: `slot-${p.id}`, circle: { x: at.x, y: at.y, r: snapR } }));
++    for (const p of cut) {
++      const at = this.slot(pieceSlot(s, p));
++      targets.set(p, createDropTarget({ id: `slot-${p}`, circle: { x: at.x, y: at.y, r: snapR } }));
+     }
+     for (const p of pieces) view.pieces.set(p.id, this.addPiece(s, p));
+     if (fade) {
+@@ -280,25 +296,31 @@ export class DinoPuzzle extends MiniGameBase<'dino-puzzle'> {
+     return this.add.image(0, 0, ATLASES['dino-puzzle'].key, frame).setOrigin(0).setScale(1 / this.layout.renderScale);
+   }
+ 
+-  private addPiece(s: SpeciesId, p: PieceState): PieceView {
+-    const frame = pieceFrames(s, p.id).idle;
++  /** The piece image with its origin on its trimmed centre (it scales around it), or undefined with one warning. */
++  private pieceImage(s: SpeciesId, p: PieceId, at: Point, scale: number): GameObjects.Image | undefined {
++    const frame = pieceFrames(s, p).idle;
+     const rect = this.frameRect(frame);
+-    const rs = this.layout.renderScale;
++    if (!rect) {
++      this.warnOnce(frame, `dino-puzzle: frame "${frame}" is missing — piece drawn without an image`);
++      return undefined;
++    }
++    const o = originFor(trimmedCentre(rect, this.layout.renderScale), this.layout.design);
++    return this.add.image(at.x, at.y, ATLASES['dino-puzzle'].key, frame).setOrigin(o.x, o.y).setScale(scale / this.layout.renderScale);
++  }
++
++  /** A loose piece: drawn at pieceScale, its hit circle sized to the displayed piece. */
++  private addPiece(s: SpeciesId, p: PieceState): PieceView {
+     const item = Tokens.components.draggableItem;
+-    const size = rect ? trimmedSize(rect, rs) : { w: item.minSize, h: item.minSize };
++    const size = this.pieceSize(s, p.id);
++    const looseScale = pieceScale(Math.max(size.w, size.h));
++    const shown = displayedSize(size);
+     const shadowSpec = item.liftShadow;
+     const shadow = this.add
+-      .ellipse(p.at.x + shadowSpec.x, p.at.y + shadowSpec.y, size.w, size.h / 2, shadowSpec.color.value, shadowSpec.color.alpha)
++      .ellipse(p.at.x + shadowSpec.x, p.at.y + shadowSpec.y, shown.w, shown.h / 2, shadowSpec.color.value, shadowSpec.color.alpha)
+       .setDepth(Depth.piece)
+       .setVisible(false);
+-    let image: GameObjects.Image | undefined;
+-    if (rect) {
+-      const o = originFor(trimmedCentre(rect, rs), this.layout.design);
+-      image = this.add.image(p.at.x, p.at.y, ATLASES['dino-puzzle'].key, frame).setOrigin(o.x, o.y).setScale(1 / rs).setDepth(Depth.piece);
+-    } else {
+-      this.warnOnce(frame, `dino-puzzle: frame "${frame}" is missing — piece drawn without an image`);
+-    }
+-    const view: PieceView = { id: p.id, image, shadow, drag: undefined, hitR: Math.max(size.w, size.h) / 2 + item.hitPad, pos: { ...p.at }, tween: undefined, returnTimer: undefined };
++    const image = this.pieceImage(s, p.id, p.at, looseScale)?.setDepth(Depth.piece);
++    const view: PieceView = { id: p.id, image, shadow, drag: undefined, hitR: hitRadius(size), looseScale, pos: { ...p.at }, tween: undefined, scaleTween: undefined, returnTimer: undefined };
+     if (this.router) {
+       view.drag = createDraggable(this.router, {
+         circle: { x: p.at.x, y: p.at.y, r: view.hitR },
+@@ -313,6 +335,18 @@ export class DinoPuzzle extends MiniGameBase<'dino-puzzle'> {
+     return view;
+   }
+ 
++  /** Story 3.4 resume: the placed pieces sit locked in place at true size, real-coloured; no tween, no sfx. */
++  private restorePieces(ids: readonly PieceId[]): void {
++    const d = this.dino;
++    if (!d) return;
++    for (const id of ids) {
++      const at = this.placedAt(d.species, id);
++      const image = this.pieceImage(d.species, id, at, 1)?.setDepth(Depth.placed);
++      const shadow = this.add.ellipse(at.x, at.y, 1, 1).setVisible(false);
++      d.pieces.set(id, { id, image, shadow, drag: undefined, hitR: 0, looseScale: 1, pos: at, tween: undefined, scaleTween: undefined, returnTimer: undefined });
++    }
++  }
++
+   private place(view: PieceView, p: Point): void {
+     view.pos = { ...p };
+     view.image?.setPosition(p.x, p.y);
+@@ -325,12 +359,13 @@ export class DinoPuzzle extends MiniGameBase<'dino-puzzle'> {
+     this.applyAll(this.round?.lift(view.id) ?? []);
+     view.tween?.stop();
+     view.tween = undefined;
+-    view.image?.setScale(Tokens.components.draggableItem.liftScale / this.layout.renderScale).setDepth(Depth.lifted);
++    // Lift is liftScale x the loose scale.
++    view.image?.setScale((Tokens.components.draggableItem.liftScale * view.looseScale) / this.layout.renderScale).setDepth(Depth.lifted);
+     view.shadow.setVisible(true).setDepth(Depth.lifted);
+   }
+ 
+   private settle(view: PieceView, outcome: () => DinoCommand[]): void {
+-    view.image?.setScale(1 / this.layout.renderScale).setDepth(Depth.piece);
++    view.image?.setScale(view.looseScale / this.layout.renderScale).setDepth(Depth.piece);
+     view.shadow.setVisible(false).setDepth(Depth.piece);
+     this.applyAll(outcome());
+   }
+@@ -355,7 +390,7 @@ export class DinoPuzzle extends MiniGameBase<'dino-puzzle'> {
+     });
+   }
+ 
+-  /** The piece snaps (ease-out, 1.05× bounce) to its frame-aligned spot and is locked there. */
++  /** The piece snaps (ease-out, 1.05× bounce) to its frame-aligned spot and is locked there; its scale eases to 1 (true size). */
+   private snap(piece: PieceId, to: Point): void {
+     audio.sfx(SFX.snap);
+     const v = this.dino?.pieces.get(piece);
+@@ -373,11 +408,33 @@ export class DinoPuzzle extends MiniGameBase<'dino-puzzle'> {
+       this.snapping -= 1;
+       if (this.snapping === 0) for (const fn of this.afterSnap.splice(0)) fn();
+     });
+-    if (v.image) this.tweens.add({ targets: v.image, scale: base * amplitude(spec.scale, this.reduced), duration: spec.durationMs / 2, ease: EASE_OUT, yoyo: true, onComplete: () => v.image?.setScale(base) });
++    const img = v.image;
++    if (!img) return;
++    // First half: shrink from the loose scale to true size; second half: the 1.05× bounce and back, so
++    // the overshoot shows for enlarged pieces too.
++    const from = img.scale;
++    const peak = base * amplitude(spec.scale, this.reduced);
++    v.scaleTween?.stop();
++    v.scaleTween = this.tweens.addCounter({
++      from: 0,
++      to: 1,
++      duration: spec.durationMs,
++      onUpdate: (t) => {
++        if (!img.active) return;
++        const k = t.getValue() ?? 0;
++        if (k < 0.5) img.setScale(from + (base - from) * Math.sin(k * Math.PI));
++        else img.setScale(base + (peak - base) * Math.sin((k - 0.5) * 2 * Math.PI));
++      },
++      onComplete: () => {
++        v.scaleTween = undefined;
++        if (img.active) img.setScale(base);
++      },
++    });
+   }
+ 
+   private destroyPiece(v: PieceView): void {
+     v.tween?.stop();
++    v.scaleTween?.stop();
+     v.returnTimer?.remove();
+     v.drag?.destroy();
+     v.image?.destroy();
+@@ -514,6 +571,7 @@ export class DinoPuzzle extends MiniGameBase<'dino-puzzle'> {
+     d.ghost?.setVisible(false);
+     for (const v of d.pieces.values()) {
+       v.tween?.stop();
++      v.scaleTween?.stop();
+       v.image?.setVisible(false);
+     }
+     const f = dinoFrames(s);
+@@ -562,8 +620,11 @@ export class DinoPuzzle extends MiniGameBase<'dino-puzzle'> {
+   private apply(c: DinoCommand): void {
+     const pieces = this.dino?.pieces;
+     switch (c.kind) {
+-      case 'build':
+-        this.buildDino(c.species, c.pieces, c.fade);
++      case 'showDino':
++        this.buildDino(c.species, c.cut, c.pieces, c.fade);
++        return;
++      case 'restorePieces':
++        this.restorePieces(c.ids);
+         return;
+       case 'beginQuestion':
+         this.hint.beginQuestion({ promptLineId: c.promptLineId, retryLineId: c.retryLineId, step: this.step(c.piece) });
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/games/dino-puzzle/questions.test.ts b/app/src/games/dino-puzzle/questions.test.ts
+index 887ca3f..e666d19 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/games/dino-puzzle/questions.test.ts
++++ b/app/src/games/dino-puzzle/questions.test.ts
+@@ -19,15 +19,22 @@ describe('roundSpecies (Story 3.3)', () => {
+     expect(orders.size).toBe(6);
+   });
+ 
+-  it('clamps the level (−1, 9, NaN → 0) and the seed (NaN → 0)', () => {
++  it('clamps the level (−1, NaN → 0; 9 → 2) and the seed (NaN → 0)', () => {
+     expect(levelIndex(-1)).toBe(0);
+-    expect(levelIndex(9)).toBe(0);
++    expect(levelIndex(9)).toBe(2);
+     expect(levelIndex(Number.NaN)).toBe(0);
+-    expect(roundSpecies(3, 9)).toEqual(roundSpecies(3, 0));
++    expect(roundSpecies(3, 9)).toEqual(roundSpecies(3, 2));
+     expect(roundSpecies(Number.NaN, 0)).toEqual(roundSpecies(0, 0));
+   });
+ 
+-  it('the cut of the one level: head-neck, body-legs, tail (the hint order)', () => {
++  it('the cut of each level in hint order (Story 3.4): 3 → 4 → 6 pieces', () => {
+     expect(levelPieces(0)).toEqual(['head-neck', 'body-legs', 'tail']);
++    expect(levelPieces(1)).toEqual(['head-neck', 'front', 'back', 'tail']);
++    expect(levelPieces(2)).toEqual(['head', 'neck', 'body', 'front-legs', 'back-legs', 'tail']);
++    expect(levelPieces(7)).toEqual(levelPieces(2));
++  });
++
++  it('every level shows 3 dinos (Story 3.4)', () => {
++    for (const l of [0, 1, 2]) expect(roundSpecies(5, l)).toHaveLength(3);
+   });
+ });
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/games/dino-puzzle/round.test.ts b/app/src/games/dino-puzzle/round.test.ts
+index d4be71b..8d151f8 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/games/dino-puzzle/round.test.ts
++++ b/app/src/games/dino-puzzle/round.test.ts
+@@ -1,24 +1,48 @@
+-// Story 3.3: the Ghép khủng long round model against fake geometry (every non-Phaser matrix row).
++// Stories 3.3 and 3.4: the Ghép khủng long round model against fake geometry (every non-Phaser matrix
++// row), plus the close-slot sweep over the real generated layout.
++import { readFileSync } from 'node:fs';
++import { join } from 'node:path';
+ import { describe, expect, it } from 'vitest';
+-import type { PieceId } from '../../content/games/dino-puzzle';
+-import type { Point } from '../../content/layout-types';
++import { BAY_ANCHORS, PIECES, PIECE_IDS, SPECIES, type PieceId, type SpeciesId } from '../../content/games/dino-puzzle';
++import type { Point, ScreenLayout } from '../../content/layout-types';
+ import { HintMachine } from '../../core/hint-machine';
+ import { RoundTally } from '../../core/round-tally';
+ import { Tokens } from '../../core/tokens';
++import { closeSlotPairs } from '../../../tools/layout/rules.ts';
+ import { roundSpecies } from './questions';
+ import { DinoRound, startCommands, type DinoCommand, type DinoGeometry } from './round';
+ 
+ const SNAP = 100;
+-// Slot centres like the real layout: the body's zone overlaps both others'.
+-const SLOTS: Record<PieceId, Point> = { 'head-neck': { x: 640, y: 250 }, 'body-legs': { x: 530, y: 280 }, tail: { x: 430, y: 240 } };
+-const STARTS: Record<PieceId, Point> = { 'head-neck': { x: 150, y: 480 }, 'body-legs': { x: 512, y: 560 }, tail: { x: 870, y: 480 } };
+-const RADIUS: Record<PieceId, number> = { 'head-neck': 80, 'body-legs': 120, tail: 90 };
++// Slot centres like the real layout: the body's zone overlaps both others'. The 4/6-piece slots sit
++// along the same ghost.
++const SLOTS: Record<PieceId, Point> = {
++  'head-neck': { x: 640, y: 250 },
++  'body-legs': { x: 530, y: 280 },
++  tail: { x: 430, y: 240 },
++  front: { x: 580, y: 290 },
++  back: { x: 490, y: 270 },
++  head: { x: 690, y: 240 },
++  neck: { x: 630, y: 250 },
++  body: { x: 540, y: 250 },
++  'front-legs': { x: 580, y: 330 },
++  'back-legs': { x: 490, y: 320 },
++};
++// Trimmed sizes (design px); every one ≥ 90, so loose pieces are drawn at scale 1.
++const SIZES: Partial<Record<PieceId, { w: number; h: number }>> = { 'head-neck': { w: 160, h: 90 }, 'body-legs': { w: 240, h: 120 }, tail: { w: 180, h: 90 } };
++const size = (p: PieceId) => SIZES[p] ?? { w: 100, h: 90 };
++const BAYS: Point[] = [
++  { x: 130, y: 400 }, { x: 400, y: 400 }, { x: 650, y: 400 }, { x: 900, y: 400 },
++  { x: 130, y: 620 }, { x: 400, y: 620 }, { x: 650, y: 620 }, { x: 900, y: 620 },
++];
+ 
+-function geometry(snapScale: Partial<Record<PieceId, number>> = {}): DinoGeometry {
++function geometry(snapScale: Partial<Record<PieceId, number>> = {}, slots: (s: SpeciesId, p: PieceId) => Point = (_s, p) => SLOTS[p]): DinoGeometry {
+   return {
+-    start: (_s, p) => STARTS[p],
+-    placed: (_s, p) => ({ x: SLOTS[p].x + 1, y: SLOTS[p].y - 1 }),
+-    radius: (_s, p) => RADIUS[p],
++    bays: BAYS,
++    slot: slots,
++    size: (_s, p) => size(p),
++    placed: (s, p) => ({ x: slots(s, p).x + 1, y: slots(s, p).y - 1 }),
++    radius: (_s, p) => Math.max(size(p).w, size(p).h) / 2,
++    // The scene keeps one target per cut piece of the current dino; the fake answers for the cut.
+     inSlot: (p, pt) => Math.hypot(pt.x - SLOTS[p].x, pt.y - SLOTS[p].y) <= SNAP * (snapScale[p] ?? 1),
+     grass: { contains: (p) => p.y >= 330 && p.y <= 760 && p.x >= 0 && p.x <= 1024 },
+     restRect: () => ({ x: 24, y: 330, w: 976, h: 364 }),
+@@ -32,27 +56,29 @@ const kinds = (cs: readonly DinoCommand[]): string[] => cs.map((c) => c.kind);
+ const find = <K extends DinoCommand['kind']>(cs: readonly DinoCommand[], kind: K): Extract<DinoCommand, { kind: K }> | undefined =>
+   cs.find((c): c is Extract<DinoCommand, { kind: K }> => c.kind === kind);
+ const near = (p: Point, dx: number, dy = 0): Point => ({ x: p.x + dx, y: p.y + dy });
++/** Where piece `p` starts on dino `index` of round `r`. */
++const startOf = (r: DinoRound, p: PieceId, index = 0): Point => r.starts(index)[p]!;
+ 
+ /** Places every piece of the open dino; returns the last drop's commands. */
+ function completeDino(r: DinoRound): DinoCommand[] {
+   let last: DinoCommand[] = [];
+-  for (const p of r.pieces) last = r.drop(p, SLOTS[p]);
++  for (const p of r.pieces) if (!r.placed().includes(p)) last = r.drop(p, SLOTS[p]);
+   return last;
+ }
+ 
+ describe('DinoRound — enter and drops (Story 3.3)', () => {
+-  it('Enter {level 0, seed 7}: the ghost of roundSpecies(7,0)[0], 3 pieces at their starts, beginQuestion(ask, retry, head-neck)', () => {
++  it('Enter {level 0, seed 7}: the ghost of roundSpecies(7,0)[0], 3 pieces at their arranged bays, beginQuestion(ask, retry, head-neck)', () => {
+     const r = new DinoRound(geometry(), 7, 0);
+     const cs = r.start();
+-    expect(kinds(cs)).toEqual(['build', 'beginQuestion']);
+-    const b = find(cs, 'build')!;
++    expect(kinds(cs)).toEqual(['showDino', 'restorePieces', 'beginQuestion']);
++    const b = find(cs, 'showDino')!;
+     expect(b.species).toBe(roundSpecies(7, 0)[0]);
+     expect(b.fade).toBe(false);
+-    expect(b.pieces).toEqual([
+-      { id: 'head-neck', at: STARTS['head-neck'] },
+-      { id: 'body-legs', at: STARTS['body-legs'] },
+-      { id: 'tail', at: STARTS.tail },
+-    ]);
++    expect(b.cut).toEqual(PIECES[3]);
++    expect(b.pieces.map((p) => p.id)).toEqual(['head-neck', 'body-legs', 'tail']);
++    for (const p of b.pieces) expect(BAYS).toContainEqual(p.at);
++    expect(b.pieces).toEqual(PIECES[3].map((id) => ({ id, at: startOf(r, id) })));
++    expect(find(cs, 'restorePieces')).toEqual({ kind: 'restorePieces', ids: [] });
+     expect(find(cs, 'beginQuestion')).toEqual({ kind: 'beginQuestion', promptLineId: 'vo.dino-puzzle.ask', retryLineId: 'vo.dino-puzzle.retry', piece: 'head-neck' });
+   });
+ 
+@@ -73,7 +99,7 @@ describe('DinoRound — enter and drops (Story 3.3)', () => {
+     const r = new DinoRound(geometry(), 7, 0);
+     r.start();
+     expect(r.drop('body-legs', near(SLOTS['head-neck'], 60, 0))).toEqual([
+-      { kind: 'floatBack', piece: 'body-legs', to: STARTS['body-legs'] },
++      { kind: 'floatBack', piece: 'body-legs', to: startOf(r, 'body-legs') },
+       { kind: 'hintWrong' },
+     ]);
+     expect(r.placed()).toEqual([]);
+@@ -95,11 +121,11 @@ describe('DinoRound — enter and drops (Story 3.3)', () => {
+     expect(find(r.drop('body-legs', both), 'snap')?.piece).toBe('body-legs');
+   });
+ 
+-  it('An enlarged other-slot zone (×4 here; level 4 doubles it) never turns a re-drop near home into a mistake: own and home come first', () => {
+-    const r = new DinoRound(geometry({ 'head-neck': 4 }), 7, 0);
++  it('An enlarged other-slot zone never turns a re-drop near home into a mistake: own and home come first', () => {
++    const r = new DinoRound(geometry({ 'head-neck': 20 }), 7, 0);
+     r.start();
+-    // The head's ×4 zone reaches the body's start; the body lifted and put back is just home.
+-    expect(r.resolve('body-legs', near(STARTS['body-legs'], 20))).toBe('home');
++    // The head's ×20 zone reaches the body's start; the body lifted and put back is just home.
++    expect(r.resolve('body-legs', near(startOf(r, 'body-legs'), 20))).toBe('home');
+   });
+ 
+   it('Hinted vs other: the ring is on head-neck, the child places tail → counted; the next step stays head-neck', () => {
+@@ -112,17 +138,19 @@ describe('DinoRound — enter and drops (Story 3.3)', () => {
+   it('Home: lifted and dropped within 50 px → settles, no hint', () => {
+     const r = new DinoRound(geometry(), 7, 0);
+     r.start();
+-    expect(r.drop('tail', near(STARTS.tail, 30, 30))).toEqual([{ kind: 'floatBack', piece: 'tail', to: STARTS.tail }]);
++    const at = startOf(r, 'tail');
++    expect(r.drop('tail', near(at, 30, 30))).toEqual([{ kind: 'floatBack', piece: 'tail', to: at }]);
+   });
+ 
+   it('Rest: dropped on grass away from slots → stays, nudged clear of the other loose pieces', () => {
+     const r = new DinoRound(geometry(), 7, 0);
+     r.start();
+-    const cs = r.drop('tail', near(STARTS['body-legs'], 80));
++    const body = startOf(r, 'body-legs');
++    const cs = r.drop('tail', near(body, 80));
+     const rest = find(cs, 'rest')!;
+     expect(kinds(cs)).toEqual(['rest']);
+     // r(tail) + max r(others) = 90 + 120.
+-    expect(Math.hypot(rest.at.x - STARTS['body-legs'].x, rest.at.y - STARTS['body-legs'].y)).toBeGreaterThanOrEqual(210 - 1e-9);
++    expect(Math.hypot(rest.at.x - body.x, rest.at.y - body.y)).toBeGreaterThanOrEqual(210 - 1e-9);
+     expect(r.loosePieces().find((p) => p.id === 'tail')!.at).toEqual(rest.at);
+     // The new rest spot is its pre-lift position: a later wrong drop floats back there.
+     expect(find(r.drop('tail', SLOTS['head-neck']), 'floatBack')!.to).toEqual(rest.at);
+@@ -131,7 +159,7 @@ describe('DinoRound — enter and drops (Story 3.3)', () => {
+   it('Off: dropped on the sky → slides back after 1500 ms; a re-lift cancels', () => {
+     const r = new DinoRound(geometry(), 7, 0);
+     r.start();
+-    expect(r.drop('tail', { x: 900, y: 120 })).toEqual([{ kind: 'returnLater', piece: 'tail', to: STARTS.tail, ms: 1500 }]);
++    expect(r.drop('tail', { x: 900, y: 120 })).toEqual([{ kind: 'returnLater', piece: 'tail', to: startOf(r, 'tail'), ms: 1500 }]);
+     expect(r.lift('tail')).toEqual([{ kind: 'cancelReturn', piece: 'tail' }]);
+     expect(r.lift('tail')).toEqual([]);
+     r.drop('tail', { x: 900, y: 120 });
+@@ -142,7 +170,75 @@ describe('DinoRound — enter and drops (Story 3.3)', () => {
+   it('Cancel (pause mid-drag): back to the pre-lift spot', () => {
+     const r = new DinoRound(geometry(), 7, 0);
+     r.start();
+-    expect(r.cancel('head-neck')).toEqual([{ kind: 'floatBack', piece: 'head-neck', to: STARTS['head-neck'] }]);
++    expect(r.cancel('head-neck')).toEqual([{ kind: 'floatBack', piece: 'head-neck', to: startOf(r, 'head-neck') }]);
++  });
++});
++
++describe('DinoRound — the ladder (Story 3.4)', () => {
++  it.each([
++    [0, PIECES[3]],
++    [1, PIECES[4]],
++    [2, PIECES[6]],
++    [7, PIECES[6]],
++    [-1, PIECES[3]],
++  ] as const)('level %i → the %j cut; 3 dinos in roundSpecies order', (level, cut) => {
++    const r = new DinoRound(geometry(), 11, level);
++    expect(r.pieces).toEqual(cut);
++    expect(r.questionCount).toBe(3);
++    expect(r.species).toEqual(roundSpecies(11, level));
++    const show = find(r.start(), 'showDino')!;
++    expect(show.cut).toEqual(cut);
++    expect(show.pieces.map((p) => p.id)).toEqual(cut);
++  });
++
++  it('L2 head-first hint; L2 tail dropped on the head slot (> 100 px from its own) floats back with wrong()', () => {
++    const r = new DinoRound(geometry(), 11, 2);
++    expect(find(r.start(), 'beginQuestion')!.piece).toBe('head');
++    expect(Math.hypot(SLOTS.head.x - SLOTS.tail.x, SLOTS.head.y - SLOTS.tail.y)).toBeGreaterThan(SNAP);
++    expect(kinds(r.drop('tail', SLOTS.head))).toEqual(['floatBack', 'hintWrong']);
++  });
++
++  it('Close slots: L2 head dropped at the neck slot centre (60 px from its own) snaps into head', () => {
++    const r = new DinoRound(geometry(), 11, 2);
++    r.start();
++    expect(Math.hypot(SLOTS.head.x - SLOTS.neck.x, SLOTS.head.y - SLOTS.neck.y)).toBeLessThan(SNAP);
++    expect(r.resolve('head', SLOTS.neck)).toBe('own');
++    expect(find(r.drop('head', SLOTS.neck), 'snap')!.piece).toBe('head');
++  });
++});
++
++describe('the close-slot sweep over the real layout (Story 3.4)', () => {
++  const layout = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'content', 'generated', 'dino-puzzle.layout.json'), 'utf8')) as ScreenLayout;
++  const slot = (s: SpeciesId, p: PieceId): Point => layout.slots[`${s}-${p}`]!;
++
++  it('every close pair: each piece dropped on the other slot\'s centre (inside its own zone too) snaps into its own slot', () => {
++    let pairs = 0;
++    for (const s of SPECIES) {
++      for (const [a, b] of closeSlotPairs(layout, s, PIECES, SNAP)) {
++        const pa = a.slice(s.length + 1) as PieceId;
++        const pb = b.slice(s.length + 1) as PieceId;
++        const level = ([0, 1, 2] as const).find((l) => {
++          const cut: readonly PieceId[] = [PIECES[3], PIECES[4], PIECES[6]][l]!;
++          return cut.includes(pa) && cut.includes(pb);
++        })!;
++        const geo: DinoGeometry = {
++          ...geometry({}, slot),
++          bays: BAY_ANCHORS.map((id) => layout.anchors[id]!),
++          inSlot: (p, pt) => Math.hypot(pt.x - slot(s, p).x, pt.y - slot(s, p).y) <= SNAP,
++        };
++        for (const [piece, other] of [[pa, pb], [pb, pa]] as const) {
++          const seed = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].find((k) => roundSpecies(k, level)[0] === s);
++          if (seed === undefined) throw new Error(`no seed in 0…9 starts level ${level} with ${s}`);
++          const r = new DinoRound(geo, seed, level);
++          r.start();
++          expect(r.resolve(piece, slot(s, other))).toBe('own');
++          expect(find(r.drop(piece, slot(s, other)), 'snap')!.piece).toBe(piece);
++          pairs += 1;
++        }
++      }
++    }
++    // The real 4/6-piece slots do sit closer than the snap radius (the rule is exercised).
++    expect(pairs).toBeGreaterThan(0);
+   });
+ });
+ 
+@@ -161,9 +257,10 @@ describe('DinoRound — come alive and the round (Story 3.3)', () => {
+     // A drag still running while the dino is alive just goes back.
+     expect(r.drop('tail', SLOTS.tail)).toEqual([]);
+     const next = r.speechEnded('name');
+-    expect(kinds(next)).toEqual(['clearDino', 'holdAlive', 'build', 'beginQuestion']);
++    expect(kinds(next)).toEqual(['clearDino', 'holdAlive', 'showDino', 'restorePieces', 'beginQuestion']);
+     expect(find(next, 'holdAlive')).toEqual({ kind: 'holdAlive', on: false });
+-    expect(find(next, 'build')).toMatchObject({ species: s1, fade: true });
++    expect(find(next, 'showDino')).toMatchObject({ species: s1, fade: true });
++    expect(find(next, 'showDino')!.pieces).toEqual(PIECES[3].map((id) => ({ id, at: startOf(r, id, 1) })));
+     expect(r.speechEnded('name')).toEqual([]);
+   });
+ 
+@@ -183,7 +280,8 @@ describe('DinoRound — come alive and the round (Story 3.3)', () => {
+     expect(r.speechEnded('name')).toEqual([]);
+   });
+ 
+-  it('Tally: dino 1 clean, dino 2 one wrong, dino 3 reaches level 2 → firstTryCorrect 1, maxHintLevel 2', () => {
++  /** Drives a round through a HintMachine and RoundTally the way MiniGameBase does. */
++  function harness() {
+     const tally = new RoundTally();
+     let token = 0;
+     const m = new HintMachine({
+@@ -206,6 +304,18 @@ describe('DinoRound — come alive and the round (Story 3.3)', () => {
+         }
+       }
+     };
++    const idleTo = (level: number): void => {
++      if (m.awaitedToken !== undefined) m.speechEnded(m.awaitedToken);
++      for (let i = 0; i < 1000 && m.level < level; i++) {
++        m.tick(Tokens.Timing.hintTickMs);
++        if (m.awaitedToken !== undefined) m.speechEnded(m.awaitedToken);
++      }
++    };
++    return { tally, m, apply, idleTo };
++  }
++
++  it('Tally: dino 1 clean, dino 2 one wrong, dino 3 reaches level 2 → firstTryCorrect 1, maxHintLevel 2', () => {
++    const { tally, m, apply, idleTo } = harness();
+     const r = new DinoRound(geometry(), 7, 0);
+     apply(r.start());
+     for (const p of r.pieces) apply(r.drop(p, SLOTS[p]));
+@@ -213,13 +323,43 @@ describe('DinoRound — come alive and the round (Story 3.3)', () => {
+     apply(r.drop('tail', SLOTS['head-neck']));
+     for (const p of r.pieces) apply(r.drop(p, SLOTS[p]));
+     apply(r.speechEnded('name'));
+-    if (m.awaitedToken !== undefined) m.speechEnded(m.awaitedToken);
+-    for (let ms = 0; ms < Tokens.Timing.hintLevel2IdleMs; ms += Tokens.Timing.hintTickMs) m.tick(Tokens.Timing.hintTickMs);
++    idleTo(2);
+     expect(m.level).toBe(2);
+     for (const p of r.pieces) apply(r.drop(p, SLOTS[p]));
+     expect(tally.outcome('dino-puzzle')).toMatchObject({ questions: 3, firstTryCorrect: 1, maxHintLevel: 2 });
+   });
+ 
++  it('Clean L1 round (no wrong drop) → questions 3, firstTryCorrect 3, maxHintLevel 0', () => {
++    const { tally, apply } = harness();
++    const r = new DinoRound(geometry(), 5, 1);
++    apply(r.start());
++    for (let i = 0; i < 3; i++) {
++      completeDinoApplied(r, apply);
++      apply(r.speechEnded('name'));
++    }
++    expect(tally.outcome('dino-puzzle')).toEqual({ gameId: 'dino-puzzle', questions: 3, firstTryCorrect: 3, maxHintLevel: 0 });
++  });
++
++  it('One piece at level 4: L1, one piece idles to hint 3, then wrong drops lift it to 4 → maxHintLevel 4; that dino is not first-try', () => {
++    const { tally, m, apply, idleTo } = harness();
++    const r = new DinoRound(geometry(), 5, 1);
++    apply(r.start());
++    // Idle escalation stops at level 3 (spec-1-9); level 4 comes from wrong drops.
++    idleTo(3);
++    expect(m.level).toBe(3);
++    for (let i = 0; i < 4; i++) apply(r.drop('tail', SLOTS['head-neck']));
++    expect(m.level).toBe(4);
++    for (let i = 0; i < 3; i++) {
++      completeDinoApplied(r, apply);
++      apply(r.speechEnded('name'));
++    }
++    expect(tally.outcome('dino-puzzle')).toMatchObject({ questions: 3, maxHintLevel: 4, firstTryCorrect: 2 });
++  });
++
++  function completeDinoApplied(r: DinoRound, apply: (cs: readonly DinoCommand[]) => void): void {
++    for (const p of r.pieces) if (!r.placed().includes(p)) apply(r.drop(p, SLOTS[p]));
++  }
++
+   it('Home mid-dino: 2 of 3 placed on dino 2 → progress {questionIndex 1, partial {placed: [2 ids]}}', () => {
+     const r = new DinoRound(geometry(), 7, 0);
+     r.start();
+@@ -243,25 +383,101 @@ describe('DinoRound — come alive and the round (Story 3.3)', () => {
+   });
+ });
+ 
+-describe('startCommands (Story 3.3)', () => {
++describe('resume (Story 3.4)', () => {
++  const placed4: PieceId[] = ['body', 'tail', 'head', 'back-legs'];
++
++  it('Home mid-dino at L2: dino 2, 4 of 6 placed → progress {questionIndex 1, placed: 4 ids}; JSON round-trips', () => {
++    const r = new DinoRound(geometry(), 9, 2);
++    r.start();
++    completeDino(r);
++    r.speechEnded('name');
++    for (const p of placed4) r.drop(p, SLOTS[p]);
++    const progress = r.progress();
++    expect(progress).toEqual({ questionIndex: 1, partial: { placed: placed4 } });
++    expect(JSON.parse(JSON.stringify(progress))).toEqual(progress);
++  });
++
++  it('Resume that snapshot: restorePieces(4 ids), the other 2 at the same arranged starts, ask replayed, ring on the first unplaced', () => {
++    const before = new DinoRound(geometry(), 9, 2);
++    const starts = before.starts(1);
++    const r = new DinoRound(geometry(), 9, 2);
++    const plan = startCommands(r, { questionIndex: 1, partial: { placed: placed4 } });
++    expect(plan).toMatchObject({ accepted: true, warnings: [] });
++    expect(kinds(plan.commands)).toEqual(['showDino', 'restorePieces', 'beginQuestion']);
++    const show = find(plan.commands, 'showDino')!;
++    expect(show).toMatchObject({ species: roundSpecies(9, 2)[1], fade: false, cut: PIECES[6] });
++    expect(show.pieces).toEqual([
++      { id: 'neck', at: starts.neck },
++      { id: 'front-legs', at: starts['front-legs'] },
++    ]);
++    expect(find(plan.commands, 'restorePieces')).toEqual({ kind: 'restorePieces', ids: placed4 });
++    expect(find(plan.commands, 'beginQuestion')).toEqual({ kind: 'beginQuestion', promptLineId: 'vo.dino-puzzle.ask', retryLineId: 'vo.dino-puzzle.retry', piece: 'neck' });
++    // Placed order continues after the restored ones; the last piece completes the dino.
++    r.drop('front-legs', SLOTS['front-legs']);
++    expect(r.progress().partial.placed).toEqual([...placed4, 'front-legs']);
++    expect(kinds(r.drop('neck', SLOTS.neck))).toContain('questionDone');
++  });
++
++  it.each([
++    ['{}', {}],
++    ["placed: 'x'", { placed: 'x' }],
++    ['placed: [1]', { placed: [1] }],
++    ["['wing']", { placed: ['wing'] }],
++    ["['head-neck'] at L2", { placed: ['head-neck'] }],
++    ['duplicates', { placed: ['head', 'head'] }],
++    ['all 6 ids', { placed: [...PIECES[6]] }],
++    ['null', null],
++    ['an array', [['head']]],
++  ])('Bad partial %s → that dino starts clean, one warning, still accepted', (_label, partial) => {
++    const r = new DinoRound(geometry(), 9, 2);
++    expect(r.resumeQuestion(1, partial)).toBeNull();
++    const plan = startCommands(r, { questionIndex: 1, partial });
++    expect(plan.accepted).toBe(true);
++    expect(plan.warnings).toEqual(['dino-puzzle: bad resume partial']);
++    expect(find(plan.commands, 'restorePieces')).toEqual({ kind: 'restorePieces', ids: [] });
++    expect(find(plan.commands, 'showDino')!.pieces).toHaveLength(6);
++    expect(r.questionIndex).toBe(1);
++  });
++
++  it('a class instance is not a plain object; extra keys are ignored', () => {
++    class P {
++      placed = ['head'];
++    }
++    const r = new DinoRound(geometry(), 9, 2);
++    expect(r.resumeQuestion(0, new P())).toBeNull();
++    expect(r.resumeQuestion(0, { placed: ['head'], extra: 1 })).toEqual({ placed: ['head'] });
++    expect(r.resumeQuestion(0, Object.assign(Object.create(null), { placed: [] }))).toEqual({ placed: [] });
++  });
++
++  it.each([
++    [0, PIECES[3]],
++    [1, PIECES[4]],
++    [2, PIECES[6]],
++  ] as const)('level %i: each of the 10 piece ids is a valid partial exactly when the level’s cut holds it', (level, cut) => {
++    const r = new DinoRound(geometry(), 9, level);
++    for (const p of PIECE_IDS) expect(r.resumeQuestion(0, { placed: [p] }) !== null, p).toBe((cut as readonly PieceId[]).includes(p));
++  });
++});
++
++describe('startCommands (Stories 3.3/3.4)', () => {
+   it('no resume → dino 0, not accepted', () => {
+     const plan = startCommands(new DinoRound(geometry(), 7, 0), null);
+     expect(plan.accepted).toBe(false);
+-    expect(find(plan.commands, 'build')!.species).toBe(roundSpecies(7, 0)[0]);
++    expect(find(plan.commands, 'showDino')!.species).toBe(roundSpecies(7, 0)[0]);
+   });
+ 
+-  it('Resume questionIndex 2 → dino 2 begins clean, accepted (placed is restored in Story 3.4)', () => {
++  it('Resume questionIndex 2 with nothing placed → dino 2 begins clean, accepted', () => {
+     const r = new DinoRound(geometry(), 7, 0);
+-    const plan = startCommands(r, { questionIndex: 2 });
++    const plan = startCommands(r, { questionIndex: 2, partial: { placed: [] } });
+     expect(plan).toMatchObject({ accepted: true, warnings: [] });
+-    expect(find(plan.commands, 'build')).toMatchObject({ species: roundSpecies(7, 0)[2], fade: false });
++    expect(find(plan.commands, 'showDino')).toMatchObject({ species: roundSpecies(7, 0)[2], fade: false });
+     expect(r.placed()).toEqual([]);
+     expect(r.questionIndex).toBe(2);
+   });
+ 
+-  it('Resume out of range (questionIndex 5) → dino 0, not accepted, one warning', () => {
++  it.each([3, 5])('Resume out of range (questionIndex %i) → dino 0, not accepted, one warning', (qi) => {
+     const r = new DinoRound(geometry(), 7, 0);
+-    const plan = startCommands(r, { questionIndex: 5 });
++    const plan = startCommands(r, { questionIndex: qi, partial: { placed: [] } });
+     expect(plan.accepted).toBe(false);
+     expect(plan.warnings).toHaveLength(1);
+     expect(r.questionIndex).toBe(0);
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/games/dino-puzzle/round.ts b/app/src/games/dino-puzzle/round.ts
+index d0419e0..da6b8e8 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/src/games/dino-puzzle/round.ts
++++ b/app/src/games/dino-puzzle/round.ts
+@@ -14,23 +14,26 @@
+ // kept. The last piece: `questionDone`, the question index advances, every piece is locked, the ambient
+ // is held ('alive') and the dino comes alive (scene chain). The name's `speech:ended` (completed or not)
+ // then begins the next dino, or celebrates and finishes the round after the last one.
+-import type { PieceId, SpeciesId } from '../../content/games/dino-puzzle';
++// Story 3.4: the cut is `ladder[level].pieces` (3, 4 or 6 pieces); the drop order is content DROP_ORDER;
++// each dino's loose pieces start at `arrangeStarts` (seeded bays, starts.ts); `resumeQuestion` validates
++// a resume partial and `begin(index, fade, placed)` restores those pieces locked in place.
++import { DROP_ORDER, type DropOutcome, type PieceId, type SpeciesId } from '../../content/games/dino-puzzle';
+ import type { Point } from '../../content/layout-types';
+ import { nudgeApart } from '../../core/input/drop';
+ import type { Rect } from '../../core/safe-rect';
+ import { ASK_LINE, RETRY_LINE, callSfxId, nameLineId } from './lines';
+ import { levelIndex, levelPieces, roundSpecies } from './questions';
++import { arrangeStarts, type StartGeo } from './starts';
+ 
+ export interface Area {
+   contains(p: Point): boolean;
+ }
+ 
+-export interface DinoGeometry {
+-  /** Where piece `p` of species `s` waits when its dino begins (`anchor.<s>-<p>-start`). */
+-  start(s: SpeciesId, p: PieceId): Point;
++/** The bays, slots and trimmed sizes (StartGeo, for the start arrangement) plus the drop geometry. */
++export interface DinoGeometry extends StartGeo {
+   /** The drawn centre of a placed piece: its frame's trimmed centre (the frame lines up with the whole dino). */
+   placed(s: SpeciesId, p: PieceId): Point;
+-  /** The piece's r: its trimmed longest side / 2 (design px). */
++  /** The loose piece's r: its displayed longest side / 2 (design px). */
+   radius(s: SpeciesId, p: PieceId): number;
+   /** True when `pt` is inside the current dino's slot target of piece `p` (snap scale applies). */
+   inSlot(p: PieceId, pt: Point): boolean;
+@@ -48,7 +51,7 @@ export interface DinoGeometry {
+ export type Stage = 'pieces' | 'alive' | 'done';
+ /** The tag the scene maps its voice token to (the dino's name). */
+ export type SpeechTag = 'name';
+-export type DropOutcome = 'own' | 'home' | 'other' | 'rest' | 'off';
++export type { DropOutcome };
+ 
+ export interface PieceState {
+   readonly id: PieceId;
+@@ -56,8 +59,13 @@ export interface PieceState {
+ }
+ 
+ export type DinoCommand =
+-  /** The ghost of `species` and its loose pieces at their starts (`fade`: the next dino fades in). */
+-  | { readonly kind: 'build'; readonly species: SpeciesId; readonly pieces: readonly PieceState[]; readonly fade: boolean }
++  /**
++   * The ghost of `species`, a slot target for every piece of `cut`, and the unplaced pieces loose at
++   * their arranged starts (`fade`: the next dino fades in).
++   */
++  | { readonly kind: 'showDino'; readonly species: SpeciesId; readonly cut: readonly PieceId[]; readonly pieces: readonly PieceState[]; readonly fade: boolean }
++  /** Story 3.4 resume: these pieces sit locked in place, real-coloured, at scale 1 (no tween, no sfx). */
++  | { readonly kind: 'restorePieces'; readonly ids: readonly PieceId[] }
+   /** The dino's hint question; the hinted piece is the first unplaced one. */
+   | { readonly kind: 'beginQuestion'; readonly promptLineId: string; readonly retryLineId: string; readonly piece: PieceId }
+   | { readonly kind: 'stepDone'; readonly piece: PieceId }
+@@ -90,6 +98,7 @@ export interface DinoProgress {
+ 
+ export class DinoRound {
+   private readonly geo: DinoGeometry;
++  private readonly seed: number;
+   private readonly level: number;
+   private readonly dinos: readonly SpeciesId[];
+   private readonly cut: readonly PieceId[];
+@@ -101,6 +110,7 @@ export class DinoRound {
+ 
+   constructor(geo: DinoGeometry, seed: number, level: number) {
+     this.geo = geo;
++    this.seed = seed;
+     this.level = levelIndex(level);
+     this.dinos = roundSpecies(seed, this.level);
+     this.cut = levelPieces(this.level);
+@@ -158,16 +168,44 @@ export class DinoRound {
+     return this.begin(0, false);
+   }
+ 
+-  /** Lays out dino `index` clean: its ghost, every piece at its start, the hint question. */
+-  begin(index: number, fade: boolean): DinoCommand[] {
++  /** The arranged start spots of dino `index` (the same on a resume). */
++  starts(index: number): Partial<Record<PieceId, Point>> {
++    const i = Math.min(Math.max(0, index), this.dinos.length - 1);
++    return arrangeStarts(this.seed, i, this.dinos[i]!, this.cut, this.geo);
++  }
++
++  /**
++   * Validates a resume partial for dino `index`: a plain object whose `placed` is an array of distinct
++   * piece ids of the cut, fewer than the cut (the last snap advances the dino). Extra keys are ignored.
++   */
++  resumeQuestion(index: number, partial: unknown): { placed: PieceId[] } | null {
++    if (!Number.isInteger(index) || index < 0 || index >= this.questionCount) return null;
++    if (typeof partial !== 'object' || partial === null || Array.isArray(partial)) return null;
++    const proto: unknown = Object.getPrototypeOf(partial);
++    if (proto !== Object.prototype && proto !== null) return null;
++    const { placed } = partial as { placed?: unknown };
++    if (!Array.isArray(placed)) return null;
++    const cut: readonly string[] = this.cut;
++    if (!placed.every((id): id is PieceId => typeof id === 'string' && cut.includes(id))) return null;
++    if (new Set(placed).size !== placed.length || placed.length >= cut.length) return null;
++    return { placed: [...placed] };
++  }
++
++  /**
++   * Lays out dino `index`: its ghost and the unplaced pieces at their arranged starts, the `placed`
++   * pieces (from `resumeQuestion`) restored in place, then the hint question on the first unplaced piece.
++   */
++  begin(index: number, fade: boolean, placed: readonly PieceId[] = []): DinoCommand[] {
+     this.index = index;
+     this.st = 'pieces';
+-    this.placedIds = [];
++    this.placedIds = [...placed];
+     this.pendingReturn = new Set();
+     const s = this.current;
+-    this.loose = new Map(this.cut.map((p) => [p, this.geo.start(s, p)]));
++    const starts = this.starts(index);
++    this.loose = new Map(this.cut.filter((p) => !placed.includes(p)).map((p) => [p, starts[p]!]));
+     return [
+-      { kind: 'build', species: s, pieces: this.loosePieces(), fade },
++      { kind: 'showDino', species: s, cut: this.cut, pieces: this.loosePieces(), fade },
++      { kind: 'restorePieces', ids: [...placed] },
+       { kind: 'beginQuestion', promptLineId: ASK_LINE, retryLineId: RETRY_LINE, piece: this.firstUnplaced()! },
+     ];
+   }
+@@ -182,11 +220,15 @@ export class DinoRound {
+   resolve(piece: PieceId, p: Point): DropOutcome {
+     const at = this.loose.get(piece);
+     const g = this.geo;
+-    if (g.inSlot(piece, p)) return 'own';
+-    if (at && Math.hypot(p.x - at.x, p.y - at.y) <= g.snapRadius / 2) return 'home';
+-    if (this.cut.some((q) => q !== piece && g.inSlot(q, p))) return 'other';
+-    if (g.grass.contains(p)) return 'rest';
+-    return 'off';
++    // Story 3.4: the first DROP_ORDER outcome that matches (`own` first: "ô đúng thắng").
++    const matches: Record<DropOutcome, () => boolean> = {
++      own: () => g.inSlot(piece, p),
++      home: () => at !== undefined && Math.hypot(p.x - at.x, p.y - at.y) <= g.snapRadius / 2,
++      other: () => this.cut.some((q) => q !== piece && g.inSlot(q, p)),
++      rest: () => g.grass.contains(p),
++      off: () => true,
++    };
++    return DROP_ORDER.find((o) => matches[o]()) ?? 'off';
+   }
+ 
+   /** `piece` released at `p` (its centre). */
+@@ -269,14 +311,16 @@ export interface StartPlan {
+ }
+ 
+ /**
+- * The first commands of a start. No resume → dino 0. A resume → dino `resumeAt.questionIndex`, clean
+- * (restoring `placed` is Story 3.4). An out-of-range index → dino 0, not accepted, one warning.
++ * The first commands of a start. No resume → dino 0. A resume → dino `resumeAt.questionIndex` with its
++ * validated `placed` restored; a bad partial → that dino clean with one warning (still accepted, so the
++ * closed dinos' tally stays, as in pizza). An out-of-range index → dino 0, not accepted, one warning.
+  */
+-export function startCommands(round: DinoRound, resumeAt: { readonly questionIndex: number } | null): StartPlan {
++export function startCommands(round: DinoRound, resumeAt: { readonly questionIndex: number; readonly partial?: unknown } | null): StartPlan {
+   if (!resumeAt) return { commands: round.start(), accepted: false, warnings: [] };
+   const i = resumeAt.questionIndex;
+   if (!Number.isInteger(i) || i < 0 || i >= round.questionCount) {
+     return { commands: round.start(), accepted: false, warnings: [`dino-puzzle: resume index out of range (${i}) — the round starts at dino 1`] };
+   }
+-  return { commands: round.begin(i, false), accepted: true, warnings: [] };
++  const ok = round.resumeQuestion(i, resumeAt.partial);
++  return { commands: round.begin(i, false, ok?.placed ?? []), accepted: true, warnings: ok ? [] : ['dino-puzzle: bad resume partial'] };
+ }
+diff --git a/app/src/games/dino-puzzle/starts.test.ts b/app/src/games/dino-puzzle/starts.test.ts
+new file mode 100644
+index 0000000..58518ee
+--- /dev/null
++++ b/app/src/games/dino-puzzle/starts.test.ts
+@@ -0,0 +1,113 @@
++// Story 3.4: loose-piece scale and the seeded start arrangement, swept over the real generated layout
++// and the published atlas.
++import { readFileSync } from 'node:fs';
++import { join } from 'node:path';
++import { describe, expect, it } from 'vitest';
++import { BAY_ANCHORS, PIECES, SPECIES, START_ATTEMPTS, type PieceId, type SpeciesId } from '../../content/games/dino-puzzle';
++import type { Point, ScreenLayout } from '../../content/layout-types';
++import { Tokens } from '../../core/tokens';
++import { arrangeStarts, assign, clearOfSlots, displayedRect, displayedSize, hitRadius, pairsClear, pieceScale, rectGap, type StartGeo } from './starts';
++
++const APP = join(import.meta.dirname, '..', '..', '..');
++const layout = JSON.parse(readFileSync(join(APP, 'src', 'content', 'generated', 'dino-puzzle.layout.json'), 'utf8')) as ScreenLayout;
++const atlasJson = JSON.parse(readFileSync(join(APP, 'public', 'assets', 'atlases', 'dino-puzzle.json'), 'utf8')) as {
++  textures: { frames: { filename: string; spriteSourceSize: { w: number; h: number } }[] }[];
++};
++const trims = new Map(atlasJson.textures.flatMap((t) => t.frames.map((f) => [f.filename, f.spriteSourceSize] as const)));
++const rs = layout.renderScale;
++
++const realGeo: StartGeo = {
++  bays: BAY_ANCHORS.map((id) => layout.anchors[id]!),
++  slot: (s, p) => layout.slots[`${s}-${p}`]!,
++  size: (s, p) => {
++    const t = trims.get(`${s}-${p}/idle/00`)!;
++    return { w: t.w / rs, h: t.h / rs };
++  },
++};
++const CUTS = Object.entries(PIECES) as [string, readonly PieceId[]][];
++const key = (at: Partial<Record<PieceId, Point>>): string => JSON.stringify(at);
++
++describe('pieceScale and the displayed piece (Story 3.4)', () => {
++  const min = Tokens.components.draggableItem.minSize;
++
++  it('max(1, minSize / rawLongest): a 50 px neck is drawn at 1.8× (90 px); a big piece stays at 1', () => {
++    expect(pieceScale(50)).toBeCloseTo(1.8);
++    expect(pieceScale(200)).toBe(1);
++    expect(pieceScale(min)).toBe(1);
++    expect(pieceScale(0)).toBe(1);
++  });
++
++  it('the displayed rect is the trimmed size × pieceScale centred on the point; the hit r adds hitPad', () => {
++    expect(displayedSize({ w: 50, h: 25 })).toEqual({ w: 90, h: 45 });
++    expect(displayedRect({ x: 100, y: 100 }, { w: 50, h: 25 })).toEqual({ x: 55, y: 77.5, w: 90, h: 45 });
++    expect(hitRadius({ w: 50, h: 25 })).toBe(45 + Tokens.components.draggableItem.hitPad);
++    expect(hitRadius({ w: 200, h: 100 })).toBe(100 + Tokens.components.draggableItem.hitPad);
++  });
++
++  it('rectGap', () => {
++    expect(rectGap({ x: 0, y: 0, w: 10, h: 10 }, { x: 13, y: 14, w: 5, h: 5 })).toBe(5);
++    expect(rectGap({ x: 0, y: 0, w: 10, h: 10 }, { x: 5, y: 5, w: 5, h: 5 })).toBe(0);
++  });
++});
++
++describe('pairsClear / clearOfSlots (Story 3.4)', () => {
++  const geo: StartGeo = { bays: [], slot: () => ({ x: 0, y: 0 }), size: () => ({ w: 100, h: 100 }) };
++
++  it('two pieces 10 px apart are not clear; 24 px apart are', () => {
++    expect(pairsClear({ head: { x: 200, y: 200 }, neck: { x: 310, y: 200 } }, 'apatosaurus', geo)).toBe(false);
++    expect(pairsClear({ head: { x: 200, y: 200 }, neck: { x: 324, y: 200 } }, 'apatosaurus', geo)).toBe(true);
++  });
++
++  it('a start within snapRadius of its own slot fails', () => {
++    expect(clearOfSlots({ head: { x: 60, y: 60 } }, 'apatosaurus', geo)).toBe(false);
++    expect(clearOfSlots({ head: { x: 100, y: 0 } }, 'apatosaurus', geo)).toBe(true);
++  });
++
++  it('a start within snapRadius of another arranged piece’s slot fails too (a small drag off the bay is never a wrong slot)', () => {
++    const slots: Record<string, Point> = { head: { x: 0, y: 0 }, neck: { x: 500, y: 0 } };
++    const two: StartGeo = { bays: [], slot: (_s, p) => slots[p]!, size: () => ({ w: 100, h: 100 }) };
++    // head starts 300 px from its own slot but 50 px from the neck slot.
++    expect(clearOfSlots({ head: { x: 450, y: 0 }, neck: { x: 500, y: 400 } }, 'apatosaurus', two)).toBe(false);
++    expect(clearOfSlots({ head: { x: 250, y: 0 }, neck: { x: 500, y: 400 } }, 'apatosaurus', two)).toBe(true);
++    // A slot of a piece outside the arrangement (another cut) does not count.
++    expect(clearOfSlots({ head: { x: 450, y: 0 } }, 'apatosaurus', two)).toBe(true);
++  });
++
++  it('a tight bay set falls back to the identity (piece i → bay i)', () => {
++    const tight: StartGeo = { bays: [{ x: 500, y: 500 }, { x: 510, y: 500 }, { x: 520, y: 500 }], slot: () => ({ x: 0, y: 0 }), size: () => ({ w: 100, h: 100 }) };
++    expect(arrangeStarts(3, 0, 'triceratops', PIECES[3], tight)).toEqual(assign(PIECES[3], tight.bays));
++    expect(START_ATTEMPTS).toBe(64);
++  });
++});
++
++describe('arrangeStarts over the real layout (Story 3.4)', () => {
++  it('seeds 0…999 × each dino index × species × cut: deterministic, every pair clear, every start ≥ snapRadius from every slot of the cut, one bay each', () => {
++    const snap = Tokens.components.dropTarget.snapRadius;
++    for (const s of SPECIES as readonly SpeciesId[]) {
++      for (const [n, cut] of CUTS) {
++        const seen = new Set<string>();
++        for (let seed = 0; seed < 1000; seed++) {
++          for (let qi = 0; qi < 3; qi++) {
++            const at = arrangeStarts(seed, qi, s, cut, realGeo);
++            expect(key(arrangeStarts(seed, qi, s, cut, realGeo))).toBe(key(at));
++            expect(Object.keys(at).sort()).toEqual([...cut].sort());
++            const pts = Object.values(at).map((p) => `${p!.x},${p!.y}`);
++            expect(new Set(pts).size).toBe(cut.length);
++            if (!pairsClear(at, s, realGeo) || !clearOfSlots(at, s, realGeo)) throw new Error(`${s} cut ${n} seed ${seed} dino ${qi}`);
++            for (const p of cut) {
++              for (const q of cut.map((o) => realGeo.slot(s, o))) expect(Math.hypot(at[p]!.x - q.x, at[p]!.y - q.y)).toBeGreaterThanOrEqual(snap);
++            }
++            seen.add(key(at));
++          }
++        }
++        // The shuffle varies the starts (not only the fallback).
++        expect(seen.size, `${s} cut ${n}`).toBeGreaterThan(1);
++      }
++    }
++  });
++
++  it('the dino index changes the arrangement for the same seed', () => {
++    const differ = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].some((seed) => key(arrangeStarts(seed, 0, 'stegosaurus', PIECES[6], realGeo)) !== key(arrangeStarts(seed, 1, 'stegosaurus', PIECES[6], realGeo)));
++    expect(differ).toBe(true);
++  });
++});
+diff --git a/app/src/games/dino-puzzle/starts.ts b/app/src/games/dino-puzzle/starts.ts
+new file mode 100644
+index 0000000..c8bba4b
+--- /dev/null
++++ b/app/src/games/dino-puzzle/starts.ts
+@@ -0,0 +1,126 @@
++// Ghép khủng long loose-piece size and start arrangement (Story 3.4), pure and shared by the game and
++// tools/layout/rules.ts (`.ts` specifiers: the tools import it under Node type stripping; no Phaser).
++//
++// A loose piece is drawn enlarged to at least draggableItem.minSize (`pieceScale`), centred on its
++// trimmed centre; it eases to scale 1 when it snaps (its true, frame-aligned size). Each dino's pieces
++// start in the lawn bays `anchor.dino-bay-1..8`: a seeded shuffle of the bays, piece `i` (PIECES order)
++// → bay `i`, accepted when every pair of displayed rects keeps spacing.targetGap and every start stays
++// dropTarget.snapRadius from every slot of the cut; after START_ATTEMPTS failures, the identity (piece `i` → bay
++// `i`), which validateDinoPuzzle proves valid. The validator also proves every bay fits every piece, so
++// these two checks are all a shuffle needs.
++import { START_ATTEMPTS, type PieceId, type SpeciesId } from '../../content/games/dino-puzzle.ts';
++import type { Point } from '../../content/layout-types.ts';
++import { mulberry32, shuffled, startSeed } from '../../core/rng.ts';
++import type { Rect } from '../../core/safe-rect.ts';
++import { Tokens } from '../../core/tokens.ts';
++
++export interface Size {
++  readonly w: number;
++  readonly h: number;
++}
++
++/** A loose piece's scale: `max(1, minSize / rawLongest)` (rawLongest = trimmed longest side ÷ renderScale). */
++export function pieceScale(rawLongest: number, minSize: number = Tokens.components.draggableItem.minSize): number {
++  return rawLongest > 0 ? Math.max(1, minSize / rawLongest) : 1;
++}
++
++/** The loose piece's displayed size: its trimmed size (design px) × pieceScale. */
++export function displayedSize(trimmed: Size, minSize: number = Tokens.components.draggableItem.minSize): Size {
++  const k = pieceScale(Math.max(trimmed.w, trimmed.h), minSize);
++  return { w: trimmed.w * k, h: trimmed.h * k };
++}
++
++/** The displayed rect of a loose piece whose trimmed centre is at `c`. */
++export function displayedRect(c: Point, trimmed: Size, minSize: number = Tokens.components.draggableItem.minSize): Rect {
++  const d = displayedSize(trimmed, minSize);
++  return { x: c.x - d.w / 2, y: c.y - d.h / 2, w: d.w, h: d.h };
++}
++
++/** A loose piece's hit radius: its displayed longest side / 2 + draggableItem.hitPad. */
++export function hitRadius(trimmed: Size, minSize: number = Tokens.components.draggableItem.minSize, hitPad: number = Tokens.components.draggableItem.hitPad): number {
++  const d = displayedSize(trimmed, minSize);
++  return Math.max(d.w, d.h) / 2 + hitPad;
++}
++
++/** Distance between two rects (0 when they touch or overlap). */
++export function rectGap(a: Rect, b: Rect): number {
++  const dx = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w), 0);
++  const dy = Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h), 0);
++  return Math.hypot(dx, dy);
++}
++
++/** What an arrangement reads from the layout and the atlas (design px). */
++export interface StartGeo {
++  /** The bay points `anchor.dino-bay-1..8`, bay 1 first. */
++  readonly bays: readonly Point[];
++  /** `slot.<s>-<p>`. */
++  slot(s: SpeciesId, p: PieceId): Point;
++  /** The piece frame's trimmed size ÷ renderScale. */
++  size(s: SpeciesId, p: PieceId): Size;
++}
++
++export type Starts = Readonly<Partial<Record<PieceId, Point>>>;
++
++export interface StartLimits {
++  /** spacing.targetGap. */
++  readonly gap: number;
++  /** dropTarget.snapRadius. */
++  readonly snapRadius: number;
++  /** draggableItem.minSize. */
++  readonly minSize: number;
++}
++
++export const startLimits = (): StartLimits => ({
++  gap: Tokens.spacing.targetGap,
++  snapRadius: Tokens.components.dropTarget.snapRadius,
++  minSize: Tokens.components.draggableItem.minSize,
++});
++
++/** Every pair of the pieces' displayed rects at `at` is at least `gap` apart. */
++export function pairsClear(at: Starts, s: SpeciesId, geo: StartGeo, limits: StartLimits = startLimits()): boolean {
++  const rects = (Object.entries(at) as [PieceId, Point][]).map(([p, c]) => displayedRect(c, geo.size(s, p), limits.minSize));
++  for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) if (rectGap(rects[i]!, rects[j]!) < limits.gap) return false;
++  return true;
++}
++
++/**
++ * Every start is at least `snapRadius` from every slot of the arranged pieces (the cut): a piece never
++ * starts inside its own snap zone nor inside another piece's, so a small drag off its bay is never
++ * resolved as a wrong slot.
++ */
++export function clearOfSlots(at: Starts, s: SpeciesId, geo: StartGeo, limits: StartLimits = startLimits()): boolean {
++  const slots = (Object.keys(at) as PieceId[]).map((p) => geo.slot(s, p));
++  return (Object.values(at) as Point[]).every((c) => slots.every((q) => Math.hypot(c.x - q.x, c.y - q.y) >= limits.snapRadius));
++}
++
++/** Piece `i` of `cut` → `bays[i]`. */
++export function assign(cut: readonly PieceId[], bays: readonly Point[]): Partial<Record<PieceId, Point>> {
++  const out: Partial<Record<PieceId, Point>> = {};
++  cut.forEach((p, i) => {
++    const b = bays[i];
++    if (b) out[p] = { x: b.x, y: b.y };
++  });
++  return out;
++}
++
++/**
++ * The start spots of a dino's pieces: for attempt 0…START_ATTEMPTS−1, a Fisher–Yates shuffle of the
++ * bays with `mulberry32(startSeed(seed, questionIndex, attempt))`, piece `i` → shuffled bay `i`; the
++ * first that passes `pairsClear` and `clearOfSlots` wins, else the identity. Deterministic for
++ * `(seed, questionIndex, species, cut)` (a resume gets the same spots).
++ */
++export function arrangeStarts(
++  seed: number,
++  questionIndex: number,
++  species: SpeciesId,
++  cut: readonly PieceId[],
++  geo: StartGeo,
++  limits: StartLimits = startLimits(),
++): Partial<Record<PieceId, Point>> {
++  const s = (Number.isFinite(seed) ? Math.floor(seed) : 0) >>> 0;
++  for (let attempt = 0; attempt < START_ATTEMPTS; attempt++) {
++    const at = assign(cut, shuffled(geo.bays, mulberry32(startSeed(s, questionIndex, attempt))));
++    if (pairsClear(at, species, geo, limits) && clearOfSlots(at, species, geo, limits)) return at;
++  }
++  return assign(cut, geo.bays);
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/atlas/pack.ts b/app/tools/atlas/pack.ts
+index 8558935..0bbc368 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/atlas/pack.ts
++++ b/app/tools/atlas/pack.ts
+@@ -11,7 +11,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import sharp from 'sharp';
+ import { ATLASES, ATLAS_MAX_PAGES, BACKGROUNDS, FRAME_NAME, SCREEN_IDS, atlasPagePng, type ScreenId } from '../../src/content/assets.ts';
+-import { PIECES, SPECIES, screen as dinoScreen } from '../../src/content/games/dino-puzzle.ts';
++import { BAY_ANCHORS, DROP_ORDER, PIECES, SPECIES, screen as dinoScreen } from '../../src/content/games/dino-puzzle.ts';
+ import { DECORATIONS } from '../../src/content/decorations.ts';
+ import { PLAY_AGAIN_ICONS } from '../../src/content/play-again.ts';
+ import { Tokens } from '../../src/core/tokens.ts';
+@@ -57,7 +57,7 @@ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayou
+   ],
+   'ice-cream': (layout, atlas) => validateIceCream(layout, iceCreamLimits(iceCreamScreen), atlas),
+   pizza: (layout, atlas) => validatePizza(layout, pizzaLimits(pizzaScreen), atlas),
+-  'dino-puzzle': (layout, atlas) => validateDinoPuzzle(layout, dinoPuzzleLimits(dinoScreen, SPECIES, PIECES[3]), atlas),
++  'dino-puzzle': (layout, atlas) => validateDinoPuzzle(layout, dinoPuzzleLimits(dinoScreen, SPECIES, PIECES, BAY_ANCHORS, DROP_ORDER), atlas),
+ };
+ 
+ /** PNG zlib level of the shipped background. */
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/layout/dino-rules.test.ts b/app/tools/layout/dino-rules.test.ts
+index 9d88d6f..cd53dcb 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/layout/dino-rules.test.ts
++++ b/app/tools/layout/dino-rules.test.ts
+@@ -1,70 +1,124 @@
+-// Story 3.3: validateDinoPuzzle (one failing case per rule against the real layout and atlas), the
++// Stories 3.3/3.4: validateDinoPuzzle (one failing case per rule against the real layout and atlas), the
+ // multiatlas reader and the multi-page asset rule.
+ import { readFileSync } from 'node:fs';
+ import { join } from 'node:path';
+ import { describe, expect, it } from 'vitest';
+-import { PIECES, SPECIES, screen } from '../../src/content/games/dino-puzzle.ts';
++import { BAY_ANCHORS, DROP_ORDER, PIECES, SPECIES, screen } from '../../src/content/games/dino-puzzle.ts';
+ import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
+ 
+ type EditableLayout = Omit<ScreenLayout, 'anchors' | 'slots'> & { anchors: Record<string, Point>; slots: Record<string, Point> };
+-import { atlasFrames, centredRect, dinoPuzzleLimits, rectGap, validateAssets, validateDinoPuzzle, type AtlasJsonLike } from './rules.ts';
++import { Tokens } from '../../src/core/tokens.ts';
++import { displayedSize } from '../../src/games/dino-puzzle/starts.ts';
++import { atlasFrames, centredRect, closeSlotPairs, dinoPuzzleLimits, rectGap, validateAssets, validateDinoPuzzle, type AtlasJsonLike } from './rules.ts';
+ 
+ const APP = join(import.meta.dirname, '..', '..');
+ const realLayout = (): EditableLayout => JSON.parse(readFileSync(join(APP, 'src', 'content', 'generated', 'dino-puzzle.layout.json'), 'utf8'));
+ const realJson = (): unknown => JSON.parse(readFileSync(join(APP, 'public', 'assets', 'atlases', 'dino-puzzle.json'), 'utf8'));
+ const realAtlas = (): AtlasJsonLike => atlasFrames(realJson());
+-const limits = () => dinoPuzzleLimits(screen, SPECIES, PIECES[3]);
++const limits = () => dinoPuzzleLimits(screen, SPECIES, PIECES, BAY_ANCHORS, DROP_ORDER);
+ 
+ type Frames = Record<string, { spriteSourceSize: { x: number; y: number; w: number; h: number } }>;
+ const framesOf = (a: AtlasJsonLike): Frames => a.frames as Frames;
+ 
+-describe('validateDinoPuzzle (Story 3.3)', () => {
+-  it('the real layout and atlas pass; layout-only (render without frames) passes too', () => {
+-    expect(validateDinoPuzzle(realLayout(), limits(), realAtlas())).toEqual([]);
++describe('validateDinoPuzzle (Stories 3.3/3.4)', () => {
++  it('the real layout and atlas pass (30 slots, 8 bays); layout-only (render without frames) passes too', () => {
++    const l = realLayout();
++    expect(Object.keys(l.slots)).toHaveLength(30);
++    expect(BAY_ANCHORS.filter((b) => l.anchors[b])).toHaveLength(8);
++    expect(validateDinoPuzzle(l, limits(), realAtlas())).toEqual([]);
+     expect(validateDinoPuzzle(realLayout(), limits())).toEqual([]);
+   });
+ 
+-  it('required: a missing slot, start or frame is named', () => {
++  it('required: a missing slot, bay or frame is named', () => {
+     const l = realLayout();
+-    delete l.slots['triceratops-tail'];
+-    delete l.anchors['stegosaurus-head-neck-start'];
++    delete l.slots['triceratops-front-legs'];
++    delete l.anchors['dino-bay-6'];
+     const a = realAtlas();
+-    delete framesOf(a)['apatosaurus/blink/00'];
++    delete framesOf(a)['apatosaurus/walk/01'];
++    delete framesOf(a)['stegosaurus-neck/ghost/00'];
+     const p = validateDinoPuzzle(l, limits(), a);
+-    expect(p).toContain('slot "triceratops-tail": missing');
+-    expect(p).toContain('anchor "stegosaurus-head-neck-start": missing');
+-    expect(p).toContain('atlas "dino-puzzle": frame "apatosaurus/blink/00" is missing');
++    expect(p).toContain('slot "triceratops-front-legs": missing');
++    expect(p).toContain('anchor "dino-bay-6": missing');
++    expect(p).toContain('atlas "dino-puzzle": frame "apatosaurus/walk/01" is missing');
++    expect(p).toContain('atlas "dino-puzzle": frame "stegosaurus-neck/ghost/00" is missing');
+   });
+ 
+-  it('sizes: a dino off 360 ± 40 and a piece under 90 px are named', () => {
++  it('sizes: a dino off 360 ± 40 and a piece with a raw longest side of 30 px are named', () => {
+     const a = realAtlas();
+     framesOf(a)['triceratops/idle/00']!.spriteSourceSize.w = 900;
+-    framesOf(a)['stegosaurus-head-neck/idle/00']!.spriteSourceSize = { ...framesOf(a)['stegosaurus-head-neck/idle/00']!.spriteSourceSize, w: 120, h: 150 };
++    framesOf(a)['stegosaurus-head/idle/00']!.spriteSourceSize = { ...framesOf(a)['stegosaurus-head/idle/00']!.spriteSourceSize, w: 60, h: 40 };
+     const p = validateDinoPuzzle(realLayout(), limits(), a);
+     expect(p.some((m) => m.startsWith('frame "triceratops/idle/00": longest side 450 is not 360 ± 40'))).toBe(true);
+-    expect(p.some((m) => m.startsWith('frame "stegosaurus-head-neck/idle/00": longest side 75 is under 90'))).toBe(true);
++    expect(p).toContain('frame "stegosaurus-head/idle/00": raw longest side 30 is under 40');
++  });
++
++  it('sizes: a hit diameter under the hit target is named', () => {
++    const tight = { ...limits(), targetMin: 400 };
++    const p = validateDinoPuzzle(realLayout(), tight, realAtlas());
++    expect(p.some((m) => /^frame "apatosaurus-head\/idle\/00": hit diameter [\d.]+ is under 400$/.test(m))).toBe(true);
+   });
+ 
+   it('slots: a slot more than 3 px from its piece frame’s trimmed centre is named', () => {
+     const l = realLayout();
+-    l.slots['apatosaurus-tail'] = { x: l.slots['apatosaurus-tail']!.x + 5, y: l.slots['apatosaurus-tail']!.y };
+-    expect(validateDinoPuzzle(l, limits(), realAtlas()).some((m) => m.startsWith('slot "apatosaurus-tail":'))).toBe(true);
++    l.slots['apatosaurus-neck'] = { x: l.slots['apatosaurus-neck']!.x + 5, y: l.slots['apatosaurus-neck']!.y };
++    expect(validateDinoPuzzle(l, limits(), realAtlas()).some((m) => m.startsWith('slot "apatosaurus-neck":'))).toBe(true);
+   });
+ 
+-  it('starts: in a Hud keep-out, off the interactive rect, off the grass, over the ghost, too close to a slot or to another piece', () => {
++  it('bay × piece: a bay under Home with the body piece, off the interactive rect, off the grass, over the ghost', () => {
+     const l = realLayout();
+-    l.anchors['triceratops-tail-start'] = { x: 960, y: 170 };
+-    l.anchors['apatosaurus-head-neck-start'] = { x: 30, y: 600 };
+-    l.anchors['stegosaurus-body-legs-start'] = { ...l.slots['stegosaurus-body-legs']! };
++    l.anchors['dino-bay-1'] = { x: 70, y: 110 };
++    l.anchors['dino-bay-7'] = { x: 30, y: 600 };
++    l.anchors['dino-bay-3'] = { ...l.anchors.stegosaurus!, y: l.anchors.stegosaurus!.y - 40 };
+     const p = validateDinoPuzzle(l, limits(), realAtlas());
+-    expect(p).toContain('anchor "triceratops-tail-start": the piece rect reaches into a Home/Speaker keep-out zone');
+-    expect(p.some((m) => m.startsWith('anchor "triceratops-tail-start": (960, 170) is not on hit "grass"'))).toBe(true);
+-    expect(p.some((m) => m.startsWith('anchor "apatosaurus-head-neck-start": the piece rect') && m.includes('leaves the interactive rect'))).toBe(true);
+-    expect(p).toContain('anchor "stegosaurus-body-legs-start": the piece rect overlaps the ghost of "stegosaurus" grown by 24');
+-    expect(p.some((m) => m.startsWith('anchor "stegosaurus-body-legs-start": 0 px from a slot of "stegosaurus" (min 100)'))).toBe(true);
+-    const l2 = realLayout();
+-    l2.anchors['triceratops-tail-start'] = { x: l2.anchors['triceratops-body-legs-start']!.x + 150, y: l2.anchors['triceratops-body-legs-start']!.y };
+-    expect(validateDinoPuzzle(l2, limits(), realAtlas()).some((m) => m.startsWith('anchors "triceratops-body-legs-start" and "triceratops-tail-start": piece rects'))).toBe(true);
++    expect(p).toContain('anchor "dino-bay-1" with "stegosaurus-body": the piece rect reaches into a Home/Speaker keep-out zone');
++    expect(p.some((m) => m.startsWith('anchor "dino-bay-1": (70, 110) is not on hit "grass"'))).toBe(true);
++    expect(p.some((m) => m.startsWith('anchor "dino-bay-7" with "triceratops-body-legs": the piece rect') && m.includes('leaves the interactive rect'))).toBe(true);
++    expect(p).toContain('anchor "dino-bay-3" with "stegosaurus-tail": the piece rect overlaps the ghost of "stegosaurus" grown by 24');
++  });
++
++  it('fallback: an identity assignment with 2 pieces 10 px apart is named per species and cut', () => {
++    const l = realLayout();
++    const atlas = realAtlas();
++    // Bay 2 right next to bay 1, so the displayed rects of piece 1 and piece 2 of the 3-piece cut are 10 px apart.
++    const b1 = l.anchors['dino-bay-1']!;
++    const half = (s: string, p: string) => {
++      const ss = framesOf(atlas)[`${s}-${p}/idle/00`]!.spriteSourceSize;
++      return displayedSize({ w: ss.w / 2, h: ss.h / 2 }, Tokens.components.draggableItem.minSize).w / 2;
++    };
++    const s = 'apatosaurus';
++    l.anchors['dino-bay-2'] = { x: b1.x + half(s, 'head-neck') + half(s, 'body-legs') + 10, y: b1.y };
++    const p = validateDinoPuzzle(l, limits(), atlas);
++    expect(p).toContain('species "apatosaurus" cut 3: the identity fallback (piece i → bay i) has piece rects closer than 24');
++  });
++
++  it('fallback: a bay inside a slot of the cut is named (piece 1 starts 30 px from its own slot)', () => {
++    const l = realLayout();
++    const slot = l.slots['apatosaurus-head-neck']!;
++    l.anchors['dino-bay-1'] = { x: slot.x + 30, y: slot.y };
++    const p = validateDinoPuzzle(l, limits(), realAtlas());
++    expect(p).toContain('species "apatosaurus" cut 3: the identity fallback starts a piece within 100 of a slot of the cut');
++    expect(p).toContain('species "apatosaurus" cut 4: the identity fallback starts a piece within 100 of a slot of the cut');
++  });
++
++  it('fallback: fewer bays than a cut is named once; a fallback that cannot be checked is named', () => {
++    const five = validateDinoPuzzle(realLayout(), { ...limits(), bays: BAY_ANCHORS.slice(0, 5) }, realAtlas());
++    expect(five.filter((m) => m === 'cut 6: 6 pieces but only 5 bays')).toHaveLength(1);
++    const a = realAtlas();
++    delete framesOf(a)['triceratops-neck/idle/00'];
++    expect(validateDinoPuzzle(realLayout(), limits(), a)).toContain('species "triceratops" cut 6: the identity fallback cannot be checked (missing frame "triceratops-neck/idle/00")');
++    const info: string[] = [];
++    validateDinoPuzzle(realLayout(), { ...limits(), info: (m) => info.push(m) });
++    expect(info).toContain('dino-puzzle: species "stegosaurus" cut 4: the identity fallback check needs the frames (skipped without an atlas)');
++  });
++
++  it('close slots: allowed (one info line each) while DROP_ORDER resolves own first; otherwise each pair fails', () => {
++    const info: string[] = [];
++    expect(validateDinoPuzzle(realLayout(), { ...limits(), info: (m) => info.push(m) }, realAtlas())).toEqual([]);
++    expect(info.length).toBeGreaterThan(0);
++    for (const s of SPECIES) expect(info.length).toBeGreaterThanOrEqual(closeSlotPairs(realLayout(), s, PIECES, 100).length);
++    const p = validateDinoPuzzle(realLayout(), { ...limits(), dropOrder: ['home', 'own', 'other', 'rest', 'off'] }, realAtlas());
++    expect(p.some((m) => /^slots "apatosaurus-head" and "apatosaurus-neck": [\d.]+ px apart \(< 100\) but DROP_ORDER does not resolve "own" first$/.test(m))).toBe(true);
++    expect(DROP_ORDER[0]).toBe('own');
+   });
+ 
+   it('walk: 140 px is over the 120 px cap; a walk that leaves the safe rect is named', () => {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/layout/rules.ts b/app/tools/layout/rules.ts
+index 9cf3c25..b0e9756 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/layout/rules.ts
++++ b/app/tools/layout/rules.ts
+@@ -10,6 +10,8 @@ import { playAgainIconFrame } from '../../src/content/play-again.ts';
+ import { distToPolyline, minWidth, pointInPolygon, polygonDistance } from './geometry.ts';
+ import { circleHitsRect, hudKeepOutRects } from './hud-keep-out.ts';
+ import { baseRadius } from '../../src/games/pizza/geometry.ts';
++import type { PieceId, SpeciesId } from '../../src/content/games/dino-puzzle.ts';
++import { assign, clearOfSlots, displayedRect, hitRadius, pairsClear, rectGap, type StartGeo } from '../../src/games/dino-puzzle/starts.ts';
+ 
+ export interface LayoutLimits {
+   /** Interactive rect: x∈[x0,x1], y∈[y0,y1] (design px). */
+@@ -778,16 +780,26 @@ export function atlasFrames(json: unknown): AtlasJsonLike {
+ export interface DinoRuleInput {
+   ids: ScreenIds;
+   species: readonly string[];
+-  /** The piece ids of the cut in play (content PIECES[3]). */
+-  pieces: readonly string[];
++  /** Story 3.4: the content cuts (PIECES) by piece count; a piece id in several cuts is the same frame and slot. */
++  cuts: Readonly<Record<number, readonly string[]>>;
++  /** Story 3.4: the bay anchor ids (`dino-bay-1..8`), bay 1 first (the identity fallback's order). */
++  bays: readonly string[];
++  /** Story 3.4: content DROP_ORDER; slots closer than snapRadius are allowed only while its first entry is `own`. */
++  dropOrder: readonly string[];
+   limits: LayoutLimits;
+   /** ui.dinoSizePx ± ui.dinoSizeTolerance: the idle frame's trimmed longest side. */
+   sizePx: number;
+   sizeTolerance: number;
+   /** character.minSize. */
+   characterMin: number;
+-  /** draggableItem.minSize: each piece's longest side. */
++  /** draggableItem.minSize: each loose piece's displayed longest side. */
+   itemMin: number;
++  /** Story 3.4: ui.dinoPieceMinRawPx: each piece's trimmed longest side ÷ renderScale. */
++  pieceMinRaw: number;
++  /** Story 3.4: spacing.targetMin: each loose piece's hit diameter. */
++  targetMin: number;
++  /** Story 3.4: draggableItem.hitPad. */
++  hitPad: number;
+   /** ui.dinoSlotTolerancePx. */
+   slotTolerance: number;
+   /** spacing.targetGap. */
+@@ -800,19 +812,32 @@ export interface DinoRuleInput {
+   safe: Rect;
+   keepOut: readonly Rect[];
+   renderScale: number;
+-}
+-
+-/** The Ghép khủng long rules from Tokens. */
+-export function dinoPuzzleLimits(ids: ScreenIds, species: readonly string[], pieces: readonly string[]): DinoRuleInput {
++  /** Story 3.4: receives one info line per close slot pair (allowed by the drop order). */
++  info?: (line: string) => void;
++}
++
++/** The Ghép khủng long rules from Tokens and content. */
++export function dinoPuzzleLimits(
++  ids: ScreenIds,
++  species: readonly string[],
++  cuts: Readonly<Record<number, readonly string[]>>,
++  bays: readonly string[],
++  dropOrder: readonly string[],
++): DinoRuleInput {
+   return {
+     ids,
+     species,
+-    pieces,
++    cuts,
++    bays,
++    dropOrder,
+     limits: layoutLimits(),
+     sizePx: Tokens.ui.dinoSizePx,
+     sizeTolerance: Tokens.ui.dinoSizeTolerance,
+     characterMin: Tokens.components.character.minSize,
+     itemMin: Tokens.components.draggableItem.minSize,
++    pieceMinRaw: Tokens.ui.dinoPieceMinRawPx,
++    targetMin: Tokens.spacing.targetMin,
++    hitPad: Tokens.components.draggableItem.hitPad,
+     slotTolerance: Tokens.ui.dinoSlotTolerancePx,
+     gap: Tokens.spacing.targetGap,
+     snapRadius: Tokens.components.dropTarget.snapRadius,
+@@ -829,12 +854,8 @@ export const centredRect = (c: Point, size: { w: number; h: number }): Rect => (
+ const growRect = (r: Rect, d: number): Rect => ({ x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d });
+ const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+ 
+-/** Distance between two rects (0 when they touch or overlap). */
+-export function rectGap(a: Rect, b: Rect): number {
+-  const dx = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w), 0);
+-  const dy = Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h), 0);
+-  return Math.hypot(dx, dy);
+-}
++/** Distance between two rects (0 when they touch or overlap); games/dino-puzzle/starts.ts. */
++export { rectGap };
+ 
+ /** The trimmed rect of an atlas frame in design px (its full-frame position). */
+ export function designRect(atlas: AtlasJsonLike, frame: string, rs: number): Rect | undefined {
+@@ -844,17 +865,50 @@ export function designRect(atlas: AtlasJsonLike, frame: string, rs: number): Rec
+ 
+ const fmtRect = (r: Rect): string => `(${round2(r.x)}, ${round2(r.y)}, ${round2(r.w)}×${round2(r.h)})`;
+ 
++/** Every piece id of the cuts, in cut order, once each. */
++const cutPieceIds = (cuts: DinoRuleInput['cuts']): string[] => [...new Set(Object.values(cuts).flat())];
++
++/**
++ * Story 3.4: the slot pairs of one species closer than `snapRadius`, over the pieces that share a cut
++ * (each pair once, as `[slot id, slot id, distance]`).
++ */
++export function closeSlotPairs(layout: ScreenLayout, s: string, cuts: DinoRuleInput['cuts'], snapRadius: number): [string, string, number][] {
++  const seen = new Set<string>();
++  const out: [string, string, number][] = [];
++  for (const cut of Object.values(cuts)) {
++    for (let i = 0; i < cut.length; i++) {
++      for (let j = i + 1; j < cut.length; j++) {
++        const [a, b] = [cut[i]!, cut[j]!].sort() as [string, string];
++        const key = `${a}|${b}`;
++        const pa = layout.slots[`${s}-${a}`];
++        const pb = layout.slots[`${s}-${b}`];
++        if (seen.has(key) || !pa || !pb) continue;
++        seen.add(key);
++        const d = Math.hypot(pa.x - pb.x, pa.y - pb.y);
++        if (d < snapRadius) out.push([`${s}-${a}`, `${s}-${b}`, round2(d)]);
++      }
++    }
++  }
++  return out;
++}
++
+ /**
+  * Ghép khủng long screen rules (run by `render` with the rendered frames' trims, `atlas` and
+- * `validate:content`). Each message names the id. A piece rect is its trimmed frame size ÷ renderScale
+- * centred at a point.
++ * `validate:content`). Each message names the id. A loose piece is drawn at `pieceScale`
++ * (games/dino-puzzle/starts.ts): its displayed rect is its trimmed size × pieceScale centred at a point.
+  *   - required: every layout id and, with the atlas, every frame;
+  *   - sizes: `<s>/idle/00` longest side within sizePx ± sizeTolerance and ≥ characterMin; each piece's
+- *     longest side ≥ itemMin;
++ *     trimmed longest side ÷ renderScale ≥ pieceMinRaw (its displayed longest side is ≥ itemMin by
++ *     construction) and its hit diameter ≥ targetMin;
+  *   - slots: `slot.<s>-<p>` within slotTolerance of its piece frame's trimmed centre;
+- *   - starts: each piece rect at its start inside the interactive rect and outside every Hud keep-out
+- *     rect, its centre inside `hit.grass`; the rects of one species ≥ gap apart; none overlaps the
+- *     `<s>/ghost/00` rect grown by gap; the start ≥ snapRadius from every slot of its species;
++ *   - bay × piece (every bay, every piece id, every species): the displayed rect inside the interactive
++ *     rect and outside every Hud keep-out rect, the bay inside `hit.grass`, the rect clear of the
++ *     `<s>/ghost/00` rect grown by gap — so any assignment of pieces to bays fits;
++ *   - fallback: per species × cut, the identity assignment (piece i → bay i) passes `pairsClear` and
++ *     `clearOfSlots` (every start ≥ snapRadius from every slot of the cut); fewer bays than a cut
++ *     is reported once, and a fallback that cannot be checked (missing bay, slot or frame) is reported;
++ *   - close slots: two slots of one species (pieces sharing a cut) closer than snapRadius fail unless
++ *     the drop order resolves the own slot first (each close pair is reported through `info`);
+  *   - walk: |anchor.<s>-walk − anchor.<s>| ≤ walkMax and the idle rect moved by it stays inside safeRect.
+  */
+ export function validateDinoPuzzle(layout: ScreenLayout, input: DinoRuleInput, atlas?: AtlasJsonLike): string[] {
+@@ -862,7 +916,12 @@ export function validateDinoPuzzle(layout: ScreenLayout, input: DinoRuleInput, a
+   const rs = input.renderScale;
+   const r = input.limits.rect;
+   const grass = layout.hits.grass;
++  const pieceIds = cutPieceIds(input.cuts);
++  const startLim = { gap: input.gap, snapRadius: input.snapRadius, minSize: input.itemMin };
++  const bays = input.bays.map((id) => ({ id, at: layout.anchors[id] })).filter((b): b is { id: string; at: Point } => b.at !== undefined);
+   if (atlas) for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "dino-puzzle": frame "${f}" is missing`);
++  for (const b of bays) if (grass && grass.length >= MIN_HIT_POINTS && !pointInPolygon(b.at, grass)) problems.push(`anchor "${b.id}": ${fmt(b.at)} is not on hit "grass"`);
++  for (const [n, cut] of Object.entries(input.cuts)) if (cut.length > input.bays.length) problems.push(`cut ${n}: ${cut.length} pieces but only ${input.bays.length} bays`);
+   for (const s of input.species) {
+     const anchor = layout.anchors[s];
+     const walk = layout.anchors[`${s}-walk`];
+@@ -884,41 +943,68 @@ export function validateDinoPuzzle(layout: ScreenLayout, input: DinoRuleInput, a
+       }
+     }
+     const ghost = atlas ? designRect(atlas, `${s}/ghost/00`, rs) : undefined;
+-    const slots = input.pieces.map((p) => layout.slots[`${s}-${p}`]).filter((p): p is Point => p !== undefined);
+-    const starts: { id: string; rect: Rect }[] = [];
+-    for (const p of input.pieces) {
++    // Piece sizes and slots.
++    const sizes = new Map<string, { w: number; h: number }>();
++    for (const p of pieceIds) {
+       const id = `${s}-${p}`;
+-      const start = layout.anchors[`${id}-start`];
+       const slot = layout.slots[id];
+       const piece = atlas ? designRect(atlas, `${id}/idle/00`, rs) : undefined;
+-      if (piece) {
+-        const longest = Math.max(piece.w, piece.h);
+-        if (longest < input.itemMin) problems.push(`frame "${id}/idle/00": longest side ${round2(longest)} is under ${input.itemMin}`);
+-        if (slot) {
+-          const d = Math.hypot(slot.x - (piece.x + piece.w / 2), slot.y - (piece.y + piece.h / 2));
+-          if (d > input.slotTolerance) problems.push(`slot "${id}": ${round2(d)} px from the trimmed centre of "${id}/idle/00" (max ${input.slotTolerance})`);
++      if (!piece) continue;
++      sizes.set(p, { w: piece.w, h: piece.h });
++      const raw = Math.max(piece.w, piece.h);
++      if (raw < input.pieceMinRaw) problems.push(`frame "${id}/idle/00": raw longest side ${round2(raw)} is under ${input.pieceMinRaw}`);
++      // The displayed longest side is max(raw, itemMin) by construction (pieceScale), so only the raw
++      // minimum (which caps the enlargement) and the hit diameter can fail.
++      const hitD = 2 * hitRadius(piece, input.itemMin, input.hitPad);
++      if (hitD < input.targetMin) problems.push(`frame "${id}/idle/00": hit diameter ${round2(hitD)} is under ${input.targetMin}`);
++      if (slot) {
++        const d = Math.hypot(slot.x - (piece.x + piece.w / 2), slot.y - (piece.y + piece.h / 2));
++        if (d > input.slotTolerance) problems.push(`slot "${id}": ${round2(d)} px from the trimmed centre of "${id}/idle/00" (max ${input.slotTolerance})`);
++      }
++    }
++    // Every bay fits every piece.
++    for (const b of bays) {
++      for (const [p, size] of sizes) {
++        const rect = displayedRect(b.at, size, input.itemMin);
++        const what = `anchor "${b.id}" with "${s}-${p}"`;
++        if (rect.x < r.x0 || rect.y < r.y0 || rect.x + rect.w > r.x1 || rect.y + rect.h > r.y1) {
++          problems.push(`${what}: the piece rect ${fmtRect(rect)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+         }
++        if (input.keepOut.some((k) => overlaps(rect, k))) problems.push(`${what}: the piece rect reaches into a Home/Speaker keep-out zone`);
++        if (ghost && overlaps(rect, growRect(ghost, input.gap))) problems.push(`${what}: the piece rect overlaps the ghost of "${s}" grown by ${input.gap}`);
+       }
+-      if (!start) continue;
+-      for (const q of slots) {
+-        const d = Math.hypot(start.x - q.x, start.y - q.y);
+-        if (d < input.snapRadius) problems.push(`anchor "${id}-start": ${round2(d)} px from a slot of "${s}" (min ${input.snapRadius})`);
++    }
++    // The identity fallback of every cut (piece i → bay i).
++    const geo: StartGeo = {
++      bays: input.bays.map((id) => layout.anchors[id]!),
++      slot: (_s, p) => layout.slots[`${s}-${p}`]!,
++      size: (_s, p) => sizes.get(p)!,
++    };
++    const sp = s as SpeciesId;
++    for (const [n, cut] of Object.entries(input.cuts)) {
++      if (cut.length > input.bays.length) continue; // reported once, above the species loop
++      const used = input.bays.slice(0, cut.length);
++      const missing = [
++        ...used.filter((id) => !layout.anchors[id]).map((id) => `anchor "${id}"`),
++        ...cut.filter((p) => !layout.slots[`${s}-${p}`]).map((p) => `slot "${s}-${p}"`),
++        ...cut.filter((p) => !sizes.has(p)).map((p) => `frame "${s}-${p}/idle/00"`),
++      ];
++      if (!atlas) {
++        input.info?.(`dino-puzzle: species "${s}" cut ${n}: the identity fallback check needs the frames (skipped without an atlas)`);
++        continue;
+       }
+-      if (grass && grass.length >= MIN_HIT_POINTS && !pointInPolygon(start, grass)) problems.push(`anchor "${id}-start": ${fmt(start)} is not on hit "grass"`);
+-      if (!piece) continue;
+-      const rect = centredRect(start, piece);
+-      starts.push({ id, rect });
+-      if (rect.x < r.x0 || rect.y < r.y0 || rect.x + rect.w > r.x1 || rect.y + rect.h > r.y1) {
+-        problems.push(`anchor "${id}-start": the piece rect ${fmtRect(rect)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
++      if (missing.length > 0) {
++        problems.push(`species "${s}" cut ${n}: the identity fallback cannot be checked (missing ${missing.join(', ')})`);
++        continue;
+       }
+-      if (input.keepOut.some((k) => overlaps(rect, k))) problems.push(`anchor "${id}-start": the piece rect reaches into a Home/Speaker keep-out zone`);
+-      if (ghost && overlaps(rect, growRect(ghost, input.gap))) problems.push(`anchor "${id}-start": the piece rect overlaps the ghost of "${s}" grown by ${input.gap}`);
++      const at = assign(cut as readonly PieceId[], geo.bays);
++      if (!pairsClear(at, sp, geo, startLim)) problems.push(`species "${s}" cut ${n}: the identity fallback (piece i → bay i) has piece rects closer than ${input.gap}`);
++      if (!clearOfSlots(at, sp, geo, startLim)) problems.push(`species "${s}" cut ${n}: the identity fallback starts a piece within ${input.snapRadius} of a slot of the cut`);
+     }
+-    for (let i = 0; i < starts.length; i++) {
+-      for (let j = i + 1; j < starts.length; j++) {
+-        const d = rectGap(starts[i]!.rect, starts[j]!.rect);
+-        if (d < input.gap) problems.push(`anchors "${starts[i]!.id}-start" and "${starts[j]!.id}-start": piece rects ${round2(d)} px apart (min ${input.gap})`);
+-      }
++    // Close slots are allowed only while the own slot wins.
++    for (const [a, b, d] of closeSlotPairs(layout, s, input.cuts, input.snapRadius)) {
++      input.info?.(`dino-puzzle: slots "${a}" and "${b}" are ${d} px apart (< ${input.snapRadius}); allowed: the own slot wins (DROP_ORDER)`);
++      if (input.dropOrder[0] !== 'own') problems.push(`slots "${a}" and "${b}": ${d} px apart (< ${input.snapRadius}) but DROP_ORDER does not resolve "own" first`);
+     }
+   }
+   return problems;
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/lint/hint-contrast-dino.test.ts b/app/tools/lint/hint-contrast-dino.test.ts
+index fce3445..65da475 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/lint/hint-contrast-dino.test.ts
++++ b/app/tools/lint/hint-contrast-dino.test.ts
+@@ -1,4 +1,4 @@
+-// Story 3.3: the dino-puzzle hint-ring contrast sites, and the no-meat-eater source scan.
++// Stories 3.3/3.4: the dino-puzzle hint-ring contrast sites (the start bays), and the no-meat-eater source scan.
+ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+@@ -13,21 +13,34 @@ const layout = {
+   screenId: 'dino-puzzle',
+   design: { width: 1024, height: 768 },
+   renderScale: 2,
+-  anchors: { 'apatosaurus-tail-start': { x: 870, y: 480 }, 'triceratops-head-neck-start': { x: 150, y: 480 } },
++  anchors: { 'dino-bay-1': { x: 870, y: 480 }, 'dino-bay-2': { x: 150, y: 480 } },
+   paths: {},
+   slots: {},
+   hits: {},
+ } as unknown as ScreenLayout;
+ 
+-describe('dinoRings (Story 3.3)', () => {
+-  it('one ring per piece at its start: the trimmed size + pad, or the minSize circle without the frame', () => {
+-    const atlas = { frames: { 'apatosaurus-tail/idle/00': { spriteSourceSize: { x: 0, y: 0, w: 280, h: 130 } } } };
++describe('dinoRings (Story 3.4)', () => {
++  it('one ring per bay and species, sized to the species’ largest displayed piece + pad; the minSize circle without frames', () => {
++    const atlas = {
++      frames: {
++        // 140×65 and 30×60 design px: the small one is drawn enlarged to 45×90.
++        'apatosaurus-tail/idle/00': { spriteSourceSize: { x: 0, y: 0, w: 280, h: 130 } },
++        'apatosaurus-head/idle/00': { spriteSourceSize: { x: 0, y: 0, w: 60, h: 120 } },
++      },
++    };
+     const rings = dinoRings(layout, atlas);
+     const pad = Tokens.ui.hintRingPad;
+-    expect(rings.map((r) => r.label)).toEqual(['anchor.apatosaurus-tail-start', 'anchor.triceratops-head-neck-start']);
+-    expect(rings[0]!.ring).toEqual({ cx: 870, cy: 480, rx: 70 + pad, ry: 32.5 + pad });
++    expect(rings.map((r) => r.label)).toEqual([
++      'anchor.dino-bay-1 (apatosaurus)',
++      'anchor.dino-bay-2 (apatosaurus)',
++      'anchor.dino-bay-1 (triceratops)',
++      'anchor.dino-bay-2 (triceratops)',
++      'anchor.dino-bay-1 (stegosaurus)',
++      'anchor.dino-bay-2 (stegosaurus)',
++    ]);
++    expect(rings[0]!.ring).toEqual({ cx: 870, cy: 480, rx: 70 + pad, ry: 45 + pad });
+     const r = Tokens.components.draggableItem.minSize / 2 + pad;
+-    expect(rings[1]!.ring).toEqual({ cx: 150, cy: 480, rx: r, ry: r });
++    expect(rings[3]!.ring).toEqual({ cx: 150, cy: 480, rx: r, ry: r });
+   });
+ });
+ 
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/lint/hint-contrast.ts b/app/tools/lint/hint-contrast.ts
+index ff2c29e..b4a77df 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/lint/hint-contrast.ts
++++ b/app/tools/lint/hint-contrast.ts
+@@ -8,8 +8,8 @@
+ //   - `pizza` (Story 3.1): around every slice home `slot.bowl-*` (the topping frame's trimmed bounds +
+ //     ui.hintRingPad; each topping is rendered at its own bowl slot) and the oven's ready ring (the
+ //     ellipse inscribed in the `hit.oven` bbox).
+-//   - `dino-puzzle` (Story 3.3): around every piece at its start (`anchor.<s>-<p>-start`; the piece
+-//     frame's trimmed size + ui.hintRingPad).
++//   - `dino-puzzle` (Stories 3.3/3.4): around every start bay `anchor.dino-bay-<n>` for each species,
++//     sized to the species' largest displayed loose piece (games/dino-puzzle/starts.ts) + ui.hintRingPad.
+ // The plates are read with sharp; `ringContrastProblems` is the pure part (unit-tested).
+ import { readFileSync } from 'node:fs';
+ import { join, resolve } from 'node:path';
+@@ -17,7 +17,8 @@ import sharp from 'sharp';
+ import { ATLASES, BACKGROUNDS } from '../../src/content/assets.ts';
+ import { SCOOP_RENDER_SLOT, scoopFrame } from '../../src/content/games/ice-cream.ts';
+ import { HITS as PIZZA_HITS } from '../../src/content/games/pizza.ts';
+-import { PIECES, SPECIES, pieceFrames, pieceStart } from '../../src/content/games/dino-puzzle.ts';
++import { BAY_ANCHORS, PIECE_IDS, SPECIES, pieceFrames } from '../../src/content/games/dino-puzzle.ts';
++import { displayedSize } from '../../src/games/dino-puzzle/starts.ts';
+ import { atlasFrames } from '../layout/rules.ts';
+ import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
+ import { Tokens } from '../../src/core/tokens.ts';
+@@ -195,21 +196,29 @@ export function pizzaRings(layout: ScreenLayout, atlas: { frames?: Record<string
+ }
+ 
+ /**
+- * Story 3.3: the dino-puzzle rings — every piece at its start (its frame's trimmed size + ui.hintRingPad
+- * centred on `anchor.<s>-<p>-start`); without the atlas, a circle of draggableItem.minSize + 2·pad.
++ * Story 3.4: the dino-puzzle rings — every start bay for each species, the ring sized to the species'
++ * largest displayed loose piece (the widest and the tallest of its trimmed sizes × pieceScale) +
++ * ui.hintRingPad, centred on `anchor.dino-bay-<n>`; without the atlas, a circle of draggableItem.minSize + 2·pad.
+  */
+ export function dinoRings(layout: ScreenLayout, atlas: { frames?: Record<string, FrameJson> } | undefined): { label: string; ring: RingEllipse }[] {
+   const pad = Tokens.ui.hintRingPad;
+   const rs = layout.renderScale;
++  const half = Tokens.components.draggableItem.minSize / 2;
+   const rings: { label: string; ring: RingEllipse }[] = [];
+   for (const s of SPECIES) {
+-    for (const p of PIECES[3]) {
+-      const id = pieceStart(s, p);
++    let w = 0;
++    let h = 0;
++    for (const p of PIECE_IDS) {
++      const ss = atlas?.frames?.[pieceFrames(s, p).idle]?.spriteSourceSize;
++      if (!ss) continue;
++      const d = displayedSize({ w: ss.w / rs, h: ss.h / rs });
++      w = Math.max(w, d.w);
++      h = Math.max(h, d.h);
++    }
++    for (const id of BAY_ANCHORS) {
+       const at = layout.anchors[id];
+       if (!at) continue;
+-      const ss = atlas?.frames?.[pieceFrames(s, p).idle]?.spriteSourceSize;
+-      const half = Tokens.components.draggableItem.minSize / 2;
+-      rings.push({ label: `anchor.${id}`, ring: { cx: at.x, cy: at.y, rx: (ss ? ss.w / rs / 2 : half) + pad, ry: (ss ? ss.h / rs / 2 : half) + pad } });
++      rings.push({ label: `anchor.${id} (${s})`, ring: { cx: at.x, cy: at.y, rx: (w > 0 ? w / 2 : half) + pad, ry: (h > 0 ? h / 2 : half) + pad } });
+     }
+   }
+   return rings;
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/lint/validate-content.test.ts b/app/tools/lint/validate-content.test.ts
+index d5c6152..135ed1a 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/lint/validate-content.test.ts
++++ b/app/tools/lint/validate-content.test.ts
+@@ -8,7 +8,7 @@ import { AUDIO_CATALOG } from '../../src/content/audio-catalog.ts';
+ import { VOICE_LINES, voiceHashPath, voicePath } from '../../src/content/voice-lines.ts';
+ import { lineHash } from '../tts/line-hash.ts';
+ import { ATLASES, BACKGROUNDS } from '../../src/content/assets.ts';
+-import { REQUIRED_FRAMES, run } from './validate-content.ts';
++import { REQUIRED_FRAMES, dinoLayoutInfo, run } from './validate-content.ts';
+ 
+ const dirs: string[] = [];
+ 
+@@ -246,3 +246,23 @@ describe('validate-content run(publicDir)', () => {
+     expect(run(root, layouts)).toEqual(['layout "map": not a JSON object']);
+   });
+ });
++
++describe('dinoLayoutInfo (Story 3.4)', () => {
++  it('the real layout: 30 slots, 8 bays, then the close-slot info lines of validateDinoPuzzle', () => {
++    const lines = dinoLayoutInfo();
++    expect(lines[0]).toBe('dino-puzzle layout: 30 slots, 8 bays');
++    expect(lines.length).toBeGreaterThan(1);
++    for (const l of lines.slice(1)) expect(l).toMatch(/^dino-puzzle: slots "[a-z-]+" and "[a-z-]+" are [\d.]+ px apart \(< 100\); allowed: the own slot wins \(DROP_ORDER\)$/);
++  });
++
++  it('an unreadable layout or one without its records gives one line, never a throw', () => {
++    const dir = mkdtempSync(join(tmpdir(), 'bhc-dino-info-'));
++    try {
++      expect(dinoLayoutInfo(dir)[0]).toMatch(/^dino-puzzle layout: cannot be read \(/);
++      writeFileSync(join(dir, 'dino-puzzle.layout.json'), JSON.stringify({ v: 1, screenId: 'dino-puzzle', anchors: {} }));
++      expect(dinoLayoutInfo(dir)).toEqual(['dino-puzzle layout: not a v1 layout with anchors, hits, slots and paths']);
++    } finally {
++      rmSync(dir, { recursive: true, force: true });
++    }
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/lint/validate-content.ts b/app/tools/lint/validate-content.ts
+index d19787b..9a804d2 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/lint/validate-content.ts
++++ b/app/tools/lint/validate-content.ts
+@@ -40,7 +40,7 @@ import {
+ } from '../layout/rules.ts';
+ import { screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
+ import { screen as pizzaScreen } from '../../src/content/games/pizza.ts';
+-import { PIECES, SPECIES, screen as dinoScreen } from '../../src/content/games/dino-puzzle.ts';
++import { BAY_ANCHORS, DROP_ORDER, PIECES, SPECIES, screen as dinoScreen } from '../../src/content/games/dino-puzzle.ts';
+ import { GAME_IDS } from '../../src/content/types.ts';
+ import { reviewLines, validateContent } from '../../src/content/validate.ts';
+ import { VOICE_LINES } from '../../src/content/voice-lines.ts';
+@@ -112,12 +112,34 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[]
+     } else if (screen === 'pizza') {
+       for (const p of validatePizza(layout, pizzaLimits(pizzaScreen), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+     } else if (screen === 'dino-puzzle') {
+-      for (const p of validateDinoPuzzle(layout, dinoPuzzleLimits(dinoScreen, SPECIES, PIECES[3]), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
++      for (const p of validateDinoPuzzle(layout, dinoPuzzleLimits(dinoScreen, SPECIES, PIECES, BAY_ANCHORS, DROP_ORDER), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+     }
+   }
+   return problems;
+ }
+ 
++/**
++ * Story 3.4: information lines about the dino layout (not failures): its slot and bay counts and the
++ * `info` lines of validateDinoPuzzle (every slot pair closer than the snap radius, allowed while
++ * DROP_ORDER resolves the own slot first). Its problems are reported by `run` (layoutProblems); a
++ * layout that cannot be read or lacks its records yields one line saying so.
++ */
++export function dinoLayoutInfo(layoutDir: string = LAYOUT_DIR, publicDir: string = join(APP_DIR, 'public')): string[] {
++  const file = join(layoutDir, 'dino-puzzle.layout.json');
++  let layout: ScreenLayout;
++  try {
++    layout = JSON.parse(readFileSync(file, 'utf8')) as ScreenLayout;
++  } catch (e) {
++    return [`dino-puzzle layout: cannot be read (${(e as Error).message})`];
++  }
++  if (layout === null || typeof layout !== 'object' || LAYOUT_RECORDS.some((k) => layout[k] === null || typeof layout[k] !== 'object')) {
++    return ['dino-puzzle layout: not a v1 layout with anchors, hits, slots and paths'];
++  }
++  const lines = [`dino-puzzle layout: ${Object.keys(layout.slots).length} slots, ${BAY_ANCHORS.filter((b) => layout.anchors[b]).length} bays`];
++  validateDinoPuzzle(layout, { ...dinoPuzzleLimits(dinoScreen, SPECIES, PIECES, BAY_ANCHORS, DROP_ORDER), info: (l) => lines.push(l) }, readAtlas(publicDir, 'dino-puzzle'));
++  return lines;
++}
++
+ /** Asset problems under `publicDir` (atlases, backgrounds, size caps). */
+ export function assetProblems(publicDir: string): string[] {
+   const scale = RENDER_SCALE;
+@@ -229,6 +251,8 @@ async function main(): Promise<void> {
+     console.log(`content: ${review.length} voice line(s) to review by ear before approval:`);
+     for (const l of review) console.log(`content:   ${l.id} "${l.text}" — ${l.review}`);
+   }
++  // Story 3.4: the dino layout's counts and close slot pairs (information, not a failure).
++  for (const line of dinoLayoutInfo()) console.log(`content: info ${line}`);
+   if (problems.length > 0) {
+     for (const p of problems) console.error(`content: ${p}`);
+     process.exit(1);
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/render/blender/build_dino_puzzle.py b/app/tools/render/blender/build_dino_puzzle.py
+index 7619342..e3ec136 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/render/blender/build_dino_puzzle.py
++++ b/app/tools/render/blender/build_dino_puzzle.py
+@@ -1,18 +1,20 @@
+-# Builds art/dino-puzzle.blend (Ghép khủng long, Story 3.3) from the vendored island art/src/map-v2.blend.
++# Builds art/dino-puzzle.blend (Ghép khủng long, Stories 3.3 and 3.4) from the vendored island art/src/map-v2.blend.
+ #
+ # Run by `npm run art:build -- dino-puzzle` (tools/render/build.ts), never by hand:
+ #   blender -b --factory-startup art/src/map-v2.blend --python-exit-code 1 --python build_dino_puzzle.py -- \
+-#     --out <tmp>/dino-puzzle.blend --params <tmp>/params.json
++#     --out <tmp>/dino-puzzle.blend --params <tmp>/params.json --cuts "3:head-neck,body-legs,tail;4:…;6:…"
+ # params.json (written by build.ts from Tokens and content): colours (hex), art (incl. art.dino), dino
+ # {species, pieces, sizePx, sizeTolerance, walkMaxPx}, design size, renderScale, the interactive rect.
++# --cuts (Story 3.4): the content cuts (PIECES); each cut must partition every deform bone exactly once.
+ #
+ # Steps: prune the reference's Tiệm kem preview, its HintRing and the three station dinos (the fence
+ # stays); add camera `CamDino` (lens from `CamGame2`) aimed at the lawn inside the dino-park fence;
+ # import the three gentle Quaternius dinosaurs (never a meat-eater, never an attack pose), recolour
+ # them by material name (MATERIAL_ROLES), give each builder-made eyes (EYES) and key their frames:
+-#   1 idle · 2 blink (pupils hidden, lids shown) · 10–11 happy (head up, tail wag) · 20–23 walk in place;
+-# cut each into pieces by bone groups (PIECE_BONES) at frame 1, each rendered in place as its own
+-# sprite; two clouds; the layout objects in a hidden `layout` collection; render size; save.
++#   1 idle · 2 blink (pupils hidden, lids shown) · 10–11 happy (head up, tail wag) · 20, 22 walk in place;
++# cut each into pieces by bone groups (PIECE_BONES) at frame 1, every piece id of every cut rendered once
++# in place as its own sprite; two clouds; 8 lawn bays (BAY_SPOTS) where loose pieces start; the layout
++# objects in a hidden `layout` collection; render size; save.
+ # Every sprite collection here is `movable` (no baked shadow); dinos and pieces carry `ghost` (the
+ # render step derives `<object>/ghost/00` from `<object>/idle/00`, tools/render/ghost.ts).
+ # Every constant is in Blender world units (metres) unless its name says otherwise.
+@@ -91,28 +93,57 @@ LID_OUT = 0.35  # the lid sits this far out (× eye radius)
+ IDLE_FRAME = 1
+ BLINK_FRAME = 2
+ HAPPY_FRAMES = [10, 11]
+-WALK_FRAMES = [20, 21, 22, 23]
++WALK_FRAMES = [20, 22]  # Story 3.4: 2 walk frames keep the atlas within 4 pages
+ DINO_STATES = {'idle': [IDLE_FRAME], 'blink': [BLINK_FRAME], 'happy': HAPPY_FRAMES, 'walk': WALK_FRAMES}
+ HEAD_PITCH_DEG = 10.0  # happy: the head looks up
+ TAIL_YAW_DEG = 15.0  # happy: the tail wags ± this
+ IDLE_SUFFIX = '_Idle'
+ WALK_SUFFIX = '_Walk'
+ 
+-# Piece cut by bones: a vertex belongs to the piece of its dominant bone; a face to the piece holding
+-# the majority of its vertices; `None` = every bone the other pieces do not list.
++# Piece cut by bones (Story 3.4: explicit per piece id). A bone pattern is an exact bone name, or a
++# prefix ending in `*`. Every cut must partition every deform bone of the armature exactly once.
++# `Back` (exact) is the spine bone between the hips and the tail; the back legs are the `Back<Leg…>`
++# prefixes, so the spine goes with the body in every cut.
++FRONT_LEGS = ['FrontLeg*', 'FrontUpLeg*', 'FrontLowLeg*', 'FrontFoot*']
++BACK_LEGS = ['BackLeg*', 'BackUpLeg*', 'BackLowLeg*', 'BackFoot*']
+ PIECE_BONES = {
+     'head-neck': ['Neck', 'Head', 'Head_end'],
+-    'body-legs': None,
+-    'tail': ['Tail1', 'Tail2', 'Tail3', 'Tail4', 'Tail5', 'Tail5_end'],
++    'body-legs': ['root', 'Body', 'Back', 'Hips', 'Torso', 'Shoulders', *FRONT_LEGS, *BACK_LEGS],
++    'tail': ['Tail*'],
++    'front': ['Shoulders', 'Torso', *FRONT_LEGS],
++    'back': ['root', 'Body', 'Back', 'Hips', *BACK_LEGS],
++    'head': ['Head', 'Head_end'],
++    'neck': ['Neck'],
++    'body': ['root', 'Body', 'Back', 'Hips', 'Torso', 'Shoulders'],
++    'front-legs': FRONT_LEGS,
++    'back-legs': BACK_LEGS,
+ }
+-
+-# Where each piece waits (world XY offsets from DINO_SPOT, on the lawn): head-neck left of the ghost,
+-# tail right, body-legs below (nearer the camera). The same for every species.
+-START_SPOTS = {
+-    'head-neck': (-0.56, -0.61),
+-    'tail': (0.56, -0.61),
+-    'body-legs': (0.0, -0.86),
++# A piece with fewer faces than this fails the build (naming the cut, the piece and its bones).
++PIECE_MIN_FACES = 12
++# Story 3.4: optional per-species planes that grow a piece too small to grab. After the bone pass, the
++# faces of piece `from` whose centre lies on the positive side of the plane move to piece `to` (`to`
++# must be one bone group, so every cut holding both stays a partition). Key (species, from, to); value
++# (bone, t): the world-space plane through the posed bone at fraction `t` from its head to its tail,
++# normal along the bone (head → tail), so the plane follows the frame-1 pose wherever the dino stands.
++# Tuned until ui.dinoPieceMinRawPx passes.
++CUT_PLANES = {
++    # The long-neck's head alone is ~34 design px (< 40): its neck's last stretch joins it.
++    ('apatosaurus', 'neck', 'head'): ('Neck', 0.88),
+ }
++
++# Story 3.4: the 8 lawn bays where loose pieces start (world XY offsets from DINO_SPOT, on the ground).
++# A ring around the ghost: arrangeStarts (games/dino-puzzle/starts.ts) shuffles each dino's pieces into
++# them; bays 1…n are also the identity fallback, so their order matters (validateDinoPuzzle checks it).
++BAY_SPOTS = [
++    (-0.810, 0.243),  # 1 left, behind the ghost's tail
++    (0.727, -0.174),  # 2 right, below the Speaker keep-out
++    (-0.145, -0.860),  # 3 front row
++    (0.166, -0.860),  # 4 front row
++    (-0.456, -0.860),  # 5 front row, left
++    (0.451, -0.860),  # 6 front row, right
++    (-0.554, -0.499),  # 7 left, middle
++    (0.560, -0.617),  # 8 right, middle
++]
+ # The lawn (`hit.grass`): a world rect on the grass inside the fence (x0, x1, y0, y1).
+ LAWN_RECT_M = (-5.2, -1.0, 5.5, 7.05)
+ 
+@@ -499,13 +530,66 @@ def fit_dino(screen, d, size_px):
+ 
+ # --- pieces --------------------------------------------------------------------------------------------
+ 
+-def piece_of_bone(bone, piece_ids):
+-    for p in piece_ids:
+-        bones = PIECE_BONES[p]
+-        if bones is not None and bone in bones:
+-            return p
+-    rest = [p for p in piece_ids if PIECE_BONES[p] is None]
+-    return rest[0]
++def bone_matches(pattern, bone):
++    return bone.startswith(pattern[:-1]) if pattern.endswith('*') else bone == pattern
++
++
++def pieces_of_bone(bone, cut):
++    """The pieces of `cut` whose PIECE_BONES match `bone`."""
++    return [p for p in cut if any(bone_matches(x, bone) for x in PIECE_BONES[p])]
++
++
++def check_cuts(species, arm, cuts):
++    """Every cut partitions every deform bone exactly once; returns the deform bone names."""
++    bones = [b.name for b in arm.data.bones if b.use_deform]
++    for n, cut in cuts.items():
++        for b in bones:
++            hits = pieces_of_bone(b, cut)
++            if len(hits) != 1:
++                where = 'no piece' if not hits else f'pieces {", ".join(hits)}'
++                fail(f'{species}: cut {n}: bone "{b}" is in {where}')
++    return bones
++
++
++class Atoms:
++    """The coarsest bone groups every cut agrees on: two bones share an atom when they share a piece in
++    every cut. A face belongs to one atom, so a piece id is the same faces in every cut it is in."""
++
++    def __init__(self, bones, cuts):
++        self.cuts = cuts
++        self.of_bone = {}
++        self.order = []
++        for b in bones:
++            sig = tuple(pieces_of_bone(b, cut)[0] for cut in cuts.values())
++            if sig not in self.order:
++                self.order.append(sig)
++            self.of_bone[b] = sig
++        # Ties go to the atom holding `Body` (the seam stays on the body), then by bone order.
++        body = self.of_bone.get('Body')
++        if body is not None:
++            self.order.remove(body)
++            self.order.insert(0, body)
++
++    def of_piece(self, piece):
++        return [a for a in self.order if piece in a]
++
++    def fallback(self):
++        return self.order[0]
++
++
++def cut_plane(arm, spec):
++    """(bone, t) → (point, normal) in world space at the current frame."""
++    bone, t = spec
++    pb = arm.pose.bones.get(bone)
++    if pb is None:
++        fail(f'CUT_PLANES: no bone "{bone}"')
++    h, tl = arm.matrix_world @ pb.head, arm.matrix_world @ pb.tail
++    return h.lerp(tl, t), (tl - h).normalized()
++
++
++def plane_side(point, plane):
++    origin, normal = plane
++    return (point - origin).dot(normal)
+ 
+ 
+ def static_copy(obj, name, coll):
+@@ -519,39 +603,62 @@ def static_copy(obj, name, coll):
+     return o
+ 
+ 
+-def cut_pieces(species, d, piece_ids, sprites):
+-    """Splits the frame-1 pose into one static sprite per piece (rendered in place)."""
++def cut_pieces(species, d, cuts, piece_ids, sprites):
++    """Splits the frame-1 pose into one static sprite per piece id (rendered in place). A vertex goes to
++    the atom of its dominant bone, a face to the atom holding most of its vertices (ties: the body), then
++    CUT_PLANES move faces; a piece is the faces of its atoms."""
+     scene = bpy.context.scene
+     scene.frame_set(IDLE_FRAME)
+     bpy.context.view_layer.update()
+     mesh = d['meshes'][0]
++    bones = check_cuts(species, d['arm'], cuts)
++    atoms = Atoms(bones, cuts)
+     dom = dominant_bones(mesh)
+-    vpiece = [piece_of_bone(b, piece_ids) if b is not None else piece_of_bone('', piece_ids) for b in dom]
++    vatom = [atoms.of_bone.get(b, atoms.fallback()) if b is not None else atoms.fallback() for b in dom]
+     whole = static_copy(mesh, f'{species}-posed', scene.collection)
+     if len(whole.data.vertices) != len(dom):
+         fail(f'{species}: the posed mesh changed its vertex count')
+     body_index = next((i for i, m in enumerate(whole.data.materials) if m and m.name == d['mats']['body'].name), 0)
++    # Face → atom.
++    fatom = []
++    for poly in whole.data.polygons:
++        counts = {}
++        for vi in poly.vertices:
++            counts[vatom[vi]] = counts.get(vatom[vi], 0) + 1
++        best = max(counts.values())
++        fatom.append(next(a for a in atoms.order if counts.get(a, 0) == best))
++    for (s, src, dst), spec in CUT_PLANES.items():
++        if s != species or src not in piece_ids or dst not in piece_ids:
++            continue
++        plane = cut_plane(d['arm'], spec)
++        to = atoms.of_piece(dst)
++        if len(to) != 1:
++            fail(f'{species}: CUT_PLANES {src} → {dst}: "{dst}" is not one bone group')
++        src_atoms = set(atoms.of_piece(src))
++        moved = 0
++        for i, poly in enumerate(whole.data.polygons):
++            if fatom[i] in src_atoms and plane_side(whole.matrix_world @ poly.center, plane) > 0:
++                fatom[i] = to[0]
++                moved += 1
++        print(f'build_dino_puzzle: {species} CUT_PLANES {src} → {dst}: {moved} faces')
++    for n, cut in cuts.items():
++        for p in cut:
++            own = set(atoms.of_piece(p))
++            faces = sum(1 for a in fatom if a in own)
++            if faces < PIECE_MIN_FACES:
++                fail(f'{species}: cut {n}: piece "{p}" has {faces} faces (min {PIECE_MIN_FACES}; bones {", ".join(PIECE_BONES[p])})')
++    holds_head = [p for p in piece_ids if any(bone_matches(x, 'Head') for x in PIECE_BONES[p])]
+     out = {}
+     for p in piece_ids:
+         coll = bpy.data.collections.new(f'sprite.{species}-{p}')
+         sprites.children.link(coll)
+         coll['movable'] = 1
+         coll['ghost'] = 1
++        own = set(atoms.of_piece(p))
+         bm = bmesh.new()
+         bm.from_mesh(whole.data)
+-        bm.verts.ensure_lookup_table()
+-        drop = []
+-        for f in bm.faces:
+-            counts = {}
+-            for v in f.verts:
+-                counts[vpiece[v.index]] = counts.get(vpiece[v.index], 0) + 1
+-            best = max(counts.values())
+-            winners = [q for q in piece_ids if counts.get(q, 0) == best]
+-            # Ties go to the remainder piece (body-legs), else to the first in order.
+-            rest = [q for q in winners if PIECE_BONES[q] is None]
+-            owner = rest[0] if rest else winners[0]
+-            if owner != p:
+-                drop.append(f)
++        bm.faces.ensure_lookup_table()
++        drop = [f for f in bm.faces if fatom[f.index] not in own]
+         bmesh.ops.delete(bm, geom=drop, context='FACES')
+         loose = [v for v in bm.verts if not v.link_faces]
+         bmesh.ops.delete(bm, geom=loose, context='VERTS')
+@@ -568,7 +675,7 @@ def cut_pieces(species, d, piece_ids, sprites):
+         o = bpy.data.objects.new(f'{species}-{p}', me)
+         coll.objects.link(o)
+         objs = [o]
+-        if p == 'head-neck':
++        if p in holds_head:
+             for e in d['visible_eyes']:
+                 objs.append(static_copy(e, f'{e.name}-{p}', coll))
+         out[p] = objs
+@@ -636,18 +743,32 @@ def build_cloud(name, at, mat, sprites):
+     return objs
+ 
+ 
++def parse_cuts(text):
++    """`3:a,b,c;4:…` → {'3': ['a', 'b', 'c'], …} (content PIECES, in order)."""
++    cuts = {}
++    for part in text.split(';'):
++        n, _, ids = part.partition(':')
++        pieces = [p for p in ids.split(',') if p]
++        if not n.strip().isdigit() or len(pieces) != int(n) or len(set(pieces)) != len(pieces):
++            fail(f'--cuts: bad cut "{part}"')
++        cuts[n.strip()] = pieces
++    if not cuts:
++        fail('--cuts is empty')
++    return cuts
++
++
+ def main():
+-    args = parse_args('build_dino_puzzle')
++    args = parse_args('build_dino_puzzle', required=('out', 'params', 'cuts'))
+     params = args['params']
+     content = params['dino']
+-    piece_ids = content['pieces'].get('3')
+-    if not piece_ids:
+-        fail('params.dino.pieces has no 3-piece cut')
+-    for p in piece_ids:
+-        if p not in PIECE_BONES:
+-            fail(f'unknown piece id "{p}" (PIECE_BONES has {", ".join(PIECE_BONES)})')
+-    if sum(1 for p in piece_ids if PIECE_BONES[p] is None) != 1:
+-        fail('exactly one piece must take the remaining bones')
++    cuts = parse_cuts(args['cuts'])
++    piece_ids = []
++    for cut in cuts.values():
++        for p in cut:
++            if p not in PIECE_BONES:
++                fail(f'unknown piece id "{p}" (PIECE_BONES has {", ".join(PIECE_BONES)})')
++            if p not in piece_ids:
++                piece_ids.append(p)
+     for s in content['species']:
+         if s not in DINO_FILES:
+             fail(f'unknown species "{s}"')
+@@ -677,7 +798,7 @@ def main():
+         fit_dino(screen, d, content['sizePx'])
+         dinos[s] = d
+ 
+-    pieces = {s: cut_pieces(s, d, piece_ids, sprites) for s, d in dinos.items()}
++    pieces = {s: cut_pieces(s, d, cuts, piece_ids, sprites) for s, d in dinos.items()}
+ 
+     white = flat_material('cloud-white', params['colours']['counterTop'], roughness=0.9)
+     clouds = {name: build_cloud(name, at, white, sprites) for name, at in CLOUD_SPOTS.items()}
+@@ -698,8 +819,8 @@ def main():
+             (_a, _b), (_c, _d), (pz0, pz1) = bounds(ppts)
+             centre = Vector(((min(q.x for q in ppts) + max(q.x for q in ppts)) / 2, (min(q.y for q in ppts) + max(q.y for q in ppts)) / 2, (pz0 + pz1) / 2))
+             add_empty(f'slot.{s}-{p}', screen.unproject((rx0 + rx1) / 2, (ry0 + ry1) / 2, centre), layout)
+-            dx, dy = START_SPOTS[p]
+-            add_empty(f'anchor.{s}-{p}-start', (DINO_SPOT[0] + dx, DINO_SPOT[1] + dy, GROUND_Z), layout)
++    for i, (dx, dy) in enumerate(BAY_SPOTS):
++        add_empty(f'anchor.dino-bay-{i + 1}', (DINO_SPOT[0] + dx, DINO_SPOT[1] + dy, GROUND_Z), layout)
+     for name, objs in clouds.items():
+         pts = eval_world_verts(objs, dg)
+         (x0, x1), (y0, y1), (z0, z1) = bounds(pts)
+@@ -740,9 +861,11 @@ def report(screen, dinos, pieces, clouds, params):
+         dg = bpy.context.evaluated_depsgraph_get()
+         for p, objs in pieces[s].items():
+             r = screen.rect(eval_world_verts(objs, dg))
+-            st = screen.project(bpy.data.objects[f'anchor.{s}-{p}-start'].location)
+             sl = screen.project(bpy.data.objects[f'slot.{s}-{p}'].location)
+-            print(f'build_dino_puzzle: {s}-{p} {fmt(r)} slot {sl[0]:.0f},{sl[1]:.0f} start {st[0]:.0f},{st[1]:.0f}')
++            print(f'build_dino_puzzle: {s}-{p} {fmt(r)} slot {sl[0]:.0f},{sl[1]:.0f}')
++    for i in range(len(BAY_SPOTS)):
++        b = screen.project(bpy.data.objects[f'anchor.dino-bay-{i + 1}'].location)
++        print(f'build_dino_puzzle: dino-bay-{i + 1} {b[0]:.1f},{b[1]:.1f}')
+     for name, objs in clouds.items():
+         print(f'build_dino_puzzle: {name} {fmt(screen.rect(eval_world_verts(objs, bpy.context.evaluated_depsgraph_get())))}')
+     grass = bpy.data.objects['hit.grass']
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/render/build.ts b/app/tools/render/build.ts
+index b9799bd..bd050b3 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/render/build.ts
++++ b/app/tools/render/build.ts
+@@ -7,6 +7,7 @@
+ // fails the build before Blender runs, naming it.
+ // Story 2.4: it also gets the play-again icon list (content/play-again.ts › PLAY_AGAIN_ICONS) as
+ // `[{id, model, creature}]` (`--icons <file>`), checked the same way.
++// Story 3.4: the dino-puzzle builder also gets the content cuts (`--cuts 3:head-neck,body-legs,tail;4:…;6:…`).
+ import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+ import { join, resolve } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+@@ -113,6 +114,14 @@ export function iconModels(assetsDir: string = ASSETS_DIR): IconModel[] {
+   });
+ }
+ 
++/** Story 3.4: content PIECES as the dino builder's `--cuts` value: `<n>:<id>,<id>…` joined by `;`, in key order. */
++export function cutsArg(pieces: Readonly<Record<number, readonly string[]>> = PIECES): string {
++  return Object.entries(pieces)
++    .sort(([a], [b]) => Number(a) - Number(b))
++    .map(([n, ids]) => `${n}:${ids.join(',')}`)
++    .join(';');
++}
++
+ /** Screens whose builder imports the decoration models. */
+ const DECORATED_SCREENS = new Set(['map']);
+ 
+@@ -165,6 +174,7 @@ export function build(screenArg: string | undefined, deps: BuildDeps): string {
+       writeFileSync(file, `${JSON.stringify(icons, null, 2)}\n`);
+       extra.push('--icons', file);
+     }
++    if (screen.id === 'dino-puzzle') extra.push('--cuts', cutsArg());
+     deps.log(`art:build: building art/${screen.id}.blend with Blender (${bin})…`);
+     const result = runBlender(deps.run, bin, blenderArgs(source, join(BLENDER_SCRIPTS, screen.builder), ['--out', out, '--params', params, ...extra]));
+     // The builder's own report (Story 2.2: decoration sizes, slot warnings, estimated rule breaches).
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/render/render.test.ts b/app/tools/render/render.test.ts
+index 971b7e5..c6cb07f 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/render/render.test.ts
++++ b/app/tools/render/render.test.ts
+@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
+ import { STATIONS } from '../../src/content/stations.ts';
+ import { resolveBlender } from '../shared/binaries.ts';
+ import { ART_DIR, RENDER_DIR, blenderArgs, runBlender, screenSpec, tail } from './blender.ts';
+-import { ASSETS_DIR, build, buildParams, decorationModels, iconModels } from './build.ts';
++import { ASSETS_DIR, build, buildParams, cutsArg, decorationModels, iconModels } from './build.ts';
+ import { FRAME_RULE_SCREENS, SCREEN_RULES, SCREEN_SEPARATE, addGhostFrames, layoutFromRaw, layoutPath, previewSvg, render, replaceDir } from './render.ts';
+ import { atlasFrames } from '../layout/rules.ts';
+ import type { RawProjection } from '../layout/to-layout.ts';
+@@ -235,13 +235,31 @@ describe('Story 3.3: dino-puzzle screen', () => {
+     expect(screenSpec('dino-puzzle')).toEqual({ id: 'dino-puzzle', source: 'art/src/map-v2.blend', builder: 'build_dino_puzzle.py' });
+     expect(buildParams().dino).toEqual({
+       species: ['apatosaurus', 'triceratops', 'stegosaurus'],
+-      pieces: { 3: ['head-neck', 'body-legs', 'tail'] },
++      pieces: {
++        3: ['head-neck', 'body-legs', 'tail'],
++        4: ['head-neck', 'front', 'back', 'tail'],
++        6: ['head', 'neck', 'body', 'front-legs', 'back-legs', 'tail'],
++      },
+       sizePx: 360,
+       sizeTolerance: 40,
+       walkMaxPx: 120,
+     });
+   });
+ 
++  it('Story 3.4: build_dino_puzzle.py gets --cuts with the content cuts; other screens do not', () => {
++    expect(cutsArg()).toBe('3:head-neck,body-legs,tail;4:head-neck,front,back,tail;6:head,neck,body,front-legs,back-legs,tail');
++    expect(cutsArg({ 6: ['a'], 3: ['b', 'c'] })).toBe('3:b,c;6:a');
++    let args: readonly string[] = [];
++    const run = vi.fn((_bin: string, a: readonly string[]) => {
++      args = a;
++      return { status: 1, stdout: '', stderr: 'stop here' };
++    });
++    expect(() => build('dino-puzzle', deps(() => 'blender', run))).toThrow(/stop here/);
++    expect(args[args.indexOf('--cuts') + 1]).toBe(cutsArg());
++    expect(() => build('pizza', deps(() => 'blender', run))).toThrow(/stop here/);
++    expect(args).not.toContain('--cuts');
++  });
++
+   it('addGhostFrames writes <object>/ghost/00 from <object>/idle/00 for every ghost object and lists it', async () => {
+     const dir = mkdtempSync(join(tmpdir(), 'bhc-ghost-'));
+     try {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/render/render.ts b/app/tools/render/render.ts
+index cbb5b4f..5771d04 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-3-4/app/tools/render/render.ts
++++ b/app/tools/render/render.ts
+@@ -24,7 +24,7 @@ import {
+   validatePizza,
+   type AtlasJsonLike,
+ } from '../layout/rules.ts';
+-import { GRASS_HIT, PIECES, SPECIES, screen as dinoScreen } from '../../src/content/games/dino-puzzle.ts';
++import { BAY_ANCHORS, DROP_ORDER, GRASS_HIT, PIECES, SPECIES, screen as dinoScreen } from '../../src/content/games/dino-puzzle.ts';
+ import { frameTrimRect } from '../atlas/pack.ts';
+ import { ghostFrame } from './ghost.ts';
+ import { screen as pizzaScreen } from '../../src/content/games/pizza.ts';
+@@ -46,7 +46,7 @@ export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames
+   'ice-cream': (layout) => validateIceCream(layout, iceCreamLimits(iceCreamScreen)),
+   pizza: (layout) => validatePizza(layout, pizzaLimits(pizzaScreen)),
+   // Story 3.3: nearly every dino rule reads frame sizes, so render checks them on the rendered frames' trims.
+-  'dino-puzzle': (layout, frames) => validateDinoPuzzle(layout, dinoPuzzleLimits(dinoScreen, SPECIES, PIECES[3]), frames),
++  'dino-puzzle': (layout, frames) => validateDinoPuzzle(layout, dinoPuzzleLimits(dinoScreen, SPECIES, PIECES, BAY_ANCHORS, DROP_ORDER), frames),
+ };
+ 
+ /** Story 3.3: screens whose render-time rules get the rendered frames' trims. */

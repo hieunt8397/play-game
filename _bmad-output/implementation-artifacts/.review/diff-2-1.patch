@@ -1,0 +1,1072 @@
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/eslint.config.js b/app/eslint.config.js
+index 009a490..a425c4d 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/eslint.config.js
++++ b/app/eslint.config.js
+@@ -90,6 +90,8 @@ const NO_GAME_NAV = [
+   { selector: "MemberExpression[object.property.name='load']", message: LOAD_MSG },
+ ];
+ 
++const STORAGE_MSG = 'Persistent storage only through core/progress-store (ProgressStore actions), never localStorage / sessionStorage / indexedDB / navigator.storage.';
++
+ const CORE_MSG = 'Layer rule: core/ must not import scenes/ or games/ (core → content only).';
+ const GAME_SCENES_MSG = 'Layer rule: games/ must not import scenes/ (games → core/content only).';
+ const GAME_CROSS_MSG = 'Layer rule: a game must not import another game or the registry.';
+@@ -188,6 +190,25 @@ export default defineConfig(
+     },
+   },
+ 
++  // --- Persistent storage only in core/progress-store (AD-2, Story 2.1) ------------------------------
++  // no-restricted-globals / no-restricted-properties (not no-restricted-syntax: flat-config entries for
++  // the same rule replace each other, and the scenes/games blocks own no-restricted-syntax).
++  {
++    files: ['src/**/*.ts'],
++    ignores: ['src/core/progress-store.ts', 'src/core/progress-store.test.ts'],
++    rules: {
++      'no-restricted-globals': [
++        'error',
++        ...['localStorage', 'sessionStorage', 'indexedDB'].map((name) => ({ name, message: STORAGE_MSG })),
++      ],
++      'no-restricted-properties': [
++        'error',
++        ...['localStorage', 'sessionStorage', 'indexedDB'].map((property) => ({ property, message: STORAGE_MSG })),
++        { object: 'navigator', property: 'storage', message: STORAGE_MSG },
++      ],
++    },
++  },
++
+   // --- Literals, direct audio and raw pointer input in scenes and games (AD-8, AD-3, AD-4) ----------
+   {
+     files: ['src/scenes/**/*.ts', 'src/games/**/*.ts'],
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/content/types.ts b/app/src/content/types.ts
+index 05fb49e..b8d6ac6 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/content/types.ts
++++ b/app/src/content/types.ts
+@@ -28,6 +28,18 @@ export interface Snapshot {
+   partial: JsonValue;
+ }
+ 
++/**
++ * One island decoration in a predefined slot (Epic 2, AD-2), persisted by core/progress-store.
++ * `seq` is the document's monotonic counter at the time of the grant (never the clock).
++ * Story 2.1 declares the type; Story 2.2 (`grantDecoration`) fills it.
++ */
++export interface DecorationSlot {
++  slotId: string;
++  stationId: GameId;
++  decorationId: string;
++  seq: number;
++}
++
+ /** Terminal outcome of one MiniGame start (AD-1). */
+ export interface RoundOutcome {
+   gameId: GameId;
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/difficulty.test.ts b/app/src/core/difficulty.test.ts
+index 520f0b7..9f012bd 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/difficulty.test.ts
++++ b/app/src/core/difficulty.test.ts
+@@ -1,6 +1,8 @@
+ import { describe, expect, it } from 'vitest';
+ import type { HintLevel } from '../content/types';
+-import { nextLevel } from './difficulty';
++import { nextLevel, persistRoundLevel } from './difficulty';
++import { ProgressStoreService } from './progress-store';
++import { SessionStore } from './session-store';
+ 
+ const o = (questions: number, firstTryCorrect: number, maxHintLevel: HintLevel) => ({ questions, firstTryCorrect, maxHintLevel });
+ 
+@@ -40,3 +42,41 @@ describe('nextLevel', () => {
+     expect(nextLevel(0, o(4, 4, 0), 1)).toBe(0);
+   });
+ });
++
++describe('persistRoundLevel (Story 2.1, Map on round:complete)', () => {
++  const outcome = (q: number, first: number, max: HintLevel) => ({ gameId: 'ice-cream' as const, ...o(q, first, max) });
++  const fake = () => {
++    const writes: [string, number][] = [];
++    return { writes, setDifficulty: (id: string, level: number) => void writes.push([id, level]) };
++  };
++
++  it.each([
++    ['up', 1, outcome(4, 4, 0), 2],
++    ['down', 2, outcome(5, 1, 4), 1],
++    ['flat', 1, outcome(4, 3, 3), 1],
++  ])('%s: writes nextLevel from the started level', (_name, started, out, expected) => {
++    const p = fake();
++    expect(persistRoundLevel({ id: 'ice-cream', level: started }, out, 4, p)).toBe(expected);
++    expect(p.writes).toEqual([['ice-cream', expected]]);
++  });
++
++  it('a mismatched gameId, no running game or no ladder writes nothing', () => {
++    const p = fake();
++    expect(persistRoundLevel({ id: 'pizza', level: 1 }, outcome(3, 3, 0), 4, p)).toBeUndefined();
++    expect(persistRoundLevel(undefined, outcome(3, 3, 0), 4, p)).toBeUndefined();
++    expect(persistRoundLevel({ id: 'ice-cream', level: 1 }, outcome(3, 3, 0), undefined, p)).toBeUndefined();
++    expect(p.writes).toEqual([]);
++  });
++
++  it('the written level comes back after a reload through SessionStore.startData', async () => {
++    const data = new Map<string, string>();
++    const storage = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
++    const before = new ProgressStoreService();
++    await before.init({ storage, persist: async () => true });
++    persistRoundLevel({ id: 'ice-cream', level: 0 }, outcome(3, 3, 0), 4, before);
++
++    const after = new ProgressStoreService();
++    await after.init({ storage, persist: async () => true });
++    expect(new SessionStore().startData('ice-cream', 4, () => 0, after).level).toBe(1);
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/difficulty.ts b/app/src/core/difficulty.ts
+index 68e3bf9..0d55da6 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/difficulty.ts
++++ b/app/src/core/difficulty.ts
+@@ -1,6 +1,7 @@
+ // Difficulty policy (Story 1.10, FR5, AR8), pure. Only the shell (Map) calls it, on `round:complete`;
+ // games never decide their own level.
+-import type { RoundOutcome } from '../content/types';
++import type { GameId, RoundOutcome } from '../content/types';
++import type { ProgressStoreService } from './progress-store';
+ 
+ /** The highest hint level: a question that reached it counts as "needed full help". */
+ const FULL_HELP_LEVEL = 4;
+@@ -28,3 +29,26 @@ export function nextLevel(
+   else if (outcome.maxHintLevel === FULL_HELP_LEVEL) step = -1;
+   return clamp(base + step, ladderLength);
+ }
++
++/** The game Map started, with the level it passed in the start data. */
++export interface RunningGame {
++  readonly id: GameId;
++  readonly level: number;
++}
++
++/**
++ * Story 2.1, called by Map synchronously on `round:complete`: when the outcome belongs to the running
++ * game, persist `nextLevel(run.level, outcome, ladderLength)` through `progress.setDifficulty` and
++ * return it. A missing run, a different `gameId` or an unknown ladder writes nothing (undefined).
++ */
++export function persistRoundLevel(
++  run: RunningGame | undefined,
++  outcome: RoundOutcome,
++  ladderLength: number | undefined,
++  progress: Pick<ProgressStoreService, 'setDifficulty'>,
++): number | undefined {
++  if (!run || run.id !== outcome.gameId || ladderLength === undefined) return undefined;
++  const level = nextLevel(run.level, outcome, ladderLength);
++  progress.setDifficulty(run.id, level);
++  return level;
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/progress-store.test.ts b/app/src/core/progress-store.test.ts
+index b7d14a3..6856391 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/progress-store.test.ts
++++ b/app/src/core/progress-store.test.ts
+@@ -1,6 +1,15 @@
+-// I/O matrix (Story 1.2): init once, persist denied, corrupt store.
++// I/O matrix (Story 1.2 init/persist rows; Story 2.1 schema v2, actions, migrations, failure policy).
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+-import { PROGRESS_KEY, ProgressStoreService, defaultProgress, type StorageLike } from './progress-store';
++import {
++  MIGRATIONS,
++  NewerSchemaError,
++  PROGRESS_KEY,
++  PROGRESS_SCHEMA_VERSION,
++  ProgressStoreService,
++  defaultProgress,
++  migrate,
++  type StorageLike,
++} from './progress-store';
+ 
+ function memoryStorage(initial: Record<string, string> = {}) {
+   const data = new Map(Object.entries(initial));
+@@ -13,6 +22,22 @@ function memoryStorage(initial: Record<string, string> = {}) {
+   } satisfies StorageLike & { data: Map<string, string> };
+ }
+ 
++type MemoryStorage = ReturnType<typeof memoryStorage>;
++
++function stored(storage: MemoryStorage): unknown {
++  const raw = storage.data.get(PROGRESS_KEY);
++  return raw === undefined ? undefined : JSON.parse(raw);
++}
++
++async function storeWith(raw?: unknown): Promise<{ store: ProgressStoreService; storage: MemoryStorage }> {
++  const storage = memoryStorage(raw === undefined ? {} : { [PROGRESS_KEY]: typeof raw === 'string' ? raw : JSON.stringify(raw) });
++  const store = new ProgressStoreService();
++  await store.init({ storage, persist: async () => true });
++  return { store, storage };
++}
++
++const V1_FIXTURE = { schemaVersion: 1, seq: 4, difficulty: { 'ice-cream': 2 }, decorations: ['x'] };
++
+ let warn: ReturnType<typeof vi.spyOn>;
+ beforeEach(() => {
+   warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+@@ -32,63 +57,218 @@ describe('ProgressStore.init', () => {
+     expect(warn).not.toHaveBeenCalled();
+   });
+ 
+-  it('writes the default state on first run', async () => {
++  it('loads synchronously inside the first call (before persist settles)', () => {
++    const storage = memoryStorage({ [PROGRESS_KEY]: JSON.stringify({ ...defaultProgress(), difficulty: { 'ice-cream': 2 } }) });
+     const store = new ProgressStoreService();
+-    const storage = memoryStorage();
+-    await store.init({ storage, persist: async () => true });
+-    expect(JSON.parse(storage.data.get(PROGRESS_KEY) ?? '')).toEqual({ schemaVersion: 1, seq: 0, difficulty: {}, decorations: [] });
++    void store.init({ storage, persist: () => new Promise<boolean>(() => undefined) });
++    expect(store.getDifficulty('ice-cream', 4)).toBe(2);
++  });
++
++  it('first run: defaults in memory and written; getDifficulty is 0', async () => {
++    const { store, storage } = await storeWith();
++    expect(stored(storage)).toEqual({ schemaVersion: 2, seq: 0, difficulty: {}, decorations: [] });
+     expect(store.state).toEqual(defaultProgress());
++    expect(store.getDifficulty('ice-cream', 4)).toBe(0);
++    expect(warn).not.toHaveBeenCalled();
+   });
+ 
+-  it('loads a valid stored state and writes updates synchronously', async () => {
+-    const saved = { schemaVersion: 1, seq: 4, difficulty: { 'ice-cream': 2 }, decorations: ['flag'] };
+-    const storage = memoryStorage({ [PROGRESS_KEY]: JSON.stringify(saved) });
++  it('an action before init() works in memory only; init() then loads over it', async () => {
++    const storage = memoryStorage({ [PROGRESS_KEY]: JSON.stringify({ ...defaultProgress(), difficulty: { 'ice-cream': 1 } }) });
+     const store = new ProgressStoreService();
++    store.setDifficulty('ice-cream', 3);
++    expect(store.getDifficulty('ice-cream', 4)).toBe(3);
+     await store.init({ storage, persist: async () => true });
+-    expect(store.state).toEqual(saved);
+-    store.update((d) => {
+-      d.decorations.push('tree');
+-    });
+-    expect(JSON.parse(storage.data.get(PROGRESS_KEY) ?? '').seq).toBe(5);
++    expect(store.getDifficulty('ice-cream', 4)).toBe(1);
++    expect(storage.setItem).not.toHaveBeenCalled();
+   });
+ });
+ 
+-describe('ProgressStore — persist denied', () => {
++describe('ProgressStore.setDifficulty', () => {
++  it('set + reload: setItem runs inside the action; a new store on the same storage reads it back', async () => {
++    const { store, storage } = await storeWith();
++    storage.setItem.mockClear();
++    store.setDifficulty('ice-cream', 2);
++    // Synchronous: the write has happened before the call returned.
++    expect(storage.setItem).toHaveBeenCalledTimes(1);
++    expect(stored(storage)).toEqual({ schemaVersion: 2, seq: 0, difficulty: { 'ice-cream': 2 }, decorations: [] });
++
++    const reloaded = new ProgressStoreService();
++    await reloaded.init({ storage, persist: async () => true });
++    expect(reloaded.getDifficulty('ice-cream', 4)).toBe(2);
++  });
++
++  it('writes even when the value is unchanged, and never changes seq', async () => {
++    const { store, storage } = await storeWith({ ...defaultProgress(), seq: 7 });
++    store.setDifficulty('ice-cream', 1);
++    store.setDifficulty('ice-cream', 1);
++    expect(storage.setItem).toHaveBeenCalledTimes(2);
++    expect(store.state.seq).toBe(7);
++    expect((stored(storage) as { seq: number }).seq).toBe(7);
++  });
++
++  it('touch-talk: silent no-op, no write, key absent', async () => {
++    const { store, storage } = await storeWith();
++    storage.setItem.mockClear();
++    store.setDifficulty('touch-talk', 1);
++    expect(storage.setItem).not.toHaveBeenCalled();
++    expect('touch-talk' in store.state.difficulty).toBe(false);
++    expect(warn).not.toHaveBeenCalled();
++  });
++
++  it.each([[-1], [1.5], [Number.NaN], [Number.POSITIVE_INFINITY]])('bad level %s: ignored with a warn, no write', async (level) => {
++    const { store, storage } = await storeWith();
++    storage.setItem.mockClear();
++    store.setDifficulty('ice-cream', level);
++    expect(storage.setItem).not.toHaveBeenCalled();
++    expect('ice-cream' in store.state.difficulty).toBe(false);
++    expect(warn).toHaveBeenCalledTimes(1);
++  });
++});
++
++describe('ProgressStore.getDifficulty', () => {
+   it.each([
+-    ['rejects', { persist: () => Promise.reject(new Error('nope')) }],
+-    ['returns false', { persist: async () => false }],
+-    ['is missing', { persist: null }],
+-  ])('persist() %s → app continues, store usable, one warning', async (_name, deps) => {
++    ['9', 9, 3],
++    ['−2', -2, 0],
++    ['1.5', 1.5, 0],
++    ['"2"', '2', 0],
++    ['null', null, 0],
++    ['missing', undefined, 0],
++    ['2', 2, 2],
++  ])('stored %s, ladder 4 → %i', async (_name, value, expected) => {
++    const difficulty = value === undefined ? {} : { 'ice-cream': value };
++    const { store, storage } = await storeWith({ ...defaultProgress(), difficulty });
++    storage.setItem.mockClear();
++    expect(store.getDifficulty('ice-cream', 4)).toBe(expected);
++    expect(storage.setItem).not.toHaveBeenCalled();
++    expect(warn).not.toHaveBeenCalled();
++  });
++
++  it('touch-talk and ladderLength < 1 → 0', async () => {
++    const { store } = await storeWith({ ...defaultProgress(), difficulty: { pizza: 2 } });
++    expect(store.getDifficulty('touch-talk', 4)).toBe(0);
++    expect(store.getDifficulty('pizza', 0)).toBe(0);
++    expect(store.getDifficulty('pizza', Number.NaN)).toBe(0);
++    expect(store.getDifficulty('pizza', 1)).toBe(0);
++    expect(store.getDifficulty('pizza', 3)).toBe(2);
++  });
++});
++
++describe('ProgressStore — migrations', () => {
++  it('migrate v1 → v2 fixture: seq and difficulty kept, decorations reset', () => {
++    expect(MIGRATIONS[1]?.(V1_FIXTURE)).toEqual({ schemaVersion: 2, seq: 4, difficulty: { 'ice-cream': 2 }, decorations: [] });
++    expect(migrate(V1_FIXTURE)).toEqual({ schemaVersion: 2, seq: 4, difficulty: { 'ice-cream': 2 }, decorations: [] });
++  });
++
++  it('every step from the v1 fixture reaches the current version with the difficulty unchanged', () => {
++    let doc: Record<string, unknown> = { ...V1_FIXTURE };
++    for (let v = 1; v < PROGRESS_SCHEMA_VERSION; v += 1) {
++      const step = MIGRATIONS[v];
++      expect(step, `missing migration from v${v}`).toBeTypeOf('function');
++      doc = step!(doc);
++      expect(doc.schemaVersion).toBe(v + 1);
++      expect(doc.difficulty).toEqual(V1_FIXTURE.difficulty);
++    }
++    expect(migrate(V1_FIXTURE).difficulty).toEqual(V1_FIXTURE.difficulty);
++    expect(migrate(V1_FIXTURE).schemaVersion).toBe(PROGRESS_SCHEMA_VERSION);
++  });
++
++  it('migrate throws NewerSchemaError for a newer version and a plain Error for corrupt input', () => {
++    expect(() => migrate({ ...defaultProgress(), schemaVersion: 3 })).toThrow(NewerSchemaError);
++    for (const bad of [null, [], 'x', { schemaVersion: 0 }, { schemaVersion: 1.5 }, { schemaVersion: '2' }, {}, { schemaVersion: 2 }]) {
++      expect(() => migrate(bad)).toThrow();
++      try {
++        migrate(bad);
++      } catch (error) {
++        expect(error).not.toBeInstanceOf(NewerSchemaError);
++      }
++    }
++  });
++
++  it('a v1 document is migrated and written back during init()', async () => {
++    const storage = memoryStorage({ [PROGRESS_KEY]: JSON.stringify(V1_FIXTURE) });
+     const store = new ProgressStoreService();
+-    const storage = memoryStorage();
+-    await expect(store.init({ storage, ...deps })).resolves.toBeUndefined();
++    const pending = store.init({ storage, persist: async () => true });
++    // Written synchronously inside init(), before persist settles.
++    expect(stored(storage)).toEqual({ schemaVersion: 2, seq: 4, difficulty: { 'ice-cream': 2 }, decorations: [] });
++    await pending;
++    expect(store.getDifficulty('ice-cream', 4)).toBe(2);
++    expect(warn).not.toHaveBeenCalled();
++  });
++
++  it('a current document is not written at init', async () => {
++    const { storage } = await storeWith({ ...defaultProgress(), difficulty: { 'ice-cream': 1 } });
++    expect(storage.setItem).not.toHaveBeenCalled();
++  });
++
++  it('newer schema: defaults, one warn, key never overwritten by later actions', async () => {
++    const newer = { schemaVersion: 3, seq: 9, difficulty: { 'ice-cream': 3 }, decorations: [], extra: true };
++    const { store, storage } = await storeWith(newer);
++    expect(store.state).toEqual(defaultProgress());
++    expect(warn).toHaveBeenCalledTimes(1);
++    store.setDifficulty('ice-cream', 1);
++    expect(store.getDifficulty('ice-cream', 4)).toBe(1);
++    expect(storage.setItem).not.toHaveBeenCalled();
++    expect(stored(storage)).toEqual(newer);
+     expect(warn).toHaveBeenCalledTimes(1);
+-    store.update((d) => {
+-      d.decorations.push('x');
+-    });
+-    expect(store.state.decorations).toEqual(['x']);
+-    expect(storage.data.has(PROGRESS_KEY)).toBe(true);
+   });
+ });
+ 
+ describe('ProgressStore — corrupt store', () => {
+-  it.each([['"{bad"', '{bad'], ['wrong shape', JSON.stringify({ schemaVersion: 2 })], ['null', 'null']])(
+-    '%s → defaults in memory, one warning, stored value untouched',
+-    async (_name, raw) => {
+-      const storage = memoryStorage({ [PROGRESS_KEY]: raw });
+-      const store = new ProgressStoreService();
+-      await store.init({ storage, persist: async () => true });
+-      expect(store.state).toEqual(defaultProgress());
+-      expect(warn).toHaveBeenCalledTimes(1);
+-      store.update((d) => {
+-        d.decorations.push('x');
+-      });
+-      expect(storage.setItem).not.toHaveBeenCalled();
+-      expect(store.state.decorations).toEqual(['x']);
+-    },
+-  );
+-
+-  it('getItem throws → defaults in memory, one warning', async () => {
++  it.each([
++    ['"{bad"', '{bad'],
++    ['null', 'null'],
++    ['no seq/difficulty/decorations', JSON.stringify({ schemaVersion: 2 })],
++    ['difficulty is an array', JSON.stringify({ schemaVersion: 2, seq: 0, difficulty: [], decorations: [] })],
++    ['missing schemaVersion', JSON.stringify({ seq: 0, difficulty: {}, decorations: [] })],
++    ['negative seq', JSON.stringify({ schemaVersion: 2, seq: -1, difficulty: {}, decorations: [] })],
++    ['v1 with a bad shape', JSON.stringify({ schemaVersion: 1, seq: 0, difficulty: null })],
++  ])('%s → defaults, one warn, no write at init; the next action writes defaults + change', async (_name, raw) => {
++    const { store, storage } = await storeWith(raw);
++    expect(store.state).toEqual(defaultProgress());
++    expect(warn).toHaveBeenCalledTimes(1);
++    expect(storage.setItem).not.toHaveBeenCalled();
++    store.setDifficulty('ice-cream', 1);
++    expect(stored(storage)).toEqual({ schemaVersion: 2, seq: 0, difficulty: { 'ice-cream': 1 }, decorations: [] });
++    expect(warn).toHaveBeenCalledTimes(1);
++  });
++});
++
++describe('ProgressStore — sanitise', () => {
++  it('stray entries: touch-talk difficulty and a malformed decoration dropped in memory, rest kept, one warn', async () => {
++    const good = { slotId: 'slot.ice-cream.1', stationId: 'ice-cream', decorationId: 'flag', seq: 1 };
++    const doc = {
++      schemaVersion: 2,
++      seq: 1,
++      difficulty: { 'ice-cream': 2, 'touch-talk': 1, pizza: '1' },
++      decorations: [good, { slotId: 'slot.x.1', stationId: 'nowhere', decorationId: 'flag', seq: 2 }],
++    };
++    const { store, storage } = await storeWith(doc);
++    expect(store.state.difficulty).toEqual({ 'ice-cream': 2, pizza: '1' });
++    expect(store.state.decorations).toEqual([good]);
++    expect(store.state.seq).toBe(1);
++    expect(warn).toHaveBeenCalledTimes(1);
++    // In memory only: the stored document is untouched until the next action.
++    expect(storage.setItem).not.toHaveBeenCalled();
++    expect(stored(storage)).toEqual(doc);
++    store.setDifficulty('ice-cream', 3);
++    expect(stored(storage)).toEqual({ schemaVersion: 2, seq: 1, difficulty: { 'ice-cream': 3, pizza: '1' }, decorations: [good] });
++  });
++
++  it.each([
++    ['slotId not a string', { slotId: 1, stationId: 'pizza', decorationId: 'a', seq: 0 }],
++    ['decorationId missing', { slotId: 's', stationId: 'pizza', seq: 0 }],
++    ['seq not an integer', { slotId: 's', stationId: 'pizza', decorationId: 'a', seq: 1.5 }],
++    ['seq negative', { slotId: 's', stationId: 'pizza', decorationId: 'a', seq: -1 }],
++    ['a string (v1 style)', 'flag'],
++  ])('drops a decoration whose %s', async (_name, bad) => {
++    const { store } = await storeWith({ ...defaultProgress(), decorations: [bad] });
++    expect(store.state.decorations).toEqual([]);
++    expect(warn).toHaveBeenCalledTimes(1);
++  });
++});
++
++describe('ProgressStore — storage unusable', () => {
++  it('getItem throws → memory only, levels still move, one warn total', async () => {
+     const storage = memoryStorage();
+     storage.getItem.mockImplementation(() => {
+       throw new Error('SecurityError');
+@@ -96,28 +276,64 @@ describe('ProgressStore — corrupt store', () => {
+     const store = new ProgressStoreService();
+     await store.init({ storage, persist: async () => true });
+     expect(store.state).toEqual(defaultProgress());
++    store.setDifficulty('ice-cream', 1);
++    store.setDifficulty('ice-cream', 2);
++    expect(store.getDifficulty('ice-cream', 4)).toBe(2);
++    expect(storage.setItem).not.toHaveBeenCalled();
+     expect(warn).toHaveBeenCalledTimes(1);
+   });
+ 
+-  it('setItem throws → memory fallback, warns once only', async () => {
+-    const storage = memoryStorage();
++  it('setItem throws (quota) → detached, levels still move, one warn total', async () => {
++    const storage = memoryStorage({ [PROGRESS_KEY]: JSON.stringify(defaultProgress()) });
+     storage.setItem.mockImplementation(() => {
+       throw new Error('QuotaExceededError');
+     });
+     const store = new ProgressStoreService();
+     await store.init({ storage, persist: async () => true });
+-    store.update((d) => {
+-      d.seq = d.seq + 0;
++    store.setDifficulty('ice-cream', 1);
++    store.setDifficulty('ice-cream', 2);
++    expect(store.getDifficulty('ice-cream', 4)).toBe(2);
++    expect(storage.setItem).toHaveBeenCalledTimes(1);
++    expect(warn).toHaveBeenCalledTimes(1);
++  });
++
++  it('setItem throws on the first-run write → detached, one warn', async () => {
++    const storage = memoryStorage();
++    storage.setItem.mockImplementation(() => {
++      throw new Error('QuotaExceededError');
+     });
++    const store = new ProgressStoreService();
++    await store.init({ storage, persist: async () => true });
++    store.setDifficulty('ice-cream', 1);
++    expect(store.getDifficulty('ice-cream', 4)).toBe(1);
++    expect(storage.setItem).toHaveBeenCalledTimes(1);
+     expect(warn).toHaveBeenCalledTimes(1);
+-    expect(store.state.seq).toBe(1);
+   });
+ 
+   it('no storage at all → memory only, one warning', async () => {
+     const store = new ProgressStoreService();
+     await store.init({ storage: null, persist: async () => true });
+     expect(store.state).toEqual(defaultProgress());
++    store.setDifficulty('ice-cream', 1);
++    expect(store.getDifficulty('ice-cream', 4)).toBe(1);
++    expect(warn).toHaveBeenCalledTimes(1);
++  });
++});
++
++describe('ProgressStore — persist denied', () => {
++  it.each([
++    ['rejects', { persist: () => Promise.reject(new Error('nope')) }],
++    ['throws synchronously', { persist: () => { throw new Error('nope'); } }],
++    ['returns false', { persist: async () => false }],
++    ['is missing', { persist: null }],
++  ])('persist() %s → app continues, store usable, one warning', async (_name, deps) => {
++    const store = new ProgressStoreService();
++    const storage = memoryStorage();
++    await expect(store.init({ storage, ...deps })).resolves.toBeUndefined();
+     expect(warn).toHaveBeenCalledTimes(1);
++    store.setDifficulty('ice-cream', 1);
++    expect(store.getDifficulty('ice-cream', 4)).toBe(1);
++    expect((stored(storage) as { difficulty: unknown }).difficulty).toEqual({ 'ice-cream': 1 });
+   });
+ });
+ 
+@@ -132,7 +348,7 @@ describe('ProgressStore — production defaults', () => {
+     const store = new ProgressStoreService();
+     await store.init();
+     expect(persist).toHaveBeenCalledTimes(1);
+-    expect(JSON.parse(storage.data.get(PROGRESS_KEY) ?? '')).toEqual(defaultProgress());
++    expect(stored(storage)).toEqual(defaultProgress());
+     expect(warn).not.toHaveBeenCalled();
+   });
+ });
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/progress-store.ts b/app/src/core/progress-store.ts
+index f61116a..44623d4 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/progress-store.ts
++++ b/app/src/core/progress-store.ts
+@@ -1,26 +1,130 @@
+-// ProgressStore (AD-2, minimal for Epic 1): owns localStorage key `bhc.progress`, writes
+-// synchronously, and is the ONLY code that calls `navigator.storage.persist()`.
+-// `init()` runs on the first Start tap and is idempotent. Every storage problem (persist denied /
+-// missing, corrupt JSON, localStorage throwing) gives one console.warn and an in-memory fallback —
+-// startup never fails because of it.
++// ProgressStore (AD-2, Story 2.1): the durable store and the ONLY module that touches persistent
++// storage (lint bans localStorage / sessionStorage / indexedDB / navigator.storage elsewhere).
++// - One localStorage key, `bhc.progress`, schema v2:
++//   `{ schemaVersion, seq, difficulty: Partial<Record<GameId, number>>, decorations: DecorationSlot[] }`.
++// - Only named actions mutate the document (`setDifficulty`; Story 2.2 adds `grantDecoration`). Each
++//   action writes the whole document synchronously with `setItem` inside the call — no debounce,
++//   timer or promise — even when the value is unchanged.
++// - `getDifficulty` is a pure clamped read (missing / bad / negative / touch-talk → 0).
++// - `init()` runs on the first Start tap: idempotent, never rejects, the only caller of
++//   `navigator.storage.persist()`. Loading and migrating happen synchronously inside the first call;
++//   only persist() is awaited.
++// - Load: read → JSON.parse → integer schemaVersion ≥ 1 → newer than the app? reject → step-by-step
++//   MIGRATIONS (v → v+1) → shape check → sanitise (memory only) → write back if a migration ran.
++// - Failure policy (one console.warn per case, never a visible or audible error):
++//   * corrupt (bad JSON, bad shape, bad/missing schemaVersion, a throwing migration) → defaults in
++//     memory, storage stays attached, nothing written at init; the next action overwrites the key;
++//   * unusable (getItem/setItem throws, no localStorage) or a NEWER schemaVersion → memory only for
++//     the session: storage is detached and never written again (a newer document is real progress).
++// - An action before `init()` works in memory only; `init()` then loads over it.
++import { GAME_IDS, type DecorationSlot, type GameId } from '../content/types';
+ 
+ export const PROGRESS_KEY = 'bhc.progress';
+-export const PROGRESS_SCHEMA_VERSION = 1;
++export const PROGRESS_SCHEMA_VERSION = 2;
+ 
+ export interface ProgressState {
+   schemaVersion: typeof PROGRESS_SCHEMA_VERSION;
+-  /** Monotonic write counter. */
++  /** The last issued `DecorationSlot.seq`; only `grantDecoration` (Story 2.2) advances it. */
+   seq: number;
+-  /** Difficulty level per GameId (persisted from Epic 2). */
+-  difficulty: Record<string, number>;
+-  /** Earned island decoration ids (Epic 2). */
+-  decorations: string[];
++  /** Ladder level per game (`touch-talk` has none). Raw values are clamped on read. */
++  difficulty: Partial<Record<GameId, number>>;
++  /** Decorations placed on the island (Story 2.2). */
++  decorations: DecorationSlot[];
+ }
+ 
+ export function defaultProgress(): ProgressState {
+   return { schemaVersion: PROGRESS_SCHEMA_VERSION, seq: 0, difficulty: {}, decorations: [] };
+ }
+ 
++type RawDoc = Record<string, unknown>;
++
++/**
++ * Step migrations: `MIGRATIONS[v]` turns a v document into a v+1 document.
++ * v1 → v2: v1 `decorations` was `string[]` with no slot (Epic 1 never wrote any), so it is reset;
++ * `seq` and `difficulty` are kept.
++ */
++export const MIGRATIONS: Readonly<Record<number, (d: RawDoc) => RawDoc>> = {
++  1: (d) => ({ ...d, schemaVersion: 2, decorations: [] }),
++};
++
++/** The stored document belongs to a newer app build: never overwrite it. */
++export class NewerSchemaError extends Error {
++  readonly schemaVersion: number;
++
++  constructor(schemaVersion: number) {
++    super(`progress: schemaVersion ${schemaVersion} is newer than ${PROGRESS_SCHEMA_VERSION}`);
++    this.name = 'NewerSchemaError';
++    this.schemaVersion = schemaVersion;
++  }
++}
++
++function isPlainObject(v: unknown): v is RawDoc {
++  return typeof v === 'object' && v !== null && !Array.isArray(v);
++}
++
++function isNonNegativeInteger(v: unknown): v is number {
++  return typeof v === 'number' && Number.isInteger(v) && v >= 0;
++}
++
++/**
++ * Pure: brings a parsed document to the current schema and checks its shape. Throws
++ * `NewerSchemaError` for a newer schemaVersion and a plain `Error` for anything corrupt (bad
++ * schemaVersion, a missing or throwing migration step, a bad shape). It does not sanitise.
++ */
++export function migrate(raw: unknown): ProgressState {
++  if (!isPlainObject(raw)) throw new Error('progress: document is not an object');
++  const version = raw.schemaVersion;
++  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
++    throw new Error('progress: missing or invalid schemaVersion');
++  }
++  if (version > PROGRESS_SCHEMA_VERSION) throw new NewerSchemaError(version);
++  let doc: RawDoc = raw;
++  for (let v = version; v < PROGRESS_SCHEMA_VERSION; v += 1) {
++    const step = MIGRATIONS[v];
++    if (!step) throw new Error(`progress: no migration from schemaVersion ${v}`);
++    doc = step(doc);
++    if (!isPlainObject(doc)) throw new Error(`progress: migration from ${v} returned a non-object`);
++  }
++  if (
++    doc.schemaVersion !== PROGRESS_SCHEMA_VERSION ||
++    !isNonNegativeInteger(doc.seq) ||
++    !isPlainObject(doc.difficulty) ||
++    !Array.isArray(doc.decorations)
++  ) {
++    throw new Error('progress: document has a bad shape');
++  }
++  return {
++    schemaVersion: PROGRESS_SCHEMA_VERSION,
++    seq: doc.seq,
++    difficulty: { ...doc.difficulty } as ProgressState['difficulty'],
++    decorations: [...doc.decorations] as DecorationSlot[],
++  };
++}
++
++function isDecorationSlot(v: unknown): v is DecorationSlot {
++  return (
++    isPlainObject(v) &&
++    typeof v.slotId === 'string' &&
++    typeof v.decorationId === 'string' &&
++    typeof v.stationId === 'string' &&
++    (GAME_IDS as readonly string[]).includes(v.stationId) &&
++    isNonNegativeInteger(v.seq)
++  );
++}
++
++/** Pure: drops `difficulty['touch-talk']` and malformed decorations; other difficulty values are kept. */
++export function sanitise(state: ProgressState): { state: ProgressState; dropped: boolean } {
++  const difficulty = { ...state.difficulty };
++  let dropped = false;
++  if ('touch-talk' in difficulty) {
++    delete difficulty['touch-talk'];
++    dropped = true;
++  }
++  const decorations = state.decorations.filter(isDecorationSlot);
++  if (decorations.length !== state.decorations.length) dropped = true;
++  return { state: { ...state, difficulty, decorations }, dropped };
++}
++
+ export interface StorageLike {
+   getItem(key: string): string | null;
+   setItem(key: string, value: string): void;
+@@ -33,37 +137,36 @@ export interface ProgressDeps {
+   persist?: (() => Promise<boolean>) | null;
+ }
+ 
+-function isProgressState(v: unknown): v is ProgressState {
+-  if (typeof v !== 'object' || v === null) return false;
+-  const o = v as Record<string, unknown>;
+-  return (
+-    o.schemaVersion === PROGRESS_SCHEMA_VERSION &&
+-    typeof o.seq === 'number' &&
+-    typeof o.difficulty === 'object' &&
+-    o.difficulty !== null &&
+-    !Array.isArray(o.difficulty) &&
+-    Array.isArray(o.decorations)
+-  );
+-}
+-
+ function defaultStorage(): StorageLike | null {
+-  // Accessing `localStorage` itself can throw (blocked storage) — callers catch.
++  // Accessing `localStorage` itself can throw (blocked storage) — the caller catches.
+   return typeof localStorage === 'undefined' ? null : localStorage;
+ }
+ 
+ function defaultPersist(): (() => Promise<boolean>) | null {
+-  const storage = typeof navigator === 'undefined' ? undefined : navigator.storage;
+-  return typeof storage?.persist === 'function' ? () => storage.persist() : null;
++  try {
++    const storage = typeof navigator === 'undefined' ? undefined : navigator.storage;
++    return typeof storage?.persist === 'function' ? () => storage.persist() : null;
++  } catch {
++    return null;
++  }
+ }
+ 
+ export class ProgressStoreService {
+   private initPromise: Promise<void> | undefined;
++  /** Attached storage; `null` = memory only (before init, or detached for the session). */
+   private storage: StorageLike | null = null;
+   private current: ProgressState = defaultProgress();
+ 
+-  /** Idempotent: a second call returns the first call's promise (deps of later calls are ignored). */
++  /**
++   * Idempotent: a second call returns the first call's promise (deps of later calls are ignored).
++   * The document is loaded (and migrated) synchronously inside the first call; only persist() is
++   * awaited. Never rejects.
++   */
+   init(deps: ProgressDeps = {}): Promise<void> {
+-    this.initPromise ??= this.doInit(deps);
++    if (!this.initPromise) {
++      this.load(deps);
++      this.initPromise = this.requestPersist('persist' in deps ? (deps.persist ?? null) : defaultPersist());
++    }
+     return this.initPromise;
+   }
+ 
+@@ -71,16 +174,40 @@ export class ProgressStoreService {
+     return this.current;
+   }
+ 
+-  /** Applies a change and writes synchronously (memory only after a storage failure). */
+-  update(change: (draft: ProgressState) => void): void {
+-    change(this.current);
+-    this.current.seq += 1;
+-    this.write();
++  /**
++   * The stored level of `gameId`, clamped to `[0, ladderLength − 1]`. Pure: no write, no warn.
++   * 0 when missing, not an integer, negative, for `touch-talk`, or when `ladderLength < 1`.
++   */
++  getDifficulty(gameId: GameId, ladderLength: number): number {
++    if (gameId === 'touch-talk' || !(ladderLength >= 1)) return 0;
++    const value = this.current.difficulty[gameId];
++    if (!isNonNegativeInteger(value)) return 0;
++    return Math.min(value, Math.floor(ladderLength) - 1);
+   }
+ 
+-  private async doInit(deps: ProgressDeps): Promise<void> {
+-    this.load(deps);
+-    await this.requestPersist('persist' in deps ? (deps.persist ?? null) : defaultPersist());
++  /**
++   * Sets the level of `gameId` and writes the document synchronously. `touch-talk` is a silent
++   * no-op; a level that is not a non-negative integer warns and is ignored. `seq` is unchanged.
++   */
++  setDifficulty(gameId: GameId, level: number): void {
++    if (gameId === 'touch-talk') return;
++    if (!isNonNegativeInteger(level)) {
++      console.warn(`progress: setDifficulty("${gameId}", ${String(level)}) ignored — not a non-negative integer`);
++      return;
++    }
++    this.current.difficulty[gameId] = level;
++    this.commit();
++  }
++
++  /** Writes the whole document synchronously (nothing while detached). A throw detaches storage. */
++  private commit(): void {
++    if (!this.storage) return;
++    try {
++      this.storage.setItem(PROGRESS_KEY, JSON.stringify(this.current));
++    } catch (error) {
++      this.storage = null;
++      console.warn('progress: localStorage write failed — progress kept in memory only', error);
++    }
+   }
+ 
+   private load(deps: ProgressDeps): void {
+@@ -98,32 +225,33 @@ export class ProgressStoreService {
+       return;
+     }
+     if (raw === null) {
++      this.current = defaultProgress();
+       this.storage = storage;
+-      this.write();
++      this.commit();
+       return;
+     }
+-    let parsed: unknown;
++    let loaded: ProgressState;
++    let migrated: boolean;
+     try {
+-      parsed = JSON.parse(raw);
+-    } catch {
+-      parsed = undefined;
+-    }
+-    if (!isProgressState(parsed)) {
+-      console.warn(`progress: "${PROGRESS_KEY}" is corrupt — using defaults in memory`);
++      const parsed: unknown = JSON.parse(raw);
++      loaded = migrate(parsed);
++      migrated = (parsed as RawDoc).schemaVersion !== PROGRESS_SCHEMA_VERSION;
++    } catch (error) {
++      this.current = defaultProgress();
++      if (error instanceof NewerSchemaError) {
++        console.warn(`progress: "${PROGRESS_KEY}" has schemaVersion ${error.schemaVersion}, newer than this app — progress kept in memory only`);
++        return;
++      }
++      // Corrupt: keep storage attached so the next action replaces the key (UX-DR55).
++      console.warn(`progress: "${PROGRESS_KEY}" is corrupt — using defaults; the next change overwrites it`, error);
++      this.storage = storage;
+       return;
+     }
+-    this.current = parsed;
++    const { state, dropped } = sanitise(loaded);
++    if (dropped) console.warn(`progress: "${PROGRESS_KEY}" had stray entries — dropped in memory`);
++    this.current = state;
+     this.storage = storage;
+-  }
+-
+-  private write(): void {
+-    if (!this.storage) return;
+-    try {
+-      this.storage.setItem(PROGRESS_KEY, JSON.stringify(this.current));
+-    } catch (error) {
+-      this.storage = null;
+-      console.warn('progress: localStorage write failed — progress kept in memory only', error);
+-    }
++    if (migrated) this.commit();
+   }
+ 
+   private async requestPersist(persist: (() => Promise<boolean>) | null): Promise<void> {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/session-store.test.ts b/app/src/core/session-store.test.ts
+index 5bcb13c..9b5fe52 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/session-store.test.ts
++++ b/app/src/core/session-store.test.ts
+@@ -1,45 +1,45 @@
+ import { describe, expect, it } from 'vitest';
++import { ProgressStoreService, type StorageLike } from './progress-store';
+ import { SessionStore } from './session-store';
+ 
++function memoryStorage(): StorageLike {
++  const data = new Map<string, string>();
++  return { getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) };
++}
++
+ describe('SessionStore', () => {
+-  it('cold start: no last station, no trips, level 0', () => {
++  it('cold start: no last station, no trips', () => {
+     const s = new SessionStore();
+     expect(s.lastStation).toBeUndefined();
+     expect(s.kartTrips).toBe(0);
+-    expect(s.levelFor('ice-cream', 3)).toBe(0);
+   });
+ 
+-  it('levelFor clamps the stored level to the ladder', () => {
++  it('startData: level from the injected progress, seed floor(rng × 2^31)', () => {
+     const s = new SessionStore();
+-    s.levels['ice-cream'] = 5;
+-    expect(s.levelFor('ice-cream', 3)).toBe(2);
+-    s.levels['ice-cream'] = -2;
+-    expect(s.levelFor('ice-cream', 3)).toBe(0);
+-    s.levels['ice-cream'] = 1;
+-    expect(s.levelFor('ice-cream', 3)).toBe(1);
+-    expect(s.levelFor('ice-cream', 0)).toBe(0);
++    const calls: [string, number][] = [];
++    const progress = {
++      getDifficulty: (id: string, len: number) => {
++        calls.push([id, len]);
++        return 2;
++      },
++    };
++    expect(s.startData('pizza', 5, () => 0.5, progress)).toEqual({ level: 2, seed: 2 ** 30 });
++    expect(calls).toEqual([['pizza', 5]]);
++    expect(s.startData('pizza', 5, () => 0, progress).seed).toBe(0);
++    const top = s.startData('pizza', 5, () => 1, progress).seed;
++    expect(top).toBeLessThan(2 ** 31);
++    expect(Number.isInteger(top)).toBe(true);
+   });
+ 
+-  it('recordRound (Story 1.10): the next levelFor/startData uses nextLevel; a fresh store is back at 0', () => {
+-    const s = new SessionStore();
+-    expect(s.recordRound('ice-cream', 0, { questions: 3, firstTryCorrect: 3, maxHintLevel: 0 }, 4)).toBe(1);
+-    expect(s.levelFor('ice-cream', 4)).toBe(1);
+-    expect(s.startData('ice-cream', 4, () => 0).level).toBe(1);
+-    s.recordRound('ice-cream', 1, { questions: 4, firstTryCorrect: 1, maxHintLevel: 4 }, 4);
+-    expect(s.levelFor('ice-cream', 4)).toBe(0);
+-    s.recordRound('ice-cream', 0, { questions: 3, firstTryCorrect: 2, maxHintLevel: 4 }, 4);
+-    expect(s.levelFor('ice-cream', 4)).toBe(0);
+-    s.recordRound('ice-cream', 0, { questions: 3, firstTryCorrect: 3, maxHintLevel: 0 }, 4);
+-    expect(new SessionStore().levelFor('ice-cream', 4)).toBe(0);
+-  });
++  it('startData (Story 2.1): a level set in ProgressStore survives a reload', async () => {
++    const storage = memoryStorage();
++    const before = new ProgressStoreService();
++    await before.init({ storage, persist: async () => true });
++    before.setDifficulty('ice-cream', 2);
+ 
+-  it('startData: level from the store, seed floor(rng × 2^31)', () => {
+-    const s = new SessionStore();
+-    s.levels.pizza = 1;
+-    expect(s.startData('pizza', 5, () => 0.5)).toEqual({ level: 1, seed: 2 ** 30 });
+-    expect(s.startData('pizza', 5, () => 0).seed).toBe(0);
+-    const top = s.startData('pizza', 5, () => 1).seed;
+-    expect(top).toBeLessThan(2 ** 31);
+-    expect(Number.isInteger(top)).toBe(true);
++    const after = new ProgressStoreService();
++    await after.init({ storage, persist: async () => true });
++    expect(new SessionStore().startData('ice-cream', 4, () => 0, after)).toEqual({ level: 2, seed: 0 });
++    expect(new SessionStore().startData('ice-cream', 2, () => 0, after).level).toBe(1);
+   });
+ });
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/session-store.ts b/app/src/core/session-store.ts
+index ccb23ae..0670b9e 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/core/session-store.ts
++++ b/app/src/core/session-store.ts
+@@ -1,40 +1,31 @@
+ // Session state (Story 1.7), memory only: a page reload starts fresh, so the kart is back at
+-// `kart-start`. Epic 2 adds `resume` and `pendingFlyIns`; Story 2.1 moves the level to ProgressStore.
+-import type { GameId, GameStartData, RoundOutcome } from '../content/types';
+-import { nextLevel } from './difficulty';
++// `kart-start`. Story 2.1 moved the ladder level to the durable ProgressStore: `startData` reads it
++// through `getDifficulty`, and Map writes it with `setDifficulty` on `round:complete`.
++// Epic 2 adds `resume` and `pendingFlyIns` here.
++import type { GameId, GameStartData } from '../content/types';
++import { ProgressStore, type ProgressStoreService } from './progress-store';
+ 
+ /** 2^31: seeds are non-negative 31-bit integers. */
+ const SEED_RANGE = 2 ** 31;
+ 
++/** The slice of ProgressStore that start data needs (injectable for tests). */
++export type DifficultySource = Pick<ProgressStoreService, 'getDifficulty'>;
++
+ export class SessionStore {
+   /** The station of the last game started; Map parks the kart at its stop. */
+   lastStation: GameId | undefined = undefined;
+   /** Kart arrivals this session (the first trip is capped at kartDriveMaxMs, later ones at kartDriveRepeatMaxMs). */
+   kartTrips = 0;
+-  /** Ladder level per game (Epic 1 keeps levels in memory). */
+-  levels: Partial<Record<GameId, number>> = {};
+-
+-  /** `levels[id] ?? 0` clamped to `[0, ladderLength − 1]` (0 for an empty ladder). */
+-  levelFor(id: GameId, ladderLength: number): number {
+-    const max = Math.max(0, Math.floor(ladderLength) - 1);
+-    const level = Math.floor(this.levels[id] ?? 0);
+-    return Number.isFinite(level) ? Math.min(max, Math.max(0, level)) : 0;
+-  }
+-
+-  /**
+-   * Story 1.10: a round of `id` started at `startedLevel` completed; the next start uses
+-   * `nextLevel(startedLevel, outcome, ladderLength)` (memory only; Story 2.1 persists it).
+-   */
+-  recordRound(id: GameId, startedLevel: number, outcome: Pick<RoundOutcome, 'questions' | 'firstTryCorrect' | 'maxHintLevel'>, ladderLength: number): number {
+-    const level = nextLevel(startedLevel, outcome, ladderLength);
+-    this.levels[id] = level;
+-    return level;
+-  }
+ 
+-  /** Start data for a game: its session level and a fresh seed `floor(rng() × 2^31)`. */
+-  startData(id: GameId, ladderLength: number, rng: () => number = Math.random): GameStartData {
++  /** Start data for a game: its persisted level (clamped to the ladder) and a fresh seed `floor(rng() × 2^31)`. */
++  startData(
++    id: GameId,
++    ladderLength: number,
++    rng: () => number = Math.random,
++    progress: DifficultySource = ProgressStore,
++  ): GameStartData {
+     const r = Math.min(Math.max(rng(), 0), 1 - Number.EPSILON);
+-    return { level: this.levelFor(id, ladderLength), seed: Math.floor(r * SEED_RANGE) };
++    return { level: progress.getDifficulty(id, ladderLength), seed: Math.floor(r * SEED_RANGE) };
+   }
+ }
+ 
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/scenes/Map.ts b/app/src/scenes/Map.ts
+index b71022f..d6b4bac 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/src/scenes/Map.ts
++++ b/app/src/scenes/Map.ts
+@@ -8,8 +8,10 @@
+ //   - every tap resets idle (core/map-idle), which is suspended while the kart travels.
+ // A terminal event (`round:complete` / `round:abandon`) of the running game stops it and wakes Map:
+ // the island fades back with the kart parked at `SessionStore.lastStation`. The game's own assets are
+-// removed when its scene shuts down (AR39). Story 1.10: on `round:complete` Map first records the round
+-// (SessionStore.recordRound → core/difficulty nextLevel, memory only), so the next start uses the new level. Timing, routing and geometry are pure core code; this
++// removed when its scene shuts down (AR39). Story 2.1: on `round:complete`, synchronously on receipt, Map
++// persists the next level (core/difficulty persistRoundLevel → ProgressStore.setDifficulty(id, nextLevel(startedLevel, …))), and
++// the next start reads it back (SessionStore.startData → ProgressStore.getDifficulty), also after a reload.
++// Timing, routing and geometry are pure core code; this
+ // scene only wires Phaser. The kart moves only in `update` (no timers or tweens), so a pause freezes it.
+ import { Scene, type GameObjects } from 'phaser';
+ import { ATLASES, BACKGROUNDS, MAP_KART } from '../content/assets';
+@@ -20,6 +22,7 @@ import { KART_START_ANCHOR, ROAD_PATH, STATIONS, stopAnchor } from '../content/s
+ import { inviteLine, islandPrompt, stationNameLine } from '../content/voice-lines';
+ import { audio } from '../core/audio-director';
+ import { bus } from '../core/bus';
++import { persistRoundLevel } from '../core/difficulty';
+ import { AssetTracker, loadPlan, releasePlan } from '../core/game-assets';
+ import { createHintRing, type HintRing } from '../core/hint-visuals';
+ import { setHudMode } from '../core/hud-mode';
+@@ -31,6 +34,7 @@ import { KART_TARGET, KartTrip, type TripCommand } from '../core/kart-trip';
+ import { createMapIdle, type MapIdle, type MapIdleEvent } from '../core/map-idle';
+ import { planMap, type MapPlan, type PlannedKart, type PlannedStation } from '../core/map-plan';
+ import { enterStation, revealScene } from '../core/motion';
++import { ProgressStore } from '../core/progress-store';
+ import { amplitude, prefersReducedMotion } from '../core/reduced-motion';
+ import { createRoad } from '../core/road';
+ import { session } from '../core/session-store';
+@@ -201,9 +205,8 @@ export class MapScene extends Scene {
+     // Scoped subscriptions stay alive while Map sleeps (they end on shutdown/destroy only).
+     const scoped = bus.scoped(this);
+     scoped.on('round:complete', (outcome) => {
+-      const run = this.running;
+-      const entry = run && run.id === outcome.gameId ? GAMES[run.id] : undefined;
+-      if (run && entry) session.recordRound(run.id, run.level, outcome, ladderLength(entry));
++      const entry = this.running ? GAMES[this.running.id] : undefined;
++      persistRoundLevel(this.running, outcome, entry ? ladderLength(entry) : undefined, ProgressStore);
+       this.returnFrom(outcome.gameId);
+     });
+     scoped.on('round:abandon', ({ gameId }) => this.returnFrom(gameId));
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/tools/lint/rules.test.ts b/app/tools/lint/rules.test.ts
+index be9c3ce..1807cd9 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-1/app/tools/lint/rules.test.ts
++++ b/app/tools/lint/rules.test.ts
+@@ -131,6 +131,36 @@ describe('eslint.config.js', () => {
+     expect(ids.filter((id) => id === SYNTAX)).toHaveLength(2);
+   });
+ 
++  const STORAGE_RULES = ['no-restricted-globals', 'no-restricted-properties'];
++  const storageHits = (ids: string[]) => ids.filter((id) => STORAGE_RULES.includes(id));
++
++  it.each([
++    ['localStorage.getItem in a scene', 'src/scenes/X.ts', "export const v = localStorage.getItem('k');"],
++    ['window.localStorage in core', 'src/core/x.ts', 'export const s = window.localStorage;'],
++    ['indexedDB.open in a game', 'src/games/pizza/scene.ts', "export const r = indexedDB.open('x');"],
++    ['navigator.storage.persist in session-store', 'src/core/session-store.ts', 'export const p = navigator.storage.persist();'],
++    ['bare sessionStorage in content', 'src/content/x.ts', 'export const s = sessionStorage;'],
++  ])('bans storage outside core/progress-store: %s', async (_name, file, code) => {
++    expect(storageHits(await ruleIds(file, code)).length).toBeGreaterThan(0);
++  });
++
++  it.each([
++    ['localStorage.getItem', "export const v = localStorage.getItem('k');"],
++    ['window.localStorage', 'export const s = window.localStorage;'],
++    ['indexedDB.open', "export const r = indexedDB.open('x');"],
++    ['navigator.storage.persist', 'export const p = navigator.storage.persist();'],
++  ])('allows storage in core/progress-store: %s', async (_name, code) => {
++    expect(storageHits(await ruleIds('src/core/progress-store.ts', code))).toEqual([]);
++  });
++
++  it.each([
++    ['a scene', 'src/scenes/X.ts'],
++    ['core', 'src/core/x.ts'],
++    ['a game', 'src/games/pizza/scene.ts'],
++  ])('allows navigator.userAgent in %s', async (_name, file) => {
++    expect(await ruleIds(file, 'export const ua = navigator.userAgent;')).toEqual([]);
++  });
++
+   it.each([
+     ['scene → Tokens facade, games, content', 'src/scenes/X.ts', "import { Tokens } from '../core/tokens';\nimport '../games/pizza/scene';\nimport '../content/types';\nexport const t = Tokens;"],
+     ['game → own file, core, content', 'src/games/pizza/scene.ts', "import './helpers';\nimport { bus } from '../../core/bus';\nimport '../../content/games/pizza';\nexport const b = bus;"],

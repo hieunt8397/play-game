@@ -1,0 +1,10 @@
+app/eslint.config.js
+app/src/content/types.ts
+app/src/core/difficulty.test.ts
+app/src/core/difficulty.ts
+app/src/core/progress-store.test.ts
+app/src/core/progress-store.ts
+app/src/core/session-store.test.ts
+app/src/core/session-store.ts
+app/src/scenes/Map.ts
+app/tools/lint/rules.test.ts

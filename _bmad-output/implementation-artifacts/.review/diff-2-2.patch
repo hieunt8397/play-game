@@ -1,0 +1,2959 @@
+diff --git a/app/src/content/decorations.ts b/app/src/content/decorations.ts
+new file mode 100644
+index 0000000..af62248
+--- /dev/null
++++ b/app/src/content/decorations.ts
+@@ -0,0 +1,74 @@
++// Island decorations (Story 2.2, AD-2). Data only: per station, the CC0 low-poly models a finished
++// round can place on that station's slots, in a fixed order. `ProgressStore.grantDecoration` gives the
++// entry after the station's newest one (wrapping), so the order is the order a child sees them.
++// - `id`: kebab-case and unique across all stations; the map atlas frame is `decoration/<id>/00`.
++// - `model`: path relative to the project's `assets/` folder (Kenney / Quaternius, CC0). build_map.py
++//   imports it, normalises its size and renders it as `state.<id>` under `sprite.decoration`.
++// Every station has more items than slots, so a replacement always brings in a different item.
++// No T-rex anywhere (UX-DR75); Shiba, the fox and the station dinos are already game characters.
++import type { GameId } from './types.ts';
++
++export interface DecorationItem {
++  readonly id: string;
++  /** Relative to `assets/` (e.g. `kenney/kenney_food-kit/Models/GLB format/pizza.glb`). */
++  readonly model: string;
++}
++
++const COMMERCIAL = 'kenney/kenney_city-kit-commercial_2.1/Models/GLB format';
++const FOOD = 'kenney/kenney_food-kit/Models/GLB format';
++const CARS = 'kenney/kenney_car-kit/Models/GLB format';
++const ROADS = 'kenney/kenney_city-kit-roads/Models/GLB format';
++const CUTEFISH = 'quaternius/cutefish';
++const DINOSAURS = 'quaternius/dinosaurs';
++const ANIMALS = 'quaternius/animals';
++
++const item = (id: string, folder: string, file: string): DecorationItem => ({ id, model: `${folder}/${file}` });
++
++export const DECORATIONS: Readonly<Record<GameId, readonly DecorationItem[]>> = {
++  'ice-cream': [
++    item('parasol', COMMERCIAL, 'detail-parasol-a.glb'),
++    item('giant-cone', FOOD, 'ice-cream.glb'),
++    item('popsicle', FOOD, 'popsicle.glb'),
++    item('sundae', FOOD, 'sundae.glb'),
++  ],
++  pizza: [
++    item('pizza-pie', FOOD, 'pizza.glb'),
++    item('tomato', FOOD, 'tomato.glb'),
++    item('cheese', FOOD, 'cheese.glb'),
++    item('pizza-box', FOOD, 'pizza-box.glb'),
++  ],
++  race: [
++    item('cone', CARS, 'cone.glb'),
++    item('traffic-light', ROADS, 'traffic-light.glb'),
++    item('race-car', CARS, 'race-future.glb'),
++    item('barrier', ROADS, 'construction-barrier.glb'),
++  ],
++  fishing: [
++    item('boat', CUTEFISH, 'Boat.fbx'),
++    item('puffer', CUTEFISH, 'Puffer.fbx'),
++    item('koi', CUTEFISH, 'Koi.fbx'),
++    item('butterfly-fish', CUTEFISH, 'ButterflyFish.fbx'),
++  ],
++  'touch-talk': [
++    item('fire-truck', CARS, 'firetruck.glb'),
++    item('ambulance', CARS, 'ambulance.glb'),
++    item('taxi', CARS, 'taxi.glb'),
++    item('street-lamp', ROADS, 'light-curved.glb'),
++  ],
++  'dino-puzzle': [
++    item('parasaurolophus', DINOSAURS, 'Parasaurolophus.fbx'),
++    // Swapped in for a T-rex (UX-DR75, 2026-10-08; see spec-cross-notes).
++    item('pineapple', FOOD, 'pineapple.glb'),
++    item('dino-egg', FOOD, 'egg.glb'),
++    item('coconut', FOOD, 'coconut.glb'),
++  ],
++  'shadow-match': [
++    item('mushroom', FOOD, 'mushroom.glb'),
++    item('pumpkin', FOOD, 'pumpkin.glb'),
++    item('lamp-post', ROADS, 'light-square.glb'),
++    item('alpaca', ANIMALS, 'Alpaca.fbx'),
++  ],
++};
++
++/** The map atlas frame of a decoration (one state, one frame). */
++export const decorationFrame = (id: string): string => `decoration/${id}/00`;
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/content/generated/map.layout.json b/app/src/content/generated/map.layout.json
+index 76a1dbb..b7665c8 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/content/generated/map.layout.json
++++ b/app/src/content/generated/map.layout.json
+@@ -269,20 +269,16 @@
+   "renderScale": 2,
+   "screenId": "map",
+   "slots": {
+-    "dino-puzzle-1": { "x": 523.5, "y": 200.6 },
+-    "dino-puzzle-2": { "x": 613.9, "y": 200.6 },
+-    "fishing-1": { "x": 481.8, "y": 298.6 },
+-    "fishing-2": { "x": 427.3, "y": 393.1 },
+-    "ice-cream-1": { "x": 143, "y": 485.8 },
+-    "ice-cream-2": { "x": 327.9, "y": 428.8 },
+-    "pizza-1": { "x": 699.3, "y": 425.9 },
+-    "pizza-2": { "x": 514.6, "y": 413.9 },
+-    "race-1": { "x": 901.4, "y": 510.7 },
+-    "race-2": { "x": 767.9, "y": 384.8 },
+-    "shadow-match-1": { "x": 842.2, "y": 261.5 },
+-    "shadow-match-2": { "x": 806, "y": 273.4 },
+-    "touch-talk-1": { "x": 559.3, "y": 301.1 },
+-    "touch-talk-2": { "x": 703.6, "y": 388.1 }
++    "dino-puzzle-1": { "x": 183.2, "y": 248.6 },
++    "fishing-1": { "x": 390.4, "y": 432.1 },
++    "ice-cream-1": { "x": 252, "y": 597.6 },
++    "ice-cream-2": { "x": 331.7, "y": 568.2 },
++    "pizza-1": { "x": 544.3, "y": 586.6 },
++    "pizza-2": { "x": 644.4, "y": 615.4 },
++    "race-1": { "x": 826.5, "y": 593.8 },
++    "race-2": { "x": 924.6, "y": 584.6 },
++    "shadow-match-1": { "x": 729, "y": 398 },
++    "touch-talk-1": { "x": 560.8, "y": 185.1 }
+   },
+   "v": 1
+ }
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/content/stations.ts b/app/src/content/stations.ts
+index be4da0f..6833bae 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/content/stations.ts
++++ b/app/src/content/stations.ts
+@@ -12,15 +12,37 @@ export interface Station {
+   readonly label: string;
+   /** True when the station's game is playable (Epic 1: ice-cream only). */
+   readonly awake: boolean;
+-  /** Decoration slot ids on the map (`slot.<id>` objects in art/map.blend). */
++  /**
++   * Decoration slot ids on the map (`slot.<id>-<n>` objects in art/map.blend), n = 1..k with no gaps.
++   * The order is the fill order of `grantDecoration` (Story 2.2).
++   */
+   readonly slots: readonly string[];
+ }
+ 
++/**
++ * Decoration slots per station (Story 2.2, review loop 1b): up to 2 points beside each station, placed
++ * by build_map.py (SLOT_OFFSETS). A second slot exists only where it fits the decoration rules beside
++ * the station (tools/layout/rules.ts › validateDecorations); the rule is >= 1.
++ */
++const SLOT_COUNT: Readonly<Record<GameId, number>> = {
++  'ice-cream': 2,
++  pizza: 2,
++  race: 2,
++  fishing: 1,
++  'touch-talk': 1,
++  'dino-puzzle': 1,
++  'shadow-match': 1,
++};
++
++/** The decoration slot ids of a station: `<id>-1..count`. */
++export const slotIds = (id: GameId, count: number = SLOT_COUNT[id]): string[] =>
++  Array.from({ length: count }, (_, i) => `${id}-${i + 1}`);
++
+ const station = (id: GameId, label: string, awake = false): Station => ({
+   id,
+   label,
+   awake,
+-  slots: [`${id}-1`, `${id}-2`],
++  slots: slotIds(id),
+ });
+ 
+ export const STATIONS: readonly Station[] = [
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/content/types.ts b/app/src/content/types.ts
+index b8d6ac6..fc1427c 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/content/types.ts
++++ b/app/src/content/types.ts
+@@ -40,6 +40,16 @@ export interface DecorationSlot {
+   seq: number;
+ }
+ 
++/**
++ * What `ProgressStore.grantDecoration` returns (Story 2.2): the slot it just filled and, when every
++ * slot of the station was taken, the decoration that slot held before. core/reward-service queues it
++ * in `SessionStore.pendingFlyIns` for Map's fly-in (Story 2.3).
++ */
++export interface GrantResult {
++  slot: DecorationSlot;
++  replaced?: { decorationId: string };
++}
++
+ /** Terminal outcome of one MiniGame start (AD-1). */
+ export interface RoundOutcome {
+   gameId: GameId;
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/content/validate.test.ts b/app/src/content/validate.test.ts
+index 85efec6..1991c23 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/content/validate.test.ts
++++ b/app/src/content/validate.test.ts
+@@ -1,6 +1,7 @@
+ import { describe, expect, it } from "vitest";
+ import { GAME_IDS } from "./types";
+-import { validateContent, validateGames, validateStations } from "./validate";
++import { validateContent, validateDecorationCatalogue, validateGames, validateStations } from "./validate";
++import { DECORATIONS } from "./decorations";
+ import { GAME_CONTENT } from "./games/index";
+ import { STATIONS } from "./stations";
+ import { AUDIO_CATALOG } from "./audio-catalog";
+@@ -368,3 +369,53 @@ describe("validateContent › games (Story 1.7)", () => {
+     ).toEqual(['game "ice-cream": asset audio id "vo.ice-cream.nope" is neither a voice line nor an audio-catalog id']);
+   });
+ });
++
++describe("validateContent › decorations (Story 2.2)", () => {
++  const input = { gameIds: GAME_IDS, catalogue: DECORATIONS, stations: STATIONS };
++
++  it("accepts the real catalogue and slots: 28 items, 1-2 slots per station (review loop 1b)", () => {
++    expect(validateContent({ gameIds: GAME_IDS, decorations: input })).toEqual([]);
++    expect(Object.values(DECORATIONS).flat()).toHaveLength(28);
++    expect(STATIONS.reduce((n, s) => n + s.slots.length, 0)).toBe(10);
++    for (const s of STATIONS) {
++      expect(s.slots.length).toBeGreaterThanOrEqual(1);
++      expect(s.slots.length).toBeLessThanOrEqual(2);
++      expect(s.slots).toEqual(s.slots.map((_, i) => `${s.id}-${i + 1}`));
++      expect(DECORATIONS[s.id].length).toBeGreaterThan(s.slots.length);
++    }
++    expect(DECORATIONS["ice-cream"].map((d) => d.id)).toEqual(["parasol", "giant-cone", "popsicle", "sundae"]);
++  });
++
++  it("reports an empty catalogue by station id", () => {
++    expect(validateDecorationCatalogue({ ...input, catalogue: { ...DECORATIONS, race: [] } })).toEqual([
++      'decorations "race": the catalogue is empty',
++    ]);
++  });
++
++  it("reports a non-kebab id and an id used by two stations", () => {
++    const catalogue = {
++      ...DECORATIONS,
++      pizza: [{ id: "Pizza_Pie", model: "kenney/x.glb" }],
++      race: [{ id: "parasol", model: "kenney/x.glb" }],
++    };
++    expect(validateDecorationCatalogue({ ...input, catalogue })).toEqual([
++      'decoration "Pizza_Pie" (pizza): id is not kebab-case',
++      'decoration "parasol" (race): id is already used by "ice-cream"',
++    ]);
++  });
++
++  it("reports a model outside kenney/quaternius .glb/.fbx", () => {
++    const catalogue = { ...DECORATIONS, race: [{ id: "cone", model: "other/cone.obj" }] };
++    expect(validateDecorationCatalogue({ ...input, catalogue })[0]).toMatch(/^decoration "cone" \(race\): model "other\/cone.obj" must match/);
++  });
++
++  it("reports a station with no slot and slot ids that are not <id>-1..k", () => {
++    const stations = STATIONS.map((s) =>
++      s.id === "race" ? { ...s, slots: [] } : s.id === "pizza" ? { ...s, slots: ["pizza-1", "pizza-3"] } : s,
++    );
++    expect(validateDecorationCatalogue({ ...input, stations })).toEqual([
++      'station "pizza": slot "pizza-3" must be "pizza-2" (ids <id>-1..k in order)',
++      'station "race": has no decoration slot',
++    ]);
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/content/validate.ts b/app/src/content/validate.ts
+index 95b573e..7fa0b42 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/content/validate.ts
++++ b/app/src/content/validate.ts
+@@ -45,6 +45,53 @@ export interface ContentInput {
+   stations?: StationsInput;
+   /** Game content (content/games, Story 1.7). */
+   games?: GamesInput;
++  /** Decoration catalogue and slots (content/decorations.ts, stations.ts; Story 2.2). */
++  decorations?: DecorationCatalogueInput;
++}
++
++/** Story 2.2: the decoration catalogue per station and each station's slot ids. */
++export interface DecorationCatalogueInput {
++  gameIds: readonly string[];
++  catalogue: Readonly<Record<string, ReadonlyArray<{ readonly id: string; readonly model: string }>>>;
++  stations: ReadonlyArray<{ readonly id: string; readonly slots: readonly string[] }>;
++}
++
++const DECORATION_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
++/** `model` is relative to `assets/`: a Kenney or Quaternius GLB/FBX. */
++export const DECORATION_MODEL = /^(kenney|quaternius)\/.+\.(glb|fbx)$/;
++
++/**
++ * Decoration catalogue rules (Story 2.2): every GameId has a non-empty catalogue; ids are kebab-case
++ * and unique across all stations (the atlas frame is `decoration/<id>/00`); every model is a
++ * Kenney/Quaternius .glb/.fbx under `assets/`; every station has ≥ 1 slot, with ids `<ownId>-1..k`.
++ */
++export function validateDecorationCatalogue(input: DecorationCatalogueInput): string[] {
++  const problems: string[] = [];
++  const owner = new Map<string, string>();
++  for (const gameId of input.gameIds) {
++    const items = input.catalogue[gameId] ?? [];
++    if (items.length === 0) problems.push(`decorations "${gameId}": the catalogue is empty`);
++    for (const it of items) {
++      if (!DECORATION_ID.test(it.id)) problems.push(`decoration "${it.id}" (${gameId}): id is not kebab-case`);
++      const first = owner.get(it.id);
++      if (first !== undefined) problems.push(`decoration "${it.id}" (${gameId}): id is already used by "${first}"`);
++      else owner.set(it.id, gameId);
++      if (!DECORATION_MODEL.test(it.model)) {
++        problems.push(`decoration "${it.id}" (${gameId}): model "${it.model}" must match ${DECORATION_MODEL.source}`);
++      }
++    }
++  }
++  for (const id of Object.keys(input.catalogue).filter((k) => !input.gameIds.includes(k))) {
++    problems.push(`decorations "${id}": not a GameId`);
++  }
++  for (const s of input.stations) {
++    if (s.slots.length === 0) problems.push(`station "${s.id}": has no decoration slot`);
++    s.slots.forEach((slot, i) => {
++      const expected = `${s.id}-${i + 1}`;
++      if (slot !== expected) problems.push(`station "${s.id}": slot "${slot}" must be "${expected}" (ids <id>-1..k in order)`);
++    });
++  }
++  return problems;
+ }
+ 
+ export interface StationInput {
+@@ -266,5 +313,6 @@ export function validateContent(input: ContentInput): string[] {
+   if (input.voice) problems.push(...validateVoice(input.voice, input.gameIds));
+   if (input.stations) problems.push(...validateStations(input.stations));
+   if (input.games) problems.push(...validateGames(input.games));
++  if (input.decorations) problems.push(...validateDecorationCatalogue(input.decorations));
+   return problems;
+ }
+diff --git a/app/src/core/decoration-grant.test.ts b/app/src/core/decoration-grant.test.ts
+new file mode 100644
+index 0000000..73e514a
+--- /dev/null
++++ b/app/src/core/decoration-grant.test.ts
+@@ -0,0 +1,118 @@
++// Story 2.2: every grant row of the I/O matrix on the pure planner.
++import { describe, expect, it } from 'vitest';
++import type { DecorationSlot } from '../content/types';
++import { cleanStation, planGrant } from './decoration-grant';
++
++const SLOTS = ['ice-cream-1', 'ice-cream-2', 'ice-cream-3'];
++const ITEMS = ['parasol', 'giant-cone', 'popsicle', 'sundae'];
++
++/** Runs `n` grants on ice-cream starting from `start` (default: an empty document) and `seq0`; returns the final list and seq. */
++function grantN(n: number, start: DecorationSlot[] = [], seq0 = 0) {
++  let decorations = start;
++  let seq = seq0;
++  const results = [];
++  for (let i = 0; i < n; i++) {
++    const plan = planGrant(decorations, seq, 'ice-cream', SLOTS, ITEMS)!;
++    decorations = plan.decorations;
++    seq = plan.seq;
++    results.push(plan.result);
++  }
++  return { decorations, seq, results };
++}
++
++describe('planGrant', () => {
++  it('first grant: slot -1 ← parasol, seq 1', () => {
++    const plan = planGrant([], 0, 'ice-cream', SLOTS, ITEMS)!;
++    expect(plan.result).toEqual({ slot: { slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'parasol', seq: 1 } });
++    expect(plan.seq).toBe(1);
++    expect(plan.decorations).toEqual([plan.result.slot]);
++  });
++
++  it('fill 3: -1,-2,-3 ← parasol, giant-cone, popsicle; seq 1,2,3', () => {
++    const { decorations, seq } = grantN(3);
++    expect(decorations.map((d) => [d.slotId, d.decorationId, d.seq])).toEqual([
++      ['ice-cream-1', 'parasol', 1],
++      ['ice-cream-2', 'giant-cone', 2],
++      ['ice-cream-3', 'popsicle', 3],
++    ]);
++    expect(seq).toBe(3);
++  });
++
++  it('full: the 4th grant replaces slot -1 (lowest seq) with sundae', () => {
++    const { results, decorations } = grantN(4);
++    expect(results[3]).toEqual({
++      slot: { slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'sundae', seq: 4 },
++      replaced: { decorationId: 'parasol' },
++    });
++    expect(decorations).toHaveLength(3);
++  });
++
++  it('second lap: 5th → -2 ← parasol (wrap), 6th → -3 ← giant-cone; never more than 3 entries', () => {
++    const { results, decorations } = grantN(6);
++    expect(results[4]).toEqual({
++      slot: { slotId: 'ice-cream-2', stationId: 'ice-cream', decorationId: 'parasol', seq: 5 },
++      replaced: { decorationId: 'giant-cone' },
++    });
++    expect(results[5]?.slot).toMatchObject({ slotId: 'ice-cream-3', decorationId: 'giant-cone', seq: 6 });
++    expect(results[5]?.replaced).toEqual({ decorationId: 'popsicle' });
++    expect(decorations).toHaveLength(3);
++    expect(new Set(decorations.map((d) => d.slotId)).size).toBe(3);
++  });
++
++  it('isolation: another station full is never touched', () => {
++    const pizza: DecorationSlot[] = [1, 2, 3].map((n) => ({ slotId: `pizza-${n}`, stationId: 'pizza', decorationId: 'tomato', seq: n }));
++    const plan = planGrant(pizza, 3, 'ice-cream', SLOTS, ITEMS)!;
++    expect(plan.decorations.slice(0, 3)).toEqual(pizza);
++    expect(plan.result.slot).toMatchObject({ slotId: 'ice-cream-1', decorationId: 'parasol', seq: 4 });
++  });
++
++  it('orphan / duplicate: dropped on the next grant of that station (the highest seq kept)', () => {
++    const saved: DecorationSlot[] = [
++      { slotId: 'ice-cream-9', stationId: 'ice-cream', decorationId: 'sundae', seq: 7 },
++      { slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'parasol', seq: 2 },
++      { slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'giant-cone', seq: 3 },
++      { slotId: 'pizza-9', stationId: 'pizza', decorationId: 'tomato', seq: 1 },
++    ];
++    const plan = planGrant(saved, 7, 'ice-cream', SLOTS, ITEMS)!;
++    // Newest valid item is giant-cone (seq 3) → popsicle into the first free slot (-2).
++    expect(plan.result).toEqual({ slot: { slotId: 'ice-cream-2', stationId: 'ice-cream', decorationId: 'popsicle', seq: 8 } });
++    expect(plan.decorations.map((d) => `${d.slotId}:${d.decorationId}`)).toEqual([
++      'ice-cream-1:giant-cone',
++      'pizza-9:tomato', // another station's orphan is left alone
++      'ice-cream-2:popsicle',
++    ]);
++  });
++
++  it('gone item: the newest item is not in the catalogue → the first item', () => {
++    const saved: DecorationSlot[] = [{ slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'unicorn', seq: 1 }];
++    expect(planGrant(saved, 1, 'ice-cream', SLOTS, ITEMS)!.result.slot).toMatchObject({ slotId: 'ice-cream-2', decorationId: 'parasol', seq: 2 });
++  });
++
++  it('seq comes from the document counter, not from the entries', () => {
++    expect(planGrant([], 41, 'ice-cream', SLOTS, ITEMS)!.result.slot.seq).toBe(42);
++  });
++
++  it('no slots or an empty catalogue → null', () => {
++    expect(planGrant([], 0, 'ice-cream', [], ITEMS)).toBeNull();
++    expect(planGrant([], 0, 'ice-cream', SLOTS, [])).toBeNull();
++  });
++
++  it('returns copies: mutating the result never changes the input', () => {
++    const saved: DecorationSlot[] = [{ slotId: 'pizza-1', stationId: 'pizza', decorationId: 'tomato', seq: 1 }];
++    const plan = planGrant(saved, 1, 'ice-cream', SLOTS, ITEMS)!;
++    plan.decorations[0]!.seq = 99;
++    expect(saved[0]!.seq).toBe(1);
++  });
++});
++
++describe('cleanStation', () => {
++  it('keeps one entry per listed slot of the station, the highest seq', () => {
++    const list: DecorationSlot[] = [
++      { slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'a', seq: 5 },
++      { slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'b', seq: 4 },
++      { slotId: 'ice-cream-4', stationId: 'ice-cream', decorationId: 'c', seq: 6 },
++      { slotId: 'ice-cream-2', stationId: 'pizza', decorationId: 'd', seq: 1 },
++    ];
++    expect(cleanStation(list, 'ice-cream', SLOTS).map((d) => d.decorationId)).toEqual(['a']);
++  });
++});
+diff --git a/app/src/core/decoration-grant.ts b/app/src/core/decoration-grant.ts
+new file mode 100644
+index 0000000..0b9cc4f
+--- /dev/null
++++ b/app/src/core/decoration-grant.ts
+@@ -0,0 +1,63 @@
++// Decoration grant planning (Story 2.2, AD-2), pure. ProgressStore.grantDecoration calls it and then
++// writes the result in one synchronous commit. For one station:
++//   1. Cleanup: drop this station's orphans (a slotId no longer in `slots`) and duplicate-slot entries
++//      (the highest seq is kept). Other stations' entries are never touched.
++//   2. Item: the catalogue entry after the one held by the station's highest-seq entry, wrapping at
++//      the end; the first item when the station has no entry or that item left the catalogue.
++//   3. Slot: the first slot in `slots` order with no entry; when every slot is taken, the slot whose
++//      entry has the lowest seq, and `replaced` names the decoration it held.
++//   4. seq = the document seq + 1 (both the new entry's seq and the new document seq). No clock.
++// No slots or an empty catalogue → null (the caller warns and writes nothing).
++import type { DecorationSlot, GameId, GrantResult } from '../content/types';
++
++export interface GrantPlan {
++  /** The whole new decorations list (other stations untouched, in their order). */
++  readonly decorations: DecorationSlot[];
++  /** The new document seq. */
++  readonly seq: number;
++  readonly result: GrantResult;
++}
++
++/** This station's entries without orphans and duplicate slots (the highest seq per slot is kept). */
++export function cleanStation(decorations: readonly DecorationSlot[], stationId: GameId, slots: readonly string[]): DecorationSlot[] {
++  const bySlot = new Map<string, DecorationSlot>();
++  for (const d of decorations) {
++    if (d.stationId !== stationId || !slots.includes(d.slotId)) continue;
++    const kept = bySlot.get(d.slotId);
++    if (!kept || d.seq > kept.seq) bySlot.set(d.slotId, d);
++  }
++  return [...bySlot.values()];
++}
++
++export function planGrant(
++  decorations: readonly DecorationSlot[],
++  seq: number,
++  stationId: GameId,
++  slots: readonly string[],
++  items: readonly string[],
++): GrantPlan | null {
++  if (slots.length === 0 || items.length === 0) return null;
++  const own = cleanStation(decorations, stationId, slots);
++
++  const newest = own.reduce<DecorationSlot | undefined>((a, d) => (!a || d.seq > a.seq ? d : a), undefined);
++  const at = newest ? items.indexOf(newest.decorationId) : -1;
++  const decorationId = at < 0 ? items[0]! : items[(at + 1) % items.length]!;
++
++  const taken = new Map(own.map((d) => [d.slotId, d]));
++  let slotId = slots.find((s) => !taken.has(s));
++  let replaced: DecorationSlot | undefined;
++  if (slotId === undefined) {
++    replaced = own.reduce((a, d) => (d.seq < a.seq ? d : a));
++    slotId = replaced.slotId;
++  }
++
++  const next = seq + 1;
++  const slot: DecorationSlot = { slotId, stationId, decorationId, seq: next };
++  const kept = new Set(own.filter((d) => d !== replaced));
++  const others = decorations.filter((d) => d.stationId !== stationId || kept.has(d));
++  return {
++    decorations: [...others.map((d) => ({ ...d })), slot],
++    seq: next,
++    result: replaced ? { slot: { ...slot }, replaced: { decorationId: replaced.decorationId } } : { slot: { ...slot } },
++  };
++}
+diff --git a/app/src/core/decoration-plan.test.ts b/app/src/core/decoration-plan.test.ts
+new file mode 100644
+index 0000000..aad7b1a
+--- /dev/null
++++ b/app/src/core/decoration-plan.test.ts
+@@ -0,0 +1,190 @@
++// Story 2.2: the static decoration draw plan — position, origin, depth, footprint, tap rect, and every
++// skip/warn case.
++import { describe, expect, it } from 'vitest';
++import type { ScreenLayout } from '../content/layout-types';
++import type { DecorationSlot } from '../content/types';
++import { decorationFootprint, diffDecorations, planDecorations, spriteSourceRect, type Rect } from './decoration-plan';
++
++const layout: ScreenLayout = {
++  v: 1,
++  screenId: 'map',
++  design: { width: 1024, height: 768 },
++  renderScale: 2,
++  anchors: {},
++  hits: {},
++  slots: {
++    'ice-cream-1': { x: 200, y: 400 },
++    'ice-cream-2': { x: 260, y: 420 },
++    'ice-cream-3': { x: 150, y: 380 },
++    'pizza-2': { x: 600, y: 500 },
++  },
++  paths: {},
++};
++const stations = [
++  { id: 'ice-cream', slots: ['ice-cream-1', 'ice-cream-2', 'ice-cream-3'] },
++  { id: 'pizza', slots: ['pizza-1', 'pizza-2'] },
++];
++const catalogue = {
++  'ice-cream': [{ id: 'parasol' }, { id: 'giant-cone' }],
++  pizza: [{ id: 'tomato' }],
++};
++// Rendered at slot 1 (200, 400) → render px (400, 800); the trimmed rect sits around it.
++const RECTS: Record<string, Rect> = {
++  'decoration/parasol/00': { x: 340, y: 600, width: 120, height: 210 },
++  'decoration/giant-cone/00': { x: 360, y: 640, width: 80, height: 170 },
++  'decoration/tomato/00': { x: 0, y: 0, width: 100, height: 100 },
++};
++const frameRect = (f: string): Rect | undefined => RECTS[f];
++const entry = (slotId: string, decorationId: string, seq: number, stationId: DecorationSlot['stationId'] = 'ice-cream'): DecorationSlot => ({
++  slotId,
++  stationId,
++  decorationId,
++  seq,
++});
++const PAD = 24;
++
++describe('planDecorations', () => {
++  it('empty island: nothing planned, no warning', () => {
++    expect(planDecorations([], layout, stations, catalogue, frameRect, PAD)).toEqual({ items: [], warnings: [] });
++  });
++
++  it('at slot 1: image on the slot, origin at the pivot, scale 1/renderScale, depth y; footprint = trimmed rect / 2', () => {
++    const { items, warnings } = planDecorations([entry('ice-cream-1', 'parasol', 1)], layout, stations, catalogue, frameRect, PAD);
++    expect(warnings).toEqual([]);
++    expect(items).toHaveLength(1);
++    const it0 = items[0]!;
++    expect(it0).toMatchObject({
++      key: 'ice-cream-1#1',
++      frame: 'decoration/parasol/00',
++      x: 200,
++      y: 400,
++      originX: 200 / 1024,
++      originY: 400 / 768,
++      scale: 0.5,
++      depth: 400,
++      footprint: { x: 170, y: 300, width: 60, height: 105 },
++    });
++    expect(it0.hit).toEqual([
++      { x: 146, y: 276 },
++      { x: 254, y: 276 },
++      { x: 254, y: 429 },
++      { x: 146, y: 429 },
++    ]);
++  });
++
++  it('at slot 2: the same pivot origin, placed at the slot; the footprint shifts by S − pivot', () => {
++    const { items } = planDecorations([entry('ice-cream-2', 'giant-cone', 2)], layout, stations, catalogue, frameRect, PAD);
++    expect(items[0]).toMatchObject({
++      x: 260,
++      y: 420,
++      originX: 200 / 1024,
++      originY: 400 / 768,
++      depth: 420,
++      footprint: { x: 180 + 60, y: 320 + 20, width: 40, height: 85 },
++    });
++  });
++
++  it('items are sorted by depth', () => {
++    const { items } = planDecorations(
++      [entry('ice-cream-2', 'parasol', 3), entry('ice-cream-3', 'giant-cone', 2), entry('ice-cream-1', 'giant-cone', 1)],
++      layout,
++      stations,
++      catalogue,
++      frameRect,
++      PAD,
++    );
++    expect(items.map((i) => i.slotId)).toEqual(['ice-cream-3', 'ice-cream-1', 'ice-cream-2']);
++  });
++
++  it('unknown decorationId: skipped with one warning naming it', () => {
++    const { items, warnings } = planDecorations([entry('ice-cream-1', 'unicorn', 1)], layout, stations, catalogue, frameRect, PAD);
++    expect(items).toEqual([]);
++    expect(warnings).toHaveLength(1);
++    expect(warnings[0]).toContain('"unicorn"');
++  });
++
++  it("another station's item is unknown here (its frame was rendered at another pivot)", () => {
++    const { items, warnings } = planDecorations([entry('ice-cream-1', 'tomato', 1)], layout, stations, catalogue, frameRect, PAD);
++    expect(items).toEqual([]);
++    expect(warnings).toHaveLength(1);
++  });
++
++  it('missing frame: skipped with one warning naming the frame', () => {
++    const cat = { ...catalogue, 'ice-cream': [...catalogue['ice-cream'], { id: 'sundae' }] };
++    const { items, warnings } = planDecorations([entry('ice-cream-1', 'sundae', 1)], layout, stations, cat, frameRect, PAD);
++    expect(items).toEqual([]);
++    expect(warnings).toEqual([expect.stringContaining('"decoration/sundae/00"')]);
++  });
++
++  it('slot not in the station, or with no anchor, or a pivot with no anchor: skipped, one warning each', () => {
++    const { items, warnings } = planDecorations(
++      [entry('ice-cream-9', 'parasol', 1), entry('pizza-1', 'parasol', 2), entry('pizza-2', 'tomato', 3, 'pizza')],
++      layout,
++      stations,
++      catalogue,
++      frameRect,
++      PAD,
++    );
++    expect(items).toEqual([]);
++    expect(warnings).toHaveLength(3);
++    expect(warnings[2]).toContain('pivot slot "pizza-1"');
++  });
++
++  it('unknown station: skipped with a warning', () => {
++    const odd = { slotId: 'race-1', stationId: 'race', decorationId: 'cone', seq: 1 } as DecorationSlot;
++    const { items, warnings } = planDecorations([odd], layout, stations, catalogue, frameRect, PAD);
++    expect(items).toEqual([]);
++    expect(warnings).toHaveLength(1);
++  });
++
++  it('duplicate slot: the highest seq is drawn, the other is skipped with one warning (either order)', () => {
++    for (const saved of [
++      [entry('ice-cream-1', 'parasol', 1), entry('ice-cream-1', 'giant-cone', 4)],
++      [entry('ice-cream-1', 'giant-cone', 4), entry('ice-cream-1', 'parasol', 1)],
++    ]) {
++      const { items, warnings } = planDecorations(saved, layout, stations, catalogue, frameRect, PAD);
++      expect(items.map((i) => i.decorationId)).toEqual(['giant-cone']);
++      expect(warnings).toEqual([expect.stringContaining('"parasol"')]);
++    }
++  });
++});
++
++describe('decorationFootprint', () => {
++  it('trimmed rect ÷ renderScale, shifted by at − pivot', () => {
++    expect(decorationFootprint({ x: 100, y: 200, width: 50, height: 80 }, { x: 10, y: 20 }, { x: 15, y: 10 }, 2)).toEqual({
++      x: 55,
++      y: 90,
++      width: 25,
++      height: 40,
++    });
++  });
++});
++
++describe('Map sync helpers (review loop 1)', () => {
++  const plan = (saved: DecorationSlot[]) => planDecorations(saved, layout, stations, catalogue, frameRect, PAD).items;
++
++  it('spriteSourceRect maps {x,y,w,h} to {x,y,width,height}; missing data → undefined', () => {
++    expect(spriteSourceRect({ x: 1, y: 2, w: 3, h: 4 })).toEqual({ x: 1, y: 2, width: 3, height: 4 });
++    expect(spriteSourceRect(undefined)).toBeUndefined();
++  });
++
++  it('a grant made while Map sleeps is added on the next sync; drawn ones are kept', () => {
++    const before = plan([entry('ice-cream-1', 'parasol', 1)]);
++    const drawn = before.map((i) => i.key);
++    const after = plan([entry('ice-cream-1', 'parasol', 1), entry('ice-cream-2', 'giant-cone', 2)]);
++    const diff = diffDecorations(drawn, after);
++    expect(diff.remove).toEqual([]);
++    expect(diff.add.map((i) => i.key)).toEqual(['ice-cream-2#2']);
++  });
++
++  it('a replacement (same slot, new seq) destroys the old prop and adds the new one', () => {
++    const drawn = plan([entry('ice-cream-1', 'parasol', 1)]).map((i) => i.key);
++    const diff = diffDecorations(drawn, plan([entry('ice-cream-1', 'giant-cone', 4)]));
++    expect(diff.remove).toEqual(['ice-cream-1#1']);
++    expect(diff.add.map((i) => [i.key, i.decorationId])).toEqual([['ice-cream-1#4', 'giant-cone']]);
++  });
++
++  it('an emptied document removes every prop', () => {
++    expect(diffDecorations(['ice-cream-1#1', 'pizza-2#3'], [])).toEqual({ remove: ['ice-cream-1#1', 'pizza-2#3'], add: [] });
++  });
++});
+diff --git a/app/src/core/decoration-plan.ts b/app/src/core/decoration-plan.ts
+new file mode 100644
+index 0000000..7026d18
+--- /dev/null
++++ b/app/src/core/decoration-plan.ts
+@@ -0,0 +1,186 @@
++// Decoration draw plan (Story 2.2), pure. Turns the saved decorations (ProgressStore.getDecorations)
++// plus the generated map layout and the catalogue into what Map draws, statically:
++//   - every frame of a station's decorations was rendered at `pivot = slots[station.slots[0]]` (slot 1),
++//     full-frame and pixel-aligned to the plate there. At a slot S the image goes to (S.x, S.y) with
++//     origin (pivot.x/design.width, pivot.y/design.height) and scale 1/renderScale; depth S.y (the same
++//     scheme as the stations), so it stands on S exactly as rendered at the pivot;
++//   - footprint: the trimmed frame rect (spriteSourceSize ÷ renderScale) shifted by S − pivot;
++//     tap rect: the footprint padded by tappableProp.hitPad (24 px) on every side, as a 4-point polygon.
++// Skipped entries (each with one warning, nothing drawn): an unknown station, a decorationId not in
++// its station's catalogue, a missing frame, a slotId with no anchor or not in its station's slots
++// (or a station whose slot 1 has no anchor), and duplicate slots (the highest seq is kept).
++// An empty island plans nothing. The `.ts` specifiers let tools/layout/rules.ts import the footprint
++// maths under Node type stripping (one definition for the runtime and the check gate).
++import type { Point, ScreenLayout } from '../content/layout-types.ts';
++import type { DecorationSlot } from '../content/types.ts';
++import { Tokens } from './tokens.ts';
++
++/** A rect in px (x, y = top-left). */
++export interface Rect {
++  readonly x: number;
++  readonly y: number;
++  readonly width: number;
++  readonly height: number;
++}
++
++export interface PlannedDecoration {
++  /** Map diff key: `slotId` + `seq`. */
++  readonly key: string;
++  readonly slotId: string;
++  readonly stationId: string;
++  readonly decorationId: string;
++  readonly seq: number;
++  readonly frame: string;
++  /** Image position (the slot) and origin (the render pivot). */
++  readonly x: number;
++  readonly y: number;
++  readonly originX: number;
++  readonly originY: number;
++  readonly scale: number;
++  readonly depth: number;
++  /** Visible (trimmed) rect at this slot, design px. */
++  readonly footprint: Rect;
++  /** Tap area: the footprint padded by tappableProp.hitPad. */
++  readonly hit: readonly Point[];
++}
++
++export interface DecorationPlan {
++  readonly items: readonly PlannedDecoration[];
++  readonly warnings: readonly string[];
++}
++
++export interface DecorationStationInput {
++  readonly id: string;
++  readonly slots: readonly string[];
++}
++
++/** The map atlas frame of a decoration (same grammar as content/decorations › decorationFrame). */
++export const decorationFrameName = (id: string): string => `decoration/${id}/00`;
++
++/** The trimmed frame rect `ss` (render px, in the full frame rendered at `pivot`) placed at slot `at`, design px. */
++export function decorationFootprint(ss: Rect, pivot: Point, at: Point, renderScale: number): Rect {
++  return {
++    x: ss.x / renderScale + at.x - pivot.x,
++    y: ss.y / renderScale + at.y - pivot.y,
++    width: ss.width / renderScale,
++    height: ss.height / renderScale,
++  };
++}
++
++/** The tap rect: `footprint` grown by `pad` on every side. */
++export function padRect(r: Rect, pad: number): Rect {
++  return { x: r.x - pad, y: r.y - pad, width: r.width + 2 * pad, height: r.height + 2 * pad };
++}
++
++/** The 4 corners of `r`, clockwise from top-left. */
++export function rectPolygon(r: Rect): Point[] {
++  return [
++    { x: r.x, y: r.y },
++    { x: r.x + r.width, y: r.y },
++    { x: r.x + r.width, y: r.y + r.height },
++    { x: r.x, y: r.y + r.height },
++  ];
++}
++
++export function planDecorations(
++  saved: readonly DecorationSlot[],
++  layout: ScreenLayout,
++  stations: readonly DecorationStationInput[],
++  catalogue: Readonly<Record<string, ReadonlyArray<{ readonly id: string }>>>,
++  frameRect: (frame: string) => Rect | undefined,
++  hitPad: number = Tokens.components.tappableProp.hitPad,
++): DecorationPlan {
++  const warnings: string[] = [];
++  const rs = layout.renderScale;
++
++  // Duplicate slots: keep the highest seq (first one wins a tie).
++  const bySlot = new Map<string, DecorationSlot>();
++  for (const d of saved) {
++    const kept = bySlot.get(d.slotId);
++    if (kept && kept.seq >= d.seq) {
++      warnings.push(`map: decoration "${d.decorationId}" (seq ${d.seq}) shares slot "${d.slotId}" with a newer one — skipped`);
++      continue;
++    }
++    if (kept) warnings.push(`map: decoration "${kept.decorationId}" (seq ${kept.seq}) shares slot "${d.slotId}" with a newer one — skipped`);
++    bySlot.set(d.slotId, d);
++  }
++
++  const items: PlannedDecoration[] = [];
++  for (const d of bySlot.values()) {
++    const station = stations.find((s) => s.id === d.stationId);
++    if (!station) {
++      warnings.push(`map: decoration "${d.decorationId}" belongs to unknown station "${d.stationId}" — skipped`);
++      continue;
++    }
++    if (!(catalogue[station.id] ?? []).some((c) => c.id === d.decorationId)) {
++      warnings.push(`map: decoration "${d.decorationId}" is not in the "${station.id}" catalogue — skipped`);
++      continue;
++    }
++    const at = layout.slots[d.slotId];
++    if (!station.slots.includes(d.slotId) || !at) {
++      warnings.push(`map: decoration "${d.decorationId}": slot "${d.slotId}" is not a slot of "${station.id}" with an anchor — skipped`);
++      continue;
++    }
++    const pivotId = station.slots[0]!;
++    const pivot = layout.slots[pivotId];
++    if (!pivot) {
++      warnings.push(`map: decoration "${d.decorationId}": pivot slot "${pivotId}" has no anchor — skipped`);
++      continue;
++    }
++    const frame = decorationFrameName(d.decorationId);
++    const ss = frameRect(frame);
++    if (!ss) {
++      warnings.push(`map: frame "${frame}" is missing from the map atlas — decoration "${d.decorationId}" skipped`);
++      continue;
++    }
++    const footprint = decorationFootprint(ss, pivot, at, rs);
++    items.push({
++      key: `${d.slotId}#${d.seq}`,
++      slotId: d.slotId,
++      stationId: station.id,
++      decorationId: d.decorationId,
++      seq: d.seq,
++      frame,
++      x: at.x,
++      y: at.y,
++      originX: pivot.x / layout.design.width,
++      originY: pivot.y / layout.design.height,
++      scale: 1 / rs,
++      depth: at.y,
++      footprint,
++      hit: rectPolygon(padRect(footprint, hitPad)),
++    });
++  }
++  items.sort((a, b) => a.depth - b.depth);
++  return { items, warnings };
++}
++
++/** Hit priority of decoration tap targets: below every station polygon and the kart (z 0). */
++export const DECORATION_Z = -1;
++
++/** A Phaser atlas frame's `customData.spriteSourceSize` (render px), as free-tex-packer writes it. */
++export interface SpriteSourceSize {
++  readonly x: number;
++  readonly y: number;
++  readonly w: number;
++  readonly h: number;
++}
++
++/** `{x, y, w, h}` → `{x, y, width, height}`; undefined when the frame carries no spriteSourceSize. */
++export function spriteSourceRect(ss: SpriteSourceSize | undefined): Rect | undefined {
++  return ss ? { x: ss.x, y: ss.y, width: ss.w, height: ss.h } : undefined;
++}
++
++export interface DecorationDiff {
++  /** Keys of drawn props to destroy (removed, or replaced: same slot, new seq). */
++  readonly remove: readonly string[];
++  /** Planned items with no prop yet. */
++  readonly add: readonly PlannedDecoration[];
++}
++
++/** Keyed diff (`slotId#seq`) between the props Map has drawn and a new plan: keep, remove, add. */
++export function diffDecorations(drawn: Iterable<string>, items: readonly PlannedDecoration[]): DecorationDiff {
++  const have = new Set(drawn);
++  const want = new Set(items.map((i) => i.key));
++  return { remove: [...have].filter((k) => !want.has(k)), add: items.filter((i) => !have.has(i.key)) };
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/input/hotspot-polygon.ts b/app/src/core/input/hotspot-polygon.ts
+index b9c6b95..6a67e4f 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/input/hotspot-polygon.ts
++++ b/app/src/core/input/hotspot-polygon.ts
+@@ -1,16 +1,23 @@
+ // A polygon tap area registered on a TapRouter (Story 1.5; fires on press through InputGuard, 1.6). The polygon is used exactly as given
+-// (layout hit polygons are already padded; no extra padding here).
++// (layout hit polygons are already padded; no extra padding here). Story 2.2: an optional `z` (hit
++// priority within the router, default 0; Map decorations use −1 so stations win an overlap).
+ import { pointInPolygon, type Point } from './polygon';
+ import type { TapRouter } from './tap-router';
+ 
++export interface HotspotOptions {
++  /** Hit priority within the router (default 0): a higher z wins, then the last registered. */
++  readonly z?: number;
++}
++
+ export class HotspotPolygon {
+   private enabledFlag = true;
+   private readonly remove: () => void;
+   private readonly points: readonly Point[];
+ 
+-  constructor(router: TapRouter, points: readonly Point[], onTap: (p: Point) => void) {
++  constructor(router: TapRouter, points: readonly Point[], onTap: (p: Point) => void, opts: HotspotOptions = {}) {
+     this.points = points.map((p) => ({ x: p.x, y: p.y }));
+     this.remove = router.add({
++      ...(opts.z !== undefined ? { z: opts.z } : {}),
+       contains: (p) => pointInPolygon(p, this.points),
+       isEnabled: () => this.enabledFlag,
+       onPress: (p) => onTap(p),
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/input/input.test.ts b/app/src/core/input/input.test.ts
+index cf4fc48..2a244ca 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/input/input.test.ts
++++ b/app/src/core/input/input.test.ts
+@@ -206,3 +206,57 @@ describe('createTapTarget › excludes (Story 1.7)', () => {
+     expect(below).toHaveBeenCalledTimes(1);
+   });
+ });
++
++describe('tap router › z tiebreak (Story 2.2)', () => {
++  const setup = () => {
++    const guard = new InputGuard();
++    const scene = fakeScene();
++    return { scene, router: createTapRouter(scene, { guard }) };
++  };
++
++  it('a higher z wins over a later-registered target', () => {
++    const { scene, router } = setup();
++    const station = vi.fn();
++    const decoration = vi.fn();
++    new HotspotPolygon(router, square, station);
++    new HotspotPolygon(router, square, decoration, { z: -1 });
++    scene.tap(5, 5);
++    expect(station).toHaveBeenCalledTimes(1);
++    expect(decoration).not.toHaveBeenCalled();
++  });
++
++  it('a lower-z target still gets taps outside the higher one', () => {
++    const { scene, router } = setup();
++    const station = vi.fn();
++    const decoration = vi.fn();
++    new HotspotPolygon(router, square, station);
++    new HotspotPolygon(router, square.map((p) => ({ x: p.x + 8, y: p.y })), decoration, { z: -1 });
++    scene.tap(15, 5);
++    expect(decoration).toHaveBeenCalledTimes(1);
++    expect(station).not.toHaveBeenCalled();
++  });
++
++  it('at equal z the last registered wins; z 0 is the default', () => {
++    const { scene, router } = setup();
++    const a = vi.fn();
++    const b = vi.fn();
++    const c = vi.fn();
++    new HotspotPolygon(router, square, a, { z: -1 });
++    new HotspotPolygon(router, square, b, { z: -1 });
++    scene.tap(5, 5);
++    expect(b).toHaveBeenCalledTimes(1);
++    expect(a).not.toHaveBeenCalled();
++    new HotspotPolygon(router, square, c, { z: 0 });
++    scene.tap(5, 5);
++    expect(c).toHaveBeenCalledTimes(1);
++  });
++
++  it('a disabled higher-z target is skipped', () => {
++    const { scene, router } = setup();
++    const low = vi.fn();
++    new HotspotPolygon(router, square, low, { z: -1 });
++    new HotspotPolygon(router, square, vi.fn(), { z: 3 }).setEnabled(false);
++    scene.tap(5, 5);
++    expect(low).toHaveBeenCalledTimes(1);
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/input/tap-router.ts b/app/src/core/input/tap-router.ts
+index bce1649..570e298 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/input/tap-router.ts
++++ b/app/src/core/input/tap-router.ts
+@@ -2,7 +2,8 @@
+ // One router per scene: it listens to the scene-level pointerdown / pointerup / pointerupoutside and
+ // forwards each to the global InputGuard, which decides every press once across scenes (dead zones,
+ // first finger, layers overlay > hud > scene) and calls back into the routers. Within a router the
+-// topmost enabled target containing the design point — the last one registered — wins.
++// enabled target containing the design point with the highest `z` (default 0) wins; at equal z the
++// last one registered wins (Story 2.2: Map decorations use z −1, so a station polygon always wins).
+ // This folder is the only place that touches pointer events (ESLint enforces it).
+ import { inputGuard, type GuardPointer, type GuardRouter, type GuardTarget, type InputGuard, type Layer } from './guard';
+ import type { ScaleLike } from './pointer-adapter';
+@@ -24,7 +25,10 @@ export interface RouterSceneLike {
+   readonly scale?: ScaleLike;
+ }
+ 
+-export type RouterTarget = GuardTarget;
++export type RouterTarget = GuardTarget & {
++  /** Story 2.2: hit priority within the router (default 0); a higher z wins over registration order. */
++  readonly z?: number;
++};
+ 
+ export interface TapRouter {
+   readonly layer: Layer;
+@@ -60,11 +64,12 @@ export function createTapRouter(scene: RouterSceneLike, opts: TapRouterOptions =
+     layer,
+     isActive: () => live && scene.sys.isActive(),
+     hit(p) {
++      let best: RouterTarget | undefined;
+       for (let i = targets.length - 1; i >= 0; i--) {
+         const t = targets[i]!;
+-        if (t.isEnabled() && t.contains(p)) return t;
++        if ((best === undefined || (t.z ?? 0) > (best.z ?? 0)) && t.isEnabled() && t.contains(p)) best = t;
+       }
+-      return undefined;
++      return best;
+     },
+     anyTap(p) {
+       router.onAnyTap?.(p);
+@@ -90,6 +95,7 @@ export function createTapRouter(scene: RouterSceneLike, opts: TapRouterOptions =
+       // The wrapper goes dead with the router, so a primary held across destroy never fires onRelease.
+       const { onRelease, onMove, onEnd, onCancel } = target;
+       const wrapped: RouterTarget = {
++        ...(target.z !== undefined ? { z: target.z } : {}),
+         contains: (p) => target.contains(p),
+         isEnabled: () => live && target.isEnabled(),
+         onPress: (p, pointer) => target.onPress(p, pointer),
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/progress-store.test.ts b/app/src/core/progress-store.test.ts
+index 6856391..eb99462 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/progress-store.test.ts
++++ b/app/src/core/progress-store.test.ts
+@@ -5,7 +5,9 @@ import {
+   NewerSchemaError,
+   PROGRESS_KEY,
+   PROGRESS_SCHEMA_VERSION,
++  CONTENT_CATALOG,
+   ProgressStoreService,
++  type DecorationCatalog,
+   defaultProgress,
+   migrate,
+   type StorageLike,
+@@ -352,3 +354,119 @@ describe('ProgressStore — production defaults', () => {
+     expect(warn).not.toHaveBeenCalled();
+   });
+ });
++
++/** The spec's grant matrix uses 3 slots per station; the shipped map has 1-2 (review loop 1b). */
++const THREE: DecorationCatalog = {
++  slots: (id) => [1, 2, 3].map((n) => id + '-' + n),
++  items: (id) => CONTENT_CATALOG.items(id),
++};
++
++async function storeWith3(): Promise<{ store: ProgressStoreService; storage: MemoryStorage }> {
++  const storage = memoryStorage();
++  const store = new ProgressStoreService(THREE);
++  await store.init({ storage, persist: async () => true });
++  return { store, storage };
++}
++
++describe('ProgressStore.grantDecoration (Story 2.2)', () => {
++  it('first grant: ice-cream-1 ← parasol, seq 1; setItem ran before the call returned', async () => {
++    const { store, storage } = await storeWith3();
++    storage.setItem.mockClear();
++    const result = store.grantDecoration('ice-cream');
++    expect(result).toEqual({ slot: { slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'parasol', seq: 1 } });
++    expect(storage.setItem).toHaveBeenCalledTimes(1);
++    expect(stored(storage)).toMatchObject({ seq: 1, decorations: [{ slotId: 'ice-cream-1', decorationId: 'parasol', seq: 1 }] });
++  });
++
++  it('fill 3, then reload: a new store on the same storage has the same 3 entries', async () => {
++    const { store, storage } = await storeWith3();
++    for (let i = 0; i < 3; i++) store.grantDecoration('ice-cream');
++    const reloaded = new ProgressStoreService(THREE);
++    await reloaded.init({ storage, persist: async () => true });
++    expect(reloaded.getDecorations()).toEqual(store.getDecorations());
++    expect(reloaded.getDecorations().map((d) => [d.slotId, d.decorationId, d.seq])).toEqual([
++      ['ice-cream-1', 'parasol', 1],
++      ['ice-cream-2', 'giant-cone', 2],
++      ['ice-cream-3', 'popsicle', 3],
++    ]);
++    expect(reloaded.state.seq).toBe(3);
++  });
++
++  it('full: the 4th grant replaces parasol in slot -1 with sundae', async () => {
++    const { store } = await storeWith3();
++    for (let i = 0; i < 3; i++) store.grantDecoration('ice-cream');
++    expect(store.grantDecoration('ice-cream')).toEqual({
++      slot: { slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'sundae', seq: 4 },
++      replaced: { decorationId: 'parasol' },
++    });
++    expect(store.getDecorations()).toHaveLength(3);
++  });
++
++  it('isolation: granting ice-cream leaves a full pizza untouched', async () => {
++    const { store } = await storeWith3();
++    for (let i = 0; i < 4; i++) store.grantDecoration('pizza');
++    const pizza = store.getDecorations();
++    store.grantDecoration('ice-cream');
++    expect(store.getDecorations().filter((d) => d.stationId === 'pizza')).toEqual(pizza);
++  });
++
++  it('getDecorations returns copies', async () => {
++    const { store } = await storeWith3();
++    store.grantDecoration('race');
++    (store.getDecorations()[0] as { seq: number }).seq = 99;
++    expect(store.getDecorations()[0]?.seq).toBe(1);
++  });
++
++  it('no slots (stub catalogue) → null, no write, one warn', async () => {
++    const storage = memoryStorage();
++    const store = new ProgressStoreService({ slots: () => [], items: () => ['a'] });
++    await store.init({ storage, persist: async () => true });
++    storage.setItem.mockClear();
++    warn.mockClear();
++    expect(store.grantDecoration('pizza')).toBeNull();
++    expect(storage.setItem).not.toHaveBeenCalled();
++    expect(warn).toHaveBeenCalledTimes(1);
++    expect(store.state.seq).toBe(0);
++  });
++
++  it('storage dead (setItem throws): the grant still lands in memory, one warn', async () => {
++    const storage = memoryStorage();
++    const store = new ProgressStoreService(THREE);
++    await store.init({ storage, persist: async () => true });
++    storage.setItem.mockImplementation(() => {
++      throw new Error('QuotaExceededError');
++    });
++    warn.mockClear();
++    expect(store.grantDecoration('touch-talk')?.slot.decorationId).toBe('fire-truck');
++    expect(store.grantDecoration('touch-talk')?.slot.decorationId).toBe('ambulance');
++    expect(store.getDecorations()).toHaveLength(2);
++    expect(warn).toHaveBeenCalledTimes(1);
++  });
++
++  it('memory-only (no storage): grants in memory', async () => {
++    const store = new ProgressStoreService(THREE);
++    await store.init({ storage: null, persist: async () => true });
++    expect(store.grantDecoration('fishing')?.slot).toMatchObject({ slotId: 'fishing-1', decorationId: 'boat', seq: 1 });
++  });
++
++  it('a corrupt document is overwritten by defaults plus the grant', async () => {
++    const { store, storage } = await storeWith('{bad');
++    store.grantDecoration('ice-cream');
++    expect(stored(storage)).toEqual({
++      schemaVersion: PROGRESS_SCHEMA_VERSION,
++      seq: 1,
++      difficulty: {},
++      decorations: [{ slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'parasol', seq: 1 }],
++    });
++  });
++
++  it('with the real catalogue (2 ice-cream slots), the 3rd grant replaces slot 1', async () => {
++    const { store } = await storeWith();
++    store.grantDecoration('ice-cream');
++    store.grantDecoration('ice-cream');
++    expect(store.grantDecoration('ice-cream')).toEqual({
++      slot: { slotId: 'ice-cream-1', stationId: 'ice-cream', decorationId: 'popsicle', seq: 3 },
++      replaced: { decorationId: 'parasol' },
++    });
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/progress-store.ts b/app/src/core/progress-store.ts
+index 44623d4..9f9d8ef 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/progress-store.ts
++++ b/app/src/core/progress-store.ts
+@@ -2,10 +2,13 @@
+ // storage (lint bans localStorage / sessionStorage / indexedDB / navigator.storage elsewhere).
+ // - One localStorage key, `bhc.progress`, schema v2:
+ //   `{ schemaVersion, seq, difficulty: Partial<Record<GameId, number>>, decorations: DecorationSlot[] }`.
+-// - Only named actions mutate the document (`setDifficulty`; Story 2.2 adds `grantDecoration`). Each
++// - Only named actions mutate the document (`setDifficulty`, `grantDecoration`). Each
+ //   action writes the whole document synchronously with `setItem` inside the call — no debounce,
+ //   timer or promise — even when the value is unchanged.
+ // - `getDifficulty` is a pure clamped read (missing / bad / negative / touch-talk → 0).
++// - Story 2.2: `grantDecoration(stationId)` picks the slot and the item (core/decoration-grant), advances
++//   `seq` and writes in the same call; core/reward-service is its only caller. `getDecorations()`
++//   returns copies and is Map's only read path. The catalogue (slots + items per station) is injectable.
+ // - `init()` runs on the first Start tap: idempotent, never rejects, the only caller of
+ //   `navigator.storage.persist()`. Loading and migrating happen synchronously inside the first call;
+ //   only persist() is awaited.
+@@ -17,7 +20,10 @@
+ //   * unusable (getItem/setItem throws, no localStorage) or a NEWER schemaVersion → memory only for
+ //     the session: storage is detached and never written again (a newer document is real progress).
+ // - An action before `init()` works in memory only; `init()` then loads over it.
+-import { GAME_IDS, type DecorationSlot, type GameId } from '../content/types';
++import { DECORATIONS } from '../content/decorations';
++import { STATIONS } from '../content/stations';
++import { GAME_IDS, type DecorationSlot, type GameId, type GrantResult } from '../content/types';
++import { planGrant } from './decoration-grant';
+ 
+ export const PROGRESS_KEY = 'bhc.progress';
+ export const PROGRESS_SCHEMA_VERSION = 2;
+@@ -151,12 +157,29 @@ function defaultPersist(): (() => Promise<boolean>) | null {
+   }
+ }
+ 
++/** Where grantDecoration reads a station's slots (fill order) and its catalogue item ids (Story 2.2). */
++export interface DecorationCatalog {
++  slots(stationId: GameId): readonly string[];
++  items(stationId: GameId): readonly string[];
++}
++
++/** The real catalogue: `STATIONS[i].slots` and `DECORATIONS[id]`. */
++export const CONTENT_CATALOG: DecorationCatalog = {
++  slots: (id) => STATIONS.find((s) => s.id === id)?.slots ?? [],
++  items: (id) => (DECORATIONS[id] ?? []).map((d) => d.id),
++};
++
+ export class ProgressStoreService {
+   private initPromise: Promise<void> | undefined;
++  private readonly catalog: DecorationCatalog;
+   /** Attached storage; `null` = memory only (before init, or detached for the session). */
+   private storage: StorageLike | null = null;
+   private current: ProgressState = defaultProgress();
+ 
++  constructor(catalog: DecorationCatalog = CONTENT_CATALOG) {
++    this.catalog = catalog;
++  }
++
+   /**
+    * Idempotent: a second call returns the first call's promise (deps of later calls are ignored).
+    * The document is loaded (and migrated) synchronously inside the first call; only persist() is
+@@ -199,6 +222,30 @@ export class ProgressStoreService {
+     this.commit();
+   }
+ 
++  /**
++   * Grants one decoration to `stationId` (Story 2.2, AD-2): drops the station's orphan and duplicate
++   * entries, fills its first empty slot (or replaces its lowest-seq one) with the catalogue item after
++   * its newest one, sets `seq = doc.seq + 1` and writes synchronously before returning. Other
++   * stations are never touched. No slots or an empty catalogue: one warn, no write, null. Only
++   * core/reward-service calls this.
++   */
++  grantDecoration(stationId: GameId): GrantResult | null {
++    const plan = planGrant(this.current.decorations, this.current.seq, stationId, this.catalog.slots(stationId), this.catalog.items(stationId));
++    if (!plan) {
++      console.warn(`progress: grantDecoration("${stationId}") ignored — the station has no slots or no catalogue items`);
++      return null;
++    }
++    this.current.decorations = plan.decorations;
++    this.current.seq = plan.seq;
++    this.commit();
++    return plan.result;
++  }
++
++  /** Copies of the placed decorations (Map's only read path). */
++  getDecorations(): readonly DecorationSlot[] {
++    return this.current.decorations.map((d) => ({ ...d }));
++  }
++
+   /** Writes the whole document synchronously (nothing while detached). A throw detaches storage. */
+   private commit(): void {
+     if (!this.storage) return;
+diff --git a/app/src/core/reward-service.test.ts b/app/src/core/reward-service.test.ts
+new file mode 100644
+index 0000000..32c0783
+--- /dev/null
++++ b/app/src/core/reward-service.test.ts
+@@ -0,0 +1,164 @@
++// Story 2.2: reward-service install, idempotence, ordering, the touch-talk / round:complete rows, and
++// the single-caller rule for grantDecoration (a source scan instead of a lint rule: flat-config
++// no-restricted-syntax entries replace each other, spec-2-1).
++import { readdirSync, readFileSync } from 'node:fs';
++import { dirname, join, relative, resolve, sep } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import type { RoundOutcome } from '../content/types';
++import { Bus } from './bus';
++import { PROGRESS_KEY, ProgressStoreService, type StorageLike } from './progress-store';
++import { installRewardService } from './reward-service';
++import { SessionStore } from './session-store';
++
++function memoryStorage() {
++  const data = new Map<string, string>();
++  return {
++    data,
++    getItem: (k: string) => data.get(k) ?? null,
++    setItem: vi.fn((k: string, v: string) => void data.set(k, v)),
++  } satisfies StorageLike & { data: Map<string, string> };
++}
++
++async function setup() {
++  const bus = new Bus();
++  const storage = memoryStorage();
++  const progress = new ProgressStoreService();
++  await progress.init({ storage, persist: async () => true });
++  const session = new SessionStore();
++  const uninstall = installRewardService({ bus, progress, session });
++  return { bus, storage, progress, session, uninstall };
++}
++
++const outcome = (gameId: RoundOutcome['gameId']): RoundOutcome => ({ gameId, questions: 3, firstTryCorrect: 3, maxHintLevel: 0 });
++
++afterEach(() => vi.restoreAllMocks());
++
++describe('installRewardService', () => {
++  it('reward:earned (touch-talk): 1 entry at touch-talk-1, 1 pending fly-in, 1 reward:granted with fire-truck', async () => {
++    const { bus, progress, session } = await setup();
++    const granted = vi.fn();
++    bus.on('reward:granted', granted);
++    bus.emit('reward:earned', { gameId: 'touch-talk' });
++    expect(progress.getDecorations()).toEqual([{ slotId: 'touch-talk-1', stationId: 'touch-talk', decorationId: 'fire-truck', seq: 1 }]);
++    expect(session.pendingFlyIns).toEqual([{ slot: { slotId: 'touch-talk-1', stationId: 'touch-talk', decorationId: 'fire-truck', seq: 1 } }]);
++    expect(granted).toHaveBeenCalledTimes(1);
++    expect(granted).toHaveBeenCalledWith({ gameId: 'touch-talk', decorationId: 'fire-truck' });
++  });
++
++  it('round:complete: exactly 1 grant, 1 pending fly-in, no reward:granted', async () => {
++    const { bus, progress, session } = await setup();
++    const granted = vi.fn();
++    bus.on('reward:granted', granted);
++    bus.emit('round:complete', outcome('ice-cream'));
++    expect(progress.getDecorations()).toHaveLength(1);
++    expect(session.pendingFlyIns).toHaveLength(1);
++    expect(session.pendingFlyIns[0]?.slot).toMatchObject({ slotId: 'ice-cream-1', decorationId: 'parasol' });
++    expect(granted).not.toHaveBeenCalled();
++  });
++
++  it('ordering: the grant is written before pendingFlyIns and reward:granted see it', async () => {
++    const { bus, storage, session } = await setup();
++    const seen: string[] = [];
++    storage.setItem.mockImplementation((k: string, v: string) => {
++      seen.push(`write pending=${session.pendingFlyIns.length}`);
++      storage.data.set(k, v);
++    });
++    bus.on('reward:granted', () => {
++      const doc = JSON.parse(storage.data.get(PROGRESS_KEY) ?? '{}') as { decorations?: unknown[] };
++      seen.push(`granted stored=${doc.decorations?.length ?? 0} pending=${session.pendingFlyIns.length}`);
++    });
++    bus.emit('reward:earned', { gameId: 'pizza' });
++    expect(seen).toEqual(['write pending=0', 'granted stored=1 pending=1']);
++  });
++
++  it('runs before a listener subscribed later (Map)', async () => {
++    const { bus, session } = await setup();
++    let pendingAtMap = -1;
++    bus.on('round:complete', () => {
++      pendingAtMap = session.pendingFlyIns.length;
++    });
++    bus.emit('round:complete', outcome('ice-cream'));
++    expect(pendingAtMap).toBe(1);
++  });
++
++  it('double install: one listener per event, one grant per emit, the same uninstall', async () => {
++    const { bus, progress, session, uninstall } = await setup();
++    const again = installRewardService({ bus, progress, session });
++    expect(again).toBe(uninstall);
++    expect(bus.listenerCount('round:complete')).toBe(1);
++    expect(bus.listenerCount('reward:earned')).toBe(1);
++    bus.emit('round:complete', outcome('race'));
++    expect(progress.getDecorations()).toHaveLength(1);
++    expect(session.pendingFlyIns).toHaveLength(1);
++  });
++
++  it('uninstall removes both listeners; a later install subscribes again', async () => {
++    const { bus, progress, session, uninstall } = await setup();
++    uninstall();
++    expect(bus.listenerCount('round:complete')).toBe(0);
++    expect(bus.listenerCount('reward:earned')).toBe(0);
++    const next = installRewardService({ bus, progress, session });
++    expect(next).not.toBe(uninstall);
++    expect(bus.listenerCount('round:complete')).toBe(1);
++    uninstall(); // a stale uninstall does not remove the new install
++    expect(bus.listenerCount('round:complete')).toBe(1);
++  });
++
++  it('a null grant does nothing more (no pending, no reward:granted)', async () => {
++    const bus = new Bus();
++    const session = new SessionStore();
++    const granted = vi.fn();
++    bus.on('reward:granted', granted);
++    installRewardService({ bus, session, progress: { grantDecoration: () => null } });
++    bus.emit('reward:earned', { gameId: 'race' });
++    bus.emit('round:complete', outcome('race'));
++    expect(session.pendingFlyIns).toEqual([]);
++    expect(granted).not.toHaveBeenCalled();
++  });
++
++  it('storage dead: the grant still lands in memory and the reward flow is unchanged', async () => {
++    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const { bus, storage, progress, session } = await setup();
++    storage.setItem.mockImplementation(() => {
++      throw new Error('QuotaExceededError');
++    });
++    const granted = vi.fn();
++    bus.on('reward:granted', granted);
++    bus.emit('reward:earned', { gameId: 'touch-talk' });
++    expect(progress.getDecorations()).toHaveLength(1);
++    expect(session.pendingFlyIns).toHaveLength(1);
++    expect(granted).toHaveBeenCalledWith({ gameId: 'touch-talk', decorationId: 'fire-truck' });
++  });
++});
++
++describe('grantDecoration single caller (source scan)', () => {
++  const SRC = resolve(dirname(fileURLToPath(import.meta.url)), '..');
++  const ALLOWED = ['core/progress-store.ts', 'core/reward-service.ts'];
++
++  function listTs(dir: string): string[] {
++    return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
++      const p = join(dir, e.name);
++      if (e.isDirectory()) return listTs(p);
++      return e.name.endsWith('.ts') && !e.name.endsWith('.test.ts') ? [p] : [];
++    });
++  }
++
++  it('`grantDecoration(` appears only in progress-store.ts and reward-service.ts under src/', () => {
++    const callers = listTs(SRC)
++      .filter((f) => readFileSync(f, 'utf8').includes('grantDecoration('))
++      .map((f) => relative(SRC, f).split(sep).join('/'))
++      .sort();
++    expect(callers.length).toBeGreaterThan(0);
++    expect(callers.filter((f) => !ALLOWED.includes(f))).toEqual([]);
++  });
++
++  it('main.ts calls installRewardService() before new Game( (subscribed before Map exists)', () => {
++    const main = readFileSync(join(SRC, 'main.ts'), 'utf8');
++    const install = main.indexOf('installRewardService()');
++    const game = main.indexOf('new Game(');
++    expect(install).toBeGreaterThan(-1);
++    expect(game).toBeGreaterThan(-1);
++    expect(install).toBeLessThan(game);
++  });
++});
+diff --git a/app/src/core/reward-service.ts b/app/src/core/reward-service.ts
+new file mode 100644
+index 0000000..bc14864
+--- /dev/null
++++ b/app/src/core/reward-service.ts
+@@ -0,0 +1,54 @@
++// reward-service (Story 2.2, AD-2): the boot-time core service that turns a finished round into a
++// decoration. Not a scene: it subscribes with the global `bus.on` and is installed by main.ts before
++// `new Game`, so it is subscribed before Map and runs first, also while Map sleeps or is stopped
++// (Chạm là nói, Epic 4).
++//   round:complete {gameId}  → progress.grantDecoration(gameId) → push the result to pendingFlyIns
++//   reward:earned  {gameId}  → the same, then emit reward:granted {gameId, decorationId}
++// The grant is written synchronously before anything is queued or emitted, so an app kill mid-
++// animation can never lose a reward or grant it twice. A null grant (no slots / empty catalogue)
++// does nothing more. This module is the ONLY caller of grantDecoration (a Vitest source scan
++// enforces it). A second install on the same Bus is a no-op returning the same uninstall function.
++import type { GameId, GrantResult } from '../content/types';
++import { bus as appBus, type Bus } from './bus';
++import { ProgressStore } from './progress-store';
++import { session as appSession } from './session-store';
++
++export interface RewardServiceDeps {
++  readonly bus?: Bus;
++  readonly progress?: { grantDecoration(stationId: GameId): GrantResult | null };
++  readonly session?: { pendingFlyIns: GrantResult[] };
++}
++
++const installed = new WeakMap<Bus, () => void>();
++
++export function installRewardService(deps: RewardServiceDeps = {}): () => void {
++  const bus = deps.bus ?? appBus;
++  const existing = installed.get(bus);
++  if (existing) return existing;
++  const progress = deps.progress ?? ProgressStore;
++  const session = deps.session ?? appSession;
++
++  const grant = (gameId: GameId): GrantResult | null => {
++    const result = progress.grantDecoration(gameId);
++    if (result) session.pendingFlyIns.push(result);
++    return result;
++  };
++
++  const offs = [
++    bus.on('round:complete', ({ gameId }) => {
++      grant(gameId);
++    }),
++    bus.on('reward:earned', ({ gameId }) => {
++      const result = grant(gameId);
++      if (result) bus.emit('reward:granted', { gameId, decorationId: result.slot.decorationId });
++    }),
++  ];
++
++  const uninstall = (): void => {
++    if (installed.get(bus) !== uninstall) return;
++    installed.delete(bus);
++    for (const off of offs) off();
++  };
++  installed.set(bus, uninstall);
++  return uninstall;
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/session-store.test.ts b/app/src/core/session-store.test.ts
+index 9b5fe52..9edbc43 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/session-store.test.ts
++++ b/app/src/core/session-store.test.ts
+@@ -12,6 +12,7 @@ describe('SessionStore', () => {
+     const s = new SessionStore();
+     expect(s.lastStation).toBeUndefined();
+     expect(s.kartTrips).toBe(0);
++    expect(s.pendingFlyIns).toEqual([]);
+   });
+ 
+   it('startData: level from the injected progress, seed floor(rng × 2^31)', () => {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/session-store.ts b/app/src/core/session-store.ts
+index 0670b9e..eeebf37 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/session-store.ts
++++ b/app/src/core/session-store.ts
+@@ -1,8 +1,9 @@
+ // Session state (Story 1.7), memory only: a page reload starts fresh, so the kart is back at
+ // `kart-start`. Story 2.1 moved the ladder level to the durable ProgressStore: `startData` reads it
+ // through `getDifficulty`, and Map writes it with `setDifficulty` on `round:complete`.
+-// Epic 2 adds `resume` and `pendingFlyIns` here.
+-import type { GameId, GameStartData } from '../content/types';
++// Story 2.2 adds `pendingFlyIns`: core/reward-service queues every grant here (memory only); Map's
++// post-round chain (Story 2.3) drains it. Story 2.5 adds `resume`.
++import type { GameId, GameStartData, GrantResult } from '../content/types';
+ import { ProgressStore, type ProgressStoreService } from './progress-store';
+ 
+ /** 2^31: seeds are non-negative 31-bit integers. */
+@@ -16,6 +17,8 @@ export class SessionStore {
+   lastStation: GameId | undefined = undefined;
+   /** Kart arrivals this session (the first trip is capped at kartDriveMaxMs, later ones at kartDriveRepeatMaxMs). */
+   kartTrips = 0;
++  /** Grants not yet animated on the Map, oldest first (Story 2.2 pushes, Story 2.3 drains). */
++  pendingFlyIns: GrantResult[] = [];
+ 
+   /** Start data for a game: its persisted level (clamped to the ladder) and a fresh seed `floor(rng() × 2^31)`. */
+   startData(
+diff --git a/app/src/core/ui/map-prop.test.ts b/app/src/core/ui/map-prop.test.ts
+new file mode 100644
+index 0000000..701da4a
+--- /dev/null
++++ b/app/src/core/ui/map-prop.test.ts
+@@ -0,0 +1,77 @@
++// Story 2.2: createMapProp `at` / `origin` / `z`, bounce on tap, onTap in the same handler.
++import { describe, expect, it, vi } from 'vitest';
++import type { Scene } from 'phaser';
++import { fakeScene } from '../input/fakes';
++import { InputGuard } from '../input/guard';
++import { HotspotPolygon } from '../input/hotspot-polygon';
++import { createTapRouter } from '../input/tap-router';
++import { Tokens } from '../tokens';
++import { createMapProp } from './map-prop';
++
++function fakePhaser() {
++  const images: Array<Record<string, unknown>> = [];
++  const tweens: Array<Record<string, unknown>> = [];
++  const scene = {
++    add: {
++      image: vi.fn((x: number, y: number, texture: string, frame: string) => {
++        const img: Record<string, unknown> = { x, y, texture, frame, scale: 1, destroyed: false };
++        img.setOrigin = (ox: number, oy: number) => ((img.origin = [ox, oy]), img);
++        img.setScale = (s: number) => ((img.scale = s), img);
++        img.setDepth = (d: number) => ((img.depth = d), img);
++        img.destroy = () => void (img.destroyed = true);
++        images.push(img);
++        return img;
++      }),
++    },
++    tweens: {
++      add: vi.fn((cfg: Record<string, unknown>) => {
++        tweens.push(cfg);
++        return { stop: vi.fn(), isPlaying: () => true };
++      }),
++    },
++  };
++  return { scene: scene as unknown as Scene, images, tweens };
++}
++
++const frame = { frame: 'decoration/parasol/00', x: 100, y: 200, originX: 0.1, originY: 0.25, scale: 0.5 };
++const rect = [
++  { x: 280, y: 280 },
++  { x: 320, y: 280 },
++  { x: 320, y: 320 },
++  { x: 280, y: 320 },
++];
++
++describe('createMapProp', () => {
++  it('places the frame at `at` with `origin`, scale and depth; a tap bounces it and calls onTap', () => {
++    const { scene, images, tweens } = fakePhaser();
++    const input = fakeScene();
++    const router = createTapRouter(input, { guard: new InputGuard() });
++    const onTap = vi.fn();
++    createMapProp(scene, router, { texture: 'atlas.map', frame, rect, onTap, depth: 310, at: { x: 300, y: 310 }, origin: { x: 0.2, y: 0.4 }, z: -1 });
++    expect(images[0]).toMatchObject({ x: 300, y: 310, frame: 'decoration/parasol/00', origin: [0.2, 0.4], scale: 0.5, depth: 310 });
++    input.tap(300, 300);
++    expect(onTap).toHaveBeenCalledTimes(1);
++    expect(tweens[0]).toMatchObject({ scale: 0.5 * Tokens.components.tappableProp.react.scale, duration: Tokens.components.tappableProp.react.durationMs / 2 });
++  });
++
++  it('defaults to the planned position and origin', () => {
++    const { scene, images } = fakePhaser();
++    const router = createTapRouter(fakeScene(), { guard: new InputGuard() });
++    createMapProp(scene, router, { texture: 'atlas.map', frame, rect, onTap: vi.fn() });
++    expect(images[0]).toMatchObject({ x: 100, y: 200, origin: [0.1, 0.25] });
++  });
++
++  it('z −1: an overlapping hotspot at z 0 wins even though it was registered first', () => {
++    const { scene } = fakePhaser();
++    const input = fakeScene();
++    const router = createTapRouter(input, { guard: new InputGuard() });
++    const station = vi.fn();
++    new HotspotPolygon(router, rect, station);
++    const onTap = vi.fn();
++    const prop = createMapProp(scene, router, { texture: 'atlas.map', frame, rect, onTap, z: -1 });
++    input.tap(300, 300);
++    expect(station).toHaveBeenCalledTimes(1);
++    expect(onTap).not.toHaveBeenCalled();
++    prop.destroy();
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/ui/map-prop.ts b/app/src/core/ui/map-prop.ts
+index e4dc1c4..824ddc1 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/core/ui/map-prop.ts
++++ b/app/src/core/ui/map-prop.ts
+@@ -1,7 +1,9 @@
+ // `tappable-prop` on the Map (Story 1.5; Story 2.2 decorations reuse it). A full-frame atlas image
+ // placed on its ground pivot, with a padded rect hotspot. A tap bounces it to
+ // tappableProp.react.scale over react.durationMs and calls `onTap` (the caller plays the sound).
+-// It never opens a game.
++// It never opens a game. Story 2.2 (decorations): `at` places the frame at another point than the
++// planned one, `origin` overrides the frame origin (the render pivot), and `z` is the hotspot's hit
++// priority within the router (decorations use −1, so a station polygon wins an overlap).
+ import type { GameObjects, Scene } from 'phaser';
+ import { HotspotPolygon } from '../input/hotspot-polygon';
+ import type { Point } from '../input/polygon';
+@@ -20,6 +22,12 @@ export interface MapPropOptions {
+   readonly onTap: () => void;
+   readonly depth?: number | undefined;
+   readonly reduced?: boolean;
++  /** Where the image goes (default: `frame.x/y`). */
++  readonly at?: Point;
++  /** Image origin 0..1 (default: `frame.originX/Y`). */
++  readonly origin?: { readonly x: number; readonly y: number };
++  /** Hotspot hit priority within the router (default 0). */
++  readonly z?: number;
+ }
+ 
+ export interface MapProp {
+@@ -30,14 +38,21 @@ export interface MapProp {
+ 
+ export function createMapProp(scene: Scene, router: TapRouter, opts: MapPropOptions): MapProp {
+   const f = opts.frame;
+-  const image = scene.add.image(f.x, f.y, opts.texture, f.frame).setOrigin(f.originX, f.originY).setScale(f.scale);
++  const at = opts.at ?? { x: f.x, y: f.y };
++  const origin = opts.origin ?? { x: f.originX, y: f.originY };
++  const image = scene.add.image(at.x, at.y, opts.texture, f.frame).setOrigin(origin.x, origin.y).setScale(f.scale);
+   if (opts.depth !== undefined) image.setDepth(opts.depth);
+   const react = Tokens.components.tappableProp.react;
+   const peak = amplitude(react.scale, opts.reduced ?? false);
+-  const hotspot = new HotspotPolygon(router, opts.rect, () => {
+-    bounce(scene, image, f.scale, peak, react.durationMs);
+-    opts.onTap();
+-  });
++  const hotspot = new HotspotPolygon(
++    router,
++    opts.rect,
++    () => {
++      bounce(scene, image, f.scale, peak, react.durationMs);
++      opts.onTap();
++    },
++    opts.z !== undefined ? { z: opts.z } : {},
++  );
+   return {
+     image,
+     hotspot,
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/main.ts b/app/src/main.ts
+index 6137fc3..709a4a6 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/main.ts
++++ b/app/src/main.ts
+@@ -3,6 +3,7 @@ import { AUTO, Game, Scale, type Types } from 'phaser';
+ import { Tokens } from './core/tokens';
+ import { installPageGuards, installRotationSafeScaleManager } from './core/stage';
+ import { audio, type SoundLike } from './core/audio-director';
++import { installRewardService } from './core/reward-service';
+ import { registerServiceWorker } from './core/sw';
+ import { GAME_SCENES } from './games/registry';
+ import { AudioUnlockOverlay } from './scenes/AudioUnlockOverlay';
+@@ -44,6 +45,10 @@ document.body.style.backgroundColor = Tokens.colors.sky.css;
+ // gate reads the same promise). Skipped in dev; an update waits for the next cold open (no reload).
+ registerServiceWorker('serviceWorker' in navigator ? navigator.serviceWorker : undefined, import.meta.env.DEV);
+ 
++// Story 2.2: the reward service subscribes to round:complete / reward:earned before any scene exists,
++// so it always runs before Map's handler and also while Map sleeps or is stopped.
++installRewardService();
++
+ const game = new Game(config);
+ // The only place outside core/ that touches the sound manager: hand it to AudioDirector, which
+ // wraps Phaser's unlock and the visibility handling. WebAudioSoundManager satisfies SoundLike.
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/scenes/Map.ts b/app/src/scenes/Map.ts
+index d6b4bac..3cf2c74 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/src/scenes/Map.ts
++++ b/app/src/scenes/Map.ts
+@@ -11,10 +11,15 @@
+ // removed when its scene shuts down (AR39). Story 2.1: on `round:complete`, synchronously on receipt, Map
+ // persists the next level (core/difficulty persistRoundLevel → ProgressStore.setDifficulty(id, nextLevel(startedLevel, …))), and
+ // the next start reads it back (SessionStore.startData → ProgressStore.getDifficulty), also after a reload.
++// Story 2.2: saved decorations (ProgressStore.getDecorations, granted by core/reward-service before Map
++// hears round:complete) are drawn statically by `syncDecorations()` on create and on wake, diffed by
++// slotId + seq (core/decoration-plan). A tap bounces one with the happy sound; it never opens a game,
++// moves the kart or triggers a station (its targets use z −1, so a station polygon wins an overlap).
+ // Timing, routing and geometry are pure core code; this
+ // scene only wires Phaser. The kart moves only in `update` (no timers or tweens), so a pause freezes it.
+ import { Scene, type GameObjects } from 'phaser';
+ import { ATLASES, BACKGROUNDS, MAP_KART } from '../content/assets';
++import { DECORATIONS } from '../content/decorations';
+ import type { Point } from '../content/layout-types';
+ import type { GameId } from '../content/types';
+ import { LAYOUTS } from '../content/layouts';
+@@ -22,13 +27,14 @@ import { KART_START_ANCHOR, ROAD_PATH, STATIONS, stopAnchor } from '../content/s
+ import { inviteLine, islandPrompt, stationNameLine } from '../content/voice-lines';
+ import { audio } from '../core/audio-director';
+ import { bus } from '../core/bus';
++import { DECORATION_Z, diffDecorations, planDecorations, spriteSourceRect, type SpriteSourceSize } from '../core/decoration-plan';
+ import { persistRoundLevel } from '../core/difficulty';
+ import { AssetTracker, loadPlan, releasePlan } from '../core/game-assets';
+ import { createHintRing, type HintRing } from '../core/hint-visuals';
+ import { setHudMode } from '../core/hud-mode';
+ import { HotspotPolygon } from '../core/input/hotspot-polygon';
+ import { boundingBox, pointInPolygon } from '../core/input/polygon';
+-import { createTapRouter } from '../core/input/tap-router';
++import { createTapRouter, type TapRouter } from '../core/input/tap-router';
+ import { createTapTarget, type TapTarget } from '../core/input/tap-target';
+ import { KART_TARGET, KartTrip, type TripCommand } from '../core/kart-trip';
+ import { createMapIdle, type MapIdle, type MapIdleEvent } from '../core/map-idle';
+@@ -39,6 +45,7 @@ import { amplitude, prefersReducedMotion } from '../core/reduced-motion';
+ import { createRoad } from '../core/road';
+ import { session } from '../core/session-store';
+ import { Tokens } from '../core/tokens';
++import { createMapProp, type MapProp } from '../core/ui/map-prop';
+ import { bob, bounce, isMoving, stopMotion } from '../core/ui/scale-motion';
+ import { GAMES, isGameId, ladderLength } from '../games/registry';
+ 
+@@ -48,6 +55,7 @@ const SHUTDOWN = 'shutdown';
+ const FILE_COMPLETE = 'filecomplete';
+ const LOAD_ERROR = 'loaderror';
+ const LOAD_COMPLETE = 'complete';
++const HAPPY_SFX = 'sfx.shell.happy';
+ 
+ interface StationView {
+   readonly plan: PlannedStation;
+@@ -81,6 +89,11 @@ export class MapScene extends Scene {
+   private running: { readonly id: GameId; readonly level: number } | undefined;
+   /** Games whose assets this Map loaded and has not released yet (a re-targeted trip loads more than one). */
+   private loadedGames = new Set<string>();
++  private router: TapRouter | undefined;
++  /** Drawn decorations by plan key (slotId + seq). */
++  private decorations = new Map<string, MapProp>();
++  /** Decoration warnings already logged this Map instance (one warn per bad entry, not per wake). */
++  private decorationWarnings = new Set<string>();
+ 
+   constructor() {
+     super('Map');
+@@ -94,6 +107,8 @@ export class MapScene extends Scene {
+     this.tracker = new AssetTracker();
+     this.running = undefined;
+     this.loadedGames = new Set();
++    this.decorations = new Map();
++    this.decorationWarnings = new Set();
+ 
+     const layout = LAYOUTS.map;
+     const atlasKey = ATLASES.map.key;
+@@ -137,6 +152,7 @@ export class MapScene extends Scene {
+     }
+ 
+     const router = createTapRouter(this);
++    this.router = router;
+     router.onAnyTap = () => this.handle(this.idle?.tap() ?? []);
+ 
+     // Station hotspots register back to front (by depth), so the frontmost one wins an overlap.
+@@ -173,6 +189,7 @@ export class MapScene extends Scene {
+       },
+     });
+     this.kart = this.addKart(plan.kart, router, atlasKey, road.pointAt(startS));
++    this.syncDecorations();
+ 
+     this.idle = createMapIdle({
+       stations: plan.stations.map((s) => s.id),
+@@ -228,6 +245,8 @@ export class MapScene extends Scene {
+       this.idle = undefined;
+       this.trip = undefined;
+       this.kart = undefined;
++      this.router = undefined;
++      this.decorations = new Map();
+     });
+   }
+ 
+@@ -238,6 +257,46 @@ export class MapScene extends Scene {
+     for (const id of this.tracker.drainSettled()) this.applyAll(this.trip.assetsSettled(id));
+   }
+ 
++  // --- decorations (Story 2.2) -----------------------------------------------------------------
++
++  /**
++   * Draws the saved decorations statically: entries no longer saved (or replaced: a new seq) are
++   * destroyed, new ones added, unchanged ones kept. No animation (the fly-in is Story 2.3).
++   */
++  private syncDecorations(): void {
++    const router = this.router;
++    if (!router) return;
++    const atlasKey = ATLASES.map.key;
++    const hasAtlas = this.textures.exists(atlasKey);
++    const plan = planDecorations(ProgressStore.getDecorations(), LAYOUTS.map, STATIONS, DECORATIONS, (frame) => {
++      if (!hasAtlas || !this.textures.get(atlasKey).has(frame)) return undefined;
++      const data = this.textures.get(atlasKey).get(frame).customData as { spriteSourceSize?: SpriteSourceSize } | undefined;
++      return spriteSourceRect(data?.spriteSourceSize);
++    });
++    for (const w of plan.warnings) {
++      if (this.decorationWarnings.has(w)) continue;
++      this.decorationWarnings.add(w);
++      console.warn(w);
++    }
++    const diff = diffDecorations(this.decorations.keys(), plan.items);
++    for (const key of diff.remove) {
++      this.decorations.get(key)?.destroy();
++      this.decorations.delete(key);
++    }
++    for (const item of diff.add) {
++      const prop = createMapProp(this, router, {
++        texture: atlasKey,
++        frame: { frame: item.frame, x: item.x, y: item.y, originX: item.originX, originY: item.originY, scale: item.scale },
++        rect: item.hit,
++        depth: item.depth,
++        reduced: this.reduced,
++        z: DECORATION_Z,
++        onTap: () => audio.sfx(HAPPY_SFX),
++      });
++      this.decorations.set(item.key, prop);
++    }
++  }
++
+   // --- kart -------------------------------------------------------------------------------------
+ 
+   private addKart(plan: PlannedKart, router: ReturnType<typeof createTapRouter>, atlasKey: string, at: Point): KartView {
+@@ -416,6 +475,7 @@ export class MapScene extends Scene {
+     if (prompt) audio.setPrompt(prompt);
+     else audio.clearPrompt();
+     if (this.idle) this.handle(this.idle.reset());
++    this.syncDecorations();
+     const last = session.lastStation;
+     const s = last !== undefined ? this.stops[last] : undefined;
+     if (this.trip && s !== undefined) this.applyAll(this.trip.parkAt(s));
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/atlas/pack.ts b/app/tools/atlas/pack.ts
+index 360a393..fe85a37 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/atlas/pack.ts
++++ b/app/tools/atlas/pack.ts
+@@ -9,9 +9,12 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import sharp from 'sharp';
+ import { ATLASES, BACKGROUNDS, FRAME_NAME, SCREEN_IDS, type ScreenId } from '../../src/content/assets.ts';
++import { DECORATIONS } from '../../src/content/decorations.ts';
+ import { screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
++import { STATIONS } from '../../src/content/stations.ts';
++import { GAME_IDS } from '../../src/content/types.ts';
+ import type { ScreenLayout } from '../../src/content/layout-types.ts';
+-import { MAX_FILE_BYTES, MAX_PAGE_SIDE, iceCreamLimits, validateIceCream, type AtlasJsonLike } from '../layout/rules.ts';
++import { MAX_FILE_BYTES, MAX_PAGE_SIDE, decorationLimits, iceCreamLimits, validateDecorations, validateIceCream, type AtlasJsonLike } from '../layout/rules.ts';
+ import type { PackFile, PackOptions, PackResult } from './free-tex-packer-core.d.ts';
+ 
+ const require = createRequire(import.meta.url);
+@@ -22,8 +25,12 @@ const RENDER_DIR = join(APP_DIR, '.generated', 'render');
+ const PUBLIC_DIR = join(APP_DIR, 'public');
+ const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
+ 
+-/** Screen rules that need the packed atlas (Story 1.8); they read the published layout. */
++/**
++ * Screen rules that need the packed atlas (Story 1.8; Story 2.2 adds the map decorations: frames,
++ * sizes, tap rects, station clearance); they read the published layout. Any problem refuses the write.
++ */
+ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayout, atlas: AtlasJsonLike) => string[]>>> = {
++  map: (layout, atlas) => validateDecorations(layout, decorationLimits(STATIONS, GAME_IDS, DECORATIONS), atlas),
+   'ice-cream': (layout, atlas) => validateIceCream(layout, iceCreamLimits(iceCreamScreen), atlas),
+ };
+ 
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/layout/rules.test.ts b/app/tools/layout/rules.test.ts
+index c9d53be..45192f4 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/layout/rules.test.ts
++++ b/app/tools/layout/rules.test.ts
+@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
+ import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
+ import { STATIONS } from '../../src/content/stations.ts';
+ import { GAME_IDS } from '../../src/content/types.ts';
+-import { layoutLimits, pngSizeOf, validateAssets, validateLayout, type AssetRuleInput } from './rules.ts';
++import { DECORATIONS } from '../../src/content/decorations.ts';
++import { DECO_STATION_DIST_OVERRIDE, decorationLimits, layoutLimits, pngSizeOf, validateAssets, validateDecorations, validateLayout, type AssetRuleInput, type AtlasJsonLike } from './rules.ts';
+ 
+ const sq = (x: number, y: number, s: number): Point[] => [
+   { x, y },
+@@ -32,8 +33,9 @@ function goodLayout(): MutableLayout {
+     hits[s.id] = sq(x, 400, 100);
+     anchors[s.id] = { x: x + 50, y: 480 };
+     anchors[`${s.id}-stop`] = { x: x + 50, y: 601 };
+-    slots[s.slots[0]!] = { x: x + 20, y: 200 };
+-    slots[s.slots[1]!] = { x: x + 70, y: 250 };
++    // Story 2.2 (review loop 1): beside the station (<= 170 px from the anchor), slot 2 <= 110 px from slot 1.
++    const at = [{ x: x + 40, y: 330 }, { x: x + 85, y: 380 }];
++    s.slots.forEach((id, k) => (slots[id] = at[k]!));
+   });
+   return {
+     v: 1,
+@@ -297,3 +299,110 @@ describe('validateIceCream', () => {
+     expect(validateIceCream(layout, iceCreamLimits(iceCreamScreen), atlas)).toEqual([]);
+   });
+ });
++
++describe('validateDecorations (Story 2.2)', () => {
++  // Each item renders as a 32×90 (design px) footprint standing on its station's slot 1 (the pivot).
++  const FP = { w: 32, h: 90 };
++  type Frames = Record<string, { spriteSourceSize: { x: number; y: number; w: number; h: number } }>;
++  const atlasFor = (l: ScreenLayout, size = FP): Frames => {
++    const frames: Frames = {};
++    for (const s of STATIONS) {
++      const p = l.slots[s.slots[0]!]!;
++      for (const d of DECORATIONS[s.id]) {
++        frames[`decoration/${d.id}/00`] = { spriteSourceSize: { x: (p.x - size.w / 2) * 2, y: (p.y - size.h) * 2, w: size.w * 2, h: size.h * 2 } };
++      }
++    }
++    return frames;
++  };
++  const rules = (catalogue = DECORATIONS as Record<string, ReadonlyArray<{ id: string }>>, stations = STATIONS) =>
++    decorationLimits(stations, GAME_IDS, catalogue);
++  const run = (l: ScreenLayout, atlas: AtlasJsonLike | undefined = { frames: atlasFor(l) }, input = rules()): string[] =>
++    validateDecorations(l, input, atlas);
++
++  it('the fixture has 2 slots for ice-cream, pizza and race and 1 elsewhere', () => {
++    expect(STATIONS.map((s) => s.slots.length)).toEqual([2, 2, 2, 1, 1, 1, 1]);
++  });
++
++  it('passes the fixture (and validateLayout too)', () => {
++    const l = goodLayout();
++    expect(run(l)).toEqual([]);
++    expect(check(l)).toEqual([]);
++  });
++
++  it('a station with no slot, or slot ids not <id>-1..k', () => {
++    const stations = STATIONS.map((s) => (s.id === 'race' ? { ...s, slots: [] } : s.id === 'pizza' ? { ...s, slots: ['pizza-2', 'pizza-1'] } : s));
++    const p = run(goodLayout(), undefined, rules(undefined, stations));
++    expect(p).toContain('station "race": has no decoration slot');
++    expect(p).toContain('slot "pizza-2": station "pizza" slots must be "pizza-1..2" in order');
++    expect(p).toContain('slot "race-1": in the layout but not listed in content/stations.ts');
++  });
++
++  it('a layout slot not listed in content', () => {
++    expect(run(edit((l) => (l.slots['pizza-4'] = { x: 300, y: 300 })), undefined)).toEqual(['slot "pizza-4": in the layout but not listed in content/stations.ts']);
++  });
++
++  it('an empty catalogue, a non-kebab id and an id used by two stations', () => {
++    const catalogue = { ...DECORATIONS, race: [], pizza: [{ id: 'Pizza_Pie' }, { id: 'parasol' }] };
++    expect(validateDecorations(goodLayout(), rules(catalogue))).toEqual([
++      'decoration "Pizza_Pie": id is not kebab-case',
++      'decoration "parasol": used by both "ice-cream" and "pizza"',
++      'decorations "race": the catalogue is empty',
++    ]);
++  });
++
++  it('a missing frame names the id', () => {
++    const l = goodLayout();
++    const frames = atlasFor(l);
++    delete frames['decoration/koi/00'];
++    expect(run(l, { frames })).toEqual(['decoration "koi": atlas "map" has no frame "decoration/koi/00"']);
++  });
++
++  it('a footprint under 80 px on its longest side', () => {
++    const l = goodLayout();
++    const p = run(l, { frames: atlasFor(l, { w: 40, h: 70 }) });
++    expect(p).toContain('decoration "parasol" at slot "ice-cream-1": footprint 40×70 is under 80 px on its longest side');
++  });
++
++  it('a tap rect side under targetMin', () => {
++    const l = goodLayout();
++    const p = run(l, { frames: atlasFor(l, { w: 20, h: 90 }) });
++    expect(p).toContain('decoration "sundae" at slot "ice-cream-2": tap rect 68×138 has a side under 80');
++  });
++
++  it('a tap rect outside the interactive rect', () => {
++    const p = run(edit((l) => (l.slots['race-2'] = { x: 995, y: 380 })));
++    expect(p.some((m) => m.startsWith('decoration "cone" at slot "race-2": tap rect') && m.includes('outside the interactive rect'))).toBe(true);
++  });
++
++  it('a footprint inside a station polygon as stored (UX-DR9)', () => {
++    const p = run(edit((l) => (l.slots['pizza-2'] = { x: l.slots['pizza-2']!.x, y: 430 })));
++    expect(p).toContain('decoration "tomato" at slot "pizza-2": footprint intersects the hit polygon of "pizza"');
++  });
++
++  it('two slots of one station whose union footprints overlap', () => {
++    const p = run(edit((l) => (l.slots['race-2'] = { x: l.slots['race-1']!.x + 10, y: 350 })));
++    expect(p).toContain('slots "race-1" and "race-2": decoration footprints overlap');
++  });
++
++  it('review loop 1: slots of different stations whose footprints overlap', () => {
++    const p = run(edit((l) => (l.slots['pizza-2'] = { x: l.slots['ice-cream-2']!.x + 10, y: 380 })));
++    expect(p).toContain('slots "ice-cream-2" and "pizza-2": decoration footprints overlap');
++  });
++
++  it('review loop 1: a slot more than 170 px from its station anchor (checked without the atlas too)', () => {
++    const l = edit((m) => (m.slots['fishing-1'] = { x: m.anchors.fishing!.x - 60, y: 300 }));
++    expect(validateDecorations(l, rules())).toContain('slot "fishing-1": 189.74 px from the anchor of "fishing" (max 170)');
++  });
++
++  it('review loop 1b: dino-puzzle may sit up to 240 px away (DECO_STATION_DIST_OVERRIDE), not further', () => {
++    expect(DECO_STATION_DIST_OVERRIDE).toEqual({ 'dino-puzzle': 240 });
++    const at = (dy: number) => edit((m) => (m.slots['dino-puzzle-1'] = { x: m.anchors['dino-puzzle']!.x, y: m.anchors['dino-puzzle']!.y - dy }));
++    expect(validateDecorations(at(200), rules())).toEqual([]);
++    expect(validateDecorations(at(250), rules())).toContain('slot "dino-puzzle-1": 250 px from the anchor of "dino-puzzle" (max 240)');
++  });
++
++  it('review loop 1: a slot more than 110 px from its station slot 1 (the render pivot)', () => {
++    const l = edit((m) => (m.slots['pizza-2'] = { x: m.slots['pizza-1']!.x + 70, y: 450 }));
++    expect(validateDecorations(l, rules())).toContain('slot "pizza-2": 138.92 px from slot "pizza-1" (max 110)');
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/layout/rules.ts b/app/tools/layout/rules.ts
+index f7dd4fd..baa5562 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/layout/rules.ts
++++ b/app/tools/layout/rules.ts
+@@ -5,6 +5,7 @@ import { Tokens } from '../../src/core/tokens.ts';
+ import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
+ import type { Station } from '../../src/content/stations.ts';
+ import { FRAME_NAME } from '../../src/content/assets.ts';
++import { decorationFootprint, decorationFrameName, padRect, rectPolygon, type Rect as DecoRect } from '../../src/core/decoration-plan.ts';
+ import { distToPolyline, minWidth, pointInPolygon, polygonDistance } from './geometry.ts';
+ 
+ export interface LayoutLimits {
+@@ -231,7 +232,7 @@ export function requiredIdProblems(layout: ScreenLayout, ids: ScreenIds): string
+ }
+ 
+ interface AtlasFrameJson {
+-  spriteSourceSize?: { w?: number; h?: number };
++  spriteSourceSize?: { x?: number; y?: number; w?: number; h?: number };
+   frame?: { w?: number; h?: number };
+ }
+ 
+@@ -346,3 +347,169 @@ export function validateIceCream(layout: ScreenLayout, input: IceCreamRuleInput,
+ }
+ 
+ const round2 = (v: number): number => Math.round(v * 100) / 100;
++
++// --- decorations (Story 2.2) --------------------------------------------------------------------
++
++export interface DecorationRuleInput {
++  stations: ReadonlyArray<{ readonly id: string; readonly slots: readonly string[] }>;
++  gameIds: readonly string[];
++  catalogue: Readonly<Record<string, ReadonlyArray<{ readonly id: string }>>>;
++  limits: LayoutLimits;
++  /** Tokens.components.decorationItem.minSize: the footprint's longest side (design px). */
++  minSize: number;
++  /** Tokens.components.tappableProp.hitPad: footprint → tap rect. */
++  hitPad: number;
++  /** Review loop 1: a slot lies at most this far (design px) from its station's anchor. */
++  maxStationDist: number;
++  /** Review loop 1b: per-station exceptions to maxStationDist (design px). */
++  stationDistOverride: Readonly<Record<string, number>>;
++  /** Review loop 1: a slot lies at most this far (design px) from its station's slot 1 (the render pivot). */
++  maxPivotDist: number;
++}
++
++/** Spec 2.2 (review loop 1): a decoration slot sits beside its own station. */
++export const DECO_MAX_STATION_DIST = 170;
++/**
++ * Spec 2.2 (review loop 1b): stations whose slots may sit further than DECO_MAX_STATION_DIST (at most
++ * 240 px). dino-puzzle: the only clear ground within 170 px of its anchor is the strip above the fence,
++ * which is also the only spot for touch-talk, and shadow-match's only spot is the infield pocket that
++ * touch-talk could also take; with no footprint overlap allowed, one of the three had no slot. Its
++ * slot stands by the volcano instead (about 200 px from the anchor), which fits the dinosaur theme.
++ */
++export const DECO_STATION_DIST_OVERRIDE: Readonly<Record<string, number>> = {
++  'dino-puzzle': 240,
++};
++
++/** Spec 2.2 (review loop 1): the perspective drift from the render pivot stays small. */
++export const DECO_MAX_PIVOT_DIST = 110;
++
++/** The decoration rules from Tokens. */
++export function decorationLimits(stations: DecorationRuleInput['stations'], gameIds: readonly string[], catalogue: DecorationRuleInput['catalogue']): DecorationRuleInput {
++  return {
++    stations,
++    gameIds,
++    catalogue,
++    limits: layoutLimits(),
++    minSize: Tokens.components.decorationItem.minSize,
++    hitPad: Tokens.components.tappableProp.hitPad,
++    maxStationDist: DECO_MAX_STATION_DIST,
++    stationDistOverride: DECO_STATION_DIST_OVERRIDE,
++    maxPivotDist: DECO_MAX_PIVOT_DIST,
++  };
++}
++
++const DECO_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
++
++/** Trimmed rect (render px, full-frame offsets) of an atlas frame, undefined when missing. */
++export function trimmedRect(atlas: AtlasJsonLike, frame: string): DecoRect | undefined {
++  const ss = atlas.frames?.[frame]?.spriteSourceSize;
++  if (!ss || typeof ss.x !== 'number' || typeof ss.y !== 'number' || typeof ss.w !== 'number' || typeof ss.h !== 'number') return undefined;
++  return { x: ss.x, y: ss.y, width: ss.w, height: ss.h };
++}
++
++const rectsOverlap = (a: DecoRect, b: DecoRect): boolean =>
++  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
++
++const unionRect = (a: DecoRect, b: DecoRect): DecoRect => {
++  const x = Math.min(a.x, b.x);
++  const y = Math.min(a.y, b.y);
++  return { x, y, width: Math.max(a.x + a.width, b.x + b.width) - x, height: Math.max(a.y + a.height, b.y + b.height) - y };
++};
++
++/**
++ * Decoration rules (Story 2.2; run by `atlas` before writing and by `validate:content`). Each message
++ * names the id:
++ *   - every station has ≥ 1 slot with ids `<ownId>-1..k`; every layout slot is listed in content;
++ *   - every GameId has a non-empty catalogue of kebab-case, globally unique ids;
++ *   - with `atlas`: `decoration/<id>/00` exists for every id, and for every (slot, item of that
++ *     slot's station), rendered at slot 1 and placed at the slot: the footprint's longest side is
++ *     ≥ minSize, each tap-rect side ≥ targetMin, the tap rect lies inside the interactive rect, the
++ *     footprint touches no station hit polygon as stored (UX-DR9, no extra padding); the union
++ *     footprints of any two slots, from any stations, do not overlap;
++ *   - next to its station: every slot is ≤ maxStationDist (or its stationDistOverride) from its station's anchor and ≤ maxPivotDist
++ *     from its station's slot 1 (checked without the atlas too).
++ * Slots of content without an anchor are spec-1-4's validateLayout rule (not repeated here).
++ */
++export function validateDecorations(layout: ScreenLayout, input: DecorationRuleInput, atlas?: AtlasJsonLike): string[] {
++  const problems: string[] = [];
++  const { stations, limits } = input;
++  const listed = new Set<string>();
++  for (const s of stations) {
++    if (s.slots.length === 0) problems.push(`station "${s.id}": has no decoration slot`);
++    s.slots.forEach((slot, i) => {
++      listed.add(slot);
++      if (slot !== `${s.id}-${i + 1}`) problems.push(`slot "${slot}": station "${s.id}" slots must be "${s.id}-1..${s.slots.length}" in order`);
++    });
++  }
++  for (const id of Object.keys(layout.slots)) if (!listed.has(id)) problems.push(`slot "${id}": in the layout but not listed in content/stations.ts`);
++
++  const owner = new Map<string, string>();
++  for (const gameId of input.gameIds) {
++    const items = input.catalogue[gameId] ?? [];
++    if (items.length === 0) problems.push(`decorations "${gameId}": the catalogue is empty`);
++    for (const it of items) {
++      if (!DECO_ID.test(it.id)) problems.push(`decoration "${it.id}": id is not kebab-case`);
++      const first = owner.get(it.id);
++      if (first !== undefined) problems.push(`decoration "${it.id}": used by both "${first}" and "${gameId}"`);
++      else owner.set(it.id, gameId);
++    }
++  }
++  for (const s of stations) {
++    const anchor = layout.anchors[s.id];
++    const pivot = s.slots[0] === undefined ? undefined : layout.slots[s.slots[0]];
++    for (const slot of s.slots) {
++      const at = layout.slots[slot];
++      if (!at) continue;
++      const da = anchor ? Math.hypot(at.x - anchor.x, at.y - anchor.y) : 0;
++      const maxDist = input.stationDistOverride[s.id] ?? input.maxStationDist;
++      if (da > maxDist) problems.push(`slot "${slot}": ${round2(da)} px from the anchor of "${s.id}" (max ${maxDist})`);
++      const dp = pivot ? Math.hypot(at.x - pivot.x, at.y - pivot.y) : 0;
++      if (dp > input.maxPivotDist) problems.push(`slot "${slot}": ${round2(dp)} px from slot "${s.slots[0]}" (max ${input.maxPivotDist})`);
++    }
++  }
++  if (!atlas) return problems;
++
++  const hits = Object.entries(layout.hits).filter(([id]) => input.gameIds.includes(id));
++  const r = limits.rect;
++  const rs = layout.renderScale;
++  const unions = new Map<string, DecoRect>();
++  for (const s of stations) {
++    const items = input.catalogue[s.id] ?? [];
++    for (const it of items) {
++      const frame = decorationFrameName(it.id);
++      if (!trimmedRect(atlas, frame)) problems.push(`decoration "${it.id}": atlas "map" has no frame "${frame}"`);
++    }
++    const pivot = s.slots[0] === undefined ? undefined : layout.slots[s.slots[0]];
++    if (!pivot) continue;
++    for (const slot of s.slots) {
++      const at = layout.slots[slot];
++      if (!at) continue;
++      for (const it of items) {
++        const ss = trimmedRect(atlas, decorationFrameName(it.id));
++        if (!ss) continue;
++        const fp = decorationFootprint(ss, pivot, at, rs);
++        const tap = padRect(fp, input.hitPad);
++        const where = `decoration "${it.id}" at slot "${slot}"`;
++        const longest = Math.max(fp.width, fp.height);
++        if (longest < input.minSize) problems.push(`${where}: footprint ${round2(fp.width)}×${round2(fp.height)} is under ${input.minSize} px on its longest side`);
++        if (tap.width < limits.targetMin || tap.height < limits.targetMin) {
++          problems.push(`${where}: tap rect ${round2(tap.width)}×${round2(tap.height)} has a side under ${limits.targetMin}`);
++        }
++        if (tap.x < r.x0 || tap.y < r.y0 || tap.x + tap.width > r.x1 || tap.y + tap.height > r.y1) {
++          problems.push(`${where}: tap rect (${round2(tap.x)}, ${round2(tap.y)}, ${round2(tap.width)}×${round2(tap.height)}) is outside the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
++        }
++        const poly = rectPolygon(fp);
++        for (const [id, hit] of hits) if (polygonDistance(poly, hit) === 0) problems.push(`${where}: footprint intersects the hit polygon of "${id}"`);
++        const u = unions.get(slot);
++        unions.set(slot, u ? unionRect(u, fp) : fp);
++      }
++    }
++  }
++  const slots = [...unions.keys()];
++  for (let i = 0; i < slots.length; i++) {
++    for (let j = i + 1; j < slots.length; j++) {
++      if (rectsOverlap(unions.get(slots[i]!)!, unions.get(slots[j]!)!)) problems.push(`slots "${slots[i]}" and "${slots[j]}": decoration footprints overlap`);
++    }
++  }
++  return problems;
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/lint/validate-content.test.ts b/app/tools/lint/validate-content.test.ts
+index 9b3211e..c185fa8 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/lint/validate-content.test.ts
++++ b/app/tools/lint/validate-content.test.ts
+@@ -41,7 +41,8 @@ function goodTree(): string {
+     put(root, voiceHashPath(line.id), `${lineHash(line)}\n`);
+   }
+   put(root, ATLASES.map.png, pngHeader(1024, 1024));
+-  put(root, ATLASES.map.json, atlasJson(REQUIRED_FRAMES.map!));
++  // Story 2.2: the map atlas JSON is the real one (decoration frame sizes are checked).
++  put(root, ATLASES.map.json, readFileSync(join(APP, 'public', ATLASES.map.json)));
+   put(root, BACKGROUNDS.map.path, pngHeader(2048, 1536));
+   // Story 1.8: the ice-cream atlas JSON is the real one (its frame sizes are checked).
+   put(root, ATLASES['ice-cream'].png, pngHeader(1024, 1024));
+@@ -109,7 +110,29 @@ describe('validate-content run(publicDir)', () => {
+   it('a missing atlas frame fails and names it', () => {
+     const root = goodTree();
+     put(root, ATLASES.map.json, atlasJson(REQUIRED_FRAMES.map!.filter((f) => f !== 'kart/idle/00')));
+-    expect(run(root)).toEqual(['atlas "atlas.map": frame "kart/idle/00" is missing']);
++    expect(run(root)).toContain('atlas "atlas.map": frame "kart/idle/00" is missing');
++  });
++
++  it('Story 2.2: a missing or undersized decoration frame fails naming the id', () => {
++    const root = goodTree();
++    const json = JSON.parse(readFileSync(join(APP, 'public', ATLASES.map.json), 'utf8'));
++    delete json.frames['decoration/koi/00'];
++    json.frames['decoration/parasol/00'].spriteSourceSize.w = 40;
++    json.frames['decoration/parasol/00'].spriteSourceSize.h = 40;
++    put(root, ATLASES.map.json, JSON.stringify(json));
++    const problems = run(root);
++    expect(problems).toContain('layout "map": decoration "koi": atlas "map" has no frame "decoration/koi/00"');
++    expect(problems.some((p) => p.startsWith('layout "map": decoration "parasol" at slot "ice-cream-1": footprint 20×20 is under 80'))).toBe(true);
++  });
++
++  it('Story 2.2: a slot moved onto a station fails naming the decoration and the station', () => {
++    const root = goodTree();
++    const layouts = layoutDir();
++    const real = realLayout('map');
++    real.slots['pizza-2'] = real.anchors.pizza;
++    put(layouts, 'map.layout.json', JSON.stringify(real));
++    const problems = run(root, layouts);
++    expect(problems.some((p) => /^layout "map": decoration "[a-z-]+" at slot "pizza-2": footprint intersects the hit polygon of "pizza"$/.test(p))).toBe(true);
+   });
+ 
+   it('a file over 8 MiB fails and names it', () => {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/lint/validate-content.ts b/app/tools/lint/validate-content.ts
+index 2b51ae4..f34972a 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/lint/validate-content.ts
++++ b/app/tools/lint/validate-content.ts
+@@ -5,17 +5,30 @@
+ // assets (atlases, backgrounds, 8 MiB cap on every file under public/assets) — Story 1.4 — and the
+ // station rules (label, name line, invite line of awake stations) — Story 1.5 — and the game content
+ // (awake ⇔ GAME_CONTENT, game audio ids exist) — Story 1.7 — and the hint ring contrast on the real
+-// plates (tools/lint/hint-contrast.ts) — Story 1.9.
++// plates (tools/lint/hint-contrast.ts) — Story 1.9 — and the decorations (catalogue shape, slot ids,
++// `decoration/<id>/00` frames, footprint size, tap rects, station clearance) — Story 2.2.
+ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+ import { dirname, join, relative, resolve, sep } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import { ATLASES, BACKGROUNDS, SCREEN_IDS } from '../../src/content/assets.ts';
+ import { AUDIO_CATALOG } from '../../src/content/audio-catalog.ts';
++import { DECORATIONS } from '../../src/content/decorations.ts';
+ import { GAME_CONTENT } from '../../src/content/games/index.ts';
+ import type { ScreenLayout } from '../../src/content/layout-types.ts';
+ import { KART_FRAME, STATIONS, stationFrame } from '../../src/content/stations.ts';
+ import { Tokens } from '../../src/core/tokens.ts';
+-import { RENDER_SCALE, iceCreamLimits, layoutLimits, pngSizeOf, validateAssets, validateIceCream, validateLayout, type AtlasJsonLike } from '../layout/rules.ts';
++import {
++  RENDER_SCALE,
++  decorationLimits,
++  iceCreamLimits,
++  layoutLimits,
++  pngSizeOf,
++  validateAssets,
++  validateDecorations,
++  validateIceCream,
++  validateLayout,
++  type AtlasJsonLike,
++} from '../layout/rules.ts';
+ import { screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
+ import { GAME_IDS } from '../../src/content/types.ts';
+ import { validateContent } from '../../src/content/validate.ts';
+@@ -31,6 +44,7 @@ export const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
+ 
+ /** Frames each screen's atlas must hold. */
+ export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
++  // Decoration frames are checked by validateDecorations (layoutProblems), naming the decoration id.
+   map: [...STATIONS.map((s) => stationFrame(s.id)), KART_FRAME],
+   'ice-cream': iceCreamScreen.frames,
+ };
+@@ -74,6 +88,8 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[]
+     if (missing.length > 0) continue;
+     if (screen === 'map') {
+       for (const p of validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, limits: layoutLimits() })) problems.push(`layout "${screen}": ${p}`);
++      const decorations = validateDecorations(layout, decorationLimits(STATIONS, GAME_IDS, DECORATIONS), readAtlas(publicDir, screen));
++      for (const p of decorations) problems.push(`layout "${screen}": ${p}`);
+     } else if (screen === 'ice-cream') {
+       for (const p of validateIceCream(layout, iceCreamLimits(iceCreamScreen), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+     }
+@@ -118,6 +134,7 @@ export function run(publicDir: string, layoutDir: string = LAYOUT_DIR): string[]
+       voiceIds: VOICE_LINES.map((l) => l.id),
+       audioIds: Object.keys(AUDIO_CATALOG),
+     },
++    decorations: { gameIds: GAME_IDS, catalogue: DECORATIONS, stations: STATIONS },
+     voice: {
+       lines: VOICE_LINES,
+       hashLine: lineHash,
+@@ -147,7 +164,7 @@ async function main(): Promise<void> {
+     process.exit(1);
+   }
+   console.log(
+-    `content: OK (${GAME_IDS.length} game ids, ${Object.keys(AUDIO_CATALOG).length} audio ids, ${VOICE_LINES.length} voice lines, ${SCREEN_IDS.length} layout(s) with ${STATIONS.length} stations, ${SCREEN_IDS.length} atlas(es), ${listFiles(join(publicDir, 'assets')).length} asset files; hint contrast ${Object.entries(contrast.rings)
++    `content: OK (${GAME_IDS.length} game ids, ${Object.keys(AUDIO_CATALOG).length} audio ids, ${VOICE_LINES.length} voice lines, ${SCREEN_IDS.length} layout(s) with ${STATIONS.length} stations, ${STATIONS.reduce((n, s) => n + s.slots.length, 0)} slots, ${Object.values(DECORATIONS).flat().length} decorations, ${SCREEN_IDS.length} atlas(es), ${listFiles(join(publicDir, 'assets')).length} asset files; hint contrast ${Object.entries(contrast.rings)
+       .map(([s, n]) => `${s} ${n} rings`)
+       .join(', ')})`,
+   );
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/render/blender/build_map.py b/app/tools/render/blender/build_map.py
+index b6a76b3..a9e4be1 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/render/blender/build_map.py
++++ b/app/tools/render/blender/build_map.py
+@@ -2,24 +2,29 @@
+ #
+ # Run by `npm run art:build -- map` (tools/render/build.ts), never by hand:
+ #   blender -b --factory-startup art/src/map-v2.blend --python-exit-code 1 --python build_map.py -- \
+-#     --out <tmp>/map.blend --params <tmp>/params.json
++#     --out <tmp>/map.blend --params <tmp>/params.json --decorations <tmp>/decorations.json
+ # params.json (written by build.ts from Tokens): creature colours (hex), hitPad, renderScale,
+-# design size and the interactive rect (design px) used to keep slots on screen.
++# design size and the interactive rect (design px) used to keep slots on screen; Story 2.2 adds
++# decorationMin. decorations.json (Story 2.2): the catalogue [{id, stationId, model (absolute path)}].
+ #
+ # Steps: fail on SUBSURF; prune the Tiệm kem preview; regroup station objects into
+ # `sprite.<id>` collections; recolour creatures; create the layout objects (`hit.*`, `anchor.*`,
+-# `slot.*`, `path.road`) in a `layout` collection with hide_render; set the render size; save.
++# `slot.*`, `path.road`) in a `layout` collection with hide_render; Story 2.2: 1-2 slots per station (10 in total)
++# from SLOT_OFFSETS and the detached `sprite.decoration` group (one `state.<id>` per catalogue item,
++# built at its station's slot 1, the render pivot); set the render size; save.
+ # Every constant below is in Blender world units (metres), read off the reference scene.
++import json
+ import math
+ import os
+ import sys
+ 
++import bmesh
+ import bpy
+ from bpy_extras.object_utils import world_to_camera_view
+ from mathutils import Vector
+ 
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+-from common import add_empty, descendants, eval_world_verts, hull_object, move_to, recolor_creature  # noqa: E402
++from common import add_empty, descendants, eval_world_verts, flat_material, force_opaque, hull_object, move_to, principled, recolor_creature  # noqa: E402
+ from common import parse_args as common_args  # noqa: E402
+ 
+ # --- the station table ---------------------------------------------------------------------------
+@@ -89,16 +94,62 @@ ROAD_CENTRE = [
+ ROAD_HALF_WIDTH = 0.725
+ ROAD_TOP_Z = 0.53
+ 
+-# Decoration slots: grass points around each station's anchor.
+-SLOTS_PER_STATION = 2
+-SLOT_RADII = [1.4, 1.8, 2.2, 2.6, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0]
+-SLOT_ANGLE_STEP_DEG = 10
++# Decoration slots (Story 2.2, review loop 1b): ground points beside each station, in fill order.
++# Each entry is a world XY offset in metres from the station's anchor (the XY centre of its sprite
++# group, after the shifts). tools/layout/rules.ts › validateDecorations checks every slot: within
++# 170 design px of its station's anchor (dino-puzzle: 240, DECO_STATION_DIST_OVERRIDE), within 110 px
++# of the station's slot 1 (the render pivot), every item's footprint clear of every station polygon
++# and of every other slot's footprint (any station), and the tap rect inside the interactive rect.
++# The padded station polygons leave little clear ground, so a station gets a second slot only where
++# one fits: ice-cream, pizza and race have 2; fishing, touch-talk, dino-puzzle and shadow-match have
++# 1 (content/stations.ts must match). dino-puzzle stands by the volcano (its only clear spot that does
++# not take touch-talk's or shadow-match's pocket). The table came from a scratch search over clear
++# ground points that mirrors those rules.
++SLOT_OFFSETS = {
++    'ice-cream': [(1.315, -3.712), (2.715, -3.112)],
++    'pizza': [(-1.362, -3.225), (0.438, -3.825)],
++    'race': [(-1.830, -3.535), (0.070, -3.335)],
++    'fishing': [(0.309, -3.968)],
++    'touch-talk': [(-2.360, 5.344)],
++    'dino-puzzle': [(-4.918, -2.083)],
++    'shadow-match': [(-2.262, -6.488)],
++}
+ SLOT_ROAD_CLEARANCE = 0.3  # beyond the road edge
+-SLOT_FOOTPRINT = 0.35  # radius that must be clear grass
+-SLOT_SPACING = 1.0  # between any two slots
+-SLOT_SCREEN_MARGIN = 16  # design px inside the interactive rect
+-SLOT_HULL_MARGIN = 6  # design px beyond the padded station hulls
+-GRASS = 'Grass'
++SLOT_FOOTPRINT = 0.35  # radius around a slot point that must be clear ground
++SLOT_Z = 0.45  # island ground (used when the downward ray misses)
++# Meshes a slot may stand on: the grass and the beach (the beach band is the only clear ground
++# south of the road under the pizza and race stations).
++GROUND = ('Grass', 'Sand')
++# The scratch slot search (outside the project) sets this to False to get warnings instead of failures.
++STRICT_SLOTS = True
++
++# Decorations (Story 2.2): each catalogue model (content/decorations.ts, passed in as JSON by
++# build.ts) is imported, normalised to DECO_SIZE_M on its largest dimension (times DECO_SCALE[id]),
++# turned by DECO_YAW_DEG toward the camera and stood on the ground at its station's slot 1 (the
++# render pivot), with a flat dark blob shadow. Each is a `state.<id>` collection under the detached
++# `sprite.decoration` group: excluded from the plate, rendered one state at a time.
++DECO_SIZE_M = 1.85
++# Per-item scale so every item shows about 84-110 px on its longest side at its station's pivot
++# (smaller where the space beside a station is tight; the rules need >= 80). Every catalogue id has
++# an entry; the builder fails on a missing or unknown key (check_deco_scale).
++DECO_SCALE = {
++    'parasol': 0.76, 'giant-cone': 0.92, 'popsicle': 1.01, 'sundae': 1.04,
++    'pizza-pie': 0.98, 'tomato': 0.92, 'cheese': 0.97, 'pizza-box': 0.90,
++    'cone': 0.84, 'traffic-light': 1.29, 'race-car': 0.98, 'barrier': 0.85,
++    'boat': 1.26, 'puffer': 1.17, 'koi': 0.95, 'butterfly-fish': 0.94,
++    'fire-truck': 1.64, 'ambulance': 1.64, 'taxi': 1.70, 'street-lamp': 1.32,
++    'parasaurolophus': 1.78, 'pineapple': 1.41, 'dino-egg': 1.33, 'coconut': 1.25,
++    'mushroom': 0.86, 'pumpkin': 0.99, 'lamp-post': 0.99, 'alpaca': 1.23,
++}
++DECO_YAW_DEG = 30.0
++# The curved street lamp's arm points at the camera at DECO_YAW_DEG, so its footprint is too thin for
++# an 80 px tap rect (footprint + 2 x 24 px pad); turned to 270 degrees, the arm reaches sideways.
++DECO_YAW_OVERRIDE_DEG = {'street-lamp': 270.0}
++BLOB_COLOUR = 'iconInk'
++BLOB_ALPHA = 0.25
++BLOB_RADIUS = 0.42  # times the item's largest XY extent
++BLOB_LIFT = 0.01  # above the ground, against z-fighting
++BLOB_SEGMENTS = 32
+ 
+ RENDER_SIZE = (2048, 1536)
+ 
+@@ -241,61 +292,203 @@ def dist_to_poly(p, poly):
+     return best
+ 
+ 
+-def is_grass(scene, depsgraph, x, y):
++def is_ground(scene, depsgraph, x, y):
+     hit, _loc, _n, _i, obj, _m = scene.ray_cast(depsgraph, Vector((x, y, 50.0)), Vector((0, 0, -1)))
+-    return hit and obj.original.name == GRASS
++    return hit and obj.original.name in GROUND
+ 
+ 
+-def choose_slots(scene, depsgraph, screen, params, centres, station_polys):
+-    rect = params['rect']
+-    clearance = params['hitPad'] + SLOT_HULL_MARGIN
+-    chosen = {}
+-    taken = []
++def ground_z(scene, depsgraph, x, y):
++    hit, loc, _n, _i, _obj, _m = scene.ray_cast(depsgraph, Vector((x, y, 50.0)), Vector((0, 0, -1)))
++    return loc.z if hit else SLOT_Z
++
++
++def slot_problems(scene, depsgraph, p):
++    """Why a slot point is not a clear ground point away from the road (empty = fine)."""
++    out = []
++    road_d = nearest_on_road(p)[0]
++    if road_d < ROAD_HALF_WIDTH + SLOT_ROAD_CLEARANCE + SLOT_FOOTPRINT:
++        out.append(f'{road_d:.2f} m from the road centre')
++    ring = [(p[0] + SLOT_FOOTPRINT * math.cos(math.radians(a)), p[1] + SLOT_FOOTPRINT * math.sin(math.radians(a))) for a in range(0, 360, 45)]
++    if not all(is_ground(scene, depsgraph, x, y) for x, y in [p] + ring):
++        out.append('not clear ground')
++    return out
++
++
++def place_slots(scene, depsgraph, centres):
++    """World points of every station's slots from SLOT_OFFSETS: {sid: [(x, y, z), ...]}."""
++    slots = {}
+     for sid in STATIONS:
++        offsets = SLOT_OFFSETS.get(sid, [])
++        if not offsets:
++            fail(f'station "{sid}" has no SLOT_OFFSETS entry')
+         cx, cy = centres[sid]
+-        cands = []
+-        for r in SLOT_RADII:
+-            row = []
+-            for k in range(0, 360, SLOT_ANGLE_STEP_DEG):
+-                a = math.radians(k)
+-                p = (round(cx + r * math.cos(a), 3), round(cy + r * math.sin(a), 3))
+-                road_d = nearest_on_road(p)[0]
+-                row.append((-road_d, k, p, road_d))
+-            row.sort()
+-            cands.extend(row)
+-        picks = []
+-        why = {'road': 0, 'spacing': 0, 'grass': 0, 'rect': 0, 'station': 0}
+-        for _neg, _k, p, road_d in cands:
+-            if len(picks) == SLOTS_PER_STATION:
+-                break
+-            if road_d < ROAD_HALF_WIDTH + SLOT_ROAD_CLEARANCE + SLOT_FOOTPRINT:
+-                why['road'] += 1
+-                continue
+-            if any(math.dist(p, q) < SLOT_SPACING for q in taken + picks):
+-                why['spacing'] += 1
+-                continue
+-            ring = [(p[0] + SLOT_FOOTPRINT * math.cos(math.radians(a)), p[1] + SLOT_FOOTPRINT * math.sin(math.radians(a))) for a in range(0, 360, 45)]
+-            if not all(is_grass(scene, depsgraph, x, y) for x, y in [p] + ring):
+-                why['grass'] += 1
+-                continue
+-            sx, sy = screen.project((p[0], p[1], 0.45))
+-            if not (rect['x0'] + SLOT_SCREEN_MARGIN <= sx <= rect['x1'] - SLOT_SCREEN_MARGIN and rect['y0'] + SLOT_SCREEN_MARGIN <= sy <= rect['y1'] - SLOT_SCREEN_MARGIN):
+-                why['rect'] += 1
+-                continue
+-            if any(point_in_poly((sx, sy), poly) or dist_to_poly((sx, sy), poly) < clearance for poly in station_polys.values()):
+-                why['station'] += 1
+-                continue
+-            picks.append(p)
+-        if len(picks) < SLOTS_PER_STATION:
+-            # The layout rules (render/check) then report the missing slot by id.
+-            print(f'build_map: WARNING only {len(picks)} grass slot(s) found for station "{sid}" (rejected: {why})')
+-        chosen[sid] = picks
+-        taken.extend(picks)
+-    return chosen
++        pts = []
++        for n, (dx, dy) in enumerate(offsets, 1):
++            p = (round(cx + dx, 3), round(cy + dy, 3))
++            why = slot_problems(scene, depsgraph, p)
++            if why:
++                msg = f'slot.{sid}-{n} at {p}: ' + ', '.join(why)
++                if STRICT_SLOTS:
++                    fail(msg)
++                print(f'build_map: WARNING {msg}')
++            pts.append((p[0], p[1], ground_z(scene, depsgraph, p[0], p[1])))
++        slots[sid] = pts
++    return slots
++
++
++# --- decorations (Story 2.2) ---------------------------------------------------------------------
++
++def load_decorations(path):
++    with open(path, encoding='utf8') as f:
++        items = json.load(f)
++    for it in items:
++        if it['stationId'] not in STATIONS:
++            fail(f'decoration "{it["id"]}": unknown station "{it["stationId"]}"')
++        if not os.path.isfile(it['model']):
++            fail(f'decoration "{it["id"]}": model {it["model"]} is missing')
++    return items
++
++
++def import_model(path):
++    """Imports a GLB (from its own folder, so Textures/colormap.png resolves) or an FBX; returns the new objects."""
++    before = set(bpy.data.objects)
++    images = set(bpy.data.images)
++    if path.lower().endswith('.glb'):
++        bpy.ops.import_scene.gltf(filepath=path)
++    elif path.lower().endswith('.fbx'):
++        bpy.ops.import_scene.fbx(filepath=path)
++    else:
++        fail(f'unsupported model {path}')
++    new = [o for o in bpy.data.objects if o not in before]
++    if not any(o.type == 'MESH' for o in new):
++        fail(f'model {path} has no mesh')
++    if path.lower().endswith('.fbx'):
++        force_opaque(new)  # FBX imports leave Alpha 0: every material becomes Alpha 1 / opaque
++    # Pack new textures: art/map.blend must render without the asset folders.
++    for img in bpy.data.images:
++        if img not in images and img.source == 'FILE' and img.packed_file is None and img.filepath:
++            img.pack()
++    return new
++
++
++def blob_material(colours):
++    m = flat_material('deco-blob', colours[BLOB_COLOUR], roughness=1.0)
++    bsdf = principled(m)
++    bsdf.inputs['Alpha'].default_value = BLOB_ALPHA
++    if hasattr(m, 'surface_render_method'):
++        m.surface_render_method = 'BLENDED'
++    if hasattr(m, 'blend_method'):
++        m.blend_method = 'BLEND'
++    return m
++
++
++def add_blob(name, centre, radius, mat, coll):
++    bm = bmesh.new()
++    bmesh.ops.create_circle(bm, cap_ends=True, segments=BLOB_SEGMENTS, radius=radius)
++    me = bpy.data.meshes.new(name)
++    bm.to_mesh(me)
++    bm.free()
++    me.materials.append(mat)
++    o = bpy.data.objects.new(name, me)
++    o.location = centre
++    o.visible_shadow = False
++    coll.objects.link(o)
++    return o
++
++
++def check_deco_scale(items):
++    """Every catalogue id has a DECO_SCALE entry and every key is a catalogue id (review loop 1)."""
++    ids = [it['id'] for it in items]
++    missing = [i for i in ids if i not in DECO_SCALE]
++    extra = sorted(k for k in DECO_SCALE if k not in ids)
++    if missing:
++        fail(f'DECO_SCALE has no entry for {", ".join(missing)}')
++    if extra:
++        fail(f'DECO_SCALE keys not in the catalogue: {", ".join(extra)}')
++
++
++def build_decorations(items, slots, colours, sprite_parent):
++    """sprite.decoration (detached) with one state.<id> per item, built at its station's slot 1."""
++    group = bpy.data.collections.new('sprite.decoration')
++    sprite_parent.children.link(group)
++    group['bhc_detached'] = 1  # never in the plate (no image, no shadow), rendered one state at a time
++    group['occlude'] = 0  # placed anywhere at runtime: renders alone, like the kart
++    blob_mat = blob_material(colours)
++    built = {}
++    for it in items:
++        did, sid = it['id'], it['stationId']
++        px, py, pz = slots[sid][0]
++        coll = bpy.data.collections.new(f'state.{did}')
++        group.children.link(coll)
++        new = import_model(it['model'])
++        root = add_empty(f'deco.{did}', (0.0, 0.0, 0.0), coll)
++        for o in new:
++            move_to(o, coll)
++        for o in roots(new):
++            o.parent = root
++        root.rotation_euler = (0.0, 0.0, math.radians(DECO_YAW_OVERRIDE_DEG.get(did, DECO_YAW_DEG)))
++        bpy.context.view_layer.update()
++        depsgraph = bpy.context.evaluated_depsgraph_get()
++        pts = eval_world_verts(new, depsgraph)
++        if not pts:
++            fail(f'decoration "{did}" has no visible mesh')
++        lo = [min(p[i] for p in pts) for i in range(3)]
++        hi = [max(p[i] for p in pts) for i in range(3)]
++        size = max(h - l for h, l in zip(hi, lo))
++        s = DECO_SIZE_M * DECO_SCALE.get(did, 1.0) / size
++        root.scale = (s, s, s)
++        root.location = (px - (lo[0] + hi[0]) / 2 * s, py - (lo[1] + hi[1]) / 2 * s, pz - lo[2] * s)
++        extent = max(hi[0] - lo[0], hi[1] - lo[1]) * s
++        add_blob(f'deco-blob.{did}', (px, py, pz + BLOB_LIFT), BLOB_RADIUS * extent, blob_mat, coll)
++        built[did] = {'station': sid, 'objects': list(coll.all_objects)}
++    bpy.context.view_layer.update()
++    return built
+ 
+ 
+-def main():
+-    args = parse_args()
++def footprint_report(screen, params, built, slots, station_polys):
++    """Estimated screen footprints (design px) of every item at every slot of its station; prints the
++    rule breaches the TS gate will report after the render (bbox of the projected vertices)."""
++    depsgraph = bpy.context.evaluated_depsgraph_get()
++    rect = params['rect']
++    pad = params['hitPad']
++    problems = []
++    per_station = {}
++    for did, b in built.items():
++        sid = b['station']
++        pts = [screen.project(p) for p in eval_world_verts(b['objects'], depsgraph)]
++        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
++        pivot = screen.project(slots[sid][0])
++        box = (min(xs) - pivot[0], min(ys) - pivot[1], max(xs) - pivot[0], max(ys) - pivot[1])
++        print(f'build_map: decoration "{did}" ({sid}): {box[2] - box[0]:.0f}x{box[3] - box[1]:.0f} px')
++        if max(box[2] - box[0], box[3] - box[1]) < params['decorationMin']:
++            problems.append(f'decoration "{did}" is under {params["decorationMin"]} px')
++        per_station.setdefault(sid, []).append((did, box))
++    for sid, boxes in per_station.items():
++        unions = []
++        for n, p in enumerate(slots[sid], 1):
++            sx, sy = screen.project(p)
++            u = None
++            for did, (x0, y0, x1, y1) in boxes:
++                fp = (sx + x0, sy + y0, sx + x1, sy + y1)
++                u = fp if u is None else (min(u[0], fp[0]), min(u[1], fp[1]), max(u[2], fp[2]), max(u[3], fp[3]))
++                if fp[0] - pad < rect['x0'] or fp[1] - pad < rect['y0'] or fp[2] + pad > rect['x1'] or fp[3] + pad > rect['y1']:
++                    problems.append(f'"{did}" at slot {sid}-{n}: tap rect leaves the interactive rect')
++                corners = [(fp[0], fp[1]), (fp[2], fp[1]), (fp[2], fp[3]), (fp[0], fp[3])]
++                for other, poly in station_polys.items():
++                    if any(point_in_poly(c, poly) or dist_to_poly(c, poly) < pad for c in corners) or any(fp[0] <= v[0] <= fp[2] and fp[1] <= v[1] <= fp[3] for v in poly):
++                        problems.append(f'"{did}" at slot {sid}-{n}: footprint near station "{other}"')
++            unions.append(u)
++        for i in range(len(unions)):
++            for j in range(i + 1, len(unions)):
++                a, b2 = unions[i], unions[j]
++                if a[0] < b2[2] and b2[0] < a[2] and a[1] < b2[3] and b2[1] < a[3]:
++                    problems.append(f'slots {sid}-{i + 1} and {sid}-{j + 1}: footprints overlap')
++    for p in problems:
++        print(f'build_map: CHECK {p}')
++    return problems
++
++
++def build(args):
+     params = args['params']
+     scene = bpy.context.scene
+ 
+@@ -385,13 +578,24 @@ def main():
+         pt.co = (x, y, ROAD_TOP_Z, 1.0)
+     layout.objects.link(bpy.data.objects.new('path.road', curve))
+ 
+-    slots = choose_slots(scene, depsgraph, screen, params, centres, station_polys)
+-    for sid, picks in slots.items():
+-        for n, (x, y) in enumerate(picks, 1):
+-            add_empty(f'slot.{sid}-{n}', (x, y, 0.45), layout)
++    slots = place_slots(scene, depsgraph, centres)
++    for sid, pts in slots.items():
++        for n, p in enumerate(pts, 1):
++            add_empty(f'slot.{sid}-{n}', p, layout)
++
++    decorations = load_decorations(args['decorations']) if 'decorations' in args else []
++    if decorations:
++        check_deco_scale(decorations)
++    built = build_decorations(decorations, slots, params['colours'], sprite_parent) if decorations else {}
++    check_no_subsurf()
++    report = footprint_report(screen, params, built, slots, station_polys) if built else []
++
++    if args.get('out'):
++        bpy.ops.wm.save_as_mainfile(filepath=args['out'], compress=True)
++        print(f'build_map: saved {args["out"]}')
++    return {'scene': scene, 'screen': screen, 'centres': centres, 'station_polys': station_polys, 'slots': slots, 'built': built, 'report': report}
+ 
+-    bpy.ops.wm.save_as_mainfile(filepath=args['out'], compress=True)
+-    print(f'build_map: saved {args["out"]}')
+ 
++if __name__ == '__main__':
++    build(parse_args())
+ 
+-main()
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/render/blender/render_screen.py b/app/tools/render/blender/render_screen.py
+index 9e48260..d794887 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/render/blender/render_screen.py
++++ b/app/tools/render/blender/render_screen.py
+@@ -15,7 +15,13 @@
+ #                                     otherwise the sprite renders alone;
+ #                                   - `movable` = 1: no shadow in the plate (default: not holdout);
+ #                                   - `states` = JSON {state: [timeline frames]} → <state>/<nn> per
+-#                                     frame in order (default {"idle": [1]}).
++#                                     frame in order (default {"idle": [1]});
++#                                   - Story 2.2: `bhc_detached` = 1: the group is excluded from the
++#                                     plate entirely (hide_render: no image, no shadow) — the map
++#                                     decorations, placed anywhere at runtime.
++#                                   Story 2.2: a group with `state.<state>` child collections renders
++#                                   one pass per child (other states hidden) as <object>/<state>/00,
++#                                   at timeline frame 1, instead of the `states` prop.
+ #                                   The plate renders at timeline frame 1.
+ #   raw.json                        every object of the `layout` collection projected to render px:
+ #                                   hit = every evaluated vertex, anchor/slot = the origin,
+@@ -67,6 +73,18 @@ def states_of(c):
+     return states
+ 
+ 
++def detached_of(c):
++    return bool(c.get('bhc_detached', 0))
++
++
++STATE_PREFIX = 'state.'
++
++
++def state_children(c):
++    """Story 2.2: the `state.<state>` child collections of a sprite group, by name."""
++    return sorted((k for k in c.children if k.name.startswith(STATE_PREFIX)), key=lambda k: k.name)
++
++
+ def sprite_collections():
+     return sorted((c for c in bpy.data.collections if c.name.startswith('sprite.')), key=lambda c: c.name)
+ 
+@@ -150,17 +168,22 @@ def main():
+             json.dump(raw, f, indent=1, sort_keys=True)
+         return
+ 
+-    # Plate: sprites hidden from the camera, still casting shadows.
++    # Plate: sprites hidden from the camera, still casting shadows; detached groups not rendered at all.
+     film = r.film_transparent
++    detached = [(o, o.hide_render) for c in sprites if detached_of(c) for o in sprite_objs[c.name]]
+     for o in in_sprite:
+         o.visible_camera = False
+     for o in moving:
+         o.visible_shadow = False
++    for o, _hide in detached:
++        o.hide_render = True
+     render_to(scene, os.path.join(out, 'bg.png'))
+     for o in in_sprite:
+         o.visible_camera = True
+     for o in moving:
+         o.visible_shadow = True
++    for o, hide in detached:
++        o.hide_render = hide
+ 
+     # Full-frame transparent renders per sprite collection and state frame.
+     r.film_transparent = True
+@@ -176,12 +199,27 @@ def main():
+                 o.is_holdout = True
+             else:
+                 o.hide_render = True
+-        for state, timeline in states_of(c).items():
+-            for n, f in enumerate(timeline):
+-                scene.frame_set(int(f))
+-                frame = f'{name}/{state}/{n:02d}'
+-                render_to(scene, os.path.join(out, 'frames', name, state, f'{n:02d}.png'))
+-                raw['frames'].append(frame)
++        children = state_children(c)
++        if children:
++            # One full-frame pass per `state.<state>` child, the other states hidden.
++            members = {k.name: list(k.all_objects) for k in children}
++            scene.frame_set(PLATE_FRAME)
++            for k in children:
++                state = k.name[len(STATE_PREFIX):]
++                hidden = [(o, o.hide_render) for other, objs in members.items() if other != k.name for o in objs]
++                for o, _hide in hidden:
++                    o.hide_render = True
++                render_to(scene, os.path.join(out, 'frames', name, state, '00.png'))
++                raw['frames'].append(f'{name}/{state}/00')
++                for o, hide in hidden:
++                    o.hide_render = hide
++        else:
++            for state, timeline in states_of(c).items():
++                for n, f in enumerate(timeline):
++                    scene.frame_set(int(f))
++                    frame = f'{name}/{state}/{n:02d}'
++                    render_to(scene, os.path.join(out, 'frames', name, state, f'{n:02d}.png'))
++                    raw['frames'].append(frame)
+         scene.frame_set(PLATE_FRAME)
+         for o, hide, hold in saved:
+             o.hide_render = hide
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/render/build.ts b/app/tools/render/build.ts
+index 0b7b5b4..00939fc 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/render/build.ts
++++ b/app/tools/render/build.ts
+@@ -2,9 +2,14 @@
+ // scene with tools/render/blender/<builder>.py in Blender 5.2 (background mode).
+ // Blender is resolved and its version checked before any work (BLENDER_BIN, then `blender` on PATH).
+ // The builder writes into a temp dir; art/<screen>.blend is replaced only after Blender exits 0.
++// Story 2.2: the map builder also gets the decoration catalogue (content/decorations.ts) as JSON,
++// `[{id, stationId, model}]` with absolute model paths (`--decorations <file>`); a missing model file
++// fails the build before Blender runs, naming it.
+ import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+ import { join, resolve } from 'node:path';
+ import { fileURLToPath } from 'node:url';
++import { DECORATIONS } from '../../src/content/decorations.ts';
++import { GAME_IDS } from '../../src/content/types.ts';
+ import { Tokens } from '../../src/core/tokens.ts';
+ import { RENDER_SCALE, layoutLimits } from '../layout/rules.ts';
+ import { resolveBlender, type Env } from '../shared/binaries.ts';
+@@ -19,6 +24,8 @@ export interface BuildParams {
+   draggableMinSize: number;
+   rowGap: number;
+   hitPad: number;
++  /** Story 2.2: decorationItem.minSize (the builder's footprint report). */
++  decorationMin: number;
+   renderScale: number;
+   design: { width: number; height: number };
+   rect: { x0: number; y0: number; x1: number; y1: number };
+@@ -38,17 +45,41 @@ export function buildParams(): BuildParams {
+     draggableMinSize: Tokens.components.draggableItem.minSize,
+     rowGap: Tokens.ui.iceCreamRowGap,
+     hitPad: Tokens.spacing.hitPad,
++    decorationMin: Tokens.components.decorationItem.minSize,
+     renderScale: RENDER_SCALE,
+     design: { width: Tokens.design.width, height: Tokens.design.height },
+     rect: layoutLimits().rect,
+   };
+ }
+ 
++/** The project's `assets/` folder (CC0 model packs; not shipped). */
++export const ASSETS_DIR = join(PROJECT_DIR, 'assets');
++
++/** One decoration as build_map.py imports it. */
++export interface DecorationModel {
++  id: string;
++  stationId: string;
++  /** Absolute path of the .glb/.fbx. */
++  model: string;
++}
++
++/** The catalogue in GAME_IDS order, model paths resolved under `assetsDir`. */
++export function decorationModels(assetsDir: string = ASSETS_DIR): DecorationModel[] {
++  return GAME_IDS.flatMap((stationId) => DECORATIONS[stationId].map((d) => ({ id: d.id, stationId, model: join(assetsDir, ...d.model.split('/')) })));
++}
++
++/** Screens whose builder imports the decoration models. */
++const DECORATED_SCREENS = new Set(['map']);
++
+ export interface BuildDeps {
+   env: Env;
+   run: Runner;
+   resolve: (env: Env) => string;
+   log: (msg: string) => void;
++  /** Whether a model file exists (default: fs). */
++  exists?: (path: string) => boolean;
++  /** Where the model packs live (default: <project>/assets). */
++  assetsDir?: string;
+ }
+ 
+ /** Builds art/<screen>.blend; throws on any failure (nothing replaced). */
+@@ -57,13 +88,29 @@ export function build(screenArg: string | undefined, deps: BuildDeps): string {
+   const screen = screenSpec(screenArg);
+   const source = join(PROJECT_DIR, screen.source);
+   if (!existsSync(source)) throw new Error(`source scene ${screen.source} is missing`);
++  const decorations = DECORATED_SCREENS.has(screen.id) ? decorationModels(deps.assetsDir) : undefined;
++  if (decorations) {
++    const exists = deps.exists ?? existsSync;
++    const missing = decorations.filter((d) => !exists(d.model));
++    if (missing.length > 0) {
++      throw new Error(`decoration model(s) missing: ${missing.map((d) => `"${d.id}" → ${d.model}`).join(', ')}`);
++    }
++  }
+   const tmp = mkdtempSync(join(ART_DIR, `.tmp-${screen.id}-`));
+   try {
+     const params = join(tmp, 'params.json');
+     writeFileSync(params, `${JSON.stringify(buildParams(), null, 2)}\n`);
+     const out = join(tmp, `${screen.id}.blend`);
++    const extra: string[] = [];
++    if (decorations) {
++      const file = join(tmp, 'decorations.json');
++      writeFileSync(file, `${JSON.stringify(decorations, null, 2)}\n`);
++      extra.push('--decorations', file);
++    }
+     deps.log(`art:build: building art/${screen.id}.blend with Blender (${bin})…`);
+-    runBlender(deps.run, bin, blenderArgs(source, join(BLENDER_SCRIPTS, screen.builder), ['--out', out, '--params', params]));
++    const result = runBlender(deps.run, bin, blenderArgs(source, join(BLENDER_SCRIPTS, screen.builder), ['--out', out, '--params', params, ...extra]));
++    // The builder's own report (Story 2.2: decoration sizes, slot warnings, estimated rule breaches).
++    for (const line of result.stdout.split(/\r?\n/)) if (/^build_[a-z_]+: /.test(line)) deps.log(line);
+     if (!existsSync(out)) throw new Error(`the builder did not write ${screen.id}.blend`);
+     renameSync(out, blendPath(screen.id));
+     return blendPath(screen.id);
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/render/render.test.ts b/app/tools/render/render.test.ts
+index eb2ac7d..ff416dc 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-2/app/tools/render/render.test.ts
++++ b/app/tools/render/render.test.ts
+@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
+ import { STATIONS } from '../../src/content/stations.ts';
+ import { resolveBlender } from '../shared/binaries.ts';
+ import { ART_DIR, RENDER_DIR, blenderArgs, runBlender, screenSpec, tail } from './blender.ts';
+-import { build, buildParams } from './build.ts';
++import { ASSETS_DIR, build, buildParams, decorationModels } from './build.ts';
+ import { layoutFromRaw, layoutPath, previewSvg, render, replaceDir } from './render.ts';
+ import type { RawProjection } from '../layout/to-layout.ts';
+ 
+@@ -65,6 +65,37 @@ describe('art:build', () => {
+     expect(snapshot(ART_DIR)).toEqual(before);
+   });
+ 
++  it('Story 2.2: the map catalogue is 28 models with absolute paths, all present in assets/', () => {
++    const models = decorationModels();
++    expect(models).toHaveLength(28);
++    expect(models[0]).toEqual({ id: 'parasol', stationId: 'ice-cream', model: join(ASSETS_DIR, 'kenney', 'kenney_city-kit-commercial_2.1', 'Models', 'GLB format', 'detail-parasol-a.glb') });
++    expect(models.filter((m) => !existsSync(m.model))).toEqual([]);
++  });
++
++  it('Story 2.2: a missing model fails before Blender runs, naming it; art/ untouched', () => {
++    const before = snapshot(ART_DIR);
++    const run = vi.fn();
++    const exists = (p: string): boolean => !p.endsWith('Puffer.fbx');
++    expect(() => build('map', { ...deps(() => 'blender', run), exists })).toThrow(/decoration model\(s\) missing: "puffer" → .*Puffer\.fbx/);
++    expect(run).not.toHaveBeenCalled();
++    expect(snapshot(ART_DIR)).toEqual(before);
++  });
++
++  it('Story 2.2: build_map.py gets --decorations with the catalogue JSON; ice-cream does not', () => {
++    let seen: unknown;
++    let args: readonly string[] = [];
++    const run = vi.fn((_bin: string, a: readonly string[]) => {
++      args = a;
++      const i = a.indexOf('--decorations');
++      if (i >= 0) seen = JSON.parse(readFileSync(a[i + 1]!, 'utf8'));
++      return { status: 1, stdout: '', stderr: 'stop here' };
++    });
++    expect(() => build('map', deps(() => 'blender', run))).toThrow(/stop here/);
++    expect(seen).toEqual(decorationModels());
++    expect(() => build('ice-cream', deps(() => 'blender', run))).toThrow(/stop here/);
++    expect(args).not.toContain('--decorations');
++  });
++
+   it('a failing builder leaves art/ untouched', () => {
+     const before = snapshot(ART_DIR);
+     const run = vi.fn(() => ({ status: 1, stdout: '', stderr: 'RuntimeError: build_map: object "X" has a subdivision modifier' }));

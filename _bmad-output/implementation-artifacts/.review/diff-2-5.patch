@@ -1,0 +1,1788 @@
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/content/types.ts b/app/src/content/types.ts
+index fc1427c..83e01e7 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/content/types.ts
++++ b/app/src/content/types.ts
+@@ -1,4 +1,5 @@
+ // Shared content types (AD-1, AD-6). `content/` imports only types from other layers.
++import type { FlavourId } from './games/ice-cream.ts';
+ 
+ /** Every mini-game id. Scene key === GameId === stationId (AD-1). */
+ export const GAME_IDS = [
+@@ -19,14 +20,37 @@ export type HintLevel = 0 | 1 | 2 | 3 | 4;
+ /** JSON-only data (no object references) — used for resume snapshots (AD-2). */
+ export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+ 
+-/** Resume snapshot written by Map on `round:abandon` (AD-2). */
+-export interface Snapshot {
++/**
++ * The per-game `partial` of a resume snapshot (Story 2.5, AD-2): what a game needs to rebuild its open
++ * question. Every game is declared now (shapes from the Story 3.2/3.4/3.6/4.2/4.4/4.5/4.6 ACs), so
++ * Epics 3/4 implement them without editing the contract. Type aliases (not interfaces) stay assignable
++ * to JsonValue.
++ */
++export type SnapshotPartials = {
++  'ice-cream': { placed: FlavourId[] };
++  pizza: { placed: number[]; baked: boolean };
++  'dino-puzzle': { placed: string[] };
++  'shadow-match': Record<string, never>;
++  race: { traceIndex: number };
++  fishing: Record<string, never>;
++  'touch-talk': { sceneId: string; touchedIds: string[] };
++};
++
++/** The closed questions of a round so far (Story 2.5): a resumed round judges `nextLevel` on all of them. */
++export type TallyState = { questions: number; firstTryCorrect: number; maxHintLevel: HintLevel };
++
++/**
++ * Resume snapshot written by Map on `round:abandon` (AD-2, Story 2.5), plain JSON. MiniGameBase composes
++ * `v`, `level`, `seed` and `tally`; the game supplies `questionIndex` and its `partial`.
++ */
++export type Snapshot<G extends GameId = GameId> = {
+   v: 1;
+   level: number;
+   seed: number;
+   questionIndex: number;
+-  partial: JsonValue;
+-}
++  partial: SnapshotPartials[G];
++  tally?: TallyState;
++};
+ 
+ /**
+  * One island decoration in a predefined slot (Epic 2, AD-2), persisted by core/progress-store.
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/post-round-chain.test.ts b/app/src/core/post-round-chain.test.ts
+index d04d073..86fb0d7 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/post-round-chain.test.ts
++++ b/app/src/core/post-round-chain.test.ts
+@@ -1,6 +1,6 @@
+ import { describe, expect, it, vi } from 'vitest';
+ import type { GrantResult, RoundOutcome } from '../content/types';
+-import { newestPerSlot, PostRoundChain, routeChainEnd, routeRoundAbandon, routeRoundComplete, type ChainDeps, type ChainFinish } from './post-round-chain';
++import { keepAbandonSnapshot, newestPerSlot, PostRoundChain, routeChainEnd, routeRoundAbandon, routeRoundComplete, type ChainDeps, type ChainFinish } from './post-round-chain';
+ import { opensPlayAgain } from './play-again';
+ import { ProgressStoreService } from './progress-store';
+ import { SessionStore } from './session-store';
+@@ -122,7 +122,7 @@ function harness(opts: { pending?: GrantResult[]; auto?: boolean } = {}) {
+ describe('PostRoundChain › complete', () => {
+   it('L1, 4/4 first try, one pending: setDifficulty + clearResume synchronously, then the exact order 1 → 6', async () => {
+     const h = harness({ pending: [grant('ice-cream-1', 'parasol', 1)] });
+-    h.session.resume['ice-cream'] = { v: 1, level: 1, seed: 1, questionIndex: 0, partial: null };
++    h.session.resume['ice-cream'] = { v: 1, level: 1, seed: 1, questionIndex: 0, partial: { placed: [] } };
+     const p = h.chain.start({ kind: 'complete', gameId: 'ice-cream', outcome: PERFECT, startedLevel: 1 });
+     // Steps 1–3 ran before `start` returned its promise.
+     expect(h.calls).toEqual(['setDifficulty ice-cream 2', 'clearResume ice-cream', 'stopGameAndWake']);
+@@ -451,3 +451,34 @@ describe('chain end → onChainEnd hook (Story 2.4 regression)', () => {
+     expect(opensPlayAgain({ kind: 'complete', gameId: 'pizza' }, isGame)).toBe(false);
+   });
+ });
++
++describe('keepAbandonSnapshot (Story 2.5)', () => {
++  const SNAP = { v: 1 as const, level: 1, seed: 3, questionIndex: 1, partial: { placed: ['mint' as const] }, tally: { questions: 1, firstTryCorrect: 1, maxHintLevel: 0 as const } };
++
++  it('the running game: stored as a copy, before the return path', () => {
++    const s = new SessionStore();
++    expect(keepAbandonSnapshot({ id: 'ice-cream', level: 1 }, 'ice-cream', SNAP, s)).toBe(true);
++    expect(s.getResume('ice-cream')).toEqual(SNAP);
++    expect(s.getResume('ice-cream')).not.toBe(SNAP);
++  });
++
++  it.each([
++    ['no running game', undefined],
++    ['another running game', { id: 'pizza' as const, level: 0 }],
++  ])('%s: nothing stored', (_name, running) => {
++    const s = new SessionStore();
++    expect(keepAbandonSnapshot(running, 'ice-cream', SNAP, s)).toBe(false);
++    expect(s.resumeIds()).toEqual([]);
++  });
++
++  it('a throwing store (cycle / BigInt) never throws: one warn, nothing stored, the route still follows', () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const s = new SessionStore();
++    const bad = { ...SNAP, partial: { placed: [] as never[], big: BigInt(1) } } as never;
++    expect(() => keepAbandonSnapshot({ id: 'ice-cream', level: 1 }, 'ice-cream', bad, s)).not.toThrow();
++    expect(s.resumeIds()).toEqual([]);
++    expect(warn).toHaveBeenCalledOnce();
++    expect(routeRoundAbandon({ id: 'ice-cream', level: 1 }, 'ice-cream', 0, false)).toEqual({ action: 'fade', gameId: 'ice-cream' });
++    warn.mockRestore();
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/post-round-chain.ts b/app/src/core/post-round-chain.ts
+index ee07ac9..f001f4f 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/post-round-chain.ts
++++ b/app/src/core/post-round-chain.ts
+@@ -14,7 +14,7 @@
+ // taps during the chain are queued (`queueTap`, the last one wins) and handed to `end`. deps.wait and
+ // every animation run on the scene clock and tweens (never setTimeout), so a paused scene freezes the
+ // chain mid-step. In a dev build `log` prints `post-round: <kind> <gameId> → onChainEnd <ms> ms`.
+-import type { GameId, GrantResult, RoundOutcome } from '../content/types';
++import type { GameId, GrantResult, RoundOutcome, Snapshot } from '../content/types';
+ import { nextLevel } from './difficulty';
+ import { Tokens } from './tokens';
+ 
+@@ -103,6 +103,27 @@ export function routeRoundAbandon(running: RunningGame | undefined, gameId: Game
+   return { action: 'fade', gameId };
+ }
+ 
++/**
++ * Story 2.5: on `round:abandon`, keeps the snapshot of the running game only (`store.setResume`), before
++ * the return path. Never throws: a store failure (a cycle or BigInt in the snapshot) warns once and the
++ * child still goes home. Returns true when the snapshot was stored.
++ */
++export function keepAbandonSnapshot(
++  running: RunningGame | undefined,
++  gameId: GameId,
++  snapshot: Snapshot,
++  store: { setResume(id: GameId, s: Snapshot): void },
++): boolean {
++  if (!running || running.id !== gameId) return false;
++  try {
++    store.setResume(gameId, snapshot);
++    return true;
++  } catch (error) {
++    console.warn(`post-round: the "${gameId}" snapshot could not be kept — no resume point`, error);
++    return false;
++  }
++}
++
+ /** What Map does when the chain ends (Story 2.4 regression guard: a queued tap never reaches the hook). */
+ export type ChainEndRoute =
+   | { readonly action: 'tap'; readonly stationId: string }
+diff --git a/app/src/core/resume-marks.test.ts b/app/src/core/resume-marks.test.ts
+new file mode 100644
+index 0000000..72ed47a
+--- /dev/null
++++ b/app/src/core/resume-marks.test.ts
+@@ -0,0 +1,64 @@
++// Story 2.5 I/O matrix (mark rows): placement on the station's top-right corner, the clamp into the
++// interactive rect, and the real map layout for all 7 stations.
++import { readFileSync } from 'node:fs';
++import { describe, expect, it } from 'vitest';
++import type { Point, ScreenLayout } from '../content/layout-types';
++import { STATIONS } from '../content/stations';
++import { GAME_IDS } from '../content/types';
++import { playAgainInteractiveRect } from './play-again-layout';
++import { RESUME_MARK_EXTENT, RESUME_MARK_OUTLINE_PX, resumeMarkPlan } from './resume-marks';
++import { Tokens } from './tokens';
++
++const AREA = playAgainInteractiveRect();
++const R = Tokens.ui.resumeMarkRadiusPx;
++const square = (x0: number, y0: number, x1: number, y1: number): Point[] => [
++  { x: x0, y: y0 },
++  { x: x1, y: y0 },
++  { x: x1, y: y1 },
++  { x: x0, y: y1 },
++];
++
++describe('resumeMarkPlan', () => {
++  it('one mark per id, on the bbox top-right corner moved inwards by the radius', () => {
++    const hits = { 'ice-cream': square(300, 300, 500, 450), pizza: square(600, 200, 700, 300) };
++    expect(resumeMarkPlan(['ice-cream', 'pizza'], hits, AREA)).toEqual([
++      { id: 'ice-cream', x: 500 - R, y: 300 + R },
++      { id: 'pizza', x: 700 - R, y: 200 + R },
++    ]);
++  });
++
++  it('an id without a hit polygon gets no mark', () => {
++    expect(resumeMarkPlan(['race'], { 'ice-cream': square(300, 300, 500, 450) }, AREA)).toEqual([]);
++  });
++
++  it('a station touching the edges is clamped so the whole mark lies inside the interactive rect', () => {
++    const [m] = resumeMarkPlan(['ice-cream'], { 'ice-cream': square(900, 0, 1024, 100) }, AREA);
++    expect(m).toEqual({ id: 'ice-cream', x: AREA.x1 - RESUME_MARK_EXTENT, y: AREA.y0 + RESUME_MARK_EXTENT });
++  });
++
++  it('an interactive rect narrower than the mark: centred in it on that axis', () => {
++    const narrow = { x0: 100, y0: 100, x1: 130, y1: 500 };
++    const [m] = resumeMarkPlan(['ice-cream'], { 'ice-cream': square(0, 200, 400, 300) }, narrow);
++    expect(m).toEqual({ id: 'ice-cream', x: 115, y: 200 + R });
++  });
++
++  it('the extent covers the annulus plus its outline', () => {
++    expect(RESUME_MARK_EXTENT).toBe(R + RESUME_MARK_OUTLINE_PX);
++  });
++});
++
++describe('resumeMarkPlan on the real map layout', () => {
++  const layout = JSON.parse(readFileSync(new URL('../content/generated/map.layout.json', import.meta.url), 'utf8')) as ScreenLayout;
++
++  it('every one of the 7 stations gets a mark whose whole circle lies inside the interactive rect', () => {
++    expect(STATIONS.map((s) => s.id).sort()).toEqual([...GAME_IDS].sort());
++    const plan = resumeMarkPlan(GAME_IDS, layout.hits);
++    expect(plan.map((m) => m.id)).toEqual([...GAME_IDS]);
++    for (const m of plan) {
++      expect(m.x - RESUME_MARK_EXTENT, m.id).toBeGreaterThanOrEqual(AREA.x0);
++      expect(m.x + RESUME_MARK_EXTENT, m.id).toBeLessThanOrEqual(AREA.x1);
++      expect(m.y - RESUME_MARK_EXTENT, m.id).toBeGreaterThanOrEqual(AREA.y0);
++      expect(m.y + RESUME_MARK_EXTENT, m.id).toBeLessThanOrEqual(AREA.y1);
++    }
++  });
++});
+diff --git a/app/src/core/resume-marks.ts b/app/src/core/resume-marks.ts
+new file mode 100644
+index 0000000..9b8b378
+--- /dev/null
++++ b/app/src/core/resume-marks.ts
+@@ -0,0 +1,43 @@
++// Resume marks (Story 2.5, UX-DR38), pure: where Map draws the small static ring on each station that
++// holds an in-session resume point. One mark per id, centred on the top-right corner of the bbox of the
++// station's hit polygon, moved inwards by ui.resumeMarkRadiusPx on both axes, then clamped so the whole
++// mark (radius plus its ink outline) lies inside the interactive rect (safeRect minus the edge dead bands,
++// spec-2-2's rule). An id with no hit polygon gets no mark.
++import type { Point } from '../content/layout-types';
++import { boundingBox } from './input/polygon';
++import { playAgainInteractiveRect, type InteractiveRect } from './play-again-layout';
++import { Tokens } from './tokens';
++
++/** Width (design px) of the ink outline drawn outside the annulus and inside its hole. */
++export const RESUME_MARK_OUTLINE_PX = 2;
++
++/** The drawn mark's outer radius: the annulus plus its outer ink outline. */
++export const RESUME_MARK_EXTENT = Tokens.ui.resumeMarkRadiusPx + RESUME_MARK_OUTLINE_PX;
++
++export interface ResumeMarkAt {
++  readonly id: string;
++  readonly x: number;
++  readonly y: number;
++}
++
++const clamp = (v: number, lo: number, hi: number): number => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
++
++/** The mark centres for `ids` (in the given order); ids without a hit polygon are skipped. */
++export function resumeMarkPlan(
++  ids: readonly string[],
++  hits: Readonly<Record<string, readonly Point[]>>,
++  interactive: InteractiveRect = playAgainInteractiveRect(),
++): ResumeMarkAt[] {
++  const r = Tokens.ui.resumeMarkRadiusPx;
++  const e = RESUME_MARK_EXTENT;
++  const out: ResumeMarkAt[] = [];
++  for (const id of ids) {
++    const hit = hits[id];
++    if (!hit || hit.length === 0) continue;
++    const box = boundingBox(hit);
++    const x = clamp(box.x + box.width - r, interactive.x0 + e, interactive.x1 - e);
++    const y = clamp(box.y + r, interactive.y0 + e, interactive.y1 - e);
++    out.push({ id, x, y });
++  }
++  return out;
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/round-guard.test.ts b/app/src/core/round-guard.test.ts
+index b9b1875..f03435e 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/round-guard.test.ts
++++ b/app/src/core/round-guard.test.ts
+@@ -3,7 +3,7 @@ import type { RoundOutcome, Snapshot } from '../content/types';
+ import { Bus } from './bus';
+ import { RoundGuard } from './round-guard';
+ 
+-const SNAP: Snapshot = { v: 1, level: 0, seed: 7, questionIndex: 0, partial: null };
++const SNAP: Snapshot = { v: 1, level: 0, seed: 7, questionIndex: 0, partial: { placed: [] } };
+ const OUTCOME: RoundOutcome = { gameId: 'ice-cream', questions: 3, firstTryCorrect: 3, maxHintLevel: 0 };
+ 
+ function setup() {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/round-tally.test.ts b/app/src/core/round-tally.test.ts
+index 6d6ed21..c675b60 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/round-tally.test.ts
++++ b/app/src/core/round-tally.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, expect, it } from 'vitest';
++import { nextLevel } from './difficulty';
+ import { RoundTally } from './round-tally';
+ 
+ describe('RoundTally', () => {
+@@ -59,3 +60,48 @@ describe('RoundTally', () => {
+     expect(t.outcome('ice-cream')).toMatchObject({ questions: 1, firstTryCorrect: 0, maxHintLevel: 4 });
+   });
+ });
++
++describe('RoundTally state / restore (Story 2.5)', () => {
++  it('state covers closed questions only (the open question is left out)', () => {
++    const t = new RoundTally();
++    t.beginQuestion();
++    t.level(2);
++    t.questionDone();
++    t.beginQuestion();
++    t.level(4);
++    expect(t.state()).toEqual({ questions: 1, firstTryCorrect: 0, maxHintLevel: 2 });
++    expect(t.outcome('ice-cream').maxHintLevel).toBe(4);
++  });
++
++  it('restore sums the counts and takes the max', () => {
++    const t = new RoundTally();
++    t.restore({ questions: 2, firstTryCorrect: 1, maxHintLevel: 3 });
++    t.beginQuestion();
++    t.level(1);
++    t.questionDone();
++    expect(t.state()).toEqual({ questions: 3, firstTryCorrect: 1, maxHintLevel: 3 });
++    expect(t.outcome('ice-cream')).toEqual({ gameId: 'ice-cream', questions: 3, firstTryCorrect: 1, maxHintLevel: 3 });
++  });
++
++  it('tally carry: q1 hint 4, Home, resume, q2–q3 clean → 3 questions, 2 first try, max 4 → nextLevel −1', () => {
++    const before = new RoundTally();
++    before.beginQuestion();
++    before.level(4);
++    before.questionDone();
++    before.level(0);
++    before.beginQuestion(); // q2 open when Home is tapped: not kept
++    const carried = before.state();
++    expect(carried).toEqual({ questions: 1, firstTryCorrect: 0, maxHintLevel: 4 });
++
++    const after = new RoundTally();
++    after.restore(carried);
++    for (let q = 0; q < 2; q++) {
++      after.beginQuestion();
++      after.questionDone();
++      after.level(0);
++    }
++    const outcome = after.outcome('ice-cream');
++    expect(outcome).toEqual({ gameId: 'ice-cream', questions: 3, firstTryCorrect: 2, maxHintLevel: 4 });
++    expect(nextLevel(1, outcome, 4)).toBe(0);
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/round-tally.ts b/app/src/core/round-tally.ts
+index 8aaabfc..91d97e4 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/round-tally.ts
++++ b/app/src/core/round-tally.ts
+@@ -1,11 +1,15 @@
+ // Round tally (Story 1.10), pure and game-agnostic: MiniGameBase feeds it from the hint protocol
+ // (`beginQuestion`, `questionDone`, `hint:level`) so every game reports a correct RoundOutcome.
+-import type { GameId, HintLevel, RoundOutcome } from '../content/types';
++// Story 2.5: `state()` (closed questions only) travels in a resume snapshot, and `restore(s)` adds a
++// snapshot's closed questions back before a resumed round begins its first question.
++import type { GameId, HintLevel, RoundOutcome, TallyState } from '../content/types';
+ 
+ export class RoundTally {
+   private closed = 0;
+   private firstTry = 0;
+   private roundMax: HintLevel = 0;
++  /** The max level over closed questions only (what a snapshot keeps). */
++  private closedMax: HintLevel = 0;
+   /** The open question's own max level; undefined while no question is open. */
+   private open: HintLevel | undefined = undefined;
+ 
+@@ -26,6 +30,7 @@ export class RoundTally {
+     if (this.open === undefined) return;
+     this.closed += 1;
+     if (this.open === 0) this.firstTry += 1;
++    if (this.open > this.closedMax) this.closedMax = this.open;
+     this.open = undefined;
+   }
+ 
+@@ -33,6 +38,19 @@ export class RoundTally {
+     return this.closed;
+   }
+ 
++  /** The closed questions so far (an open question is not included). */
++  state(): TallyState {
++    return { questions: this.closed, firstTryCorrect: this.firstTry, maxHintLevel: this.closedMax };
++  }
++
++  /** Adds the closed questions of `s` (counts summed, max taken); called before any question begins. */
++  restore(s: TallyState): void {
++    this.closed += s.questions;
++    this.firstTry += s.firstTryCorrect;
++    if (s.maxHintLevel > this.closedMax) this.closedMax = s.maxHintLevel;
++    if (s.maxHintLevel > this.roundMax) this.roundMax = s.maxHintLevel;
++  }
++
+   outcome(gameId: GameId): RoundOutcome {
+     return { gameId, questions: this.closed, firstTryCorrect: this.firstTry, maxHintLevel: this.roundMax };
+   }
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/session-store.test.ts b/app/src/core/session-store.test.ts
+index b0fed01..a603ddf 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/session-store.test.ts
++++ b/app/src/core/session-store.test.ts
+@@ -1,6 +1,12 @@
+-import { describe, expect, it } from 'vitest';
++import { readdirSync, readFileSync } from 'node:fs';
++import { dirname, join, relative, resolve, sep } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { describe, expect, it, vi } from 'vitest';
++import { LAYOUTS } from '../content/layouts';
++import type { Snapshot } from '../content/types';
+ import { ProgressStoreService, type StorageLike } from './progress-store';
+-import { SessionStore } from './session-store';
++import { resumeMarkPlan } from './resume-marks';
++import { resumeStartData, SessionStore, takeStartData } from './session-store';
+ 
+ function memoryStorage(): StorageLike {
+   const data = new Map<string, string>();
+@@ -18,7 +24,7 @@ describe('SessionStore', () => {
+ 
+   it('clearResume (Story 2.3) removes only that game', () => {
+     const s = new SessionStore();
+-    const snap = { v: 1 as const, level: 1, seed: 3, questionIndex: 2, partial: null };
++    const snap = { v: 1 as const, level: 1, seed: 3, questionIndex: 2, partial: { placed: [] } };
+     s.resume['ice-cream'] = snap;
+     s.resume.pizza = { ...snap, level: 0 };
+     s.clearResume('ice-cream');
+@@ -56,3 +62,140 @@ describe('SessionStore', () => {
+     expect(new SessionStore().startData('ice-cream', 2, () => 0, after).level).toBe(1);
+   });
+ });
++
++describe('SessionStore resume points (Story 2.5)', () => {
++  const SNAP: Snapshot = {
++    v: 1,
++    level: 1,
++    seed: 77,
++    questionIndex: 1,
++    partial: { placed: ['strawberry'] },
++    tally: { questions: 1, firstTryCorrect: 1, maxHintLevel: 0 },
++  };
++
++  it('setResume keeps a deep copy (never the same object); getResume returns it', () => {
++    const s = new SessionStore();
++    const live = JSON.parse(JSON.stringify(SNAP)) as Snapshot<'ice-cream'>;
++    s.setResume('ice-cream', live);
++    const held = s.getResume('ice-cream');
++    expect(held).toEqual(SNAP);
++    expect(held).not.toBe(live);
++    live.partial.placed.push('mint');
++    expect(s.getResume('ice-cream')).toEqual(SNAP);
++    expect(s.getResume('pizza')).toBeUndefined();
++  });
++
++  it('two games: set ice-cream then pizza, clear ice-cream → pizza kept; resumeIds in GAME_IDS order; one mark', () => {
++    const s = new SessionStore();
++    s.setResume('pizza', { ...SNAP, partial: { placed: [1], baked: false } });
++    s.setResume('ice-cream', SNAP);
++    expect(s.resumeIds()).toEqual(['ice-cream', 'pizza']);
++    s.clearResume('ice-cream');
++    expect(s.getResume('pizza')).toMatchObject({ partial: { placed: [1], baked: false } });
++    expect(s.resumeIds()).toEqual(['pizza']);
++    expect(resumeMarkPlan(s.resumeIds(), LAYOUTS.map.hits)).toHaveLength(1);
++  });
++
++  it('reload: a fresh store holds nothing; resumeStartData null, so the start uses getDifficulty', () => {
++    const s = new SessionStore();
++    expect(s.resume).toEqual({});
++    expect(s.resumeIds()).toEqual([]);
++    expect(resumeMarkPlan(s.resumeIds(), LAYOUTS.map.hits)).toEqual([]);
++    expect(resumeStartData('ice-cream', 4, s)).toBeNull();
++    const progress = { getDifficulty: () => 2 };
++    expect(s.startData('ice-cream', 4, () => 0, progress)).toEqual({ level: 2, seed: 0 });
++  });
++
++  it('resumeStartData: the held level and seed (even when ProgressStore says otherwise), with the snapshot', () => {
++    const s = new SessionStore();
++    s.setResume('ice-cream', SNAP);
++    expect(resumeStartData('ice-cream', 4, s)).toEqual({ level: 1, seed: 77, resume: SNAP });
++    expect(resumeStartData('pizza', 4, s)).toBeNull();
++  });
++
++  it('resumeStartData: a held level outside the ladder warns and returns null', () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const s = new SessionStore();
++    s.setResume('ice-cream', { ...SNAP, level: 7 });
++    expect(resumeStartData('ice-cream', 4, s)).toBeNull();
++    expect(warn).toHaveBeenCalledOnce();
++    warn.mockRestore();
++  });
++});
++
++describe('setResume callers (source scan, Story 2.5)', () => {
++  const SRC = resolve(dirname(fileURLToPath(import.meta.url)), '..');
++  // Map stores through core/post-round-chain › keepAbandonSnapshot (the pure abandon helper).
++  const ALLOWED = ['core/post-round-chain.ts', 'core/session-store.ts'];
++
++  function listTs(dir: string): string[] {
++    return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
++      const p = join(dir, e.name);
++      if (e.isDirectory()) return listTs(p);
++      return e.name.endsWith('.ts') && !e.name.endsWith('.test.ts') ? [p] : [];
++    });
++  }
++
++  it('`setResume(` appears only in session-store.ts and post-round-chain.ts; keepAbandonSnapshot is called only by Map', () => {
++    const callers = listTs(SRC)
++      .filter((f) => readFileSync(f, 'utf8').includes('setResume('))
++      .map((f) => relative(SRC, f).split(sep).join('/'))
++      .sort();
++    expect(callers).toEqual(ALLOWED);
++    const keepers = listTs(SRC)
++      .filter((f) => readFileSync(f, 'utf8').includes('keepAbandonSnapshot('))
++      .map((f) => relative(SRC, f).split(sep).join('/'))
++      .sort();
++    expect(keepers).toEqual(['core/post-round-chain.ts', 'scenes/Map.ts']);
++  });
++});
++
++describe('takeStartData (Story 2.5: the start choice)', () => {
++  const SNAP: Snapshot = { v: 1, level: 1, seed: 77, questionIndex: 1, partial: { placed: ['strawberry'] }, tally: { questions: 1, firstTryCorrect: 1, maxHintLevel: 0 } };
++  const progress = { getDifficulty: () => 2 };
++
++  it('normal entry with a held snapshot: resumes at its level and seed (ProgressStore says 2); cleared after', () => {
++    const s = new SessionStore();
++    s.setResume('ice-cream', SNAP);
++    expect(takeStartData('ice-cream', 4, undefined, s, () => 0.5, progress)).toEqual({ level: 1, seed: 77, resume: SNAP });
++    expect(s.getResume('ice-cream')).toBeUndefined();
++    expect(s.resumeIds()).toEqual([]);
++  });
++
++  it('replay: never resumes (a fresh seed at the stored level); the held snapshot is cleared', () => {
++    const s = new SessionStore();
++    s.setResume('ice-cream', SNAP);
++    expect(takeStartData('ice-cream', 4, 'replay', s, () => 0.5, progress)).toEqual({ level: 2, seed: 2 ** 30 });
++    expect(s.getResume('ice-cream')).toBeUndefined();
++  });
++
++  it('nothing held: a fresh start', () => {
++    const s = new SessionStore();
++    expect(takeStartData('ice-cream', 4, undefined, s, () => 0, progress)).toEqual({ level: 2, seed: 0 });
++  });
++
++  it('only that game is cleared', () => {
++    const s = new SessionStore();
++    s.setResume('ice-cream', SNAP);
++    s.setResume('pizza', { ...SNAP, partial: { placed: [], baked: false } });
++    takeStartData('ice-cream', 4, undefined, s, () => 0, progress);
++    expect(s.resumeIds()).toEqual(['pizza']);
++  });
++
++  it.each([
++    ['level outside the ladder', { level: 7 }],
++    ['a negative seed', { seed: -1 }],
++    ['a seed ≥ 2^31', { seed: 2 ** 31 }],
++    ['a fractional seed', { seed: 1.5 }],
++    ['version 2', { v: 2 }],
++    ['a negative question index', { questionIndex: -1 }],
++  ])('an invalid held snapshot (%s): a fresh start with a warn, and it is cleared', (_name, patch) => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const s = new SessionStore();
++    s.resume['ice-cream'] = { ...SNAP, ...patch } as Snapshot;
++    expect(takeStartData('ice-cream', 4, undefined, s, () => 0, progress)).toEqual({ level: 2, seed: 0 });
++    expect(warn).toHaveBeenCalled();
++    expect(s.getResume('ice-cream')).toBeUndefined();
++    warn.mockRestore();
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/session-store.ts b/app/src/core/session-store.ts
+index 4e1155d..9954f90 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/session-store.ts
++++ b/app/src/core/session-store.ts
+@@ -2,10 +2,14 @@
+ // `kart-start`. Story 2.1 moved the ladder level to the durable ProgressStore: `startData` reads it
+ // through `getDifficulty`, and Map writes it with `setDifficulty` on `round:complete`.
+ // Story 2.2 adds `pendingFlyIns`: core/reward-service queues every grant here (memory only); Map's
+-// post-round chain (Story 2.3) drains it. Story 2.3 adds `resume` (empty until Story 2.5 writes it)
++// post-round chain (Story 2.3) drains it. Story 2.3 adds `resume` (Map writes it on round:abandon, Story 2.5)
+ // and `clearResume`, which the post-round chain calls on `round:complete`.
+-import type { GameId, GameStartData, GrantResult, Snapshot } from '../content/types';
++// Story 2.5: `setResume` (Map, on round:abandon; a deep copy), `getResume`, `resumeIds`,
++// `resumeStartData` and `takeStartData` (the start choice: resume unless replay, then clear). Memory
++// only: a reload starts with no resume point.
++import { GAME_IDS, type GameId, type GameStartData, type GrantResult, type Snapshot } from '../content/types';
+ import { ProgressStore, type ProgressStoreService } from './progress-store';
++import { readResume } from './snapshot';
+ 
+ /** 2^31: seeds are non-negative 31-bit integers. */
+ const SEED_RANGE = 2 ** 31;
+@@ -28,6 +32,21 @@ export class SessionStore {
+     delete this.resume[id];
+   }
+ 
++  /** Story 2.5: keeps a deep JSON copy of `s` (it never aliases game state). Only Map calls it, on round:abandon. */
++  setResume(id: GameId, s: Snapshot): void {
++    this.resume[id] = JSON.parse(JSON.stringify(s)) as Snapshot;
++  }
++
++  /** Story 2.5: the resume point of `id`, if any. */
++  getResume(id: GameId): Snapshot | undefined {
++    return this.resume[id];
++  }
++
++  /** Story 2.5: the games holding a resume point, in GAME_IDS order. */
++  resumeIds(): GameId[] {
++    return GAME_IDS.filter((id) => this.resume[id] !== undefined);
++  }
++
+   /** Start data for a game: its persisted level (clamped to the ladder) and a fresh seed `floor(rng() × 2^31)`. */
+   startData(
+     id: GameId,
+@@ -42,3 +61,43 @@ export class SessionStore {
+ 
+ /** The app-wide session. */
+ export const session = new SessionStore();
++
++/**
++ * Story 2.5: start data that resumes `id`'s held snapshot: `{ level: s.level, seed: s.seed, resume: s }`.
++ * Null when nothing is held, or (with a warn) when the held level is outside `[0, ladderLength − 1]`, its
++ * seed is not a non-negative 31-bit integer, or `readResume` would reject it against its own level/seed;
++ * Map then starts normally with `startData`. The snapshot's level wins over ProgressStore's.
++ */
++export function resumeStartData(id: GameId, ladderLength: number, store: SessionStore = session): GameStartData | null {
++  const s = store.getResume(id);
++  if (!s) return null;
++  if (!Number.isInteger(s.level) || s.level < 0 || s.level > ladderLength - 1) {
++    console.warn(`session: held resume of "${id}" has level ${s.level} outside the ladder (${ladderLength}) — a normal start`);
++    return null;
++  }
++  if (!Number.isInteger(s.seed) || s.seed < 0 || s.seed >= SEED_RANGE) {
++    console.warn(`session: held resume of "${id}" has an invalid seed — a normal start`);
++    return null;
++  }
++  // The same check the game runs on its start data: a snapshot it would reject is never resumed.
++  if (!readResume(s, { level: s.level, seed: s.seed })) return null;
++  return { level: s.level, seed: s.seed, resume: s };
++}
++
++/**
++ * Story 2.5: the start data of `id`, and the resume point consumed. A normal entry resumes the held
++ * snapshot when `resumeStartData` accepts it; a replay never resumes (Story 2.4). Otherwise a fresh
++ * start (`startData`: ProgressStore's level, a new seed). Every start clears `id`'s resume point.
++ */
++export function takeStartData(
++  id: GameId,
++  ladderLength: number,
++  via: 'replay' | undefined,
++  store: SessionStore = session,
++  rng: () => number = Math.random,
++  progress: DifficultySource = ProgressStore,
++): GameStartData {
++  const data = (via === 'replay' ? null : resumeStartData(id, ladderLength, store)) ?? store.startData(id, ladderLength, rng, progress);
++  store.clearResume(id);
++  return data;
++}
+diff --git a/app/src/core/snapshot.test.ts b/app/src/core/snapshot.test.ts
+new file mode 100644
+index 0000000..816fa4f
+--- /dev/null
++++ b/app/src/core/snapshot.test.ts
+@@ -0,0 +1,162 @@
++// Story 2.5 I/O matrix: JSON-only check, the envelope, every readResume rejection, and the per-game
++// partial types (compile-time: `npm run typecheck` fails if an @ts-expect-error below stops erroring).
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import type { Snapshot, SnapshotPartials } from '../content/types';
++import { EMPTY_TALLY, isJsonOnly, makeSnapshot, readResume } from './snapshot';
++
++afterEach(() => {
++  vi.restoreAllMocks();
++});
++
++const HOME_SNAP: Snapshot<'ice-cream'> = {
++  v: 1,
++  level: 1,
++  seed: 123,
++  questionIndex: 1,
++  partial: { placed: ['strawberry'] },
++  tally: { questions: 1, firstTryCorrect: 1, maxHintLevel: 0 },
++};
++
++describe('isJsonOnly', () => {
++  it.each([
++    ['null', null],
++    ['a string', 'a'],
++    ['a boolean', false],
++    ['a finite number', -1.5],
++    ['an array', [1, 'a', null, [true]]],
++    ['a plain object', { a: { b: [1] } }],
++    ['a null-prototype object', Object.assign(Object.create(null) as object, { a: 1 })],
++    ['a shared (non-cyclic) reference', (() => {
++      const shared = { x: 1 };
++      return { a: shared, b: shared };
++    })()],
++  ])('true for %s', (_name, v) => {
++    expect(isJsonOnly(v)).toBe(true);
++  });
++
++  class Thing {
++    x = 1;
++  }
++  const cyclic: Record<string, unknown> = { a: 1 };
++  cyclic.self = cyclic;
++  const cyclicArray: unknown[] = [];
++  cyclicArray.push(cyclicArray);
++
++  it.each([
++    ['undefined', undefined],
++    ['a function', () => 1],
++    ['NaN', Number.NaN],
++    ['Infinity', Number.POSITIVE_INFINITY],
++    ['a class instance (e.g. a GameObject)', new Thing()],
++    ['a Date', new Date(0)],
++    ['a Map', new Map()],
++    ['a nested function', { partial: { placed: [() => 1] } }],
++    ['an undefined property', { a: undefined }],
++    ['a sparse array', new Array<number>(3)],
++    ['a cyclic object', cyclic],
++    ['a cyclic array', cyclicArray],
++    ['a symbol', Symbol('s')],
++    ['a bigint', BigInt(1)],
++  ])('false for %s', (_name, v) => {
++    expect(isJsonOnly(v)).toBe(false);
++  });
++});
++
++describe('makeSnapshot', () => {
++  it('builds the v1 envelope from level, seed, tally and the game progress', () => {
++    const s = makeSnapshot<'ice-cream'>({
++      level: 1,
++      seed: 123,
++      tally: { questions: 1, firstTryCorrect: 1, maxHintLevel: 0 },
++      progress: { questionIndex: 1, partial: { placed: ['strawberry'] } },
++    });
++    expect(s).toEqual(HOME_SNAP);
++    expect(s).toMatchObject({ v: 1, level: 1, seed: 123, questionIndex: 1, partial: { placed: ['strawberry'] } });
++  });
++
++  it('JSON: a round trip deep-equals the snapshot; isJsonOnly is true', () => {
++    expect(JSON.parse(JSON.stringify(HOME_SNAP))).toEqual(HOME_SNAP);
++    expect(isJsonOnly(HOME_SNAP)).toBe(true);
++  });
++
++  it('not JSON (a function, a GameObject-like instance, NaN in the progress): console.error in dev', () => {
++    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
++    class GameObject {
++      x = 0;
++    }
++    const bad = [() => 1, new GameObject(), Number.NaN];
++    for (const v of bad) {
++      makeSnapshot({ level: 0, seed: 0, tally: EMPTY_TALLY, progress: { questionIndex: 0, partial: { placed: [v] } as never } });
++    }
++    expect(error).toHaveBeenCalledTimes(bad.length);
++  });
++});
++
++describe('readResume', () => {
++  const START = { level: 1, seed: 123 };
++
++  it('a valid snapshot: questionIndex, partial (unvalidated) and tally', () => {
++    expect(readResume(HOME_SNAP, START)).toEqual({ questionIndex: 1, partial: { placed: ['strawberry'] }, tally: HOME_SNAP.tally });
++  });
++
++  it('a missing tally is the empty tally, with no warn', () => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const { tally: _t, ...noTally } = HOME_SNAP;
++    expect(readResume(noTally, START)?.tally).toEqual(EMPTY_TALLY);
++    expect(warn).not.toHaveBeenCalled();
++  });
++
++  it.each([
++    ['a negative count', { questions: -1, firstTryCorrect: 0, maxHintLevel: 0 }],
++    ['firstTry > questions', { questions: 1, firstTryCorrect: 2, maxHintLevel: 0 }],
++    ['hint level 5', { questions: 1, firstTryCorrect: 0, maxHintLevel: 5 }],
++    ['not an object', 'x'],
++    ['questions ≠ questionIndex', { questions: 2, firstTryCorrect: 2, maxHintLevel: 0 }],
++  ])('an invalid tally (%s) becomes the empty tally with a warn', (_name, tally) => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const r = readResume({ ...HOME_SNAP, tally }, START);
++    expect(r).toMatchObject({ questionIndex: 1, tally: EMPTY_TALLY });
++    expect(warn).toHaveBeenCalledOnce();
++  });
++
++  it.each([
++    ['not an object', null],
++    ['v 2', { ...HOME_SNAP, v: 2 }],
++    ['a missing v', { ...HOME_SNAP, v: undefined }],
++    ['a non-integer level', { ...HOME_SNAP, level: 1.5 }],
++    ['a non-integer seed', { ...HOME_SNAP, seed: '123' }],
++    ['a non-integer question index', { ...HOME_SNAP, questionIndex: 0.5 }],
++    ['a negative question index', { ...HOME_SNAP, questionIndex: -1 }],
++    ['a level mismatch', { ...HOME_SNAP, level: 2 }],
++    ['a seed mismatch', { ...HOME_SNAP, seed: 124 }],
++    ['non-JSON content', { ...HOME_SNAP, partial: { placed: [() => 1] } }],
++  ])('rejects %s: null with one console.warn', (_name, resume) => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    expect(readResume(resume, START)).toBeNull();
++    expect(warn).toHaveBeenCalledOnce();
++  });
++});
++
++describe('SnapshotPartials (compile-time)', () => {
++  it('every game is declared; a touch-talk partial type-checks, an ice-cream one does not', () => {
++    const touch: Snapshot<'touch-talk'> = { v: 1, level: 0, seed: 1, questionIndex: 0, partial: { sceneId: 'sea', touchedIds: ['a'] } };
++    // @ts-expect-error -- `{ placed: [] }` is not a touch-talk partial
++    const wrong: Snapshot<'touch-talk'> = { v: 1, level: 0, seed: 1, questionIndex: 0, partial: { placed: [] } };
++    // @ts-expect-error -- an unknown flavour is not an ice-cream partial
++    const flavour: SnapshotPartials['ice-cream'] = { placed: ['banana'] };
++    const all: { [G in keyof SnapshotPartials]: SnapshotPartials[G] } = {
++      'ice-cream': { placed: ['mint'] },
++      pizza: { placed: [0, 2], baked: false },
++      'dino-puzzle': { placed: ['head'] },
++      'shadow-match': {},
++      race: { traceIndex: 3 },
++      fishing: {},
++      'touch-talk': { sceneId: 'sea', touchedIds: [] },
++    };
++    expect(isJsonOnly(touch)).toBe(true);
++    expect(isJsonOnly(all)).toBe(true);
++    expect(Object.keys(all)).toHaveLength(7);
++    expect(wrong.partial).toEqual({ placed: [] });
++    expect(flavour.placed).toEqual(['banana']);
++  });
++});
+diff --git a/app/src/core/snapshot.ts b/app/src/core/snapshot.ts
+new file mode 100644
+index 0000000..befe5b0
+--- /dev/null
++++ b/app/src/core/snapshot.ts
+@@ -0,0 +1,125 @@
++// Resume snapshots (Story 2.5, AD-2), pure. MiniGameBase builds the envelope from the game's progress
++// (`makeSnapshot`) and validates an incoming `resume` against its own start data (`readResume`). A game
++// receives only `{ questionIndex, partial: unknown, tally }` and validates its own `partial`.
++// Snapshots are plain JSON (`isJsonOnly`): Map keeps a deep copy in SessionStore, never game state.
++import type { GameId, HintLevel, Snapshot, SnapshotPartials, TallyState } from '../content/types';
++
++/** The empty tally: no closed question. */
++export const EMPTY_TALLY: TallyState = { questions: 0, firstTryCorrect: 0, maxHintLevel: 0 };
++
++/** What a game reports for its snapshot: the open question and its own partial progress. */
++export interface GameProgress<G extends GameId = GameId> {
++  readonly questionIndex: number;
++  readonly partial: SnapshotPartials[G];
++}
++
++/** A validated resume point, handed to the game through `MiniGameBase.resumeAt`. */
++export interface ResumeAt {
++  readonly questionIndex: number;
++  /** Unvalidated: the game checks it (an invalid partial begins the question clean). */
++  readonly partial: unknown;
++  readonly tally: TallyState;
++}
++
++/**
++ * True only for JSON data: `null`, strings, booleans, finite numbers, arrays and plain objects (prototype
++ * `Object.prototype` or `null`), deeply. A function, class instance, `undefined`, `NaN`, `Infinity` or a
++ * cycle makes it false. Shared (non-cyclic) references are allowed: they serialise as copies.
++ */
++export function isJsonOnly(v: unknown): boolean {
++  const ancestors = new Set<object>();
++  const walk = (x: unknown): boolean => {
++    if (x === null) return true;
++    switch (typeof x) {
++      case 'string':
++      case 'boolean':
++        return true;
++      case 'number':
++        return Number.isFinite(x);
++      case 'object':
++        break;
++      default:
++        return false;
++    }
++    const o = x as object;
++    if (ancestors.has(o)) return false;
++    if (Array.isArray(o)) {
++      ancestors.add(o);
++      // A sparse hole is `undefined`: not JSON.
++      for (let i = 0; i < o.length; i++) if (!(i in o) || !walk(o[i])) return false;
++      ancestors.delete(o);
++      return true;
++    }
++    const proto: unknown = Object.getPrototypeOf(o);
++    if (proto !== Object.prototype && proto !== null) return false;
++    ancestors.add(o);
++    for (const key of Object.keys(o)) if (!walk((o as Record<string, unknown>)[key])) return false;
++    ancestors.delete(o);
++    return true;
++  };
++  return walk(v);
++}
++
++/** The snapshot envelope (`v: 1`) of a game's progress; a dev build reports non-JSON content. */
++export function makeSnapshot<G extends GameId>(args: {
++  readonly level: number;
++  readonly seed: number;
++  readonly tally: TallyState;
++  readonly progress: GameProgress<G>;
++}): Snapshot<G> {
++  const s: Snapshot<G> = {
++    v: 1,
++    level: args.level,
++    seed: args.seed,
++    questionIndex: args.progress.questionIndex,
++    partial: args.progress.partial,
++    tally: { ...args.tally },
++  };
++  if (import.meta.env.DEV && !isJsonOnly(s)) console.error('snapshot: the snapshot is not plain JSON', s);
++  return s;
++}
++
++const isInt = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n);
++const isHintLevel = (n: unknown): n is HintLevel => isInt(n) && n >= 0 && n <= 4;
++
++/** True for a well-formed tally: non-negative integer counts, firstTry ≤ questions, a hint level 0–4. */
++export function isTallyState(t: unknown): t is TallyState {
++  if (typeof t !== 'object' || t === null) return false;
++  const r = t as Record<string, unknown>;
++  return (
++    isInt(r.questions) &&
++    r.questions >= 0 &&
++    isInt(r.firstTryCorrect) &&
++    r.firstTryCorrect >= 0 &&
++    r.firstTryCorrect <= r.questions &&
++    isHintLevel(r.maxHintLevel)
++  );
++}
++
++/**
++ * Validates `resume` against the start data it came with. Null (one console.warn) unless `v === 1`,
++ * `level`, `seed` and `questionIndex` are integers with `questionIndex ≥ 0`, `level`/`seed` equal the
++ * start's, and the whole snapshot is plain JSON. A missing tally is the empty tally; an invalid one
++ * (or one whose `questions` differs from `questionIndex`)
++ * becomes the empty tally with a warn.
++ */
++export function readResume(resume: unknown, start: { readonly level: number; readonly seed: number }): ResumeAt | null {
++  const reject = (why: string): null => {
++    console.warn(`snapshot: resume ignored (${why}) — a fresh round starts`);
++    return null;
++  };
++  if (typeof resume !== 'object' || resume === null) return reject('not an object');
++  const r = resume as Record<string, unknown>;
++  if (r.v !== 1) return reject(`version ${String(r.v)}`);
++  if (!isInt(r.level) || !isInt(r.seed) || !isInt(r.questionIndex) || r.questionIndex < 0) return reject('bad level, seed or question index');
++  if (r.level !== start.level || r.seed !== start.seed) return reject('level or seed differs from the start data');
++  if (!isJsonOnly(resume)) return reject('not plain JSON');
++  let tally = EMPTY_TALLY;
++  if (r.tally !== undefined) {
++    // The tally covers the closed questions, i.e. exactly the ones before the open question.
++    if (isTallyState(r.tally) && r.tally.questions === r.questionIndex) {
++      tally = { questions: r.tally.questions, firstTryCorrect: r.tally.firstTryCorrect, maxHintLevel: r.tally.maxHintLevel };
++    } else console.warn('snapshot: invalid tally in resume — counted as empty');
++  }
++  return { questionIndex: r.questionIndex, partial: r.partial, tally };
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/tokens.test.ts b/app/src/core/tokens.test.ts
+index 5f34f57..3798f90 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/tokens.test.ts
++++ b/app/src/core/tokens.test.ts
+@@ -1,4 +1,5 @@
+ import { describe, expect, it } from 'vitest';
++import { RESUME_MARK_OUTLINE_PX } from './resume-marks';
+ import { Tokens } from './tokens';
+ import { computeSafeRect, visibleRect } from './safe-rect';
+ 
+@@ -161,3 +162,20 @@ describe('Tokens.art (Story 1.8)', () => {
+     expect(Tokens.ui.iceCreamRowTolerance).toBe(20);
+   });
+ });
++
++describe('resume mark (Story 2.5)', () => {
++  it('the new values', () => {
++    expect(Tokens.ui.resumeMarkRadiusPx).toBe(20);
++    expect(Tokens.ui.resumeMarkStrokePx).toBe(8);
++    expect(Tokens.ui.resumeMarkDotPx).toBe(6);
++    expect(Tokens.ui.resumeMarkDepth).toBe(10000);
++  });
++
++  it('the centre dot clears the annulus hole and its inner outline, and the colours exist', () => {
++    // The inner ink outline sits inside the hole: the dot must clear it too.
++    expect(Tokens.ui.resumeMarkDotPx).toBeLessThan(Tokens.ui.resumeMarkRadiusPx - Tokens.ui.resumeMarkStrokePx - RESUME_MARK_OUTLINE_PX);
++    expect(Tokens.colors.buttonHome.css).toMatch(/^#[0-9A-F]{6}$/i);
++    expect(Tokens.colors.iconInk.css).toMatch(/^#[0-9A-F]{6}$/i);
++    expect(Tokens.colors.counterTop.css).toMatch(/^#[0-9A-F]{6}$/i);
++  });
++});
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/tokens.ts b/app/src/core/tokens.ts
+index 85cc301..3c76012 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/core/tokens.ts
++++ b/app/src/core/tokens.ts
+@@ -71,6 +71,14 @@ const ui = {
+   playAgainKartPx: 72,
+   /** Story 2.4: clearance (design px) between the play-again buttons and the station / its decorations. */
+   playAgainClearPx: 24,
++  /** Story 2.5 resume mark: outer radius (design px) of the static ring on a station holding a resume point. */
++  resumeMarkRadiusPx: 20,
++  /** Story 2.5 resume mark: width (design px) of the Home-yellow annulus. */
++  resumeMarkStrokePx: 8,
++  /** Story 2.5 resume mark: radius (design px) of the white centre dot. */
++  resumeMarkDotPx: 6,
++  /** Story 2.5 resume mark: depth, above every map sprite (stations, decorations, kart, ring). */
++  resumeMarkDepth: 10000,
+ } as const;
+ 
+ /** A colour in the generated-token shape (`css`, `value`, `alpha`). */
+diff --git a/app/src/core/ui/resume-mark.ts b/app/src/core/ui/resume-mark.ts
+new file mode 100644
+index 0000000..b31e4d0
+--- /dev/null
++++ b/app/src/core/ui/resume-mark.ts
+@@ -0,0 +1,32 @@
++// Resume mark (Story 2.5, UX-DR38): the small static ring Map draws on a station holding an in-session
++// resume point. One Graphics: a Home-yellow annulus (ui.resumeMarkRadiusPx, ui.resumeMarkStrokePx) with
++// a 2 px ink outline on both edges and a white centre dot (ui.resumeMarkDotPx), at ui.resumeMarkDepth.
++// It never moves: no tween, pulse or alpha change (so reduced motion changes nothing), and it is not
++// interactive, so a tap on it reaches the station polygon underneath. Not the `hint-ring` (purple,
++// pulsing, around the whole station): a different shape, colour and place.
++import type { GameObjects, Scene } from 'phaser';
++import type { Point } from '../../content/layout-types';
++import { RESUME_MARK_OUTLINE_PX } from '../resume-marks';
++import { Tokens } from '../tokens';
++
++/** Draws one resume mark centred at `at` (design px). The caller destroys it. */
++export function drawResumeMark(scene: Scene, at: Point): GameObjects.Graphics {
++  const ui = Tokens.ui;
++  const c = Tokens.colors;
++  const outer = ui.resumeMarkRadiusPx;
++  const inner = outer - ui.resumeMarkStrokePx;
++  const ink = RESUME_MARK_OUTLINE_PX;
++  const g = scene.add.graphics({ x: at.x, y: at.y });
++  // Ink outlines: just outside the annulus and just inside its hole.
++  g.lineStyle(ink, c.iconInk.value, c.iconInk.alpha);
++  g.strokeCircle(0, 0, outer + ink / 2);
++  g.strokeCircle(0, 0, inner - ink / 2);
++  // The annulus: a stroke centred between its inner and outer radius.
++  g.lineStyle(ui.resumeMarkStrokePx, c.buttonHome.value, c.buttonHome.alpha);
++  g.strokeCircle(0, 0, (outer + inner) / 2);
++  // The centre dot.
++  g.fillStyle(c.counterTop.value, c.counterTop.alpha);
++  g.fillCircle(0, 0, ui.resumeMarkDotPx);
++  g.setDepth(ui.resumeMarkDepth);
++  return g;
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/games/ice-cream/IceCream.ts b/app/src/games/ice-cream/IceCream.ts
+index f89d2e0..2265ff4 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/games/ice-cream/IceCream.ts
++++ b/app/src/games/ice-cream/IceCream.ts
+@@ -5,6 +5,8 @@
+ // resolution, outcomes, questions) is the pure round model (round.ts, questions.ts); prompts and
+ // retries go through `hint` only; audio here is SFX only. Every position comes from
+ // LAYOUTS['ice-cream']; timers are scene-clock events (removed on Home by MiniGameBase).
++// Story 2.5: a resumed start (MiniGameBase `resumeAt`) begins the question it was left on; its served
++// scoops stand on the cone at once (restoreCone: no tween, no sfx, locked) with fresh copies at home.
+ import type { GameObjects, Time, Tweens } from 'phaser';
+ import { ATLASES, BACKGROUNDS } from '../../content/assets';
+ import {
+@@ -20,7 +22,6 @@ import {
+ } from '../../content/games/ice-cream';
+ import type { Point, ScreenLayout } from '../../content/layout-types';
+ import { LAYOUTS } from '../../content/layouts';
+-import type { Snapshot } from '../../content/types';
+ import { audio } from '../../core/audio-director';
+ import type { HintStep } from '../../core/hint-director';
+ import { createDraggable, defaultDragArea, type Draggable } from '../../core/input/drag-controller';
+@@ -33,7 +34,7 @@ import type { Rect } from '../../core/safe-rect';
+ import { Tokens } from '../../core/tokens';
+ import { originFor, trimmedCentre, trimmedSize, type TrimmedRect } from '../../core/ui/sprite-pivot';
+ import { MiniGameBase } from '../mini-game-base';
+-import { IceCreamRound, type Area, type RoundCommand, type RoundGeometry, type ScoopState } from './round';
++import { IceCreamRound, startCommands, type Area, type IceCreamProgress, type RoundCommand, type RoundGeometry, type ScoopState } from './round';
+ 
+ const EASE_OUT = 'Quad.easeOut';
+ const SINE = 'Sine.easeInOut';
+@@ -60,7 +61,7 @@ interface ScoopView {
+ 
+ const NO_AREA: Area = { contains: () => false };
+ 
+-export class IceCream extends MiniGameBase {
++export class IceCream extends MiniGameBase<'ice-cream'> {
+   private round: IceCreamRound | undefined;
+   private router: TapRouter | undefined;
+   private scoops = new Map<string, ScoopView>();
+@@ -96,12 +97,17 @@ export class IceCream extends MiniGameBase {
+     const coneAt = this.slot(CONE_SLOTS[0]);
+     this.cone = createDropTarget({ id: CONE_ANCHOR, circle: { x: coneAt.x, y: coneAt.y, r: Tokens.components.dropTarget.snapRadius } });
+ 
+-    this.round = new IceCreamRound(this.geometry(), this.seed, this.level);
+-    this.applyAll(this.round.start());
++    const round = new IceCreamRound(this.geometry(), this.seed, this.level);
++    this.round = round;
++    // Story 2.5: a resumed start begins the question it was left on, with its served scoops on the cone.
++    const plan = startCommands(round, this.resumeAt);
++    for (const w of plan.warnings) console.warn(w);
++    if (plan.accepted) this.acceptResume();
++    this.applyAll(plan.commands);
+   }
+ 
+-  snapshot(): Snapshot {
+-    return this.round?.snapshot() ?? { v: 1, level: this.level, seed: this.seed, questionIndex: 0, partial: { placed: [] } };
++  protected progress(): IceCreamProgress {
++    return this.round?.progress() ?? { questionIndex: 0, partial: { placed: [] } };
+   }
+ 
+   private slot(id: string): Point {
+@@ -366,6 +372,9 @@ export class IceCream extends MiniGameBase {
+       case 'snap':
+         this.snap(c.id, c.to);
+         return;
++      case 'restoreCone':
++        for (const s of c.scoops) this.restoreConeScoop(s.flavour, s.to);
++        return;
+       case 'floatBack': {
+         const v = this.scoops.get(c.id);
+         if (v) this.moveTo(v, c.to, Tokens.components.draggableItem.return.durationMs);
+@@ -441,6 +450,18 @@ export class IceCream extends MiniGameBase {
+     }
+   }
+ 
++  /**
++   * Story 2.5: a scoop served before Home stands on its cone slot at once: no tween, no sfx, no
++   * celebration, never draggable (locked like a served scoop). It is eaten with the cone as usual.
++   */
++  private restoreConeScoop(flavour: FlavourId, to: Point): void {
++    const view = this.addScoop({ id: `cone-${this.coneScoops.length + 1}`, flavour, at: to }, false);
++    this.scoops.delete(view.id);
++    view.drag?.destroy();
++    view.drag = undefined;
++    this.coneScoops.push(view);
++  }
++
+   /** Shiba "ate" the cone scoops: they fade out. */
+   private clearCone(): void {
+     const eaten = this.coneScoops;
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/games/ice-cream/round.test.ts b/app/src/games/ice-cream/round.test.ts
+index 9a9661c..4823725 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/games/ice-cream/round.test.ts
++++ b/app/src/games/ice-cream/round.test.ts
+@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
+ import { ladder, type FlavourId } from '../../content/games/ice-cream';
+ import type { Point } from '../../content/layout-types';
+ import { pointInPolygon } from '../../core/input/polygon';
++import { askLineId } from './lines';
+ import { questionFor } from './questions';
+-import { IceCreamRound, type RoundCommand, type RoundGeometry } from './round';
++import { IceCreamRound, startCommands, type RoundCommand, type RoundGeometry } from './round';
+ 
+ const rect = (x0: number, y0: number, x1: number, y1: number): Point[] => [
+   { x: x0, y: y0 },
+@@ -79,7 +80,7 @@ describe('IceCreamRound', () => {
+       correct: [target.id],
+       distractors: [other.id],
+     });
+-    expect(round.snapshot()).toEqual({ v: 1, level: 0, seed: 7, questionIndex: 0, partial: { placed: [] } });
++    expect(round.progress()).toEqual({ questionIndex: 0, partial: { placed: [] } });
+     expect(round.questionCount).toBe(3);
+   });
+ 
+@@ -163,7 +164,7 @@ describe('IceCreamRound', () => {
+     expect(round.questionIndex).toBe(1);
+     expect(round.wanted.join()).not.toBe(first);
+     expect(round.isCelebrating).toBe(false);
+-    expect(round.snapshot()).toMatchObject({ questionIndex: 1, partial: { placed: [] } });
++    expect(round.progress()).toMatchObject({ questionIndex: 1, partial: { placed: [] } });
+   });
+ 
+   it('the cone and the question survive wrong, home, rest and off outcomes', () => {
+@@ -290,7 +291,7 @@ describe('IceCreamRound multi-scoop (Story 1.10)', () => {
+     round.start();
+     const f = round.wanted[1]!;
+     serve(round, f);
+-    expect(round.snapshot()).toMatchObject({ questionIndex: 0, partial: { placed: [f] } });
++    expect(round.progress()).toMatchObject({ questionIndex: 0, partial: { placed: [f] } });
+   });
+ 
+   it.each(ladder.map((l, i) => [l.id, i, l.questions] as const))('Last question (%s): %i → finishRound after 1500 ms after its %i questions; then inert', (_id, level, questions) => {
+@@ -309,10 +310,141 @@ describe('IceCreamRound multi-scoop (Story 1.10)', () => {
+     expect(round.drop(s.id, ON_CONE)).toEqual([{ kind: 'floatBack', id: s.id, to: s.at }]);
+   });
+ 
+-  it('an out-of-range level is clamped (snapshot level too)', () => {
++  it('an out-of-range level is clamped (question count too)', () => {
+     const round = new IceCreamRound(GEO, 7, 9);
+     round.start();
+     expect(round.wanted).toHaveLength(3);
+-    expect(round.snapshot().level).toBe(3);
++    expect(round.questionCount).toBe(ladder[3]!.questions);
++  });
++});
++
++describe('IceCreamRound resume (Story 2.5)', () => {
++  it('Home mid-question: L1, question 2 (index 1), one wanted placed → progress is plain JSON', () => {
++    const round = new IceCreamRound(GEO, 7, 1);
++    round.start();
++    answer(round);
++    round.next();
++    const f = round.wanted[0]!;
++    serve(round, f);
++    const p = round.progress();
++    expect(p).toEqual({ questionIndex: 1, partial: { placed: [f] } });
++    expect(JSON.parse(JSON.stringify(p))).toEqual(p);
++  });
++
++  it('resumed build: the same question, the placed scoop on cone-1, beginQuestion with the retry for 1 placed', () => {
++    const before = new IceCreamRound(GEO, 7, 1);
++    before.start();
++    answer(before);
++    before.next();
++    const question = before.current;
++    const f = before.wanted[1]!;
++    serve(before, f);
++    const { questionIndex, partial } = before.progress();
++
++    const after = new IceCreamRound(GEO, 7, 1);
++    const placed = after.resumeQuestion(questionIndex, JSON.parse(JSON.stringify(partial)));
++    expect(placed).toEqual({ placed: [f] });
++    const cmds = after.resume(questionIndex, placed!.placed);
++    expect(kinds(cmds)).toEqual(['build', 'restoreCone', 'pickable', 'beginQuestion']);
++    expect(after.current).toEqual(question);
++    expect(cmds[1]).toEqual({ kind: 'restoreCone', scoops: [{ flavour: f, to: coneAt(0) }] });
++    // Every counter flavour stands at home (a fresh copy of the placed one included).
++    const build = cmds[0] as Extract<RoundCommand, { kind: 'build' }>;
++    expect(build.scoops.map((s) => s.flavour)).toEqual(question.counter);
++    const remaining = question.wanted.find((x) => x !== f)!;
++    const begin = cmds[3] as Extract<RoundCommand, { kind: 'beginQuestion' }>;
++    expect(begin.promptLineId).toBe(askLineId(question));
++    expect(begin.retryLineId).toBe(`vo.ice-cream.retry.${remaining}`);
++    expect(begin.correct).toEqual(idsOf(after, [remaining]));
++    expect(after.progress()).toEqual({ questionIndex, partial: { placed: [f] } });
++    // The next serve completes the question on cone-2.
++    const done = serve(after, remaining);
++    expect(done[0]).toEqual({ kind: 'questionDone' });
++    expect(done[1]).toMatchObject({ kind: 'snap', to: coneAt(1) });
++    expect(after.progress()).toEqual({ questionIndex: questionIndex + 1, partial: { placed: [] } });
++  });
++
++  it('ordered restore: L3, placed [wanted[0]] → cone-1 = wanted[0]; next step = wanted[1]', () => {
++    const round = new IceCreamRound(GEO, 7, 3);
++    const q = questionFor(7, 0, 3);
++    const placed = round.resumeQuestion(0, { placed: [q.wanted[0]] });
++    expect(placed).toEqual({ placed: [q.wanted[0]] });
++    const cmds = round.resume(0, placed!.placed);
++    expect(cmds[1]).toEqual({ kind: 'restoreCone', scoops: [{ flavour: q.wanted[0], to: coneAt(0) }] });
++    const begin = cmds[3] as Extract<RoundCommand, { kind: 'beginQuestion' }>;
++    expect(begin.correct).toEqual(idsOf(round, [q.wanted[1]!]));
++    expect(begin.retryLineId).toBe(`vo.ice-cream.order-next.${q.wanted[1]}`);
++    expect(begin.promptLineId).toBe(askLineId(q));
++  });
++
++  it('nothing placed: no restoreCone; the question begins as a fresh start would', () => {
++    const fresh = new IceCreamRound(GEO, 7, 1).start();
++    const resumed = new IceCreamRound(GEO, 7, 1).resume(0, []);
++    expect(resumed).toEqual(fresh);
++  });
++
++  describe('bad partials → null (the question begins clean)', () => {
++    const L1 = questionFor(7, 1, 1);
++    const L3 = questionFor(7, 0, 3);
++    const notWanted = L1.counter.find((f) => !L1.wanted.includes(f))!;
++    it.each([
++      ['not an object', 1, 1, null],
++      ['an array', 1, 1, ['strawberry']],
++      ['placed missing', 1, 1, {}],
++      ['placed not an array', 1, 1, { placed: 'strawberry' }],
++      ['a non-string entry', 1, 1, { placed: [1] }],
++      ['a non-wanted flavour', 1, 1, { placed: [notWanted] }],
++      ['an unknown flavour', 1, 1, { placed: ['banana'] }],
++      ['a duplicate', 1, 1, { placed: [L1.wanted[0], L1.wanted[0]] }],
++      ['full length', 1, 1, { placed: [...L1.wanted] }],
++      ['out of order (ordered level)', 3, 0, { placed: [L3.wanted[1]] }],
++    ])('%s', (_name, level, index, partial) => {
++      const round = new IceCreamRound(GEO, 7, level);
++      expect(round.resumeQuestion(index, partial)).toBeNull();
++    });
++  });
++
++  it.each([
++    ['index 9 at L0', 9],
++    ['index 3 at L0 (= question count)', 3],
++    ['a negative index', -1],
++    ['a fractional index', 0.5],
++  ])('bad index (%s) → null', (_name, index) => {
++    expect(new IceCreamRound(GEO, 7, 0).resumeQuestion(index, { placed: [] })).toBeNull();
++  });
++});
++
++describe('startCommands (Story 2.5: the build decision)', () => {
++  it('no resume: the fresh start, not accepted, no warning', () => {
++    const plan = startCommands(new IceCreamRound(GEO, 7, 1), null);
++    expect(plan).toEqual({ commands: new IceCreamRound(GEO, 7, 1).start(), accepted: false, warnings: [] });
++  });
++
++  it('valid resume: the resumed commands (restoreCone), accepted, no warning', () => {
++    const q = questionFor(7, 1, 1);
++    const plan = startCommands(new IceCreamRound(GEO, 7, 1), { questionIndex: 1, partial: { placed: [q.wanted[0]] } });
++    expect(plan.accepted).toBe(true);
++    expect(plan.warnings).toEqual([]);
++    expect(plan.commands).toEqual(new IceCreamRound(GEO, 7, 1).resume(1, [q.wanted[0]!]));
++    expect(kinds(plan.commands)).toEqual(['build', 'restoreCone', 'pickable', 'beginQuestion']);
++  });
++
++  it('out-of-range index: the start() commands (question 1), not accepted, one warning', () => {
++    const round = new IceCreamRound(GEO, 7, 0);
++    const plan = startCommands(round, { questionIndex: 9, partial: { placed: [] } });
++    expect(plan.commands).toEqual(new IceCreamRound(GEO, 7, 0).start());
++    expect(plan.accepted).toBe(false);
++    expect(plan.warnings).toHaveLength(1);
++    expect(round.progress()).toEqual({ questionIndex: 0, partial: { placed: [] } });
++  });
++
++  it('bad partial: that question begins clean (spec: "begins that question clean"), accepted, one warning', () => {
++    const round = new IceCreamRound(GEO, 7, 1);
++    const plan = startCommands(round, { questionIndex: 1, partial: { placed: ['banana'] } });
++    expect(plan.commands).toEqual(new IceCreamRound(GEO, 7, 1).resume(1, []));
++    expect(kinds(plan.commands)).toEqual(['build', 'pickable', 'beginQuestion']);
++    expect(plan.accepted).toBe(true);
++    expect(plan.warnings).toHaveLength(1);
++    expect(round.progress()).toEqual({ questionIndex: 1, partial: { placed: [] } });
+   });
+ });
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/games/ice-cream/round.ts b/app/src/games/ice-cream/round.ts
+index edfca3d..173fb18 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/games/ice-cream/round.ts
++++ b/app/src/games/ice-cream/round.ts
+@@ -14,9 +14,10 @@
+ // unpickable, Shiba celebrates, and the question index advances at once; then the next question after
+ // `nextQuestionDelayMs`, or `finishRound` after `finishDelayMs` when it was the round's last.
+ // A wrong serve floats back and reports `hintWrong`. The cone and the question survive every outcome.
++// Story 2.5: `progress()` is the resumable state; `resumeQuestion` validates a resume partial and
++// `resume(index, placed)` lays that question out with the placed scoops already on the cone.
+ import type { FlavourId } from '../../content/games/ice-cream';
+ import type { Point } from '../../content/layout-types';
+-import type { Snapshot } from '../../content/types';
+ import { nudgeApart } from '../../core/input/drop';
+ import type { Rect } from '../../core/safe-rect';
+ import { askLineId, retryLineId } from './lines';
+@@ -66,6 +67,8 @@ export type RoundCommand =
+     }
+   | { readonly kind: 'stepDone'; readonly retryLineId: string; readonly correct: readonly string[]; readonly distractors: readonly string[] }
+   | { readonly kind: 'snap'; readonly id: string; readonly to: Point }
++  /** Story 2.5: scoops already served before Home, drawn straight on their cone slots (no tween, no sfx). */
++  | { readonly kind: 'restoreCone'; readonly scoops: readonly { readonly flavour: FlavourId; readonly to: Point }[] }
+   | { readonly kind: 'floatBack'; readonly id: string; readonly to: Point }
+   | { readonly kind: 'rest'; readonly id: string; readonly at: Point }
+   | { readonly kind: 'returnLater'; readonly id: string; readonly to: Point; readonly ms: number }
+@@ -223,13 +226,42 @@ export class IceCreamRound {
+     return [{ kind: 'clear' }, ...this.start()];
+   }
+ 
+-  /** The resumable state (AD-2). */
++  /** The resumable state (AD-2): the open question and the scoops on the cone, in cone order. */
+   progress(): IceCreamProgress {
+     return { questionIndex: this.index, partial: { placed: [...this.placed] } };
+   }
+ 
+-  snapshot(): Snapshot {
+-    return { v: 1, level: this.level, seed: this.seed, questionIndex: this.index, partial: { placed: [...this.placed] } };
++  /**
++   * Story 2.5: validates a resume `partial` for question `index` of this round. Null (invalid) unless it is
++   * `{ placed: string[] }` whose entries are distinct wanted flavours of that question, fewer than the
++   * wanted count, and on an ordered level exactly the first ones in order. No state change.
++   */
++  resumeQuestion(index: number, partial: unknown): { placed: FlavourId[] } | null {
++    if (!Number.isInteger(index) || index < 0 || index >= this.questionCount) return null;
++    if (typeof partial !== 'object' || partial === null || Array.isArray(partial)) return null;
++    const placed: unknown = (partial as { placed?: unknown }).placed;
++    if (!Array.isArray(placed) || !placed.every((f): f is string => typeof f === 'string')) return null;
++    const q = questionFor(this.seed, index, this.level);
++    const wanted: readonly string[] = q.wanted;
++    if (!placed.every((f) => wanted.includes(f))) return null;
++    if (new Set(placed).size !== placed.length) return null;
++    if (placed.length >= wanted.length) return null;
++    if (q.ordered && !placed.every((f, i) => wanted[i] === f)) return null;
++    return { placed: placed as FlavourId[] };
++  }
++
++  /**
++   * Story 2.5: lays out question `index` with `placed` already on the cone (a resumed start). `placed`
++   * must come from `resumeQuestion`. The counter is built as usual (every flavour at home), the cone
++   * scoops are restored statically, and the hint question begins at the stage for `placed`.
++   */
++  resume(index: number, placed: readonly FlavourId[]): RoundCommand[] {
++    this.index = index;
++    this.question = questionFor(this.seed, index, this.level);
++    this.placed = [...placed];
++    const [build, ...rest] = this.start();
++    const cone = this.placed.map((flavour, n) => ({ flavour, to: this.geo.coneCentre(n) }));
++    return cone.length > 0 ? [build!, { kind: 'restoreCone', scoops: cone }, ...rest] : [build!, ...rest];
+   }
+ 
+   private serveCorrect(item: ScoopState): RoundCommand[] {
+@@ -284,3 +316,34 @@ export class IceCreamRound {
+     return s;
+   }
+ }
++
++/** What a start lays out (Story 2.5): its commands, whether the resume was taken, and the warnings to log. */
++export interface StartPlan {
++  readonly commands: RoundCommand[];
++  /** True when the round resumed at the snapshot's question (its closed questions then count). */
++  readonly accepted: boolean;
++  readonly warnings: string[];
++}
++
++/**
++ * Story 2.5: the first commands of a start. No resume → `start()`. A resume whose question index is out
++ * of range → `start()` (question 1), not accepted, one warning. Otherwise that question begins, with its
++ * placed scoops restored when the partial is valid, or clean with one warning when it is not (accepted
++ * either way: the questions before it were closed).
++ */
++export function startCommands(round: IceCreamRound, resumeAt: { readonly questionIndex: number; readonly partial: unknown } | null): StartPlan {
++  if (!resumeAt) return { commands: round.start(), accepted: false, warnings: [] };
++  if (resumeAt.questionIndex >= round.questionCount) {
++    return {
++      commands: round.start(),
++      accepted: false,
++      warnings: [`ice-cream: resume question ${resumeAt.questionIndex} is out of range — the round starts at question 1`],
++    };
++  }
++  const placed = round.resumeQuestion(resumeAt.questionIndex, resumeAt.partial);
++  return {
++    commands: round.resume(resumeAt.questionIndex, placed?.placed ?? []),
++    accepted: true,
++    warnings: placed ? [] : ['ice-cream: invalid resume progress — the question begins clean'],
++  };
++}
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/games/mini-game-base.ts b/app/src/games/mini-game-base.ts
+index 726174b..449e252 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/games/mini-game-base.ts
++++ b/app/src/games/mini-game-base.ts
+@@ -14,24 +14,34 @@
+ // the max hint level). A game ends its round with `scheduleFinish(ms)` (after its celebration) or
+ // `finishRound()`: `round:complete` with the tallied outcome, after the same cleanup as Home. A Home
+ // tap while the round is finishing completes it at once instead of abandoning it.
++// Story 2.5: the base owns the snapshot envelope (core/snapshot): `snapshot()` = makeSnapshot of the
++// level, seed, the tally of closed questions and the subclass `progress()`. `init` validates an incoming
++// `resume` against its own level and seed (`resumeAt`, null = fresh). `build()` begins question
++// `resumeAt.questionIndex` with the progress from its own `partial` and then calls `acceptResume()`, which
++// adds the snapshot's closed questions to the tally. A game that rejects the resume (e.g. an out-of-range
++// index) starts from question 1 without calling it, so the tally stays empty (nothing is counted twice).
+ // Games never navigate (`scene.start/stop/…`) or load (`this.load`): Map owns both (ESLint enforces it).
+ import { Scene, type Tweens } from 'phaser';
+-import type { GameId, GameStartData, RoundOutcome, Snapshot } from '../content/types';
++import type { GameId, GameStartData, RoundOutcome, Snapshot, SnapshotPartials } from '../content/types';
+ import { bus } from '../core/bus';
+ import { createHint, type Hint } from '../core/hint-director';
+ import { setHudMode } from '../core/hud-mode';
+ import { revealScene } from '../core/motion';
+ import { RoundGuard } from '../core/round-guard';
+ import { RoundTally } from '../core/round-tally';
++import { makeSnapshot, readResume, type ResumeAt } from '../core/snapshot';
+ 
+ /** Ambient motion stops from this hint level (the ring and bob appear). */
+ const AMBIENT_HINT_LEVEL = 2;
+ 
+-export abstract class MiniGameBase extends Scene {
++export abstract class MiniGameBase<G extends GameId = GameId> extends Scene {
+   readonly gameId: GameId;
+   protected level = 0;
+   protected seed = 0;
+-  protected resumeAt: Snapshot | undefined = undefined;
++  /** The validated resume point of this start (Story 2.5); null = a fresh round. */
++  protected resumeAt: ResumeAt | null = null;
++  /** True once `acceptResume()` restored the snapshot's tally for this start. */
++  private resumeAccepted = false;
+   private guard: RoundGuard | undefined;
+   /** The raw hint system of this start (created in `create`, before `build`). */
+   private inner: Hint = createHint(undefined);
+@@ -51,7 +61,8 @@ export abstract class MiniGameBase extends Scene {
+   init(data: Partial<GameStartData> = {}): void {
+     this.level = data.level ?? 0;
+     this.seed = data.seed ?? 0;
+-    this.resumeAt = data.resume;
++    // Story 2.5: only a resume that matches this start's level and seed is kept (readResume warns otherwise).
++    this.resumeAt = data.resume ? readResume(data.resume, { level: this.level, seed: this.seed }) : null;
+   }
+ 
+   create(): void {
+@@ -62,6 +73,7 @@ export abstract class MiniGameBase extends Scene {
+     this.ambient = new Set();
+     this.holds = new Set();
+     this.tally = new RoundTally();
++    this.resumeAccepted = false;
+     this.finishing = false;
+     this.inner = this.createHintSystem();
+     setHudMode('game');
+@@ -113,8 +125,26 @@ export abstract class MiniGameBase extends Scene {
+   /** Draws the game. */
+   protected abstract build(): void;
+ 
+-  /** The resume snapshot of the current state (written by Map on `round:abandon` from Epic 2). */
+-  abstract snapshot(): Snapshot;
++  /**
++   * The game's resumable state (Story 2.5): the open question's index and the game's own partial
++   * progress on it. The base wraps it in the snapshot envelope.
++   */
++  protected abstract progress(): { questionIndex: number; partial: SnapshotPartials[G] };
++
++  /**
++   * Story 2.5: the game resumed at `resumeAt.questionIndex`, so the questions closed before Home count
++   * towards this round's outcome. Called by `build()` only when it accepts the resume; at most once per start.
++   */
++  protected acceptResume(): void {
++    if (!this.resumeAt || this.resumeAccepted) return;
++    this.resumeAccepted = true;
++    this.tally.restore(this.resumeAt.tally);
++  }
++
++  /** The resume snapshot of the current state (Map keeps it on `round:abandon`, Story 2.5). */
++  snapshot(): Snapshot<G> {
++    return makeSnapshot<G>({ level: this.level, seed: this.seed, tally: this.tally.state(), progress: this.progress() });
++  }
+ 
+   /** The hint system this start uses (tests replace it). */
+   protected createHintSystem(): Hint {
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/games/registry.test.ts b/app/src/games/registry.test.ts
+index 254d058..ff09d6b 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/games/registry.test.ts
++++ b/app/src/games/registry.test.ts
+@@ -1,5 +1,6 @@
+ // Registry and MiniGame contract (Story 1.7) with Phaser's Scene stubbed (node has no canvas).
+ import { describe, expect, it, vi } from 'vitest';
++import type { GameStartData, Snapshot } from '../content/types';
+ 
+ vi.mock('phaser', () => {
+   class Scene {
+@@ -37,8 +38,13 @@ const { IceCream } = await import('./ice-cream/IceCream');
+ const { MiniGameBase } = await import('./mini-game-base');
+ 
+ /** A minimal game: the base contract without the ice-cream scene (which needs a real Phaser). */
+-class TestGame extends MiniGameBase {
++class TestGame extends MiniGameBase<'ice-cream'> {
+   readonly hints: string[] = [];
++  /** The open question index reported by progress(). */
++  at = 0;
++  get resumePoint() {
++    return this.resumeAt;
++  }
+   constructor() {
+     super('ice-cream');
+   }
+@@ -52,7 +58,11 @@ class TestGame extends MiniGameBase {
+       level: 0 as const,
+     };
+   }
+-  protected build(): void {}
++  /** Whether build() takes the resume (a real game decides from its own question count / partial). */
++  static acceptsResume = true;
++  protected build(): void {
++    if (this.resumeAt && TestGame.acceptsResume) this.acceptResume();
++  }
+   ask() {
+     this.hint.beginQuestion({ promptLineId: 'p', retryLineId: 'r', step: { correct: [], distractors: [], target: null, action: 'drag' } });
+   }
+@@ -68,8 +78,8 @@ class TestGame extends MiniGameBase {
+   ambientHold(reason: string, on: boolean) {
+     this.holdAmbient(reason, on);
+   }
+-  snapshot() {
+-    return { v: 1 as const, level: this.level, seed: this.seed, questionIndex: 0, partial: { placed: [] } };
++  protected progress() {
++    return { questionIndex: this.at, partial: { placed: [] as never[] } };
+   }
+ }
+ 
+@@ -98,7 +108,7 @@ describe('games/registry', () => {
+ });
+ 
+ describe('MiniGameBase', () => {
+-  function start(data = { level: 0, seed: 42 }) {
++  function start(data: Partial<GameStartData> = { level: 0, seed: 42 }) {
+     const game = new TestGame();
+     game.init(data);
+     game.create();
+@@ -109,7 +119,7 @@ describe('MiniGameBase', () => {
+     setHudMode('map');
+     const game = start({ level: 0, seed: 42 });
+     expect(getHudMode()).toBe('game');
+-    expect(game.snapshot()).toEqual({ v: 1, level: 0, seed: 42, questionIndex: 0, partial: { placed: [] } });
++    expect(game.snapshot()).toEqual({ v: 1, level: 0, seed: 42, questionIndex: 0, partial: { placed: [] }, tally: { questions: 0, firstTryCorrect: 0, maxHintLevel: 0 } });
+     game.shutdown();
+   });
+ 
+@@ -244,6 +254,86 @@ describe('MiniGameBase', () => {
+     offA();
+   });
+ 
++  it('Home mid-round (Story 2.5): the composed snapshot carries the progress and the closed-question tally; plain JSON', () => {
++    const game = start({ level: 1, seed: 9 }) as Started;
++    const abandon = vi.fn();
++    const off = bus.on('round:abandon', abandon);
++    game.ask();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 2 });
++    game.answer();
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 0 });
++    game.ask(); // open when Home is tapped: not in the tally
++    bus.emit('hint:level', { gameId: 'ice-cream', level: 4 });
++    game.at = 1;
++    bus.emit('hud:home');
++    expect(abandon).toHaveBeenCalledOnce();
++    const snap = abandon.mock.calls[0]![0].snapshot as Snapshot;
++    expect(snap).toMatchObject({ v: 1, level: 1, seed: 9, questionIndex: 1, partial: { placed: [] } });
++    expect(snap.tally).toEqual({ questions: 1, firstTryCorrect: 0, maxHintLevel: 2 });
++    expect(JSON.parse(JSON.stringify(snap))).toEqual(snap);
++    game.shutdown();
++    off();
++  });
++
++  it('a matching resume (Story 2.5): resumeAt is validated and its tally counts towards round:complete', () => {
++    const resume: Snapshot = { v: 1, level: 0, seed: 5, questionIndex: 1, partial: { placed: [] }, tally: { questions: 1, firstTryCorrect: 0, maxHintLevel: 4 } };
++    const game = start({ level: 0, seed: 5, resume }) as Started;
++    expect(game.resumePoint).toEqual({ questionIndex: 1, partial: { placed: [] }, tally: resume.tally });
++    const complete = vi.fn();
++    const off = bus.on('round:complete', complete);
++    for (let q = 0; q < 2; q++) {
++      game.ask();
++      game.answer();
++      bus.emit('hint:level', { gameId: 'ice-cream', level: 0 });
++    }
++    game.finishIn(1500);
++    bus.emit('hud:home');
++    expect(complete).toHaveBeenCalledWith({ gameId: 'ice-cream', questions: 3, firstTryCorrect: 2, maxHintLevel: 4 });
++    game.shutdown();
++    off();
++  });
++
++  it('a resume the game rejects (Story 2.5): the snapshot tally is not restored (counted once, not twice)', () => {
++    const resume: Snapshot = { v: 1, level: 0, seed: 5, questionIndex: 1, partial: { placed: [] }, tally: { questions: 1, firstTryCorrect: 0, maxHintLevel: 4 } };
++    TestGame.acceptsResume = false;
++    try {
++      const game = start({ level: 0, seed: 5, resume }) as Started;
++      expect(game.resumePoint).not.toBeNull();
++      expect(game.snapshot().tally).toEqual({ questions: 0, firstTryCorrect: 0, maxHintLevel: 0 });
++      const complete = vi.fn();
++      const off = bus.on('round:complete', complete);
++      game.ask();
++      game.answer();
++      game.finishIn(1500);
++      bus.emit('hud:home');
++      expect(complete).toHaveBeenCalledWith({ gameId: 'ice-cream', questions: 1, firstTryCorrect: 1, maxHintLevel: 0 });
++      game.shutdown();
++      off();
++    } finally {
++      TestGame.acceptsResume = true;
++    }
++  });
++
++  it.each([
++    ['v 2', { v: 2 }],
++    ['a seed mismatch', { seed: 6 }],
++    ['a level mismatch', { level: 1 }],
++  ])('a bad envelope (%s, Story 2.5): resumeAt null, a fresh round, one warn', (_name, patch) => {
++    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
++    const resume = { v: 1, level: 0, seed: 5, questionIndex: 1, partial: { placed: [] }, ...patch } as unknown as Snapshot;
++    const game = start({ level: 0, seed: 5, resume });
++    expect(game.resumePoint).toBeNull();
++    expect(warn).toHaveBeenCalledOnce();
++    warn.mockRestore();
++    game.shutdown();
++  });
++
++  it('no resume: resumeAt null', () => {
++    const game = start({ level: 0, seed: 5 });
++    expect(game.resumePoint).toBeNull();
++    game.shutdown();
++  });
++
+   it('after shutdown the scene no longer listens to hud:home', () => {
+     const game = start();
+     game.shutdown();
+diff --git a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/scenes/Map.ts b/app/src/scenes/Map.ts
+index ab37b37..a478f73 100644
+--- a/C:/Users/nguyentrunghieu/.claude/jobs/0ba395ed/tmp/baseline-2-5/app/src/scenes/Map.ts
++++ b/app/src/scenes/Map.ts
+@@ -26,6 +26,11 @@
+ // open. A station tap emits `overlay:close` first, then runs the trip as usual. On close: back / auto /
+ // station → a new idle visit (invitations restart); replay → clearResume + KartTrip.replay, which loads
+ // the game and enters it with the slower replay zoom (Timing.replayZoomInMs).
++// Story 2.5: on `round:abandon` from the running game Map keeps its snapshot (SessionStore.setResume,
++// synchronously, before the return path above). A station holding one shows a static resume mark
++// (core/resume-marks + core/ui/resume-mark), synced on create, on every wake and at each start. The next
++// normal entry starts with `{ level: snapshot.level, seed: snapshot.seed, resume }` (never a replay), and
++// every start clears that game's resume point (a resumed start consumes it).
+ // Timing, routing and geometry are pure core code; this
+ // scene only wires Phaser. The kart moves only in `update` (no timers or tweens), so a pause freezes it.
+ import { Scene, type GameObjects } from 'phaser';
+@@ -64,6 +69,7 @@ import { opensPlayAgain, PlayAgainController, routePlayAgainClose, type CloseRea
+ import { playAgainPlacement } from '../core/play-again-layout';
+ import { enterStation, enterZoomMs, pullBack, revealScene } from '../core/motion';
+ import {
++  keepAbandonSnapshot,
+   PostRoundChain,
+   routeChainEnd,
+   routeRoundAbandon,
+@@ -74,10 +80,12 @@ import {
+ } from '../core/post-round-chain';
+ import { ProgressStore } from '../core/progress-store';
+ import { amplitude, prefersReducedMotion } from '../core/reduced-motion';
++import { resumeMarkPlan } from '../core/resume-marks';
+ import { createRoad } from '../core/road';
+-import { session } from '../core/session-store';
++import { session, takeStartData } from '../core/session-store';
+ import { Tokens } from '../core/tokens';
+ import { playFlyIn } from '../core/ui/decoration-fly';
++import { drawResumeMark } from '../core/ui/resume-mark';
+ import { createMapProp, type MapProp } from '../core/ui/map-prop';
+ import { bob, bounce, isMoving, stopMotion } from '../core/ui/scale-motion';
+ import { GAMES, isGameId, ladderLength } from '../games/registry';
+@@ -140,6 +148,8 @@ export class MapScene extends Scene {
+   private chain: PostRoundChain | undefined;
+   /** Story 2.4: the open play-again question (undefined once it closed). */
+   private playAgain: PlayAgainController | undefined;
++  /** Story 2.5: the static resume marks drawn, by station id. */
++  private resumeMarks = new Map<GameId, GameObjects.Graphics>();
+ 
+   /**
+    * Story 2.3: runs when a post-round chain ends without a queued station tap. Story 2.4: a completed
+@@ -168,6 +178,7 @@ export class MapScene extends Scene {
+     this.loadedGames = new Set();
+     this.decorations = new Map();
+     this.decorationWarnings = new Set();
++    this.resumeMarks = new Map();
+ 
+     const layout = LAYOUTS.map;
+     const atlasKey = ATLASES.map.key;
+@@ -256,6 +267,7 @@ export class MapScene extends Scene {
+     this.kart = this.addKart(plan.kart, router, atlasKey, road.pointAt(startS));
+     // Story 2.3: grants still pending (Map was stopped meanwhile) are held for their fly-in below.
+     this.syncDecorations({ hold: this.pendingSlots() });
++    this.syncResumeMarks();
+ 
+     this.idle = createMapIdle({
+       stations: plan.stations.map((s) => s.id),
+@@ -311,9 +323,11 @@ export class MapScene extends Scene {
+       else if (route.action === 'fade') this.returnFrom(route.gameId);
+     };
+     scoped.on('round:complete', (outcome) => follow(routeRoundComplete(this.running, outcome)));
+-    scoped.on('round:abandon', ({ gameId }) =>
+-      follow(routeRoundAbandon(this.running, gameId, session.pendingFlyIns.length, chain.active)),
+-    );
++    scoped.on('round:abandon', ({ gameId, snapshot }) => {
++      // Story 2.5: keep the running game's snapshot first (synchronously); the return path is unchanged.
++      keepAbandonSnapshot(this.running, gameId, snapshot, session);
++      follow(routeRoundAbandon(this.running, gameId, session.pendingFlyIns.length, chain.active));
++    });
+     this.events.on(WAKE, this.onWake, this);
+ 
+     // Hud runs in parallel above Map and the games; launched once, never on Start.
+@@ -339,6 +353,7 @@ export class MapScene extends Scene {
+       this.router = undefined;
+       this.chain = undefined;
+       this.decorations = new Map();
++      this.resumeMarks = new Map();
+     });
+ 
+     // Story 2.3: Map was stopped while grants arrived (e.g. Chạm là nói, Epic 4): show them now.
+@@ -416,6 +431,23 @@ export class MapScene extends Scene {
+     this.decorations.set(item.key, { prop, slotId: item.slotId, footprint: item.footprint });
+   }
+ 
++  // --- resume marks (Story 2.5) ---------------------------------------------------------------------
++
++  /** Destroys the marks of stations no longer holding a resume point and draws the missing ones (static). */
++  private syncResumeMarks(): void {
++    const held = new Set<GameId>(session.resumeIds());
++    for (const [id, mark] of [...this.resumeMarks]) {
++      if (held.has(id)) continue;
++      mark.destroy();
++      this.resumeMarks.delete(id);
++    }
++    const missing = [...held].filter((id) => !this.resumeMarks.has(id));
++    if (missing.length === 0) return;
++    for (const at of resumeMarkPlan(missing, LAYOUTS.map.hits)) {
++      this.resumeMarks.set(at.id as GameId, drawResumeMark(this, at));
++    }
++  }
++
+   // --- post-round chain (Story 2.3) ---------------------------------------------------------------
+ 
+   /** Slots of the grants still waiting for their fly-in. */
+@@ -709,7 +741,10 @@ export class MapScene extends Scene {
+     // Story 2.4: a replay zooms back in more slowly (a fade under reduced motion either way).
+     await enterStation(this, focus, this.reduced, enterZoomMs(via));
+     if (!this.trip) return; // Map shut down meanwhile
+-    const data = session.startData(id, ladderLength(entry));
++    // Story 2.5: a held snapshot resumes the game (its own level and seed), except on a replay. Every
++    // start clears the resume point: a start without resume drops it, a resumed start consumes it.
++    const data = takeStartData(id, ladderLength(entry), via);
++    this.syncResumeMarks();
+     // At most one MiniGame: stop any other one still around.
+     for (const other of Object.keys(GAMES)) {
+       if (this.scene.isActive(other) || this.scene.isPaused(other) || this.scene.isSleeping(other)) this.scene.stop(other);
+@@ -776,6 +811,7 @@ export class MapScene extends Scene {
+       if (this.idle) this.handle(this.idle.reset());
+       this.syncDecorations();
+     }
++    this.syncResumeMarks();
+     const last = session.lastStation;
+     const s = last !== undefined ? this.stops[last] : undefined;
+     if (this.trip && s !== undefined) this.applyAll(this.trip.parkAt(s));

@@ -1,0 +1,51 @@
+{
+  "name": "be-hoc-choi",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Bé Học Chơi — offline toddler learning games for iPad (Phaser 4 + Vite). Scaffolded from phaserjs/template-vite-ts 1.4.0.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tokens": "node tools/tokens/generate.ts",
+    "tokens:check": "node tools/tokens/generate.ts --check",
+    "audio:placeholders": "node tools/audio/make-placeholders.ts",
+    "audio:normalize": "node tools/audio/normalize.ts",
+    "audio:check": "node tools/audio/check-sfx.ts",
+    "content:export": "node tools/content/export-voice-lines.ts",
+    "tts": "npm run content:export && node tools/tts/generate.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "validate:content": "node tools/lint/validate-content.ts",
+    "pwa:icons": "node tools/pwa/make-icons.ts",
+    "precache:check": "node tools/lint/check-precache.ts",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run tokens:check && npm run validate:content && npm run build && npm run precache:check",
+    "art:build": "node tools/render/build.ts",
+    "render": "node tools/render/render.ts",
+    "atlas": "node tools/atlas/pack.ts",
+    "doctor": "node tools/doctor/doctor.ts"
+  },
+  "dependencies": {
+    "phaser": "4.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.1",
+    "eslint": "10.12.0",
+    "free-tex-packer-core": "0.3.9",
+    "happy-dom": "20.14.5",
+    "sharp": "0.35.4",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "8.71.1",
+    "vite": "8.3.3",
+    "vite-plugin-pwa": "2.0.0",
+    "vitest": "5.0.3",
+    "yaml": "2.9.1"
+  }
+}

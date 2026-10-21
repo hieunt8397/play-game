@@ -1,0 +1,68 @@
+{
+  "anchors": {
+    "apatosaurus": { "x": 512, "y": 360 },
+    "apatosaurus-walk": { "x": 606.7, "y": 383.9 },
+    "cloud-1": { "x": 225.1, "y": 49.7 },
+    "cloud-2": { "x": 820.6, "y": 43.4 },
+    "dino-bay-1": { "x": 180.1, "y": 330 },
+    "dino-bay-2": { "x": 874.1, "y": 386.1 },
+    "dino-bay-3": { "x": 400, "y": 560 },
+    "dino-bay-4": { "x": 640.2, "y": 560 },
+    "dino-bay-5": { "x": 159.9, "y": 560 },
+    "dino-bay-6": { "x": 860.2, "y": 560 },
+    "dino-bay-7": { "x": 180.3, "y": 450 },
+    "dino-bay-8": { "x": 873.9, "y": 480.1 },
+    "stegosaurus": { "x": 512, "y": 360 },
+    "stegosaurus-walk": { "x": 606.7, "y": 383.9 },
+    "triceratops": { "x": 512, "y": 360 },
+    "triceratops-walk": { "x": 606.7, "y": 383.9 }
+  },
+  "design": {
+    "height": 768,
+    "width": 1024
+  },
+  "hits": {
+    "grass": [
+      { "x": 2, "y": 323.8 },
+      { "x": 1022, "y": 323.8 },
+      { "x": 1022, "y": 766.5 },
+      { "x": 2, "y": 766.5 }
+    ]
+  },
+  "paths": {},
+  "renderScale": 2,
+  "screenId": "dino-puzzle",
+  "slots": {
+    "apatosaurus-back": { "x": 502.1, "y": 311.4 },
+    "apatosaurus-back-legs": { "x": 502.1, "y": 317 },
+    "apatosaurus-body": { "x": 555.5, "y": 298.1 },
+    "apatosaurus-body-legs": { "x": 546.4, "y": 318.8 },
+    "apatosaurus-front": { "x": 565.8, "y": 323.5 },
+    "apatosaurus-front-legs": { "x": 555.9, "y": 341.3 },
+    "apatosaurus-head": { "x": 689.5, "y": 298.7 },
+    "apatosaurus-head-neck": { "x": 659.3, "y": 301.9 },
+    "apatosaurus-neck": { "x": 646.8, "y": 301.9 },
+    "apatosaurus-tail": { "x": 434, "y": 298.4 },
+    "stegosaurus-back": { "x": 548.4, "y": 260.8 },
+    "stegosaurus-back-legs": { "x": 532.5, "y": 267.2 },
+    "stegosaurus-body": { "x": 598.6, "y": 237.2 },
+    "stegosaurus-body-legs": { "x": 568.9, "y": 274.5 },
+    "stegosaurus-front": { "x": 613.6, "y": 290.1 },
+    "stegosaurus-front-legs": { "x": 635.2, "y": 347.6 },
+    "stegosaurus-head": { "x": 693.5, "y": 331.7 },
+    "stegosaurus-head-neck": { "x": 678.1, "y": 302.4 },
+    "stegosaurus-neck": { "x": 664.7, "y": 295.9 },
+    "stegosaurus-tail": { "x": 462, "y": 232.7 },
+    "triceratops-back": { "x": 489.4, "y": 272 },
+    "triceratops-back-legs": { "x": 479.3, "y": 274.5 },
+    "triceratops-body": { "x": 536.6, "y": 243.1 },
+    "triceratops-body-legs": { "x": 511.4, "y": 284.9 },
+    "triceratops-front": { "x": 546.8, "y": 291.2 },
+    "triceratops-front-legs": { "x": 572, "y": 321.3 },
+    "triceratops-head": { "x": 678.7, "y": 256.1 },
+    "triceratops-head-neck": { "x": 636.4, "y": 242.7 },
+    "triceratops-neck": { "x": 616.8, "y": 242.7 },
+    "triceratops-tail": { "x": 433.9, "y": 233 }
+  },
+  "v": 1
+}

@@ -1,0 +1,3400 @@
+diff --git a/_bmad-output/implementation-artifacts/spec-1-5-man-con-duong-7-tram-nhan-loi-moi-tram-ngu.md b/_bmad-output/implementation-artifacts/spec-1-5-man-con-duong-7-tram-nhan-loi-moi-tram-ngu.md
+new file mode 100644
+index 0000000..b76262b
+--- /dev/null
++++ b/_bmad-output/implementation-artifacts/spec-1-5-man-con-duong-7-tram-nhan-loi-moi-tram-ngu.md
+@@ -0,0 +1,261 @@
++---
++title: 'Story 1.5 — Màn Con đường: 7 trạm, nhãn, lời mời, trạm ngủ'
++type: 'feature'
++created: '2026-10-08'
++status: 'in-review'
++baseline_revision: 'NO_VCS'
++baseline_commit: 'NO_VCS'
++review_loop_iteration: 0
++followup_review_recommended: false
++context:
++  - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-4-pipeline-hinh-render-blender-atlas-layout.md'
++  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-3-be-nghe-giong-doc-tieng-viet.md'
++warnings: ['oversized']
++deferred: []
++---
++
++<intent-contract>
++
++## Intent
++
++**Problem:** `Map` is still a sky-only placeholder. The island art, hit polygons and anchors from Story 1.4 are never loaded or shown. A 3-year-old therefore has nothing to tap, sees no station names for the parent, and gets no idle invitation to start playing.
++
++**Approach:**
++- `Boot` also loads `atlas.map` and `bg.map`.
++- `Map` draws the plate, the 7 station sprites, a static label under each station and the kart as a map prop. Each station gets a `HotspotPolygon` (new, minimal `core/input`). A tap bounces the station and either reads its name (the awake `ice-cream`) or plays a happy sound (the 6 sleeping stations).
++- A pure idle scheduler in core drives two things: ambient station motion every 4–6 s, and up to 3 invitations, each drawn with a new `core/hint-visuals` ring plus a bob and voice.
++- The new voice lines, SFX, timings and UI values are content and tokens.
++
++## Boundaries & Constraints
++
++**Always:**
++- **Layout use (spec-1-4 contract, unchanged):**
++  - Read `LAYOUTS.map` (`content/layouts.ts`, layout JSON v1, design px).
++  - Each station image is the frame `<stationId>/idle/00` of texture `atlas.map`, placed full-frame. Its scale is `1/renderScale` and its origin is `(anchor.x/design.width, anchor.y/design.height)`, so every bounce scales around the ground pivot `anchors[id]`.
++  - `bg.map` is drawn at (0,0), origin 0, scale `1/renderScale`, at the lowest depth. Station depth sorts by `anchors[id].y`.
++  - Slots are never drawn (UX-DR42).
++- **Hit areas:**
++  - A station's hit area is exactly `hits[id]`, with no extra padding (the stored polygon is already final).
++  - The kart prop's hit area is the trimmed rect of `kart/idle/00` (`spriteSourceSize ÷ renderScale`) padded by `Tokens.spacing.hitPad` on each side, registered as a 4-point `HotspotPolygon`.
++  - Labels and the plate are not interactive.
++- **`core/input` (minimal, extended by Story 1.6):**
++  - `polygon.ts › pointInPolygon` (pure).
++  - `tap-router.ts › createTapRouter(scene)`: one `pointerdown` listener per scene. It reads the point through a single `pointerPoint(pointer)` (`pointer.x/y` today; 1.6 swaps in `toDesign`) and calls the topmost matching target, meaning the last one registered. Every tap, hit or miss, first calls the router's `onAnyTap` hook, which Map uses to reset idle. A tap that misses every target does nothing else.
++  - `hotspot-polygon.ts › HotspotPolygon(router, points, onTap)` with `setEnabled` and `destroy`.
++  - No pointer API is used outside `core/input`, so 1.6's lint ban passes without changes.
++- **Taps:** feedback starts in the same `pointerdown` handler (≤ `Timing.feedbackMaxMs`). Any tap on a target, and any tap on empty map, resets the idle clock and removes a showing invitation.
++  - **Awake station** (`ice-cream`): bounce `1 → Tokens.ui.stationTapScale → 1` over `Timing.stationTapMs`, then `audio.say('vo.shell.station-name.ice-cream')` and `audio.setPrompt(<same>)`. No navigation (the kart drive is Story 1.7).
++  - **Sleeping station:** the same bounce plus `audio.sfx('sfx.shell.happy')`. No voice, no navigation, no error.
++  - **Prop (kart):** bounce to `tappableProp.react.scale` over `react.durationMs` plus `audio.sfx('sfx.shell.prop')`. It never opens a game.
++  - A tap on an object that is already tweening restarts its bounce from scale 1×base (stop the old tween, reset the scale).
++- **Idle scheduler** (`core/map-idle.ts`, pure, time comes in through `tick(deltaMs)`):
++  - **Ambient:** every `rand(mapAmbientMinMs..mapAmbientMaxMs)` it emits `{kind:'ambient', id}` for one station. The id is never the same twice in a row, and every station is eligible.
++  - **First invitation:** emitted after `mapInviteFirstMs` of idle as `{kind:'invite', id}` for the next awake station (round-robin).
++  - **Later invitations:** only when idle is at least `mapInviteFirstMs` and at least `mapInviteGapMs` has passed since the previous invitation started. At most `mapInviteMaxCount` per Map visit; taps do not reset the count.
++  - **While an invitation shows** (`mapInviteHoldMs`, or until a tap): no ambient is emitted (one prominent motion, UX-DR72). When it ends, the scheduler emits `{kind:'inviteEnd', id}`.
++  - **`tap()`:** resets the idle clock and the ambient timer, and ends a showing invitation with an `inviteEnd`.
++  - **Deltas** are clamped to `MAX_TICK_MS` (250), so a resume after a pause never fires a burst of events.
++  - **Pause:** `Map` feeds `delta` from `update()`, which does not run while `AudioUnlockOverlay` pauses the scene. Idle time therefore stops during that pause.
++- **Invitation** (on `invite`):
++  - `createHintRing(scene, ellipse)` from `core/hint-visuals` draws the ring around the bounding box of `hits[id]`. It uses the three layers of `Tokens.components.hintRing`, pulsing `.95↔1.05` over `pulse.durationMs`, and only one ring exists at a time.
++  - The station bobs `stationHotspot.pulse.from → to` with yoyo over `pulse.durationMs`, repeating.
++  - Voice: `audio.sayChain(['vo.shell.invite.<id>', 'vo.shell.station-name.<id>'])` and `audio.setPrompt('vo.shell.invite.<id>')`.
++  - On `inviteEnd` the ring is destroyed and the bob stops at scale 1×base.
++- **Ambient motion:** scale `1 → Tokens.ui.ambientScale → 1` over `Timing.mapAmbientMoveMs`, yoyo, once.
++- **Reduced motion:** `core/reduced-motion.ts › prefersReducedMotion(win)` (`matchMedia('(prefers-reduced-motion: reduce)')`, false when it is unavailable) is read in `Map.create`. When true, every scale amplitude (the `x−1` part of tap, prop, ambient, bob and ring pulse) is multiplied by `Tokens.ui.reducedMotionAmplitude`. A pure `amplitude(scale, reduced)` helper does this. Nothing flashes; there are no sparkles in this story.
++- **Labels:**
++  - Each station gets a `station-label` from `STATIONS[i].label`: Phaser Text in `Tokens.components.stationLabel` (Baloo 2 18px/600, fill white, 2px stroke `labelOutline`, alpha 0.85).
++  - Position: centred on `anchors[id].x`, top at `anchors[id].y + Tokens.spacing['1']`, clamped horizontally and vertically inside `Tokens.safeRect`. The position comes from a pure `labelPosition`.
++  - Labels are static and depth-above all sprites.
++- **Missing art (AR51):**
++  - A missing frame (`!texture.has(frame)`) skips only that image, with one `console.warn` naming the frame. Its hotspot and label stay, and so does the station's tap feedback.
++  - A station missing from the layout (no `hits`/`anchors`) is skipped entirely, with a `console.warn`.
++  - Nothing is ever shown to the child.
++- **Values:** every duration comes from `Tokens.Timing.*` and every size or scale from `Tokens.*`; scenes have no magic numbers (lint). Map logic (planning, idle, geometry) is pure core code with Vitest. `scenes/Map.ts` only wires Phaser.
++
++**Never:**
++- No kart driving, re-targeting, camera zoom or `scene.start` of a game (Story 1.7). No Hud, Speaker, Home, InputGuard first-finger rule, dead-zone filter or `toDesign` (Story 1.6). No decorations or slot rendering (Story 2.2). No HintDirector or hand (Story 1.9).
++- No hand-entered coordinates, no new layout fields and no change to spec-1-4's JSON/naming.
++- No `setTimeout`/`setInterval` for idle timing, and no `this.sound` or audio paths in scenes.
++- No text other than the parent-facing station labels.
++- No writing files that contain backslashes through a shell heredoc. No git.
++
++**Decisions (auto-run defaults):**
++- **Awake set and labels:** `content/stations.ts` entries gain `label: string` and `awake: boolean`, with `awake: true` only for `ice-cream`. Story 1.7 may derive `awake` from `games/registry.ts` instead.
++  - Labels, which are also the name-line texts: ice-cream "Xe kem", pizza "Tiệm pizza", race "Đường đua", fishing "Hồ cá", touch-talk "Chạm là nói", dino-puzzle "Công viên khủng long", shadow-match "Hang tìm bóng".
++- **Sleeping stations do not read their name.** The AC asks for a bounce plus a happy sound, and saying the name would invite the child somewhere that cannot open. Only awake stations are invited.
++- **Voice lines** (scope `shell`, all unapproved until a parent listens):
++  - `vo.shell.station-name.<id>` × 7, with the label texts above.
++  - `vo.shell.invite.ice-cream` = "Bé ơi, mình đi ăn | kem nhé!" (`keywordPauseMs: 300`), from the EXPERIENCE flow.
++  - Boot already loads every `vo.shell.*` line.
++- **SFX:** `sfx.shell.happy` (sleeping-station "tiếng vui") and `sfx.shell.prop` (the small prop sound), as synthesized placeholders in `tools/audio/make-placeholders.ts`. Both stay quieter than the voice with a fade-in of at least 50 ms.
++- **Kart as the map prop:** `kart/idle/00` is placed full-frame like the stations and is the one `tappable-prop` in Epic 1. Story 1.7 replaces its tap with "bíp" plus a speed-up. Story 2.2 decorations reuse `createMapProp`.
++- **New values:**
++  - `Timing.mapAmbientMoveMs: 800` and `Timing.mapInviteHoldMs: 5600` (4 bob half-cycles).
++  - `Tokens.ui.stationTapScale: 1.1`, `ui.ambientScale: 1.04` and `ui.reducedMotionAmplitude: 0.5`.
++- **Content check:** `content/validate.ts` also requires a non-empty label for every station, a `vo.shell.station-name.<id>` line for every station, and a `vo.shell.invite.<id>` line for every awake station. Each failure names the id.
++
++## I/O & Edge-Case Matrix
++
++| Scenario | Input / State | Expected Output / Behavior | Error Handling |
++|----------|--------------|---------------------------|----------------|
++| Enter Map | layout + atlas loaded | plate, 7 sprites, 7 labels, kart; no slot markers | — |
++| Tap ice-cream | point inside `hits['ice-cream']` | bounce starts same handler; `say` + `setPrompt` name line | — |
++| Tap sleeping | point inside `hits.pizza` | bounce + `sfx.shell.happy`; no say, no navigation | — |
++| Tap kart | inside padded kart rect | 1.1× bounce + `sfx.shell.prop` | — |
++| Tap empty | outside all targets | nothing visible; idle clock reset | — |
++| Overlap | point inside two targets | only the last-registered (topmost) target fires | — |
++| Ambient | idle, tick 4–6 s | one `ambient` event; next id ≠ previous | — |
++| First invite | idle 8 s | `invite` for ice-cream; ring + bob + chain; no ambient while showing | — |
++| Invite ends | hold 5.6 s elapsed, or a tap | `inviteEnd`; ring gone; bob reset | — |
++| Later invites | idle continues | next `invite` ≥ 20 s after the previous start; none after the 3rd | — |
++| Tap resets | tap at idle 7 s | no invite until 8 s after the tap | — |
++| No awake | awake set empty | ambient only, never `invite` | — |
++| Pause/resume | delta 30 000 ms after resume | treated as 250 ms | — |
++| Reduced motion | `reduce` matches | amplitudes × 0.5 (1.1 → 1.05, .92/1.08 → .96/1.04) | — |
++| Missing frame | `pizza/idle/00` absent | no pizza image; label + hotspot remain; one warn | console.warn |
++| Missing station | layout lacks `hits.race` | station skipped | console.warn |
++| Label at edge | anchor near the safeRect bottom | label clamped inside `safeRect` | — |
++
++</intent-contract>
++
++## Code Map
++
++- `app/src/scenes/Map.ts` -- the current sky-only placeholder; it becomes the island scene.
++- `app/src/scenes/Boot.ts`, `app/src/core/boot-load.ts` (+ test) -- `attempt()` loads `bootAudio()`. Add `bootTextures()` built from `ATLASES.map` / `BACKGROUNDS.map` (planned in spec-1-4, `content/assets.ts`), loaded with `load.atlas` / `load.image` and skipped when `textures.exists(key)`. The same error and retry rules apply.
++- `app/src/core/audio-director.ts` -- `audio` singleton: `say`, `sayChain`, `sfx`, `setPrompt` (exists).
++- `app/src/core/timing.ts`, `app/src/core/tokens.ts` -- add the new Timing and `ui` values. `Tokens.components.{stationHotspot,stationLabel,hintRing,tappableProp}` already exist in `tokens.generated.ts`.
++- `app/src/content/stations.ts`, `layouts.ts`, `layout-types.ts`, `assets.ts` -- planned in spec-1-4. `stations.ts` gains `label`/`awake`.
++- `app/src/content/voice-lines.ts`, `audio-catalog.ts`, `validate.ts` (+ test) -- the new lines, SFX and rules.
++- `app/tools/audio/make-placeholders.ts` (+ test) -- the exhaustive `buildArgs` switch gets the two new SFX.
++- `app/src/core/ui/round-button.ts` -- the existing tween and press pattern to mirror.
++- Consumers: 1.6 (`tap-router`, the `pointerPoint` swap, Speaker → `audio.replayPrompt()` replays the invite or name), 1.7 (kart prop, awake set, station tap → drive), 1.9 (`hint-visuals` ring reuse), 2.2 (`createMapProp`, slots).
++
++## Tasks & Acceptance
++
++**Execution:**
++- `app/src/core/timing.ts`, `app/src/core/tokens.ts` -- add `mapAmbientMoveMs`, `mapInviteHoldMs`, and `ui.stationTapScale`, `ambientScale`, `reducedMotionAmplitude`.
++- `app/src/content/stations.ts` -- add `label` and `awake` per the Decisions.
++- `app/src/content/voice-lines.ts`, `app/src/content/audio-catalog.ts` -- 7 name lines, the ice-cream invite, and `sfx.shell.happy` / `sfx.shell.prop`.
++- `app/src/content/validate.ts` (+ test), `app/tools/lint/validate-content.ts` -- the station label, name-line and invite-line rules.
++- `app/tools/audio/make-placeholders.ts` (+ test) -- synthesize the two SFX: a short rising two-note chime for happy, a ~100 ms soft tick for prop; 50 ms fade-in, peak −20 dBFS.
++- `app/src/core/input/polygon.ts`, `tap-router.ts`, `hotspot-polygon.ts` (+ tests) -- point-in-polygon (concave, edge and vertex cases); topmost-wins routing with a fake scene input; enable/destroy.
++- `app/src/core/reduced-motion.ts` (+ test) -- `prefersReducedMotion`, `amplitude`.
++- `app/src/core/map-idle.ts` (+ test) -- the scheduler; every idle, invite, reset, clamp and no-awake matrix row, with an injected rng.
++- `app/src/core/map-plan.ts` (+ test) -- pure `planMap(layout, stations, hasFrame, frameRect)`. It returns per-station image, label position, hit, awake, the kart prop rect and warnings. It covers missing frame, missing station, label clamp, no slot items and depth order.
++- `app/src/core/hint-visuals.ts` -- `createHintRing(scene, {x,y,width,height}) → {destroy()}`: three ellipse strokes plus a pulse tween, one live ring (creating a new one destroys the old).
++- `app/src/core/ui/map-prop.ts` -- `createMapProp(scene, router, {frame, rect, onTap})` for the tappable-prop bounce.
++- `app/src/core/boot-load.ts` (+ test), `app/src/scenes/Boot.ts` -- `bootTextures()` and loading.
++- `app/src/scenes/Map.ts` -- wire the plan, images, labels, hotspots, prop, idle `update`, invitations and audio; reduced motion read once.
++- `app/public/assets/audio/{vo,sfx}/…` -- generate by running `npm run audio:placeholders` and `npm run tts` with the env bins.
++
++**Acceptance Criteria:**
++- Given 1.4's outputs and a fresh `npm run dev`, when the child taps Chơi and the Map opens, then the island fills the screen with 7 stations, each with a small, translucent, outlined label below it, and no empty decoration markers.
++- Given the Map, when the child taps the ice-cream truck, then it bounces at once and "Xe kem" is spoken. When the child taps the pizza shop, it bounces with a happy sound, says nothing and the scene stays on Map. When the child taps the kart, it bounces 1.1× with a small sound.
++- Given the Map left untouched, when watching for 70 s, then only one station moves every 4–6 s. At ~8 s the ice-cream truck gets the purple-and-white ring, bobs and the invitation plays followed by "Xe kem". At most 3 invitations come, at least 20 s apart, and nothing else moves while the ring shows.
++- Given idle at 7 s, when the child taps anywhere, then no invitation appears until 8 s after that tap.
++- Given DevTools rendering emulation `prefers-reduced-motion: reduce`, when reloading and watching, then the bounces and bobs are visibly smaller and nothing flashes.
++- Given `atlas.map` with the `pizza/idle/00` frame removed from the JSON, when the Map opens, then pizza's label and tap sound remain, one `console.warn` names the frame, and the child sees no error.
++- Given a station label, name line or invite line removed from content, when running `npm run check`, then it fails and names the id.
++
++## Spec Change Log
++
++- **2026-10-08: small API shapes chosen while building.**
++  - `planMap` takes a fifth, optional `opts` (`measureLabel`, `safeRect`, `labelGap`, `hitPad`, `atlasKey`). The label size is only known after Phaser measures the Text, so Map passes a measure that creates each label once.
++  - A router target exposes `isEnabled()` instead of an `enabled` getter, so `HotspotPolygon` needs no `this` alias.
++  - `createMapProp` takes the planned image placement (`frame: PlannedImage`) and the padded hit polygon (`rect`). The kart's pivot is `anchor.kart-start`, so its bounce scales around the ground point like the stations do.
++  - The bounce, ambient move and bob live in a new `core/ui/scale-motion.ts`. Each object has one motion at a time; a new one stops the old one and resets the scale to 1×base. The bob is a sine around the mid scale (.92↔1.08 → mid 1), so it starts without a jump.
++- **2026-10-08: the awake station's name line starts in the tap handler**, together with the bounce, instead of after the 500 ms bounce. The AC says "bounces at once and 'Xe kem' is spoken", and NFR5 wants feedback within 100 ms.
++- **2026-10-08: the hint ring is the ellipse inscribed in the bounding box of `hits[id]`.** The stored polygon is already padded by 24 px, so the inscribed ellipse sits around the art. A circumscribed one (×√2) would reach into the neighbouring stations.
++- **2026-10-08: `npm run tts` had transient edge-tts failures** (`NoAudioReceived`) on the first run. A second run wrote the remaining 2 lines, and a third run skipped all 9.
++
++## Review Triage Log
++
++## Design Notes
++
++**Why pure core + thin scene:** Phaser does not run under Vitest (node). The scheduler, planner, geometry and routing are plain functions with fakes, so every matrix row is tested. `Map.ts` only maps events to tweens and audio calls:
++
++```ts
++update(_: number, delta: number): void {
++  for (const ev of this.idle.tick(delta)) {
++    if (ev.kind === 'ambient') this.ambient(ev.id);
++    else if (ev.kind === 'invite') this.invite(ev.id);
++    else this.endInvite(ev.id);
++  }
++}
++```
++
++**Why `tick(delta)` and not `scene.time.now`:** the clock time jumps across a pause, but `update` deltas do not arrive while the scene is paused. With the clamp, idle time stops while the audio-unlock overlay pauses the Map.
++
++## Verification
++
++**Commands:**
++- `cd app && npm run audio:placeholders && npm run tts` -- expected: the two SFX and 8 new voice lines are written; a second `tts` run skips them.
++- `cd app && npm run check` -- expected: exit 0; Vitest covers every matrix row; validate:content reports 7 stations and 9 voice lines.
++- `cd app && npm run build` -- expected: exit 0; `dist/assets/atlases/map.*` and `dist/assets/bg/map.png` are present.
++
++**Manual checks:**
++- In `npm run dev`, run the AC walkthroughs: taps, the 70 s idle watch, reduced motion and the pizza-frame removal (restore the file afterwards).
++- The labels are readable but subtle, sit under their stations, and none is cut off at the edges.
++
++## Auto Run Result
++
++**Status:** in-review. `cd app && npm run check` exits 0: 27 test files, 336 tests. `validate:content` reports "7 game ids, 4 audio ids, 9 voice lines, 1 layout(s) with 7 stations, 1 atlas(es), 27 asset files".
++
++**Summary:**
++- Boot also loads `atlas.map` (`load.atlas`) and `bg.map` (`load.image`) through `bootTextures()`. It skips keys that already exist and follows the same error and retry rules.
++- `Map` draws the plate, the 7 station sprites, a static label under each station and the kart prop. The sprites are full frame on their anchors at scale 1/renderScale. Each station has a `HotspotPolygon` on its stored hit polygon. The kart's hit area is its padded trimmed rect.
++- Taps:
++  - ice-cream bounces, says "Xe kem" and sets it as the prompt;
++  - a sleeping station bounces and plays `sfx.shell.happy`;
++  - the kart bounces 1.1× and plays `sfx.shell.prop`;
++  - every tap resets idle and ends a showing invitation.
++- The pure `core/map-idle` drives the ambient motion every 4–6 s and up to 3 invitations. An invitation is a ring, a bob, `sayChain([invite, name])` and the prompt. Deltas are clamped to 250 ms.
++- Reduced motion halves every scale amplitude. A missing frame skips only the image, with one `console.warn`. A missing station is skipped with a warning.
++- Content: `label` and `awake` on stations, 8 new voice lines (unapproved), 2 new SFX, and the station rules in `validate:content`.
++
++**Files changed:**
++- `app/src/core/timing.ts`: `mapAmbientMoveMs`, `mapInviteHoldMs`.
++- `app/src/core/tokens.ts`: `ui.stationTapScale`, `ui.ambientScale`, `ui.reducedMotionAmplitude`.
++- `app/src/content/stations.ts`: `label`, `awake`, `KART_FRAME`, `stationFrame`.
++- `app/src/content/voice-lines.ts`: 7 name lines, the ice-cream invite, `stationNameLine`, `inviteLine`.
++- `app/src/content/audio-catalog.ts`: `sfx.shell.happy`, `sfx.shell.prop`.
++- `app/src/content/validate.ts` (+ test): `validateStations` (label, name line, invite line of awake stations).
++- `app/tools/lint/validate-content.ts`: wires in the station rules; frame names come from `stationFrame`/`KART_FRAME`.
++- `app/tools/audio/make-placeholders.ts` (+ test): the two synthesized SFX.
++- `app/src/core/input/polygon.ts`, `tap-router.ts`, `hotspot-polygon.ts` (+ `input.test.ts`): geometry, routing and hotspots.
++- `app/src/core/reduced-motion.ts` (+ test): `prefersReducedMotion`, `amplitude`.
++- `app/src/core/map-idle.ts` (+ test): the idle scheduler.
++- `app/src/core/map-plan.ts` (+ test): `planMap`, `labelPosition`, `estimateLabelSize`.
++- `app/src/core/hint-visuals.ts`: `createHintRing` (one live ring), `ringRadii`.
++- `app/src/core/ui/scale-motion.ts`: `bounce`, `bob`, `stopMotion`, `isMoving`.
++- `app/src/core/ui/map-prop.ts`: `createMapProp`.
++- `app/src/core/boot-load.ts` (+ test), `app/src/scenes/Boot.ts`: `bootTextures` and the texture loading.
++- `app/src/scenes/Map.ts`: the island scene.
++- Generated audio: `app/public/assets/audio/sfx/sfx.shell.{happy,prop}.m4a` and `app/public/assets/audio/vo/vo.shell.{station-name.*,invite.ice-cream}.{m4a,hash}`.
++
++**Verification:**
++- `npm run audio:placeholders` wrote 4 files. `happy` is 0.35 s with a −19.8 dBFS peak; `prop` is 0.10 s with a −20.1 dBFS peak.
++- `npm run tts` wrote the 8 new lines over two runs (see the change log). A further run printed "0 written, 9 skipped".
++- `npm run check` exits 0 (336 tests).
++- `npm run build` exits 0. `dist/assets/atlases/map.{png,json}` and `dist/assets/bg/map.png` are present.
++- Smoke test in headless Chrome against `vite preview`, driven by a CDP script kept outside the project:
++  - After the tap on Chơi, the island, 7 sprites, 7 labels and the kart render, with no slot markers and no exceptions.
++  - The ring shows around Xe kem about 8 s after the last tap and is gone after the hold.
++  - With `pizza/idle/00` removed from `dist/assets/atlases/map.json` and reduced motion emulated, there is exactly one warning (`map: frame "pizza/idle/00" is missing from atlas.map — image skipped`) and no error. `dist` was rebuilt afterwards.
++
++**Residual risks:**
++- No sound was heard in the headless run. The voice and SFX calls are covered only by their code paths and unit tests.
++- The labels sit at `anchor.y + 8`, so some overlap the bottom of their sprite ("Xe kem" over the truck's wheels, "Tiệm pizza" on the pizza box). This follows the spec, but a human should judge readability.
++- The ring is inscribed in the box around the hit polygon. For tall stations it is a tall ellipse and may touch a neighbour's label.
++- Labels are measured with Baloo 2 after the readiness gate. If the font ever fails, they are measured with the fallback font.
++
++**Manual checks still due:**
++- In `npm run dev`, with sound:
++  - the tap walkthroughs;
++  - the 70 s idle watch (one motion every 4–6 s, 3 invitations 20 s apart);
++  - reduced motion through DevTools;
++  - the pizza-frame removal in `public/assets/atlases/map.json` (restore the file afterwards).
++- Listen to the 8 new voice lines and approve them by copying each `.hash` into `approved.textHash`.
++- Check that the labels are readable but subtle and that none is cut off.
+diff --git a/app/src/core/timing.ts b/app/src/core/timing.ts
+new file mode 100644
+index 0000000..a8b79da
+--- /dev/null
++++ b/app/src/core/timing.ts
+@@ -0,0 +1,103 @@
++// Every behavioural duration named in EXPERIENCE.md (AD-8). Exposed as `Tokens.Timing.*`.
++// All values are milliseconds unless the name says otherwise. EXPERIENCE marks the hint and
++// invitation timings as "to be tuned with the child" (Open Questions 3) — tune them here only.
++// Visual-component motions that DESIGN.md defines (pulse, snap, return, celebrate, react) live in
++// the generated design tokens, not here.
++
++export const Timing = {
++  /** NFR5: every tap gets visible/audible feedback within this budget. */
++  feedbackMaxMs: 100,
++
++  // --- Start screen (State 'Đang tải', loading-strip, button-play, button-round) ---
++  /** loading-strip: one kart lap along the short road (EXPERIENCE: 'Kart chạy vòng liên tục khi đang tải'; tuned value). */
++  loadingKartLapMs: 1600,
++  /** loading-strip: kart tween time-scale while a failed load waits (EXPERIENCE: 'mất mạng → kart chậm lại đứng chờ'); a factor, not ms. */
++  loadingKartWaitTimeScale: 0.25,
++  /** Failed first load retries on its own this often, besides on window 'online' (EXPERIENCE: 'tự thử lại khi có mạng'). */
++  loadRetryMs: 5000,
++  /** button-play 'Nhún chậm' (slow bob): one up-or-down half cycle; matches the 1.4 s invitation bob of DESIGN station invite. */
++  playBobMs: 1400,
++  /** button-round press: spring back from 0.9× (epic UX › Base button 'presses to 0.9× and springs back'); well inside feedbackMaxMs for the visual start. */
++  buttonPressMs: 180,
++
++  // --- Map (State "Mời chơi", station-hotspot, kart) ---
++  /** One station gently moves every 4–6 s while idle. */
++  mapAmbientMinMs: 4000,
++  mapAmbientMaxMs: 6000,
++  /** First invitation (hint ring + invite + station name) after ~8 s idle. */
++  mapInviteFirstMs: 8000,
++  /** Later invitations at least 20 s apart … */
++  mapInviteGapMs: 20000,
++  /** … at most this many times, then only the ambient bob remains. */
++  mapInviteMaxCount: 3,
++  /** Ambient station motion: one 1 → ambientScale → 1 yoyo takes this long (Story 1.5). */
++  mapAmbientMoveMs: 800,
++  /** An invitation (ring + bob) shows this long unless a tap ends it: 4 bob half-cycles of 1.4 s. */
++  mapInviteHoldMs: 5600,
++  /** Station bounce + name readout before the kart drives (~0.5 s). */
++  stationTapMs: 500,
++  /** Hard cap on kart drive regardless of distance (first trip in session). */
++  kartDriveMaxMs: 2000,
++  /** Hard cap on later trips in the same session. */
++  kartDriveRepeatMaxMs: 1500,
++
++  // --- Drag & drop (draggable-item) ---
++  /** Dropped off the counter → slides back after this delay. */
++  dragOffCounterReturnDelayMs: 1500,
++
++  // --- Hints (State "Gợi ý") ---
++  /** Level 2 after this long idle (clock starts when the prompt finishes). */
++  hintLevel2IdleMs: 6000,
++  /** Level 3 after this much further idle. */
++  hintLevel3ExtraIdleMs: 6000,
++  /** Hint hand demonstration loops every ~15 s. */
++  hintHandLoopMs: 15000,
++  /** At level 3 the voice repeats every ~30 s. */
++  hintVoiceRepeatMs: 30000,
++  /** A voice retry plays at most once per 10 s. */
++  voiceRetryMinGapMs: 10000,
++
++  // --- Voice channel (Interaction Primitives) ---
++  /** A new line waits for the current one if it has less than this left. */
++  voiceQueueTailMs: 500,
++
++  // --- Audio mix (Voice and Tone › Âm thanh) ---
++  musicDuckDownMs: 150,
++  musicDuckRestoreDelayMs: 500,
++  sfxFadeInMinMs: 50,
++  characterSoundMaxMs: 800,
++
++  // --- Correct answer / round end (States "Đúng", "Xong lượt") ---
++  correctMusicMinMs: 1000,
++  correctMusicMaxMs: 2000,
++  roundCelebrationMs: 1500,
++  cameraPullBackMaxMs: 1500,
++  decorationFlyInMs: 1000,
++  /** Total from round end to the two Play-again buttons appearing. */
++  roundEndToOverlayMaxMs: 4000,
++
++  // --- Play-again overlay (State "Hỏi chơi tiếp", button-replay) ---
++  playAgainRepromptMs: 10000,
++  playAgainAutoCloseMs: 30000,
++  replayZoomInMs: 1500,
++
++  // --- Accessibility floor ---
++  /** Flashing ≤ 1 Hz → one flash cycle takes at least this long. */
++  flashMinPeriodMs: 1000,
++
++  // --- Per-game table ---
++  /** Làm pizza: bake time after tapping the oven. */
++  pizzaBakeMs: 2000,
++  /** Làm pizza: all toppings placed but oven not tapped → ring + hand. */
++  pizzaOvenIdleHintMs: 6000,
++  /** Câu cá: wrong fish dives and resurfaces after ~3 s. */
++  fishResurfaceMs: 3000,
++  /** Câu cá: hit test also against fish positions this long ago (latency compensation). */
++  fishHitLookbackMs: 150,
++  /** Chạm là nói: idle → one random prop wiggles silently. */
++  touchTalkIdleWiggleMs: 15000,
++  /** Chạm là nói: scene-bubble slide between scenes. */
++  touchTalkSceneSlideMs: 600,
++} as const;
++
++export type TimingTable = typeof Timing;
+diff --git a/app/src/core/tokens.ts b/app/src/core/tokens.ts
+new file mode 100644
+index 0000000..28f8787
+--- /dev/null
++++ b/app/src/core/tokens.ts
+@@ -0,0 +1,43 @@
++// The only way code reads design values (AD-7, AD-8): `Tokens.*` and `Tokens.Timing.*`.
++import { designTokens } from './tokens.generated.ts';
++import { Timing } from './timing.ts';
++import { computeSafeRect } from './safe-rect.ts';
++
++/** Design space: 1024×768 px (4:3) at 1× (AD-7). */
++const design = { width: 1024, height: 768 } as const;
++
++/**
++ * Supported iPad landscape aspect ratios (w/h). 4:3 (1024×768, 1366×1024) up to ≈1.46
++ * (1180×820 ≈ 1.439, 1210×834 ≈ 1.451) — see spec Design Notes.
++ */
++const supportedAspect = { min: 4 / 3, max: 1.46 } as const;
++
++/**
++ * UI motion values DESIGN.md does not define (Story 1.2 adds them in core, DESIGN.md unchanged).
++ * Source: epic UX › Base button (press to 0.9× and spring back) and EXPERIENCE button-play 'Nhún chậm'.
++ */
++const ui = {
++  /** button-round press scale. */
++  pressScale: 0.9,
++  /** button-play slow bob amplitude (px, design space). */
++  playBobPx: 10,
++  /** Map station tap bounce peak (Story 1.5: 1 → 1.1 → 1 over Timing.stationTapMs). */
++  stationTapScale: 1.1,
++  /** Map ambient station motion peak (1 → 1.04 → 1 over Timing.mapAmbientMoveMs). */
++  ambientScale: 1.04,
++  /** prefers-reduced-motion: every scale amplitude (scale − 1) is multiplied by this. */
++  reducedMotionAmplitude: 0.5,
++} as const;
++
++export const Tokens = {
++  ...designTokens,
++  design,
++  supportedAspect,
++  /** Design-space rect visible on every supported iPad ratio; interactive items must lie inside it. */
++  safeRect: computeSafeRect(design.width, design.height, supportedAspect.min, supportedAspect.max),
++  ui,
++  Timing,
++} as const;
++
++export type TokensType = typeof Tokens;
++export type { Rect } from './safe-rect.ts';
+diff --git a/app/src/content/stations.ts b/app/src/content/stations.ts
+new file mode 100644
+index 0000000..be4da0f
+--- /dev/null
++++ b/app/src/content/stations.ts
+@@ -0,0 +1,45 @@
++// The Map's stations (Story 1.4). Layout ids on the map (spec 1.4 › Reserved ids):
++//   anchors[id] ground pivot, anchors[`${id}-stop`] kart parking point, hits[id] hit polygon,
++//   slots[...] decoration slots listed here. `npm run check` validates them against map.layout.json.
++// Story 1.5 adds the parent-facing `label` (also the text of `vo.shell.station-name.<id>`) and
++// `awake`: only awake stations open a game and get invitations; sleeping ones bounce with a happy
++// sound. Story 1.7 may derive `awake` from games/registry.ts instead.
++import type { GameId } from './types.ts';
++
++export interface Station {
++  readonly id: GameId;
++  /** Station label under the station (parent-facing, UX-DR42); same text as its name line. */
++  readonly label: string;
++  /** True when the station's game is playable (Epic 1: ice-cream only). */
++  readonly awake: boolean;
++  /** Decoration slot ids on the map (`slot.<id>` objects in art/map.blend). */
++  readonly slots: readonly string[];
++}
++
++const station = (id: GameId, label: string, awake = false): Station => ({
++  id,
++  label,
++  awake,
++  slots: [`${id}-1`, `${id}-2`],
++});
++
++export const STATIONS: readonly Station[] = [
++  station('ice-cream', 'Xe kem', true),
++  station('pizza', 'Tiệm pizza'),
++  station('race', 'Đường đua'),
++  station('fishing', 'Hồ cá'),
++  station('touch-talk', 'Chạm là nói'),
++  station('dino-puzzle', 'Công viên khủng long'),
++  station('shadow-match', 'Hang tìm bóng'),
++];
++
++/** Where the kart starts on the map (`anchor.kart-start`). */
++export const KART_START_ANCHOR = 'kart-start';
++/** The kart frame on the map atlas (the Map's tappable prop in Epic 1). */
++export const KART_FRAME = 'kart/idle/00';
++/** The drivable road centreline (`path.road`). */
++export const ROAD_PATH = 'road';
++/** The kart parking anchor of a station. */
++export const stopAnchor = (id: GameId): string => `${id}-stop`;
++/** The idle frame of a station on the map atlas. */
++export const stationFrame = (id: string): string => `${id}/idle/00`;
+diff --git a/app/src/content/voice-lines.ts b/app/src/content/voice-lines.ts
+new file mode 100644
+index 0000000..b26b1cb
+--- /dev/null
++++ b/app/src/content/voice-lines.ts
+@@ -0,0 +1,78 @@
++// Voice lines (AD-6, Story 1.3). Every spoken request is a pre-generated warm Vietnamese female
++// line (edge-tts vi-VN-HoaiMyNeural, built by `npm run content:export && npm run tts`).
++// Code plays them ONLY by id through core/audio-director (`audio.say(id)`); there is no runtime
++// text concatenation, so every combination is enumerated here as its own line.
++//
++// Rules (checked by content/validate.ts + tools/lint/validate-content.ts):
++// - id `vo.<scope>.<intent>[.<subjectId>][.<n>]`, scope = `shell` or a GameId, kebab-case segments;
++// - at most 8 words; `|` marks the pause before the keyword (no empty segment around it) and
++//   then needs `keywordPauseMs` (and vice versa);
++// Authoring guidance not checked by code: one request per sentence, keyword last.
++// - no near-homophone pair (dâu/đâu, cá/cà, ba/bà, bóng/bông, cam/cầm) in one sentence;
++// - `public/<voicePath(id)>` and its `.hash` exist and match `lineHash(line)`.
++// A parent approves a line after listening by copying its `.hash` content into `approved.textHash`.
++// Type-only imports keep this file runnable by Node type stripping (tools/).
++import type { GameId } from './types';
++
++export interface VoiceLine {
++  readonly id: string;
++  /** Spoken text (NFC). `|` = silence of `keywordPauseMs` inserted by ffmpeg (not spoken). */
++  readonly text: string;
++  readonly keywordPauseMs?: number;
++  /** Speaking rate factor (default VOICE_DEFAULTS.rate). */
++  readonly rate?: number;
++  /** Set by a human after listening: the `.hash` content of the approved render. */
++  readonly approved?: { readonly textHash: string };
++}
++
++/** TTS settings shared by every line (Technical Decisions › Asset pipeline). */
++export const VOICE_DEFAULTS = {
++  voice: 'vi-VN-HoaiMyNeural',
++  rate: 0.85,
++} as const;
++
++/** Voice scopes: the shell or a mini-game. */
++export type VoiceScope = 'shell' | GameId;
++
++export const VOICE_LINES = [
++  /** Start: played once after the first tap unlocks audio (Story 1.3). Not yet approved. */
++  { id: 'vo.shell.greeting', text: 'Bé ơi, mình cùng | chơi nào!', keywordPauseMs: 300 },
++  // Map (Story 1.5). Station names = STATIONS[i].label (content/stations.ts). Not yet approved.
++  { id: 'vo.shell.station-name.ice-cream', text: 'Xe kem' },
++  { id: 'vo.shell.station-name.pizza', text: 'Tiệm pizza' },
++  { id: 'vo.shell.station-name.race', text: 'Đường đua' },
++  { id: 'vo.shell.station-name.fishing', text: 'Hồ cá' },
++  { id: 'vo.shell.station-name.touch-talk', text: 'Chạm là nói' },
++  { id: 'vo.shell.station-name.dino-puzzle', text: 'Công viên khủng long' },
++  { id: 'vo.shell.station-name.shadow-match', text: 'Hang tìm bóng' },
++  /** Map invitation of an awake station (EXPERIENCE › Mời chơi), followed by its name line. */
++  { id: 'vo.shell.invite.ice-cream', text: 'Bé ơi, mình đi ăn | kem nhé!', keywordPauseMs: 300 },
++] as const satisfies readonly VoiceLine[];
++
++export type VoiceLineId = (typeof VOICE_LINES)[number]['id'];
++
++const VOICE_IDS: ReadonlySet<string> = new Set(VOICE_LINES.map((line) => line.id));
++
++export function isVoiceLineId(id: string): id is VoiceLineId {
++  return VOICE_IDS.has(id);
++}
++
++/** The line that names a station (Map tap on an awake station, after an invitation). */
++export function stationNameLine(stationId: string): string {
++  return `vo.shell.station-name.${stationId}`;
++}
++
++/** The Map invitation line of an awake station. */
++export function inviteLine(stationId: string): string {
++  return `vo.shell.invite.${stationId}`;
++}
++
++/** Shipped file of a line, relative to the app base (`base: './'`). */
++export function voicePath(id: string): string {
++  return `assets/audio/vo/${id}.m4a`;
++}
++
++/** The `.hash` file next to a line's `.m4a`. */
++export function voiceHashPath(id: string): string {
++  return `assets/audio/vo/${id}.hash`;
++}
+diff --git a/app/src/content/audio-catalog.ts b/app/src/content/audio-catalog.ts
+new file mode 100644
+index 0000000..8008c67
+--- /dev/null
++++ b/app/src/content/audio-catalog.ts
+@@ -0,0 +1,33 @@
++// SFX and music catalog (AD-6). Code plays sound ONLY by these ids through core/audio-director.
++// Files live at public/assets/audio/<kind>/<id>.m4a (checked by tools/lint/validate-content.ts).
++// The current files are synthesized placeholders: `npm run audio:placeholders`.
++
++export type AudioKind = 'sfx' | 'music';
++
++export interface AudioEntry {
++  /** Relative to the app base (`base: './'`): `assets/audio/<kind>/<id>.m4a`. */
++  readonly path: string;
++  readonly kind: AudioKind;
++  readonly loop?: boolean;
++  /** Playback gain 0..1 (the file itself is already mastered to its loudness target). */
++  readonly volume?: number;
++}
++
++export const AUDIO_IDS = ['sfx.shell.pop', 'sfx.shell.happy', 'sfx.shell.prop', 'music.island'] as const;
++
++export type AudioId = (typeof AUDIO_IDS)[number];
++
++export const AUDIO_CATALOG: Record<AudioId, AudioEntry> = {
++  /** "Pụp" of button-play: 140 ms sine sweep, ≥ 50 ms fade-in, peak ≈ −20 dBFS (quieter than voice). */
++  'sfx.shell.pop': { path: 'assets/audio/sfx/sfx.shell.pop.m4a', kind: 'sfx' },
++  /** Sleeping-station tap (Story 1.5, "tiếng vui"): rising two-note chime, ≥ 50 ms fade-in, peak ≈ −20 dBFS. */
++  'sfx.shell.happy': { path: 'assets/audio/sfx/sfx.shell.happy.m4a', kind: 'sfx' },
++  /** Map prop tap (Story 1.5, tappable-prop): ~100 ms soft tick, ≥ 50 ms fade-in, peak ≈ −20 dBFS. */
++  'sfx.shell.prop': { path: 'assets/audio/sfx/sfx.shell.prop.m4a', kind: 'sfx' },
++  /** Island background loop, mastered to −30 LUFS (EXPERIENCE › Âm thanh: music ≤ −30 LUFS). */
++  'music.island': { path: 'assets/audio/music/music.island.m4a', kind: 'music', loop: true },
++};
++
++export function isAudioId(id: string): id is AudioId {
++  return Object.prototype.hasOwnProperty.call(AUDIO_CATALOG, id);
++}
+diff --git a/app/src/content/validate.ts b/app/src/content/validate.ts
+new file mode 100644
+index 0000000..dde4e36
+--- /dev/null
++++ b/app/src/content/validate.ts
+@@ -0,0 +1,236 @@
++// Content validator (AD-6, AD-12). Checks the GameId list, the SFX/music catalog and the voice
++// lines (id grammar, | ↔ keywordPauseMs, ≤ 8 words, banned near-homophones, line ↔ file ↔ hash,
++// approval, stray files). Later stories add:
++// polygons inside Tokens.safeRect / outside dead-zones, target size/gap, layout coverage.
++// The filesystem and the hash function are injected (tools/lint/validate-content.ts), so the rules
++// stay pure. Imports carry `.ts` so Node type stripping can run this file from tools/.
++import {
++  inviteLine,
++  stationNameLine,
++  voiceHashPath,
++  voicePath,
++  type VoiceLine,
++} from "./voice-lines.ts";
++
++export interface AudioEntryInput {
++  readonly path: string;
++  readonly kind: string;
++}
++
++/** Voice-line checks; everything outside the line list is injected by the tool (or a test). */
++export interface VoiceInput {
++  lines: readonly VoiceLine[];
++  /** `lineHash(line)` (tools/tts/line-hash.ts). */
++  hashLine: (line: VoiceLine) => string;
++  /** Whether a path relative to `public/` exists. */
++  fileExists: (publicPath: string) => boolean;
++  /** File names (not paths) found in `public/assets/audio/vo/`. */
++  listVoiceFiles: () => readonly string[];
++  /** Content of a `.hash` file relative to `public/` (undefined when unreadable). */
++  readHash: (publicPath: string) => string | undefined;
++}
++
++export interface ContentInput {
++  gameIds: readonly string[];
++  /** SFX/music catalog (content/audio-catalog.ts). */
++  audio?: Readonly<Record<string, AudioEntryInput>>;
++  /**
++   * Tool only: whether a path relative to `public/` exists. Omitted in unit tests of the pure
++   * rules; tools/lint/validate-content.ts passes a real filesystem check.
++   */
++  fileExists?: (publicPath: string) => boolean;
++  /** Voice lines (content/voice-lines.ts) with the injected file and hash access. */
++  voice?: VoiceInput;
++  /** Map stations (content/stations.ts) and the voice-line ids they must have (Story 1.5). */
++  stations?: StationsInput;
++}
++
++export interface StationInput {
++  readonly id: string;
++  readonly label: string;
++  readonly awake: boolean;
++}
++
++export interface StationsInput {
++  stations: readonly StationInput[];
++  /** Every voice-line id (content/voice-lines.ts). */
++  voiceIds: readonly string[];
++}
++
++/** Station rules: a non-empty label, a name line for every station, an invite line for every awake one. */
++export function validateStations(input: StationsInput): string[] {
++  const problems: string[] = [];
++  const ids = new Set(input.voiceIds);
++  for (const s of input.stations) {
++    if (s.label.trim().length === 0)
++      problems.push(`station "${s.id}": label is empty`);
++    const name = stationNameLine(s.id);
++    if (!ids.has(name))
++      problems.push(`station "${s.id}": voice line "${name}" is missing`);
++    const invite = inviteLine(s.id);
++    if (s.awake && !ids.has(invite))
++      problems.push(`station "${s.id}": awake but voice line "${invite}" is missing`);
++  }
++  return problems;
++}
++
++/** Most words in one line (UX: ≤ 8 words). */
++export const MAX_VOICE_WORDS = 8;
++
++/** Near-homophone pairs that must never share a sentence (EXPERIENCE › Voice). */
++export const BANNED_PAIRS: ReadonlyArray<readonly [string, string]> = [
++  ["dâu", "đâu"],
++  ["cá", "cà"],
++  ["ba", "bà"],
++  ["bóng", "bông"],
++  ["cam", "cầm"],
++];
++
++const KEBAB = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
++const VOICE_ID = new RegExp(
++  String.raw`^vo\.(${KEBAB})\.${KEBAB}(?:\.${KEBAB})?(?:\.[0-9]+)?$`,
++);
++const VOICE_FILE = /^(.+)\.(m4a|hash)$/;
++
++/** Words of a text (NFC, lower-cased, `|` removed, split on anything not a letter or digit). */
++export function voiceWords(text: string): string[] {
++  return text
++    .normalize("NFC")
++    .toLowerCase()
++    .replaceAll("|", " ")
++    .split(/[^\p{L}\p{N}]+/u)
++    .filter((w) => w.length > 0);
++}
++
++/** The banned pairs found together in one sentence (split on `.!?`). */
++export function bannedPairsIn(text: string): Array<readonly [string, string]> {
++  const found: Array<readonly [string, string]> = [];
++  for (const sentence of text.normalize("NFC").split(/[.!?]+/)) {
++    const words = new Set(voiceWords(sentence));
++    for (const pair of BANNED_PAIRS) {
++      if (words.has(pair[0]) && words.has(pair[1]) && !found.includes(pair))
++        found.push(pair);
++    }
++  }
++  return found;
++}
++
++function validateVoice(
++  voice: VoiceInput,
++  gameIds: readonly string[],
++): string[] {
++  const problems: string[] = [];
++  const scopes = new Set(["shell", ...gameIds]);
++  const seen = new Set<string>();
++  for (const line of voice.lines) {
++    const id = line.id;
++    const match = VOICE_ID.exec(id);
++    if (!match || !scopes.has(match[1] ?? "")) {
++      problems.push(
++        `voice id "${id}" must match vo.<shell|GameId>.<intent>[.<subjectId>][.<n>] (kebab-case)`,
++      );
++    }
++    if (seen.has(id)) problems.push(`voice id "${id}" is duplicated`);
++    seen.add(id);
++
++    const hasBar = line.text.includes("|");
++    if (hasBar && line.keywordPauseMs === undefined)
++      problems.push(`voice "${id}": text has "|" but no keywordPauseMs`);
++    if (!hasBar && line.keywordPauseMs !== undefined)
++      problems.push(`voice "${id}": keywordPauseMs is set but text has no "|"`);
++    if (line.text.split("|").some((segment) => segment.trim().length === 0)) {
++      problems.push(`voice "${id}": empty text or empty segment around "|"`);
++    }
++
++    const words = voiceWords(line.text).length;
++    if (words > MAX_VOICE_WORDS)
++      problems.push(
++        `voice "${id}": ${words} words (at most ${MAX_VOICE_WORDS})`,
++      );
++
++    for (const [a, b] of bannedPairsIn(line.text)) {
++      problems.push(
++        `voice "${id}": near-homophones "${a}" and "${b}" in one sentence`,
++      );
++    }
++
++    const hash = voice.hashLine(line);
++    const audioPath = voicePath(id);
++    const hashPath = voiceHashPath(id);
++    if (!voice.fileExists(audioPath))
++      problems.push(
++        `voice "${id}": file public/${audioPath} is missing (run npm run content:export && npm run tts)`,
++      );
++    if (!voice.fileExists(hashPath)) {
++      problems.push(
++        `voice "${id}": file public/${hashPath} is missing (run npm run content:export && npm run tts)`,
++      );
++    } else if (voice.readHash(hashPath)?.trim() !== hash) {
++      problems.push(
++        `voice "${id}": public/${hashPath} does not match the line (text or settings changed; run npm run tts)`,
++      );
++    }
++    if (line.approved && line.approved.textHash !== hash) {
++      problems.push(
++        `voice "${id}": approved.textHash does not match the line (listen again, then copy the new .hash)`,
++      );
++    }
++  }
++
++  for (const name of voice.listVoiceFiles()) {
++    const m = VOICE_FILE.exec(name);
++    if (m && !seen.has(m[1] ?? "")) {
++      problems.push(
++        `voice "${m[1]}": stray file public/assets/audio/vo/${name} has no line in content/voice-lines.ts`,
++      );
++    }
++  }
++  return problems;
++}
++
++const SFX_ID = /^sfx\.[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
++const MUSIC_ID = /^music\.[a-z][a-z0-9-]*$/;
++
++/** Returns a list of human-readable problems; empty means valid. */
++export function validateContent(input: ContentInput): string[] {
++  const problems: string[] = [];
++  const seen = new Set<string>();
++  for (const id of input.gameIds) {
++    if (!/^[a-z]+(-[a-z]+)*$/.test(id))
++      problems.push(`GameId "${id}" is not kebab-case`);
++    if (seen.has(id)) problems.push(`GameId "${id}" is duplicated`);
++    seen.add(id);
++  }
++
++  for (const [id, entry] of Object.entries(input.audio ?? {})) {
++    const kind = SFX_ID.test(id)
++      ? "sfx"
++      : MUSIC_ID.test(id)
++        ? "music"
++        : undefined;
++    if (!kind) {
++      problems.push(
++        `audio id "${id}" must match sfx.<scope>.<name> or music.<name>`,
++      );
++      continue;
++    }
++    if (entry.kind !== kind)
++      problems.push(
++        `audio id "${id}" has kind "${entry.kind}", expected "${kind}"`,
++      );
++    const expected = `assets/audio/${kind}/${id}.m4a`;
++    if (entry.path !== expected) {
++      problems.push(
++        `audio id "${id}" has path "${entry.path}", expected "${expected}"`,
++      );
++    } else if (input.fileExists && !input.fileExists(entry.path)) {
++      problems.push(
++        `audio id "${id}": file public/${entry.path} is missing (run npm run audio:placeholders)`,
++      );
++    }
++  }
++
++  if (input.voice) problems.push(...validateVoice(input.voice, input.gameIds));
++  if (input.stations) problems.push(...validateStations(input.stations));
++  return problems;
++}
+diff --git a/app/src/content/validate.test.ts b/app/src/content/validate.test.ts
+new file mode 100644
+index 0000000..2867919
+--- /dev/null
++++ b/app/src/content/validate.test.ts
+@@ -0,0 +1,331 @@
++import { describe, expect, it } from "vitest";
++import { GAME_IDS } from "./types";
++import { validateContent, validateStations } from "./validate";
++import { STATIONS } from "./stations";
++import { AUDIO_CATALOG } from "./audio-catalog";
++import { VOICE_LINES, stationNameLine, type VoiceLine } from "./voice-lines";
++
++describe("validateContent", () => {
++  it("accepts the real GameId list", () => {
++    expect(validateContent({ gameIds: GAME_IDS })).toEqual([]);
++  });
++
++  it("reports a duplicated id", () => {
++    const problems = validateContent({ gameIds: ["pizza", "race", "pizza"] });
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toMatch(/"pizza" is duplicated/);
++  });
++
++  it("reports a non-kebab-case id", () => {
++    const problems = validateContent({ gameIds: ["Ice_cream"] });
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toMatch(/"Ice_cream" is not kebab-case/);
++  });
++});
++
++describe("validateContent › audio catalog", () => {
++  it("accepts the real catalog", () => {
++    expect(validateContent({ gameIds: [], audio: AUDIO_CATALOG })).toEqual([]);
++  });
++
++  it("rejects ids outside the sfx.<scope>.<name> / music.<name> grammar", () => {
++    const problems = validateContent({
++      gameIds: [],
++      audio: {
++        "sfx.pop": { path: "assets/audio/sfx/sfx.pop.m4a", kind: "sfx" },
++        "Music.Island": {
++          path: "assets/audio/music/Music.Island.m4a",
++          kind: "music",
++        },
++      },
++    });
++    expect(problems).toHaveLength(2);
++    expect(problems[0]).toMatch(/"sfx.pop" must match/);
++  });
++
++  it("rejects a kind that does not match the id prefix", () => {
++    const problems = validateContent({
++      gameIds: [],
++      audio: {
++        "music.island": {
++          path: "assets/audio/music/music.island.m4a",
++          kind: "sfx",
++        },
++      },
++    });
++    expect(problems).toEqual([
++      'audio id "music.island" has kind "sfx", expected "music"',
++    ]);
++  });
++
++  it("rejects a path that is not assets/audio/<kind>/<id>.m4a", () => {
++    const problems = validateContent({
++      gameIds: [],
++      audio: {
++        "sfx.shell.pop": { path: "assets/audio/sfx/pop.mp3", kind: "sfx" },
++      },
++    });
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toMatch(
++      /expected "assets\/audio\/sfx\/sfx.shell.pop.m4a"/,
++    );
++  });
++
++  it("reports a missing file only when a file check is given", () => {
++    const audio = {
++      "sfx.shell.pop": {
++        path: "assets/audio/sfx/sfx.shell.pop.m4a",
++        kind: "sfx",
++      },
++    };
++    expect(validateContent({ gameIds: [], audio })).toEqual([]);
++    const problems = validateContent({
++      gameIds: [],
++      audio,
++      fileExists: () => false,
++    });
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toMatch(
++      /public\/assets\/audio\/sfx\/sfx.shell.pop.m4a is missing/,
++    );
++  });
++});
++
++describe("validateContent › voice lines", () => {
++  /** A fake hash: deterministic over everything lineHash covers. */
++  const hashLine = (line: VoiceLine): string =>
++    `h:${line.text}:${line.keywordPauseMs ?? "-"}:${line.rate ?? "-"}`;
++
++  /** A file tree that matches `lines` exactly (every .m4a + current .hash), with overrides. */
++  function voice(lines: readonly VoiceLine[], tree?: Record<string, string>) {
++    const files: Record<string, string> = tree ?? {};
++    if (!tree) {
++      for (const line of lines) {
++        files[`assets/audio/vo/${line.id}.m4a`] = "audio";
++        files[`assets/audio/vo/${line.id}.hash`] = `${hashLine(line)}\n`;
++      }
++    }
++    return {
++      files,
++      input: {
++        lines,
++        hashLine,
++        fileExists: (p: string) => p in files,
++        listVoiceFiles: () =>
++          Object.keys(files).map((p) => p.slice("assets/audio/vo/".length)),
++        readHash: (p: string) => files[p],
++      },
++    };
++  }
++
++  const ok: VoiceLine = {
++    id: "vo.ice-cream.ask.strawberry.2",
++    text: "Bé lấy kem | dâu nhé",
++    keywordPauseMs: 300,
++  };
++
++  function problemsFor(line: VoiceLine): string[] {
++    return validateContent({ gameIds: GAME_IDS, voice: voice([line]).input });
++  }
++
++  it("accepts the real voice lines when their files and hashes match", () => {
++    expect(
++      validateContent({ gameIds: GAME_IDS, voice: voice(VOICE_LINES).input }),
++    ).toEqual([]);
++  });
++
++  it("accepts a good line with scope, intent, subject and number", () => {
++    expect(problemsFor(ok)).toEqual([]);
++  });
++
++  it.each([
++    ["vo.greeting", "too few segments"],
++    ["vo.lobby.greeting", "unknown scope"],
++    ["vo.shell.Greeting", "not kebab-case"],
++    ["vo.shell.greet_ing", "underscore"],
++    ["vo.shell.greeting.a.b.c", "too many segments"],
++    ["sfx.shell.greeting", "wrong prefix"],
++  ])('rejects id "%s" (%s) and names it', (id) => {
++    const problems = problemsFor({ id, text: "Chơi nào" });
++    expect(
++      problems.some((p) => p.includes(`"${id}"`) && /must match vo\./.test(p)),
++    ).toBe(true);
++  });
++
++  it("rejects a duplicated id", () => {
++    const line: VoiceLine = { id: "vo.shell.greeting", text: "Chơi nào" };
++    const problems = validateContent({
++      gameIds: GAME_IDS,
++      voice: voice([line, line]).input,
++    });
++    expect(problems).toEqual(['voice id "vo.shell.greeting" is duplicated']);
++  });
++
++  it("rejects | without keywordPauseMs and keywordPauseMs without |", () => {
++    expect(problemsFor({ id: "vo.shell.a", text: "Bé ơi | chơi nào" })).toEqual(
++      ['voice "vo.shell.a": text has "|" but no keywordPauseMs'],
++    );
++    expect(
++      problemsFor({
++        id: "vo.shell.b",
++        text: "Bé ơi chơi nào",
++        keywordPauseMs: 300,
++      }),
++    ).toEqual([
++      'voice "vo.shell.b": keywordPauseMs is set but text has no "|"',
++    ]);
++  });
++
++  it("rejects an empty text or an empty segment around |", () => {
++    expect(
++      problemsFor({
++        id: "vo.shell.a",
++        text: "| chơi nào",
++        keywordPauseMs: 300,
++      }),
++    ).toEqual(['voice "vo.shell.a": empty text or empty segment around "|"']);
++    expect(
++      problemsFor({
++        id: "vo.shell.b",
++        text: "Bé ơi || chơi",
++        keywordPauseMs: 300,
++      }),
++    ).toEqual(['voice "vo.shell.b": empty text or empty segment around "|"']);
++    expect(problemsFor({ id: "vo.shell.c", text: " " })).toEqual([
++      'voice "vo.shell.c": empty text or empty segment around "|"',
++    ]);
++  });
++
++  it("rejects more than 8 words (the | is not a word)", () => {
++    expect(
++      problemsFor({
++        id: "vo.shell.a",
++        text: "một hai ba bốn năm sáu bảy | tám",
++        keywordPauseMs: 300,
++      }),
++    ).toEqual([]);
++    const problems = problemsFor({
++      id: "vo.shell.a",
++      text: "một hai ba bốn năm sáu bảy tám chín",
++    });
++    expect(problems).toEqual(['voice "vo.shell.a": 9 words (at most 8)']);
++  });
++
++  it.each([
++    ["dâu", "đâu", "Kem dâu ở đâu?"],
++    ["cá", "cà", "Con cá ăn cà chua."],
++    ["ba", "bà", "Ba và bà."],
++    ["bóng", "bông", "Quả bóng, bông hoa!"],
++    ["cam", "cầm", "Bé cầm quả cam."],
++  ])("rejects the near-homophones %s/%s in one sentence", (a, b, text) => {
++    const problems = problemsFor({ id: "vo.shell.a", text });
++    expect(problems).toEqual([
++      `voice "vo.shell.a": near-homophones "${a}" and "${b}" in one sentence`,
++    ]);
++  });
++
++  it("allows a banned pair split across sentences, and matches case- and NFC-insensitively", () => {
++    expect(
++      problemsFor({ id: "vo.shell.a", text: "Kem dâu đây. Bé ở đâu?" }),
++    ).toEqual([]);
++    // Decomposed (NFD) and upper-case input still counts.
++    const nfd = "DÂU ở ĐÂU".normalize("NFD");
++    expect(problemsFor({ id: "vo.shell.a", text: nfd })).toHaveLength(1);
++  });
++
++  it("reports a missing .m4a and a missing .hash, naming the id", () => {
++    const v = voice([ok]);
++    delete v.files[`assets/audio/vo/${ok.id}.m4a`];
++    expect(validateContent({ gameIds: GAME_IDS, voice: v.input })).toEqual([
++      `voice "${ok.id}": file public/assets/audio/vo/${ok.id}.m4a is missing (run npm run content:export && npm run tts)`,
++    ]);
++    const w = voice([ok]);
++    delete w.files[`assets/audio/vo/${ok.id}.hash`];
++    const problems = validateContent({ gameIds: GAME_IDS, voice: w.input });
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toMatch(
++      /vo\.ice-cream\.ask\.strawberry\.2\.hash is missing/,
++    );
++  });
++
++  it("reports a stale .hash (text edited without regenerating), naming the id", () => {
++    const v = voice([ok]);
++    const edited = { ...ok, text: "Bé lấy kem | vani nhé" };
++    const problems = validateContent({
++      gameIds: GAME_IDS,
++      voice: { ...v.input, lines: [edited] },
++    });
++    expect(problems).toHaveLength(1);
++    expect(problems[0]).toMatch(
++      /voice "vo\.ice-cream\.ask\.strawberry\.2": .* does not match the line/,
++    );
++  });
++
++  it("accepts a hash with surrounding whitespace (readers trim)", () => {
++    const v = voice([ok]);
++    v.files[`assets/audio/vo/${ok.id}.hash`] = `  ${hashLine(ok)}\r\n`;
++    expect(validateContent({ gameIds: GAME_IDS, voice: v.input })).toEqual([]);
++  });
++
++  it("reports approved.textHash that differs from the line hash", () => {
++    const approved = { ...ok, approved: { textHash: hashLine(ok) } };
++    expect(problemsFor(approved)).toEqual([]);
++    const stale = { ...ok, approved: { textHash: "old" } };
++    const problems = validateContent({
++      gameIds: GAME_IDS,
++      voice: voice([stale]).input,
++    });
++    expect(problems).toEqual([
++      `voice "${ok.id}": approved.textHash does not match the line (listen again, then copy the new .hash)`,
++    ]);
++  });
++
++  it("reports stray .m4a / .hash files with no line, naming their id; ignores other files", () => {
++    const v = voice([ok]);
++    v.files["assets/audio/vo/vo.shell.old.m4a"] = "audio";
++    v.files["assets/audio/vo/vo.shell.older.hash"] = "x";
++    v.files["assets/audio/vo/README.txt"] = "x";
++    const problems = validateContent({ gameIds: GAME_IDS, voice: v.input });
++    expect(problems).toHaveLength(2);
++    expect(problems[0]).toMatch(/voice "vo\.shell\.old": stray file/);
++    expect(problems[1]).toMatch(/voice "vo\.shell\.older": stray file/);
++  });
++});
++
++describe("validateContent › stations (Story 1.5)", () => {
++  const ids = VOICE_LINES.map((l) => l.id);
++
++  it("accepts the real stations and voice lines", () => {
++    expect(
++      validateContent({ gameIds: GAME_IDS, stations: { stations: STATIONS, voiceIds: ids } }),
++    ).toEqual([]);
++  });
++
++  it("reports an empty label by id", () => {
++    const stations = STATIONS.map((s) => (s.id === "pizza" ? { ...s, label: " " } : s));
++    expect(validateStations({ stations, voiceIds: ids })).toEqual(['station "pizza": label is empty']);
++  });
++
++  it("reports a missing name line by id", () => {
++    const voiceIds = ids.filter((id) => id !== "vo.shell.station-name.race");
++    expect(validateStations({ stations: STATIONS, voiceIds })).toEqual([
++      'station "race": voice line "vo.shell.station-name.race" is missing',
++    ]);
++  });
++
++  it("reports a missing invite line of an awake station only", () => {
++    const voiceIds = ids.filter((id) => id !== "vo.shell.invite.ice-cream");
++    expect(validateStations({ stations: STATIONS, voiceIds })).toEqual([
++      'station "ice-cream": awake but voice line "vo.shell.invite.ice-cream" is missing',
++    ]);
++    const asleep = STATIONS.map((s) => ({ ...s, awake: false }));
++    expect(validateStations({ stations: asleep, voiceIds })).toEqual([]);
++  });
++
++  it("every label is also the text of its name line", () => {
++    for (const s of STATIONS) {
++      expect(VOICE_LINES.find((l) => l.id === stationNameLine(s.id))?.text).toBe(s.label);
++    }
++    expect(STATIONS.filter((s) => s.awake).map((s) => s.id)).toEqual(["ice-cream"]);
++  });
++});
+diff --git a/app/tools/lint/validate-content.ts b/app/tools/lint/validate-content.ts
+new file mode 100644
+index 0000000..42c6db4
+--- /dev/null
++++ b/app/tools/lint/validate-content.ts
+@@ -0,0 +1,131 @@
++// `npm run validate:content` — runs the content validators (AD-12): GameIds, the audio catalog
++// (id grammar, path convention, the file existing under public/) and the voice lines (rules of
++// content/validate.ts with the real filesystem and `lineHash`, including stray files), the screen
++// layouts (src/content/generated/<screen>.layout.json against stations and touch rules) and the image
++// assets (atlases, backgrounds, 8 MiB cap on every file under public/assets) — Story 1.4 — and the
++// station rules (label, name line, invite line of awake stations) — Story 1.5.
++import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
++import { dirname, join, relative, resolve, sep } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { ATLASES, BACKGROUNDS, SCREEN_IDS } from '../../src/content/assets.ts';
++import { AUDIO_CATALOG } from '../../src/content/audio-catalog.ts';
++import type { ScreenLayout } from '../../src/content/layout-types.ts';
++import { KART_FRAME, STATIONS, stationFrame } from '../../src/content/stations.ts';
++import { Tokens } from '../../src/core/tokens.ts';
++import { RENDER_SCALE, layoutLimits, pngSizeOf, validateAssets, validateLayout } from '../layout/rules.ts';
++import { GAME_IDS } from '../../src/content/types.ts';
++import { validateContent } from '../../src/content/validate.ts';
++import { VOICE_LINES } from '../../src/content/voice-lines.ts';
++import { lineHash } from '../tts/line-hash.ts';
++
++const VOICE_DIR = 'assets/audio/vo';
++
++const APP_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
++/** Where `npm run render` writes `<screen>.layout.json`. */
++export const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
++
++/** Frames each screen's atlas must hold. */
++export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
++  map: [...STATIONS.map((s) => stationFrame(s.id)), KART_FRAME],
++};
++
++function listFiles(dir: string): string[] {
++  if (!existsSync(dir)) return [];
++  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? listFiles(join(dir, e.name)) : [join(dir, e.name)]));
++}
++
++/** The id → geometry records of a layout. */
++const LAYOUT_RECORDS = ['anchors', 'hits', 'slots', 'paths'] as const;
++
++/** Layout problems of every screen (missing or invalid JSON included). */
++export function layoutProblems(layoutDir: string): string[] {
++  const problems: string[] = [];
++  for (const screen of SCREEN_IDS) {
++    const file = join(layoutDir, `${screen}.layout.json`);
++    let layout: ScreenLayout;
++    try {
++      layout = JSON.parse(readFileSync(file, 'utf8')) as ScreenLayout;
++    } catch {
++      problems.push(`layout "${screen}": ${screen}.layout.json is missing or invalid (run npm run render -- ${screen})`);
++      continue;
++    }
++    if (layout === null || typeof layout !== 'object') {
++      problems.push(`layout "${screen}": not a JSON object`);
++      continue;
++    }
++    if (layout.v !== 1 || layout.screenId !== screen) problems.push(`layout "${screen}": not a v1 layout of screen "${screen}"`);
++    const missing = LAYOUT_RECORDS.filter((k) => layout[k] === null || typeof layout[k] !== 'object' || Array.isArray(layout[k]));
++    for (const k of missing) problems.push(`layout "${screen}": missing "${k}"`);
++    if (missing.length > 0) continue;
++    if (screen === 'map') {
++      for (const p of validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, limits: layoutLimits() })) problems.push(`layout "${screen}": ${p}`);
++    }
++  }
++  return problems;
++}
++
++/** Asset problems under `publicDir` (atlases, backgrounds, size caps). */
++export function assetProblems(publicDir: string): string[] {
++  const scale = RENDER_SCALE;
++  return validateAssets({
++    atlases: SCREEN_IDS.map((id) => ({ ...ATLASES[id], frames: REQUIRED_FRAMES[id] ?? [] })),
++    backgrounds: SCREEN_IDS.map((id) => ({ ...BACKGROUNDS[id], width: Tokens.design.width * scale, height: Tokens.design.height * scale })),
++    files: listFiles(join(publicDir, 'assets')).map((f) => ({ path: relative(publicDir, f).split(sep).join('/'), bytes: statSync(f).size })),
++    pngSize: (path) => {
++      try {
++        return pngSizeOf(readFileSync(resolve(publicDir, path)));
++      } catch {
++        return undefined;
++      }
++    },
++    readJson: (path) => {
++      try {
++        return JSON.parse(readFileSync(resolve(publicDir, path), 'utf8')) as unknown;
++      } catch {
++        return undefined;
++      }
++    },
++  });
++}
++
++/** Validates the real content against the files under `publicDir` and the layouts in `layoutDir`; returns the problems. */
++export function run(publicDir: string, layoutDir: string = LAYOUT_DIR): string[] {
++  const fileExists = (path: string): boolean => existsSync(resolve(publicDir, path));
++  const content = validateContent({
++    gameIds: GAME_IDS,
++    audio: AUDIO_CATALOG,
++    fileExists,
++    stations: { stations: STATIONS, voiceIds: VOICE_LINES.map((l) => l.id) },
++    voice: {
++      lines: VOICE_LINES,
++      hashLine: lineHash,
++      fileExists,
++      listVoiceFiles: () => {
++        const dir = resolve(publicDir, VOICE_DIR);
++        return existsSync(dir) ? readdirSync(dir) : [];
++      },
++      readHash: (path) => {
++        try {
++          return readFileSync(resolve(publicDir, path), 'utf8');
++        } catch {
++          return undefined;
++        }
++      },
++    },
++  });
++  return [...content, ...layoutProblems(layoutDir), ...assetProblems(publicDir)];
++}
++
++function main(): void {
++  const publicDir = join(APP_DIR, 'public');
++  const problems = run(publicDir);
++  if (problems.length > 0) {
++    for (const p of problems) console.error(`content: ${p}`);
++    process.exit(1);
++  }
++  console.log(
++    `content: OK (${GAME_IDS.length} game ids, ${Object.keys(AUDIO_CATALOG).length} audio ids, ${VOICE_LINES.length} voice lines, ${SCREEN_IDS.length} layout(s) with ${STATIONS.length} stations, ${SCREEN_IDS.length} atlas(es), ${listFiles(join(publicDir, 'assets')).length} asset files)`,
++  );
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+diff --git a/app/tools/audio/make-placeholders.ts b/app/tools/audio/make-placeholders.ts
+new file mode 100644
+index 0000000..a8a7278
+--- /dev/null
++++ b/app/tools/audio/make-placeholders.ts
+@@ -0,0 +1,110 @@
++// `npm run audio:placeholders` — synthesizes the placeholder SFX/music files with ffmpeg.
++// Output: mono AAC 44.1 kHz 64 kb/s `.m4a` at public/<AUDIO_CATALOG[id].path>. Re-run any time;
++// replace a file with real audio later by keeping the same id/path.
++// ffmpeg comes from FFMPEG_BIN (full path to the binary) or, failing that, from PATH.
++import { spawnSync } from 'node:child_process';
++import { existsSync, mkdirSync } from 'node:fs';
++import { dirname, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { AUDIO_CATALOG, type AudioId } from '../../src/content/audio-catalog.ts';
++import { FFMPEG, probeBinary, resolveBinary, type Env, type Probe } from '../shared/binaries.ts';
++
++/** Encoder settings shared by every file (Technical Decisions › Asset pipeline). */
++const ENCODE = ['-ac', '1', '-ar', '44100', '-c:a', 'aac', '-b:a', '64k'];
++
++// --- sfx.shell.pop -----------------------------------------------------------
++// 140 ms sine chirp 700→1100 Hz; 50 ms fade-in (SFX rule: fade-in ≥ 50 ms), exponential tail;
++// highpass at 150 Hz (nothing below 150 Hz); amplitude 0.1 = −20 dBFS peak (below −16 LUFS voice).
++const POP_SECONDS = 0.14;
++const POP_FADE_IN = 0.05;
++const POP_EXPR = `0.1*sin(2*PI*(700*t+(1100-700)/(2*${POP_SECONDS})*t*t))`;
++const POP_FILTER = [
++  `afade=t=in:st=0:d=${POP_FADE_IN}`,
++  `afade=t=out:st=${POP_FADE_IN}:d=${(POP_SECONDS - POP_FADE_IN).toFixed(2)}:curve=exp`,
++  'highpass=f=150',
++].join(',');
++
++// --- sfx.shell.happy (Story 1.5: sleeping-station "tiếng vui") ------------------
++// Rising two-note chime G5 784 Hz → C6 1047 Hz, 0.15 s + 0.2 s. Each note has a sin envelope that is
++// 0 at its edges (no click at the switch); plus a 50 ms fade-in and highpass 150 Hz. Amplitude
++// 0.1 = −20 dBFS peak (quieter than the voice).
++const HAPPY_NOTE1 = 0.15;
++const HAPPY_NOTE2 = 0.2;
++const HAPPY_SECONDS = Number((HAPPY_NOTE1 + HAPPY_NOTE2).toFixed(2));
++const HAPPY_EXPR =
++  `0.1*(lt(t,${HAPPY_NOTE1})*sin(PI*t/${HAPPY_NOTE1})*sin(2*PI*784*t)` +
++  `+gte(t,${HAPPY_NOTE1})*sin(PI*(t-${HAPPY_NOTE1})/${HAPPY_NOTE2})*sin(2*PI*1047*t))`;
++const HAPPY_FILTER = ['afade=t=in:st=0:d=0.05', 'highpass=f=150'].join(',');
++
++// --- sfx.shell.prop (Story 1.5: tappable-prop small sound) -----------------------
++// ~100 ms soft tick: 1200 Hz sine with a 50 ms fade-in and an exponential 50 ms tail, highpass
++// 150 Hz, peak −20 dBFS.
++const PROP_SECONDS = 0.1;
++const PROP_FADE_IN = 0.05;
++const PROP_EXPR = '0.1*sin(2*PI*1200*t)';
++const PROP_FILTER = [
++  `afade=t=in:st=0:d=${PROP_FADE_IN}`,
++  `afade=t=out:st=${PROP_FADE_IN}:d=${(PROP_SECONDS - PROP_FADE_IN).toFixed(2)}:curve=exp`,
++  'highpass=f=150',
++].join(',');
++
++// --- music.island ------------------------------------------------------------
++// 12 s loop. Every frequency is an integer Hz (pad C4 262 / E4 330 / G4 392, arpeggio C5 523 /
++// E5 659 / G5 784) so every sine completes whole cycles in 12 s; tremolo is 0.25 Hz (3 cycles);
++// the arpeggio steps every 0.5 s (24 steps = 8×C-E-G) with a sin² envelope that is 0 at each
++// step edge — so the file loops seamlessly. Mastered with loudnorm I=-30 (music ≤ −30 LUFS).
++const MUSIC_SECONDS = 12;
++const ARP_NOTE = 'if(eq(mod(floor(t*2),3),0),523,if(eq(mod(floor(t*2),3),1),659,784))';
++const PAD = '0.15*(sin(2*PI*262*t)+sin(2*PI*330*t)+sin(2*PI*392*t))/3*(0.85+0.15*sin(2*PI*0.25*t))';
++const ARP = `0.12*pow(sin(PI*mod(t,0.5)/0.5),2)*sin(2*PI*${ARP_NOTE}*t)`;
++const MUSIC_EXPR = `${PAD}+${ARP}`;
++export const MUSIC_LOUDNORM = 'loudnorm=I=-30:TP=-3';
++
++/** Single-quoted filtergraph value so commas inside the expression are not filter separators. */
++function source(expr: string, seconds: number): string[] {
++  return ['-f', 'lavfi', '-i', `aevalsrc='${expr}':s=44100:d=${seconds}`];
++}
++
++/** ffmpeg arguments that write `id` to `outFile` (pure; unit-tested). */
++export function buildArgs(id: AudioId, outFile: string): string[] {
++  switch (id) {
++    case 'sfx.shell.pop':
++      return ['-hide_banner', '-y', ...source(POP_EXPR, POP_SECONDS), '-af', POP_FILTER, ...ENCODE, outFile];
++    case 'sfx.shell.happy':
++      return ['-hide_banner', '-y', ...source(HAPPY_EXPR, HAPPY_SECONDS), '-af', HAPPY_FILTER, ...ENCODE, outFile];
++    case 'sfx.shell.prop':
++      return ['-hide_banner', '-y', ...source(PROP_EXPR, PROP_SECONDS), '-af', PROP_FILTER, ...ENCODE, outFile];
++    case 'music.island':
++      return ['-hide_banner', '-y', ...source(MUSIC_EXPR, MUSIC_SECONDS), '-af', MUSIC_LOUDNORM, ...ENCODE, outFile];
++  }
++}
++
++export type { Probe } from '../shared/binaries.ts';
++
++/** Resolves the ffmpeg binary: FFMPEG_BIN, else `ffmpeg` on PATH; throws a clear error otherwise. */
++export function resolveFfmpeg(env: Env, probe: Probe = probeBinary): string {
++  return resolveBinary(FFMPEG, env, probe);
++}
++
++function main(): void {
++  const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
++  let ffmpeg: string;
++  try {
++    ffmpeg = resolveFfmpeg(process.env);
++  } catch (error) {
++    console.error(`audio:placeholders: ${(error as Error).message}`);
++    process.exit(1);
++  }
++  for (const [id, entry] of Object.entries(AUDIO_CATALOG) as Array<[AudioId, (typeof AUDIO_CATALOG)[AudioId]]>) {
++    const out = resolve(appRoot, 'public', entry.path);
++    mkdirSync(dirname(out), { recursive: true });
++    const r = spawnSync(ffmpeg, buildArgs(id, out), { encoding: 'utf8' });
++    if (r.status !== 0 || !existsSync(out)) {
++      console.error(`audio:placeholders: ffmpeg failed for ${id}\n${r.stderr}`);
++      process.exit(1);
++    }
++    console.log(`audio:placeholders: wrote public/${entry.path}`);
++  }
++}
++
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+diff --git a/app/tools/audio/make-placeholders.test.ts b/app/tools/audio/make-placeholders.test.ts
+new file mode 100644
+index 0000000..b5bc191
+--- /dev/null
++++ b/app/tools/audio/make-placeholders.test.ts
+@@ -0,0 +1,70 @@
++import { describe, expect, it } from 'vitest';
++import { buildArgs, resolveFfmpeg } from './make-placeholders.ts';
++
++function valueAfter(args: string[], flag: string): string | undefined {
++  const i = args.indexOf(flag);
++  return i >= 0 ? args[i + 1] : undefined;
++}
++
++describe('buildArgs', () => {
++  it.each(['sfx.shell.pop', 'music.island'] as const)('%s encodes mono AAC 44.1 kHz 64k to the given file', (id) => {
++    const args = buildArgs(id, 'out.m4a');
++    expect(valueAfter(args, '-ac')).toBe('1');
++    expect(valueAfter(args, '-ar')).toBe('44100');
++    expect(valueAfter(args, '-c:a')).toBe('aac');
++    expect(valueAfter(args, '-b:a')).toBe('64k');
++    expect(args.at(-1)).toBe('out.m4a');
++    expect(valueAfter(args, '-i')).toMatch(/^aevalsrc='.+':s=44100:d=/);
++  });
++
++  it('pop: 140 ms, fade-in ≥ 50 ms, nothing below 150 Hz, peak −20 dBFS', () => {
++    const args = buildArgs('sfx.shell.pop', 'o.m4a');
++    expect(valueAfter(args, '-i')).toMatch(/:d=0\.14$/);
++    expect(valueAfter(args, '-i')).toMatch(/^aevalsrc='0\.1\*sin\(/);
++    const af = valueAfter(args, '-af') ?? '';
++    const fadeIn = /afade=t=in:st=0:d=([0-9.]+)/.exec(af);
++    expect(Number(fadeIn?.[1])).toBeGreaterThanOrEqual(0.05);
++    expect(af).toMatch(/afade=t=out:.*curve=exp/);
++    expect(af).toMatch(/highpass=f=150/);
++  });
++
++  it.each(['sfx.shell.happy', 'sfx.shell.prop'] as const)('%s: fade-in ≥ 50 ms, nothing below 150 Hz, peak −20 dBFS', (id) => {
++    const args = buildArgs(id, 'o.m4a');
++    expect(valueAfter(args, '-i')).toMatch(/^aevalsrc='0\.1\*/);
++    const af = valueAfter(args, '-af') ?? '';
++    const fadeIn = /afade=t=in:st=0:d=([0-9.]+)/.exec(af);
++    expect(Number(fadeIn?.[1])).toBeGreaterThanOrEqual(0.05);
++    expect(af).toMatch(/highpass=f=150/);
++  });
++
++  it('happy: a rising two-note chime of 0.35 s; prop: a ~100 ms tick', () => {
++    const happy = valueAfter(buildArgs('sfx.shell.happy', 'o.m4a'), '-i') ?? '';
++    expect(happy).toMatch(/:d=0\.35$/);
++    expect(happy).toMatch(/784\*t.*1047\*t/);
++    expect(valueAfter(buildArgs('sfx.shell.prop', 'o.m4a'), '-i')).toMatch(/:d=0\.1$/);
++  });
++
++  it('music: 12 s loop normalised with loudnorm I=-30', () => {
++    const args = buildArgs('music.island', 'o.m4a');
++    expect(valueAfter(args, '-i')).toMatch(/:d=12$/);
++    expect(valueAfter(args, '-af')).toMatch(/loudnorm=I=-30:TP=-3/);
++  });
++});
++
++describe('resolveFfmpeg', () => {
++  it('prefers FFMPEG_BIN when it runs', () => {
++    expect(resolveFfmpeg({ FFMPEG_BIN: 'C:/ff/ffmpeg.exe' }, (bin) => bin === 'C:/ff/ffmpeg.exe')).toBe('C:/ff/ffmpeg.exe');
++  });
++
++  it('falls back to ffmpeg on PATH', () => {
++    expect(resolveFfmpeg({}, (bin) => bin === 'ffmpeg')).toBe('ffmpeg');
++  });
++
++  it('fails clearly when ffmpeg is missing', () => {
++    expect(() => resolveFfmpeg({}, () => false)).toThrow(/ffmpeg not found: install ffmpeg .* FFMPEG_BIN/);
++  });
++
++  it('fails clearly when FFMPEG_BIN points nowhere', () => {
++    expect(() => resolveFfmpeg({ FFMPEG_BIN: 'nope' }, () => false)).toThrow(/FFMPEG_BIN="nope" does not run/);
++  });
++});
+diff --git a/app/src/core/input/polygon.ts b/app/src/core/input/polygon.ts
+new file mode 100644
+index 0000000..1c7f6bb
+--- /dev/null
++++ b/app/src/core/input/polygon.ts
+@@ -0,0 +1,76 @@
++// Pure polygon geometry for tap hit tests (Story 1.5). Design-space px, y down.
++import type { Point } from '../../content/layout-types';
++
++export type { Point };
++
++export interface Box {
++  readonly x: number;
++  readonly y: number;
++  readonly width: number;
++  readonly height: number;
++}
++
++/** Tolerance for "on the edge" (design px). */
++const EDGE_EPS = 1e-9;
++
++function onSegment(p: Point, a: Point, b: Point): boolean {
++  const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
++  if (Math.abs(cross) > EDGE_EPS * Math.max(1, Math.hypot(b.x - a.x, b.y - a.y))) return false;
++  return (
++    p.x >= Math.min(a.x, b.x) - EDGE_EPS &&
++    p.x <= Math.max(a.x, b.x) + EDGE_EPS &&
++    p.y >= Math.min(a.y, b.y) - EDGE_EPS &&
++    p.y <= Math.max(a.y, b.y) + EDGE_EPS
++  );
++}
++
++/**
++ * True when `p` lies inside `poly` or on its boundary (edges and vertices count as inside).
++ * Works for concave polygons (even-odd crossing rule). Fewer than 3 points → false.
++ */
++export function pointInPolygon(p: Point, poly: readonly Point[]): boolean {
++  const n = poly.length;
++  if (n < 3) return false;
++  let inside = false;
++  for (let i = 0, j = n - 1; i < n; j = i++) {
++    const a = poly[i]!;
++    const b = poly[j]!;
++    if (onSegment(p, a, b)) return true;
++    if (a.y > p.y !== b.y > p.y) {
++      const xCross = a.x + ((p.y - a.y) * (b.x - a.x)) / (b.y - a.y);
++      if (p.x < xCross) inside = !inside;
++    }
++  }
++  return inside;
++}
++
++/** Axis-aligned bounding box of a point list (empty list → zero box at the origin). */
++export function boundingBox(points: readonly Point[]): Box {
++  if (points.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
++  let minX = Infinity;
++  let minY = Infinity;
++  let maxX = -Infinity;
++  let maxY = -Infinity;
++  for (const p of points) {
++    minX = Math.min(minX, p.x);
++    minY = Math.min(minY, p.y);
++    maxX = Math.max(maxX, p.x);
++    maxY = Math.max(maxY, p.y);
++  }
++  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
++}
++
++/** `box` grown by `pad` on each side. */
++export function padBox(box: Box, pad: number): Box {
++  return { x: box.x - pad, y: box.y - pad, width: box.width + 2 * pad, height: box.height + 2 * pad };
++}
++
++/** The 4 corners of `box`, clockwise from top-left. */
++export function boxPolygon(box: Box): Point[] {
++  return [
++    { x: box.x, y: box.y },
++    { x: box.x + box.width, y: box.y },
++    { x: box.x + box.width, y: box.y + box.height },
++    { x: box.x, y: box.y + box.height },
++  ];
++}
+diff --git a/app/src/core/input/tap-router.ts b/app/src/core/input/tap-router.ts
+new file mode 100644
+index 0000000..8b4d9a9
+--- /dev/null
++++ b/app/src/core/input/tap-router.ts
+@@ -0,0 +1,82 @@
++// Tap routing (Story 1.5, minimal; Story 1.6 adds layers, InputGuard registration, up events and
++// `toDesign`). One `pointerdown` listener per scene. Every tap first calls `onAnyTap` (hit or miss),
++// then the topmost enabled target containing the point — the last one registered — gets `onTap`.
++// A miss does nothing else. This is the only place (with core/input) that touches pointer events.
++import type { Point } from './polygon';
++
++export interface PointerLike {
++  readonly x: number;
++  readonly y: number;
++}
++
++/** Slice of `Phaser.Scene` the router needs (fakeable in node tests). */
++export interface RouterSceneLike {
++  readonly input: {
++    on(event: string, fn: (pointer: PointerLike) => void): unknown;
++    off(event: string, fn: (pointer: PointerLike) => void): unknown;
++  };
++  readonly events: {
++    once(event: string, fn: () => void): unknown;
++  };
++}
++
++export interface RouterTarget {
++  contains(p: Point): boolean;
++  isEnabled(): boolean;
++  onTap(p: Point): void;
++}
++
++export interface TapRouter {
++  /** Registers a target on top of the earlier ones; returns its removal function. */
++  add(target: RouterTarget): () => void;
++  /** Called first on every tap, hit or miss (Map: reset idle). */
++  onAnyTap: ((p: Point) => void) | undefined;
++  /** Removes the listener and every target (also runs on scene shutdown). */
++  destroy(): void;
++}
++
++export const POINTER_DOWN = 'pointerdown';
++const SHUTDOWN = 'shutdown';
++
++/** The design point of a pointer. Story 1.6 swaps in `toDesign`. */
++export function pointerPoint(pointer: PointerLike): Point {
++  return { x: pointer.x, y: pointer.y };
++}
++
++export function createTapRouter(scene: RouterSceneLike): TapRouter {
++  let targets: RouterTarget[] = [];
++  let live = true;
++
++  const onDown = (pointer: PointerLike): void => {
++    const p = pointerPoint(pointer);
++    router.onAnyTap?.(p);
++    for (let i = targets.length - 1; i >= 0; i--) {
++      const t = targets[i]!;
++      if (t.isEnabled() && t.contains(p)) {
++        t.onTap(p);
++        return;
++      }
++    }
++  };
++
++  const router: TapRouter = {
++    onAnyTap: undefined,
++    add(target) {
++      targets.push(target);
++      return () => {
++        targets = targets.filter((t) => t !== target);
++      };
++    },
++    destroy() {
++      if (!live) return;
++      live = false;
++      scene.input.off(POINTER_DOWN, onDown);
++      targets = [];
++      router.onAnyTap = undefined;
++    },
++  };
++
++  scene.input.on(POINTER_DOWN, onDown);
++  scene.events.once(SHUTDOWN, () => router.destroy());
++  return router;
++}
+diff --git a/app/src/core/input/hotspot-polygon.ts b/app/src/core/input/hotspot-polygon.ts
+new file mode 100644
+index 0000000..87f7ca7
+--- /dev/null
++++ b/app/src/core/input/hotspot-polygon.ts
+@@ -0,0 +1,34 @@
++// A polygon tap area registered on a TapRouter (Story 1.5). The polygon is used exactly as given
++// (layout hit polygons are already padded; no extra padding here).
++import { pointInPolygon, type Point } from './polygon';
++import type { TapRouter } from './tap-router';
++
++export class HotspotPolygon {
++  private enabledFlag = true;
++  private readonly remove: () => void;
++  private readonly points: readonly Point[];
++
++  constructor(router: TapRouter, points: readonly Point[], onTap: (p: Point) => void) {
++    this.points = points.map((p) => ({ x: p.x, y: p.y }));
++    this.remove = router.add({
++      contains: (p) => pointInPolygon(p, this.points),
++      isEnabled: () => this.enabledFlag,
++      onTap,
++    });
++  }
++
++  get enabled(): boolean {
++    return this.enabledFlag;
++  }
++
++  setEnabled(enabled: boolean): this {
++    this.enabledFlag = enabled;
++    return this;
++  }
++
++  /** Unregisters the hotspot; it never fires again. */
++  destroy(): void {
++    this.enabledFlag = false;
++    this.remove();
++  }
++}
+diff --git a/app/src/core/input/input.test.ts b/app/src/core/input/input.test.ts
+new file mode 100644
+index 0000000..ed7a643
+--- /dev/null
++++ b/app/src/core/input/input.test.ts
+@@ -0,0 +1,146 @@
++// Story 1.5: point-in-polygon, topmost-wins tap routing, hotspot enable/destroy.
++import { describe, expect, it, vi } from 'vitest';
++import { HotspotPolygon } from './hotspot-polygon';
++import { boundingBox, boxPolygon, padBox, pointInPolygon } from './polygon';
++import { createTapRouter, POINTER_DOWN, type PointerLike } from './tap-router';
++
++const square = [
++  { x: 0, y: 0 },
++  { x: 10, y: 0 },
++  { x: 10, y: 10 },
++  { x: 0, y: 10 },
++];
++// Concave "U": the notch (4..6, 0..6) is outside.
++const u = [
++  { x: 0, y: 0 },
++  { x: 4, y: 0 },
++  { x: 4, y: 6 },
++  { x: 6, y: 6 },
++  { x: 6, y: 0 },
++  { x: 10, y: 0 },
++  { x: 10, y: 10 },
++  { x: 0, y: 10 },
++];
++
++describe('pointInPolygon', () => {
++  it('inside and outside a square', () => {
++    expect(pointInPolygon({ x: 5, y: 5 }, square)).toBe(true);
++    expect(pointInPolygon({ x: 11, y: 5 }, square)).toBe(false);
++    expect(pointInPolygon({ x: -0.01, y: 5 }, square)).toBe(false);
++  });
++
++  it('edges and vertices count as inside', () => {
++    expect(pointInPolygon({ x: 0, y: 5 }, square)).toBe(true);
++    expect(pointInPolygon({ x: 10, y: 10 }, square)).toBe(true);
++    expect(pointInPolygon({ x: 5, y: 0 }, square)).toBe(true);
++  });
++
++  it('concave: the notch is outside, the arms are inside', () => {
++    expect(pointInPolygon({ x: 5, y: 3 }, u)).toBe(false);
++    expect(pointInPolygon({ x: 2, y: 3 }, u)).toBe(true);
++    expect(pointInPolygon({ x: 8, y: 3 }, u)).toBe(true);
++    expect(pointInPolygon({ x: 5, y: 8 }, u)).toBe(true);
++    // A ray through the notch's vertex row.
++    expect(pointInPolygon({ x: 2, y: 6 }, u)).toBe(true);
++    expect(pointInPolygon({ x: 5, y: 6 }, u)).toBe(true);
++  });
++
++  it('degenerate polygons contain nothing', () => {
++    expect(pointInPolygon({ x: 0, y: 0 }, square.slice(0, 2))).toBe(false);
++  });
++
++  it('box helpers', () => {
++    expect(boundingBox(u)).toEqual({ x: 0, y: 0, width: 10, height: 10 });
++    expect(boxPolygon(padBox({ x: 10, y: 20, width: 30, height: 40 }, 24))).toEqual([
++      { x: -14, y: -4 },
++      { x: 64, y: -4 },
++      { x: 64, y: 84 },
++      { x: -14, y: 84 },
++    ]);
++  });
++});
++
++function fakeScene() {
++  const listeners = new Map<string, (p: PointerLike) => void>();
++  const once = new Map<string, () => void>();
++  return {
++    input: {
++      on: vi.fn((ev: string, fn: (p: PointerLike) => void) => listeners.set(ev, fn)),
++      off: vi.fn((ev: string, fn: (p: PointerLike) => void) => {
++        if (listeners.get(ev) === fn) listeners.delete(ev);
++      }),
++    },
++    events: { once: (ev: string, fn: () => void) => once.set(ev, fn) },
++    tap: (x: number, y: number) => listeners.get(POINTER_DOWN)?.({ x, y }),
++    listening: () => listeners.has(POINTER_DOWN),
++    shutdown: () => once.get('shutdown')?.(),
++  };
++}
++
++describe('createTapRouter + HotspotPolygon', () => {
++  it('registers one pointerdown listener and removes it on shutdown', () => {
++    const scene = fakeScene();
++    createTapRouter(scene);
++    expect(scene.input.on).toHaveBeenCalledTimes(1);
++    expect(scene.listening()).toBe(true);
++    scene.shutdown();
++    expect(scene.listening()).toBe(false);
++  });
++
++  it('the topmost (last registered) target wins an overlap', () => {
++    const scene = fakeScene();
++    const router = createTapRouter(scene);
++    const a = vi.fn();
++    const b = vi.fn();
++    new HotspotPolygon(router, square, a);
++    new HotspotPolygon(router, square.map((p) => ({ x: p.x + 5, y: p.y })), b);
++    scene.tap(7, 5);
++    expect(b).toHaveBeenCalledWith({ x: 7, y: 5 });
++    expect(a).not.toHaveBeenCalled();
++    scene.tap(2, 5);
++    expect(a).toHaveBeenCalledTimes(1);
++  });
++
++  it('onAnyTap runs first on every tap, hit or miss; a miss does nothing else', () => {
++    const scene = fakeScene();
++    const router = createTapRouter(scene);
++    const order: string[] = [];
++    router.onAnyTap = () => order.push('any');
++    new HotspotPolygon(router, square, () => order.push('hit'));
++    scene.tap(5, 5);
++    scene.tap(50, 50);
++    expect(order).toEqual(['any', 'hit', 'any']);
++  });
++
++  it('a disabled hotspot is skipped (the one below gets the tap); destroy removes it', () => {
++    const scene = fakeScene();
++    const router = createTapRouter(scene);
++    const below = vi.fn();
++    const top = vi.fn();
++    new HotspotPolygon(router, square, below);
++    const h = new HotspotPolygon(router, square, top);
++    h.setEnabled(false);
++    scene.tap(5, 5);
++    expect(below).toHaveBeenCalledTimes(1);
++    h.setEnabled(true);
++    scene.tap(5, 5);
++    expect(top).toHaveBeenCalledTimes(1);
++    h.destroy();
++    h.setEnabled(true);
++    scene.tap(5, 5);
++    expect(top).toHaveBeenCalledTimes(1);
++    expect(below).toHaveBeenCalledTimes(2);
++  });
++
++  it('a hotspot copies its points (later edits of the source do not move it)', () => {
++    const scene = fakeScene();
++    const router = createTapRouter(scene);
++    const pts = square.map((p) => ({ ...p }));
++    const hit = vi.fn();
++    new HotspotPolygon(router, pts, hit);
++    pts[1]!.x = 100;
++    pts[2]!.x = 100;
++    scene.tap(50, 5);
++    expect(hit).not.toHaveBeenCalled();
++  });
++});
+diff --git a/app/src/core/reduced-motion.ts b/app/src/core/reduced-motion.ts
+new file mode 100644
+index 0000000..626cd3c
+--- /dev/null
++++ b/app/src/core/reduced-motion.ts
+@@ -0,0 +1,24 @@
++// prefers-reduced-motion (Story 1.5). Read once per scene create; when set, every scale motion keeps
++// its timing but its amplitude (the `scale − 1` part) is multiplied by Tokens.ui.reducedMotionAmplitude.
++import { Tokens } from './tokens';
++
++export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
++
++/** Slice of `window` (fakeable). */
++export interface MotionWindowLike {
++  matchMedia?: (query: string) => { readonly matches: boolean };
++}
++
++/** True when the user asks for reduced motion; false when `matchMedia` is unavailable or throws. */
++export function prefersReducedMotion(win: MotionWindowLike | undefined): boolean {
++  try {
++    return typeof win?.matchMedia === 'function' && win.matchMedia(REDUCED_MOTION_QUERY).matches;
++  } catch {
++    return false;
++  }
++}
++
++/** `scale` with its amplitude reduced when `reduced` (1.1 → 1.05, 0.92 → 0.96 at factor 0.5). */
++export function amplitude(scale: number, reduced: boolean, factor: number = Tokens.ui.reducedMotionAmplitude): number {
++  return reduced ? 1 + (scale - 1) * factor : scale;
++}
+diff --git a/app/src/core/reduced-motion.test.ts b/app/src/core/reduced-motion.test.ts
+new file mode 100644
+index 0000000..61302c9
+--- /dev/null
++++ b/app/src/core/reduced-motion.test.ts
+@@ -0,0 +1,45 @@
++import { describe, expect, it } from 'vitest';
++import { amplitude, prefersReducedMotion, REDUCED_MOTION_QUERY } from './reduced-motion';
++import { Tokens } from './tokens';
++
++describe('prefersReducedMotion', () => {
++  it('reads the media query', () => {
++    const seen: string[] = [];
++    const win = (matches: boolean) => ({
++      matchMedia: (q: string) => {
++        seen.push(q);
++        return { matches };
++      },
++    });
++    expect(prefersReducedMotion(win(true))).toBe(true);
++    expect(prefersReducedMotion(win(false))).toBe(false);
++    expect(seen).toEqual([REDUCED_MOTION_QUERY, REDUCED_MOTION_QUERY]);
++  });
++
++  it('is false without matchMedia, without a window, or when it throws', () => {
++    expect(prefersReducedMotion({})).toBe(false);
++    expect(prefersReducedMotion(undefined)).toBe(false);
++    expect(
++      prefersReducedMotion({
++        matchMedia: () => {
++          throw new Error('nope');
++        },
++      }),
++    ).toBe(false);
++  });
++});
++
++describe('amplitude (I/O matrix: Reduced motion)', () => {
++  it('halves every scale amplitude when reduced', () => {
++    expect(Tokens.ui.reducedMotionAmplitude).toBe(0.5);
++    expect(amplitude(1.1, true)).toBeCloseTo(1.05);
++    expect(amplitude(0.92, true)).toBeCloseTo(0.96);
++    expect(amplitude(1.08, true)).toBeCloseTo(1.04);
++    expect(amplitude(0.95, true)).toBeCloseTo(0.975);
++  });
++
++  it('keeps the scale when not reduced', () => {
++    expect(amplitude(1.1, false)).toBe(1.1);
++    expect(amplitude(Tokens.ui.stationTapScale, false)).toBe(1.1);
++  });
++});
+diff --git a/app/src/core/map-idle.ts b/app/src/core/map-idle.ts
+new file mode 100644
+index 0000000..7134fe2
+--- /dev/null
++++ b/app/src/core/map-idle.ts
+@@ -0,0 +1,117 @@
++// Map idle scheduler (Story 1.5, EXPERIENCE › Mời chơi). Pure: time comes in through `tick(deltaMs)`
++// (the Map feeds `update` deltas, which stop while the scene is paused), randomness through `rng`.
++//   - ambient: every rand(ambientMin..ambientMax) one station moves; never the same id twice in a row;
++//   - invite: after `inviteFirstMs` of idle, for the next awake station (round-robin); later ones need
++//     idle ≥ inviteFirstMs AND ≥ inviteGapMs since the previous invitation started; at most
++//     `inviteMaxCount` per Map visit (taps do not reset the count);
++//   - while an invitation shows (`inviteHoldMs` or until a tap) no ambient fires; it ends with `inviteEnd`;
++//   - `tap()` resets the idle clock and the ambient timer and ends a showing invitation.
++// Deltas are clamped to MAX_TICK_MS so a resume never fires a burst.
++
++export const MAX_TICK_MS = 250;
++
++export type MapIdleEvent =
++  | { readonly kind: 'ambient'; readonly id: string }
++  | { readonly kind: 'invite'; readonly id: string }
++  | { readonly kind: 'inviteEnd'; readonly id: string };
++
++export interface MapIdleTiming {
++  readonly ambientMinMs: number;
++  readonly ambientMaxMs: number;
++  readonly inviteFirstMs: number;
++  readonly inviteGapMs: number;
++  readonly inviteMaxCount: number;
++  readonly inviteHoldMs: number;
++}
++
++export interface MapIdleOptions {
++  /** Every station that may move (ambient). */
++  readonly stations: readonly string[];
++  /** Stations that may be invited, in round-robin order. */
++  readonly awake: readonly string[];
++  readonly timing: MapIdleTiming;
++  /** Uniform [0, 1) (default Math.random). */
++  readonly rng?: () => number;
++}
++
++export interface MapIdle {
++  tick(deltaMs: number): MapIdleEvent[];
++  tap(): MapIdleEvent[];
++  /** The station whose invitation is showing, if any. */
++  readonly showing: string | undefined;
++  /** Invitations started this visit. */
++  readonly invites: number;
++}
++
++export function createMapIdle(opts: MapIdleOptions): MapIdle {
++  const { stations, awake, timing } = opts;
++  const rng = opts.rng ?? Math.random;
++  const nextAmbientDelay = (): number => timing.ambientMinMs + rng() * (timing.ambientMaxMs - timing.ambientMinMs);
++
++  let elapsed = 0;
++  let idle = 0;
++  let ambientLeft = nextAmbientDelay();
++  let lastAmbient: string | undefined;
++  let invites = 0;
++  let lastInviteAt: number | undefined;
++  let awakeIndex = 0;
++  let showing: { id: string; left: number } | undefined;
++
++  const pickAmbient = (): string | undefined => {
++    if (stations.length === 0) return undefined;
++    const pool = stations.length > 1 ? stations.filter((id) => id !== lastAmbient) : stations;
++    const id = pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
++    lastAmbient = id;
++    return id;
++  };
++
++  const inviteDue = (): boolean =>
++    awake.length > 0 &&
++    invites < timing.inviteMaxCount &&
++    idle >= timing.inviteFirstMs &&
++    (lastInviteAt === undefined || elapsed - lastInviteAt >= timing.inviteGapMs);
++
++  const endShowing = (): MapIdleEvent[] => {
++    if (!showing) return [];
++    const id = showing.id;
++    showing = undefined;
++    ambientLeft = nextAmbientDelay();
++    return [{ kind: 'inviteEnd', id }];
++  };
++
++  return {
++    tick(deltaMs) {
++      const d = Math.min(MAX_TICK_MS, Math.max(0, Number.isFinite(deltaMs) ? deltaMs : 0));
++      elapsed += d;
++      idle += d;
++      if (showing) {
++        showing.left -= d;
++        return showing.left <= 0 ? endShowing() : [];
++      }
++      if (inviteDue()) {
++        const id = awake[awakeIndex % awake.length]!;
++        awakeIndex++;
++        invites++;
++        lastInviteAt = elapsed;
++        showing = { id, left: timing.inviteHoldMs };
++        return [{ kind: 'invite', id }];
++      }
++      ambientLeft -= d;
++      if (ambientLeft > 0) return [];
++      ambientLeft = nextAmbientDelay();
++      const id = pickAmbient();
++      return id === undefined ? [] : [{ kind: 'ambient', id }];
++    },
++    tap() {
++      idle = 0;
++      ambientLeft = nextAmbientDelay();
++      return endShowing();
++    },
++    get showing() {
++      return showing?.id;
++    },
++    get invites() {
++      return invites;
++    },
++  };
++}
+diff --git a/app/src/core/map-idle.test.ts b/app/src/core/map-idle.test.ts
+new file mode 100644
+index 0000000..956e093
+--- /dev/null
++++ b/app/src/core/map-idle.test.ts
+@@ -0,0 +1,141 @@
++// Story 1.5 I/O matrix: Ambient, First invite, Invite ends, Later invites, Tap resets, No awake,
++// Pause/resume.
++import { describe, expect, it } from 'vitest';
++import { createMapIdle, MAX_TICK_MS, type MapIdle, type MapIdleEvent, type MapIdleTiming } from './map-idle';
++import { Timing } from './timing';
++
++const TIMING: MapIdleTiming = {
++  ambientMinMs: Timing.mapAmbientMinMs,
++  ambientMaxMs: Timing.mapAmbientMaxMs,
++  inviteFirstMs: Timing.mapInviteFirstMs,
++  inviteGapMs: Timing.mapInviteGapMs,
++  inviteMaxCount: Timing.mapInviteMaxCount,
++  inviteHoldMs: Timing.mapInviteHoldMs,
++};
++const STATIONS = ['ice-cream', 'pizza', 'race', 'fishing', 'touch-talk', 'dino-puzzle', 'shadow-match'];
++const STEP = 50;
++
++/** Deterministic rng cycling through `values`. */
++function seq(values: number[]): () => number {
++  let i = 0;
++  return () => values[i++ % values.length]!;
++}
++
++interface Timed {
++  at: number;
++  ev: MapIdleEvent;
++}
++
++/** Ticks `ms` in STEP slices starting at `start`; returns the timed events. */
++function run(idle: MapIdle, ms: number, start = 0): Timed[] {
++  const out: Timed[] = [];
++  for (let t = STEP; t <= ms; t += STEP) for (const ev of idle.tick(STEP)) out.push({ at: start + t, ev });
++  return out;
++}
++
++const make = (opts: { awake?: string[]; rng?: () => number } = {}) =>
++  createMapIdle({ stations: STATIONS, awake: opts.awake ?? ['ice-cream'], timing: TIMING, rng: opts.rng ?? seq([0.5]) });
++
++describe('createMapIdle', () => {
++  it('ambient: one event every 4–6 s; the id never repeats back to back', () => {
++    const idle = make({ awake: [], rng: seq([0, 0.99, 0.3, 0.7, 0.1, 0.5]) });
++    const evs = run(idle, 120_000);
++    expect(evs.length).toBeGreaterThan(15);
++    expect(evs.every((e) => e.ev.kind === 'ambient')).toBe(true);
++    let prev = 0;
++    for (const e of evs) {
++      const gap = e.at - prev;
++      expect(gap).toBeGreaterThanOrEqual(TIMING.ambientMinMs);
++      expect(gap).toBeLessThanOrEqual(TIMING.ambientMaxMs + STEP);
++      prev = e.at;
++    }
++    for (let i = 1; i < evs.length; i++) expect(evs[i]!.ev.id).not.toBe(evs[i - 1]!.ev.id);
++  });
++
++  it('ambient: every station is eligible', () => {
++    let x = 0;
++    const idle = make({ awake: [], rng: () => ((x = (x + 0.137) % 1), x) });
++    const ids = new Set(run(idle, 300_000).map((e) => e.ev.id));
++    expect([...ids].sort()).toEqual([...STATIONS].sort());
++  });
++
++  it('first invite after 8 s idle for the awake station; no ambient while it shows; it ends after the hold', () => {
++    const idle = make();
++    const evs = run(idle, TIMING.inviteFirstMs + TIMING.inviteHoldMs + 1000);
++    const invite = evs.find((e) => e.ev.kind === 'invite')!;
++    expect(invite.ev.id).toBe('ice-cream');
++    expect(invite.at).toBe(TIMING.inviteFirstMs);
++    const end = evs.find((e) => e.ev.kind === 'inviteEnd')!;
++    expect(end.ev.id).toBe('ice-cream');
++    expect(end.at).toBe(TIMING.inviteFirstMs + TIMING.inviteHoldMs);
++    expect(evs.filter((e) => e.at > invite.at && e.at < end.at)).toEqual([]);
++  });
++
++  it('a tap ends a showing invitation with inviteEnd and resets idle', () => {
++    const idle = make();
++    run(idle, TIMING.inviteFirstMs);
++    expect(idle.showing).toBe('ice-cream');
++    expect(idle.tap()).toEqual([{ kind: 'inviteEnd', id: 'ice-cream' }]);
++    expect(idle.showing).toBeUndefined();
++    expect(idle.tap()).toEqual([]);
++  });
++
++  it('later invites: ≥ 20 s after the previous start, at most 3 per visit', () => {
++    const idle = make();
++    const invites = run(idle, 70_000).filter((e) => e.ev.kind === 'invite');
++    expect(invites.map((e) => e.at)).toEqual([8000, 28000, 48000]);
++    expect(run(idle, 120_000, 70_000).filter((e) => e.ev.kind === 'invite')).toEqual([]);
++  });
++
++  it('taps do not reset the invitation count', () => {
++    const idle = make();
++    let count = 0;
++    for (let i = 0; i < 5; i++) {
++      count += run(idle, 30_000).filter((e) => e.ev.kind === 'invite').length;
++      idle.tap();
++    }
++    expect(count).toBe(TIMING.inviteMaxCount);
++    expect(idle.invites).toBe(TIMING.inviteMaxCount);
++  });
++
++  it('tap at idle 7 s: no invitation until 8 s after the tap', () => {
++    const idle = make();
++    run(idle, 7000);
++    idle.tap();
++    const evs = run(idle, 9000, 7000);
++    const invite = evs.find((e) => e.ev.kind === 'invite')!;
++    expect(invite.at).toBe(15_000);
++  });
++
++  it('round-robin over several awake stations', () => {
++    const idle = make({ awake: ['ice-cream', 'pizza'] });
++    const ids = run(idle, 70_000)
++      .filter((e) => e.ev.kind === 'invite')
++      .map((e) => e.ev.id);
++    expect(ids).toEqual(['ice-cream', 'pizza', 'ice-cream']);
++  });
++
++  it('no awake station: ambient only, never invite', () => {
++    const idle = make({ awake: [] });
++    const evs = run(idle, 70_000);
++    expect(evs.length).toBeGreaterThan(0);
++    expect(evs.some((e) => e.ev.kind !== 'ambient')).toBe(false);
++  });
++
++  it('a 30 s delta after a pause counts as 250 ms (no burst)', () => {
++    const idle = make();
++    expect(MAX_TICK_MS).toBe(250);
++    expect(idle.tick(30_000)).toEqual([]);
++    // 250 ms counted: the first invite still needs 8000 − 250 ms more.
++    const evs = run(idle, TIMING.inviteFirstMs - 250, 250);
++    expect(evs.filter((e) => e.ev.kind === 'invite').map((e) => e.at)).toEqual([TIMING.inviteFirstMs]);
++  });
++
++  it('ignores negative and non-finite deltas', () => {
++    const idle = make();
++    expect(idle.tick(-1000)).toEqual([]);
++    expect(idle.tick(Number.NaN)).toEqual([]);
++    const evs = run(idle, TIMING.inviteFirstMs);
++    expect(evs.find((e) => e.ev.kind === 'invite')?.at).toBe(TIMING.inviteFirstMs);
++  });
++});
+diff --git a/app/src/core/map-plan.ts b/app/src/core/map-plan.ts
+new file mode 100644
+index 0000000..822ae23
+--- /dev/null
++++ b/app/src/core/map-plan.ts
+@@ -0,0 +1,176 @@
++// Map planning (Story 1.5), pure. Turns the generated layout (spec-1-4 contract) + content stations
++// into what the Map scene draws and registers:
++//   - each station's full-frame image `<id>/idle/00`: positioned at anchors[id] with origin
++//     anchor/design and scale 1/renderScale, so a bounce scales around the ground pivot;
++//   - its hit polygon (hits[id], exactly as stored), its static label position, awake flag, depth;
++//   - the kart prop (`kart/idle/00` placed the same way at `anchor.kart-start`), hit = trimmed frame
++//     rect ÷ renderScale padded by Tokens.spacing.hitPad;
++//   - warnings for missing frames (image skipped, hotspot/label kept) and missing stations (skipped).
++// Slots are never planned (UX-DR42). Depth sorts by the anchor y; labels sit above every sprite.
++import { KART_FRAME, KART_START_ANCHOR, stationFrame } from '../content/stations';
++import type { Point, ScreenLayout } from '../content/layout-types';
++import { boxPolygon, padBox, type Box } from './input/polygon';
++import type { Rect } from './safe-rect';
++import { Tokens } from './tokens';
++
++export interface PlanStationInput {
++  readonly id: string;
++  readonly label: string;
++  readonly awake: boolean;
++}
++
++export interface Size {
++  readonly w: number;
++  readonly h: number;
++}
++
++/** A full-frame sprite placed on its ground pivot. */
++export interface PlannedImage {
++  readonly frame: string;
++  readonly x: number;
++  readonly y: number;
++  readonly originX: number;
++  readonly originY: number;
++  readonly scale: number;
++}
++
++export interface PlannedStation {
++  readonly id: string;
++  readonly label: string;
++  readonly awake: boolean;
++  readonly anchor: Point;
++  /** Undefined when the frame is missing from the atlas. */
++  readonly image: PlannedImage | undefined;
++  readonly hit: readonly Point[];
++  /** Label: centre x, top y. */
++  readonly labelPos: Point;
++  readonly depth: number;
++}
++
++export interface PlannedProp {
++  readonly id: string;
++  readonly image: PlannedImage;
++  /** Visible (trimmed) frame rect in design px. */
++  readonly rect: Box;
++  /** `rect` padded by Tokens.spacing.hitPad, as 4 points. */
++  readonly hit: readonly Point[];
++  readonly depth: number;
++}
++
++export interface MapPlan {
++  readonly bg: { readonly x: number; readonly y: number; readonly scale: number; readonly depth: number };
++  /** In depth order (back to front) — also the hotspot registration order (front wins). */
++  readonly stations: readonly PlannedStation[];
++  readonly kart: PlannedProp | undefined;
++  readonly labelDepth: number;
++  /** Above the sprites, below the labels. */
++  readonly ringDepth: number;
++  readonly warnings: readonly string[];
++}
++
++export interface PlanOptions {
++  /** Measured label size (Phaser Text); default: an estimate from the label typography. */
++  readonly measureLabel?: (label: string) => Size;
++  readonly safeRect?: Rect;
++  /** Gap between the anchor and the label top. */
++  readonly labelGap?: number;
++  readonly hitPad?: number;
++  /** Texture key named in warnings. */
++  readonly atlasKey?: string;
++}
++
++/** Rough glyph width / font size of Baloo 2 (estimate used only without a real measure). */
++const GLYPH_WIDTH_EM = 0.55;
++
++export function estimateLabelSize(label: string): Size {
++  const t = Tokens.components.stationLabel.typography;
++  return { w: label.length * t.fontSize * GLYPH_WIDTH_EM, h: t.fontSize * t.lineHeight };
++}
++
++/** Label position: centred on the anchor x, top at anchor.y + gap, clamped inside `safe`. */
++export function labelPosition(anchor: Point, size: Size, safe: Rect, gap: number): Point {
++  const clamp = (v: number, lo: number, hi: number): number => (hi < lo ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
++  return {
++    x: clamp(anchor.x, safe.x + size.w / 2, safe.x + safe.w - size.w / 2),
++    y: clamp(anchor.y + gap, safe.y, safe.y + safe.h - size.h),
++  };
++}
++
++function placeImage(frame: string, at: Point, layout: ScreenLayout): PlannedImage {
++  return {
++    frame,
++    x: at.x,
++    y: at.y,
++    originX: at.x / layout.design.width,
++    originY: at.y / layout.design.height,
++    scale: 1 / layout.renderScale,
++  };
++}
++
++export function planMap(
++  layout: ScreenLayout,
++  stations: readonly PlanStationInput[],
++  hasFrame: (frame: string) => boolean,
++  frameRect: (frame: string) => Box | undefined,
++  opts: PlanOptions = {},
++): MapPlan {
++  const measure = opts.measureLabel ?? estimateLabelSize;
++  const safe = opts.safeRect ?? Tokens.safeRect;
++  const gap = opts.labelGap ?? Tokens.spacing['1'];
++  const pad = opts.hitPad ?? Tokens.spacing.hitPad;
++  const atlas = opts.atlasKey ?? 'atlas';
++  const warnings: string[] = [];
++
++  const planned: PlannedStation[] = [];
++  for (const s of stations) {
++    const anchor = layout.anchors[s.id];
++    const hit = layout.hits[s.id];
++    if (!anchor || !hit) {
++      warnings.push(`map: station "${s.id}" is missing from the layout (${!anchor ? 'anchors' : 'hits'}) — skipped`);
++      continue;
++    }
++    const frame = stationFrame(s.id);
++    const image = hasFrame(frame) ? placeImage(frame, anchor, layout) : undefined;
++    if (!image) warnings.push(`map: frame "${frame}" is missing from ${atlas} — image skipped`);
++    planned.push({
++      id: s.id,
++      label: s.label,
++      awake: s.awake,
++      anchor,
++      image,
++      hit,
++      labelPos: labelPosition(anchor, measure(s.label), safe, gap),
++      depth: anchor.y,
++    });
++  }
++  planned.sort((a, b) => a.depth - b.depth);
++
++  let kart: PlannedProp | undefined;
++  const ss = hasFrame(KART_FRAME) ? frameRect(KART_FRAME) : undefined;
++  if (!ss) {
++    warnings.push(`map: frame "${KART_FRAME}" is missing from ${atlas} — kart prop skipped`);
++  } else {
++    const at = layout.anchors[KART_START_ANCHOR];
++    const rs = layout.renderScale;
++    const rect: Box = { x: ss.x / rs, y: ss.y / rs, width: ss.width / rs, height: ss.height / rs };
++    // Without the start anchor, pivot at the visible rect's bottom centre.
++    const pivot = at ?? { x: rect.x + rect.width / 2, y: rect.y + rect.height };
++    kart = {
++      id: 'kart',
++      image: placeImage(KART_FRAME, pivot, layout),
++      rect,
++      hit: boxPolygon(padBox(rect, pad)),
++      depth: pivot.y,
++    };
++  }
++
++  const maxDepth = Math.max(layout.design.height, ...planned.map((s) => s.depth), kart?.depth ?? 0);
++  return {
++    bg: { x: 0, y: 0, scale: 1 / layout.renderScale, depth: -1 },
++    stations: planned,
++    kart,
++    ringDepth: maxDepth + 1,
++    labelDepth: maxDepth + 2,
++    warnings,
++  };
++}
+diff --git a/app/src/core/map-plan.test.ts b/app/src/core/map-plan.test.ts
+new file mode 100644
+index 0000000..505c875
+--- /dev/null
++++ b/app/src/core/map-plan.test.ts
+@@ -0,0 +1,122 @@
++// Story 1.5 I/O matrix: Enter Map (plan), Missing frame, Missing station, Label at edge, depth order,
++// no slot items, kart prop rect.
++import { describe, expect, it } from 'vitest';
++import type { ScreenLayout } from '../content/layout-types';
++import { LAYOUTS } from '../content/layouts';
++import { KART_FRAME, STATIONS } from '../content/stations';
++import { boundingBox } from './input/polygon';
++import { labelPosition, planMap } from './map-plan';
++import { Tokens } from './tokens';
++
++const layout = LAYOUTS.map;
++const allFrames = (): boolean => true;
++/** spriteSourceSize of the kart in render px (2×). */
++const KART_SS = { x: 857, y: 888, width: 109, height: 135 };
++const frameRect = (frame: string) => (frame === KART_FRAME ? KART_SS : undefined);
++const fixedSize = () => ({ w: 100, h: 22 });
++
++describe('planMap (real layout)', () => {
++  const plan = planMap(layout, STATIONS, allFrames, frameRect, { measureLabel: fixedSize });
++
++  it('plans all 7 stations with images, labels and their stored hit polygons; no warnings', () => {
++    expect(plan.warnings).toEqual([]);
++    expect(plan.stations).toHaveLength(7);
++    for (const s of plan.stations) {
++      expect(s.hit).toBe(layout.hits[s.id]);
++      expect(s.label.length).toBeGreaterThan(0);
++      const a = layout.anchors[s.id]!;
++      expect(s.image).toEqual({
++        frame: `${s.id}/idle/00`,
++        x: a.x,
++        y: a.y,
++        originX: a.x / layout.design.width,
++        originY: a.y / layout.design.height,
++        scale: 1 / layout.renderScale,
++      });
++    }
++    expect(plan.stations.filter((s) => s.awake).map((s) => s.id)).toEqual(['ice-cream']);
++  });
++
++  it('sorts by anchor y (back to front); bg lowest, labels above everything, ring below labels', () => {
++    const depths = plan.stations.map((s) => s.depth);
++    expect(depths).toEqual([...depths].sort((a, b) => a - b));
++    expect(depths).toEqual(plan.stations.map((s) => layout.anchors[s.id]!.y));
++    const top = Math.max(...depths, plan.kart!.depth);
++    expect(plan.bg.depth).toBeLessThan(Math.min(...depths));
++    expect(plan.ringDepth).toBeGreaterThan(top);
++    expect(plan.labelDepth).toBeGreaterThan(plan.ringDepth);
++    expect(plan.bg.scale).toBe(1 / layout.renderScale);
++  });
++
++  it('plans no slot items (UX-DR42)', () => {
++    const ids = [...plan.stations.map((s) => s.id), plan.kart?.id];
++    for (const slot of Object.keys(layout.slots)) expect(ids).not.toContain(slot);
++    expect(JSON.stringify(plan)).not.toMatch(/slot/);
++  });
++
++  it('kart prop: trimmed rect ÷ renderScale padded by hitPad, placed on kart-start', () => {
++    const k = plan.kart!;
++    const rs = layout.renderScale;
++    expect(k.rect).toEqual({ x: KART_SS.x / rs, y: KART_SS.y / rs, width: KART_SS.width / rs, height: KART_SS.height / rs });
++    const pad = Tokens.spacing.hitPad;
++    expect(boundingBox(k.hit)).toEqual({ x: k.rect.x - pad, y: k.rect.y - pad, width: k.rect.width + 2 * pad, height: k.rect.height + 2 * pad });
++    expect(k.hit).toHaveLength(4);
++    const start = layout.anchors['kart-start']!;
++    expect(k.image).toMatchObject({ frame: KART_FRAME, x: start.x, y: start.y, originX: start.x / layout.design.width });
++    expect(k.depth).toBe(start.y);
++  });
++
++  it('labels: centred under the anchor (top = anchor.y + spacing 1) and inside safeRect', () => {
++    const safe = Tokens.safeRect;
++    for (const s of plan.stations) {
++      expect(s.labelPos.x - 50).toBeGreaterThanOrEqual(safe.x);
++      expect(s.labelPos.x + 50).toBeLessThanOrEqual(safe.x + safe.w);
++      expect(s.labelPos.y).toBeGreaterThanOrEqual(safe.y);
++      expect(s.labelPos.y + 22).toBeLessThanOrEqual(safe.y + safe.h);
++    }
++    const ice = plan.stations.find((s) => s.id === 'ice-cream')!;
++    expect(ice.labelPos).toEqual({ x: ice.anchor.x, y: ice.anchor.y + Tokens.spacing['1'] });
++  });
++});
++
++describe('planMap (edge cases)', () => {
++  it('missing frame: no image, label and hotspot stay, one warning names the frame', () => {
++    const plan = planMap(layout, STATIONS, (f) => f !== 'pizza/idle/00', frameRect, { measureLabel: fixedSize, atlasKey: 'atlas.map' });
++    const pizza = plan.stations.find((s) => s.id === 'pizza')!;
++    expect(pizza.image).toBeUndefined();
++    expect(pizza.hit).toBe(layout.hits.pizza);
++    expect(pizza.label).toBe('Tiệm pizza');
++    expect(plan.warnings).toEqual(['map: frame "pizza/idle/00" is missing from atlas.map — image skipped']);
++  });
++
++  it('missing station in the layout: skipped with a warning', () => {
++    const { race: _race, ...hits } = layout.hits;
++    const broken: ScreenLayout = { ...layout, hits };
++    const plan = planMap(broken, STATIONS, allFrames, frameRect, { measureLabel: fixedSize });
++    expect(plan.stations.map((s) => s.id)).not.toContain('race');
++    expect(plan.stations).toHaveLength(6);
++    expect(plan.warnings).toHaveLength(1);
++    expect(plan.warnings[0]).toMatch(/station "race" is missing from the layout/);
++  });
++
++  it('missing kart frame: no prop, one warning', () => {
++    const plan = planMap(layout, STATIONS, (f) => f !== KART_FRAME, frameRect, { measureLabel: fixedSize });
++    expect(plan.kart).toBeUndefined();
++    expect(plan.warnings).toEqual([expect.stringMatching(/kart\/idle\/00/)]);
++  });
++});
++
++describe('labelPosition (Label at edge)', () => {
++  const safe = { x: 100, y: 50, w: 800, h: 600 };
++  it('centred, top at anchor.y + gap when it fits', () => {
++    expect(labelPosition({ x: 400, y: 300 }, { w: 100, h: 20 }, safe, 8)).toEqual({ x: 400, y: 308 });
++  });
++  it('clamped at the bottom, left and right of safeRect', () => {
++    expect(labelPosition({ x: 400, y: 640 }, { w: 100, h: 20 }, safe, 8)).toEqual({ x: 400, y: 630 });
++    expect(labelPosition({ x: 110, y: 300 }, { w: 100, h: 20 }, safe, 8)).toEqual({ x: 150, y: 308 });
++    expect(labelPosition({ x: 899, y: 300 }, { w: 100, h: 20 }, safe, 8)).toEqual({ x: 850, y: 308 });
++  });
++  it('clamped at the top', () => {
++    expect(labelPosition({ x: 400, y: 10 }, { w: 100, h: 20 }, safe, 8)).toEqual({ x: 400, y: 50 });
++  });
++});
+diff --git a/app/src/core/hint-visuals.ts b/app/src/core/hint-visuals.ts
+new file mode 100644
+index 0000000..38c50fe
+--- /dev/null
++++ b/app/src/core/hint-visuals.ts
+@@ -0,0 +1,69 @@
++// Hint visuals (Story 1.5; Story 1.9 adds follow, item bob, hand demo and dim). The `hint-ring`
++// (DESIGN components.hint-ring): three ellipse strokes — white halo outside, white core, purple line
++// on the core — pulsing .95 ↔ 1.05 over pulse.durationMs. One live ring app-wide: creating a new
++// ring destroys the previous one.
++import type { GameObjects, Scene, Tweens } from 'phaser';
++import type { Box } from './input/polygon';
++import { amplitude } from './reduced-motion';
++import { Tokens } from './tokens';
++
++export interface HintRing {
++  destroy(): void;
++}
++
++export interface HintRingOptions {
++  /** prefers-reduced-motion: pulse amplitude × Tokens.ui.reducedMotionAmplitude. */
++  readonly reduced?: boolean;
++  readonly depth?: number | undefined;
++}
++
++let live: HintRing | undefined;
++
++/** Ellipse radii of the ring around `box` (inscribed in the box; hit polygons are already padded). */
++export function ringRadii(box: Box): { cx: number; cy: number; rx: number; ry: number } {
++  return { cx: box.x + box.width / 2, cy: box.y + box.height / 2, rx: box.width / 2, ry: box.height / 2 };
++}
++
++/** Draws the hint ring around `box` (design px) and starts its pulse. */
++export function createHintRing(scene: Scene, box: Box, opts: HintRingOptions = {}): HintRing {
++  live?.destroy();
++  const spec = Tokens.components.hintRing;
++  const { cx, cy, rx, ry } = ringRadii(box);
++  const g: GameObjects.Graphics = scene.add.graphics({ x: cx, y: cy });
++  if (opts.depth !== undefined) g.setDepth(opts.depth);
++
++  const haloOffset = spec.core.width / 2 + spec.halo.width / 2;
++  g.lineStyle(spec.halo.width, spec.halo.color.value, spec.halo.color.alpha);
++  g.strokeEllipse(0, 0, 2 * (rx + haloOffset), 2 * (ry + haloOffset));
++  g.lineStyle(spec.core.width, spec.core.color.value, spec.core.color.alpha);
++  g.strokeEllipse(0, 0, 2 * rx, 2 * ry);
++  g.lineStyle(spec.line.width, spec.line.color.value, spec.line.color.alpha);
++  g.strokeEllipse(0, 0, 2 * rx, 2 * ry);
++
++  const reduced = opts.reduced ?? false;
++  const from = amplitude(spec.pulse.from, reduced);
++  const to = amplitude(spec.pulse.to, reduced);
++  g.setScale(from);
++  const tween: Tweens.Tween = scene.tweens.add({
++    targets: g,
++    scale: to,
++    duration: spec.pulse.durationMs,
++    ease: 'Sine.easeInOut',
++    yoyo: true,
++    repeat: -1,
++  });
++
++  let destroyed = false;
++  const ring: HintRing = {
++    destroy() {
++      if (destroyed) return;
++      destroyed = true;
++      tween.stop();
++      g.destroy();
++      if (live === ring) live = undefined;
++    },
++  };
++  live = ring;
++  scene.events.once('shutdown', () => ring.destroy());
++  return ring;
++}
+diff --git a/app/src/core/ui/scale-motion.ts b/app/src/core/ui/scale-motion.ts
+new file mode 100644
+index 0000000..f7e15a6
+--- /dev/null
++++ b/app/src/core/ui/scale-motion.ts
+@@ -0,0 +1,60 @@
++// Scale motions of Map objects (Story 1.5): tap bounce, ambient move and invitation bob. One motion
++// per object at a time: a new bounce or bob stops the old tween and resets the scale to its base
++// first, so a tap on a moving object restarts its bounce from 1×base. Amplitudes are passed already
++// reduced (core/reduced-motion › amplitude).
++import type { Scene, Tweens } from 'phaser';
++
++export interface ScalableLike {
++  scale: number;
++  setScale(x: number, y?: number): unknown;
++}
++
++const motions = new WeakMap<ScalableLike, Tweens.Tween>();
++
++/** True while a motion tween runs on `target`. */
++export function isMoving(target: ScalableLike): boolean {
++  const t = motions.get(target);
++  return t !== undefined && t.isPlaying();
++}
++
++/** Stops any motion on `target` and resets it to `base` scale. */
++export function stopMotion(target: ScalableLike, base: number): void {
++  motions.get(target)?.stop();
++  motions.delete(target);
++  target.setScale(base);
++}
++
++/** base → base×peak → base over `durationMs` (yoyo, once). Restarts a running motion. */
++export function bounce(scene: Scene, target: ScalableLike, base: number, peak: number, durationMs: number): void {
++  stopMotion(target, base);
++  const tween = scene.tweens.add({
++    targets: target,
++    scale: base * peak,
++    duration: durationMs / 2,
++    ease: 'Sine.easeOut',
++    yoyo: true,
++    onComplete: () => {
++      if (motions.get(target) === tween) motions.delete(target);
++      target.setScale(base);
++    },
++  });
++  motions.set(target, tween);
++}
++
++/**
++ * Endless bob between base×from and base×to; one half cycle (from → to) takes `halfCycleMs`.
++ * Starts at base (sine around the mid scale), so it never jumps.
++ */
++export function bob(scene: Scene, target: ScalableLike, base: number, from: number, to: number, halfCycleMs: number): void {
++  stopMotion(target, base);
++  const mid = (from + to) / 2;
++  const amp = (to - from) / 2;
++  const tween = scene.tweens.addCounter({
++    from: 0,
++    to: 2 * Math.PI,
++    duration: 2 * halfCycleMs,
++    repeat: -1,
++    onUpdate: (t) => target.setScale(base * (mid + amp * Math.sin(t.getValue() ?? 0))),
++  });
++  motions.set(target, tween);
++}
+diff --git a/app/src/core/ui/map-prop.ts b/app/src/core/ui/map-prop.ts
+new file mode 100644
+index 0000000..e4dc1c4
+--- /dev/null
++++ b/app/src/core/ui/map-prop.ts
+@@ -0,0 +1,49 @@
++// `tappable-prop` on the Map (Story 1.5; Story 2.2 decorations reuse it). A full-frame atlas image
++// placed on its ground pivot, with a padded rect hotspot. A tap bounces it to
++// tappableProp.react.scale over react.durationMs and calls `onTap` (the caller plays the sound).
++// It never opens a game.
++import type { GameObjects, Scene } from 'phaser';
++import { HotspotPolygon } from '../input/hotspot-polygon';
++import type { Point } from '../input/polygon';
++import type { TapRouter } from '../input/tap-router';
++import type { PlannedImage } from '../map-plan';
++import { amplitude } from '../reduced-motion';
++import { Tokens } from '../tokens';
++import { bounce } from './scale-motion';
++
++export interface MapPropOptions {
++  readonly texture: string;
++  /** Placement of the full frame (core/map-plan). */
++  readonly frame: PlannedImage;
++  /** The hit polygon (the trimmed rect padded by hitPad). */
++  readonly rect: readonly Point[];
++  readonly onTap: () => void;
++  readonly depth?: number | undefined;
++  readonly reduced?: boolean;
++}
++
++export interface MapProp {
++  readonly image: GameObjects.Image;
++  readonly hotspot: HotspotPolygon;
++  destroy(): void;
++}
++
++export function createMapProp(scene: Scene, router: TapRouter, opts: MapPropOptions): MapProp {
++  const f = opts.frame;
++  const image = scene.add.image(f.x, f.y, opts.texture, f.frame).setOrigin(f.originX, f.originY).setScale(f.scale);
++  if (opts.depth !== undefined) image.setDepth(opts.depth);
++  const react = Tokens.components.tappableProp.react;
++  const peak = amplitude(react.scale, opts.reduced ?? false);
++  const hotspot = new HotspotPolygon(router, opts.rect, () => {
++    bounce(scene, image, f.scale, peak, react.durationMs);
++    opts.onTap();
++  });
++  return {
++    image,
++    hotspot,
++    destroy() {
++      hotspot.destroy();
++      image.destroy();
++    },
++  };
++}
+diff --git a/app/src/core/boot-load.ts b/app/src/core/boot-load.ts
+new file mode 100644
+index 0000000..eaba777
+--- /dev/null
++++ b/app/src/core/boot-load.ts
+@@ -0,0 +1,111 @@
++// Boot loading logic (Story 1.2), pure so it is testable in node. Story 1.5 adds `bootTextures`.
++// - `nextLoadState`: loading → (error) waiting → (online | retryTick) loading → (complete) ready.
++// - `kartTimeScale`: loading-strip kart speed per state (slows while waiting).
++// - `waitForReady`: readiness gate = service worker ready (skipped in DEV or with no registration;
++//   Story 1.11 adds precache completion) + the self-hosted Baloo 2 font.
++import { AUDIO_CATALOG, AUDIO_IDS } from "../content/audio-catalog";
++import { ATLASES, BACKGROUNDS } from "../content/assets";
++import { VOICE_LINES, voicePath } from "../content/voice-lines";
++import { Timing } from "./timing";
++
++/** Shell voice lines (greeting, …) load with the catalog; game lines load with their game. */
++export const SHELL_VOICE_PREFIX = "vo.shell.";
++
++/** Audio cache key → URL of everything Boot loads (catalog SFX/music + shell voice lines by id). */
++export function bootAudio(): ReadonlyArray<readonly [string, string]> {
++  return [
++    ...AUDIO_IDS.map((id) => [id, AUDIO_CATALOG[id].path] as const),
++    ...VOICE_LINES.filter((line) => line.id.startsWith(SHELL_VOICE_PREFIX)).map(
++      (line) => [line.id, voicePath(line.id)] as const,
++    ),
++  ];
++}
++
++/** One texture Boot loads (Story 1.5: the Map atlas and plate). */
++export type TextureLoad =
++  | { readonly kind: "atlas"; readonly key: string; readonly png: string; readonly json: string }
++  | { readonly kind: "image"; readonly key: string; readonly path: string };
++
++/** Textures Boot loads: `atlas.map` (`load.atlas`) and `bg.map` (`load.image`). Map keeps them for the session. */
++export function bootTextures(): readonly TextureLoad[] {
++  const atlas = ATLASES.map;
++  const bg = BACKGROUNDS.map;
++  return [
++    { kind: "atlas", key: atlas.key, png: atlas.png, json: atlas.json },
++    { kind: "image", key: bg.key, path: bg.path },
++  ];
++}
++
++export type LoadState = "loading" | "waiting" | "ready";
++export type LoadEvent = "error" | "online" | "retryTick" | "complete";
++
++export function nextLoadState(state: LoadState, event: LoadEvent): LoadState {
++  if (state === "ready") return "ready";
++  if (event === "complete") return "ready";
++  if (event === "error") return "waiting";
++  // online / retryTick: a waiting load retries; a running load keeps going.
++  return "loading";
++}
++
++/** Kart tween time-scale for a load state (EXPERIENCE: failed load → kart slows and waits). */
++export function kartTimeScale(state: LoadState): number {
++  return state === "waiting" ? Timing.loadingKartWaitTimeScale : 1;
++}
++
++export const FONT_FAMILY = "Baloo 2";
++/** Relative URL: works with Vite `base: './'` (resolved against the document). */
++export const FONT_URL = "assets/fonts/Baloo2-wght.woff2";
++/** Weight axis range of the vendored variable font. */
++export const FONT_WEIGHT_RANGE = "400 800";
++/** What the gate waits for: the station-label weight/size (DESIGN typography). */
++export const FONT_PROBE = "600 18px 'Baloo 2'";
++
++export interface FontFaceLike {
++  load(): Promise<unknown>;
++}
++
++export interface FontSetLike {
++  add(face: FontFaceLike): unknown;
++  delete(face: FontFaceLike): unknown;
++  load(font: string): Promise<readonly unknown[]>;
++}
++
++export interface ServiceWorkerLike {
++  getRegistration(): Promise<unknown>;
++  readonly ready: Promise<unknown>;
++}
++
++export interface ReadyDeps {
++  isDev: boolean;
++  /** `navigator.serviceWorker` (undefined when unsupported). */
++  sw: ServiceWorkerLike | undefined;
++  /** `document.fonts`. */
++  fonts: FontSetLike;
++  /** `(family, source, descriptors) => new FontFace(...)`. */
++  fontFace: (
++    family: string,
++    source: string,
++    descriptors: { weight: string },
++  ) => FontFaceLike;
++}
++
++/** Resolves when the app may show `button-play`; rejects (caller retries) when the font fails. */
++export async function waitForReady(deps: ReadyDeps): Promise<void> {
++  if (!deps.isDev && deps.sw) {
++    const registration = await deps.sw.getRegistration();
++    if (registration) await deps.sw.ready;
++  }
++  // A failed FontFace stays failed, so every attempt registers a fresh one.
++  const face = deps.fontFace(FONT_FAMILY, `url(${FONT_URL})`, {
++    weight: FONT_WEIGHT_RANGE,
++  });
++  deps.fonts.add(face);
++  try {
++    await face.load();
++    const faces = await deps.fonts.load(FONT_PROBE);
++    if (faces.length === 0) throw new Error(`font ${FONT_PROBE} did not load`);
++  } catch (error) {
++    deps.fonts.delete(face);
++    throw error;
++  }
++}
+diff --git a/app/src/core/boot-load.test.ts b/app/src/core/boot-load.test.ts
+new file mode 100644
+index 0000000..b77b99b
+--- /dev/null
++++ b/app/src/core/boot-load.test.ts
+@@ -0,0 +1,150 @@
++// I/O matrix (Story 1.2): "Load fails" and "Gate dev" rows.
++import { describe, expect, it, vi } from 'vitest';
++import { AUDIO_CATALOG, AUDIO_IDS } from '../content/audio-catalog';
++import {
++  bootAudio,
++  bootTextures,
++  FONT_FAMILY,
++  FONT_PROBE,
++  FONT_URL,
++  kartTimeScale,
++  nextLoadState,
++  waitForReady,
++  type LoadEvent,
++  type LoadState,
++  type ReadyDeps,
++} from './boot-load';
++import { Timing } from './timing';
++
++describe('nextLoadState', () => {
++  const table: Array<[LoadState, LoadEvent, LoadState]> = [
++    ['loading', 'complete', 'ready'],
++    ['loading', 'error', 'waiting'],
++    ['loading', 'online', 'loading'],
++    ['loading', 'retryTick', 'loading'],
++    ['waiting', 'online', 'loading'],
++    ['waiting', 'retryTick', 'loading'],
++    ['waiting', 'error', 'waiting'],
++    ['waiting', 'complete', 'ready'],
++    ['ready', 'error', 'ready'],
++    ['ready', 'online', 'ready'],
++    ['ready', 'retryTick', 'ready'],
++    ['ready', 'complete', 'ready'],
++  ];
++  it.each(table)('%s + %s → %s', (state, event, expected) => {
++    expect(nextLoadState(state, event)).toBe(expected);
++  });
++
++  it('a failed load slows the kart, retries, then reaches ready', () => {
++    let s: LoadState = 'loading';
++    expect(kartTimeScale(s)).toBe(1);
++    s = nextLoadState(s, 'error');
++    expect(kartTimeScale(s)).toBe(Timing.loadingKartWaitTimeScale);
++    expect(Timing.loadingKartWaitTimeScale).toBeLessThan(1);
++    s = nextLoadState(s, 'online');
++    expect(kartTimeScale(s)).toBe(1);
++    s = nextLoadState(s, 'complete');
++    expect(s).toBe('ready');
++  });
++});
++
++function fakes(opts: { fontOk?: boolean; probeFaces?: number; registration?: unknown } = {}) {
++  const { fontOk = true, probeFaces = 1, registration = undefined } = opts;
++  const faces: Array<{ family: string; source: string; descriptors: { weight: string }; load: () => Promise<unknown> }> = [];
++  let resolveReady: (v: unknown) => void = () => undefined;
++  const sw = {
++    getRegistration: vi.fn(async () => registration),
++    ready: new Promise((r) => {
++      resolveReady = r;
++    }),
++  };
++  const fonts = {
++    add: vi.fn(),
++    delete: vi.fn(),
++    load: vi.fn(async (_font: string) => Array.from({ length: probeFaces }, () => ({}))),
++  };
++  const deps: ReadyDeps = {
++    isDev: false,
++    sw,
++    fonts,
++    fontFace: (family, source, descriptors) => {
++      const face = { family, source, descriptors, load: () => (fontOk ? Promise.resolve(face) : Promise.reject(new Error('NetworkError'))) };
++      faces.push(face);
++      return face;
++    },
++  };
++  return { deps, sw, fonts, faces, resolveReady: (v: unknown) => resolveReady(v) };
++}
++
++describe('waitForReady', () => {
++  it('registers the vendored Baloo 2 with a relative URL and awaits the 600 18px probe', async () => {
++    const f = fakes();
++    await waitForReady(f.deps);
++    expect(f.faces).toHaveLength(1);
++    expect(f.faces[0]?.family).toBe(FONT_FAMILY);
++    expect(f.faces[0]?.source).toBe(`url(${FONT_URL})`);
++    expect(FONT_URL).not.toMatch(/^(\/|https?:)/);
++    expect(f.fonts.add).toHaveBeenCalledWith(f.faces[0]);
++    expect(f.fonts.load).toHaveBeenCalledWith(FONT_PROBE);
++    expect(FONT_PROBE).toBe("600 18px 'Baloo 2'");
++  });
++
++  it('gate dev: skips the SW step in DEV even with a registration', async () => {
++    const f = fakes({ registration: {} });
++    await waitForReady({ ...f.deps, isDev: true });
++    expect(f.sw.getRegistration).not.toHaveBeenCalled();
++    expect(f.fonts.load).toHaveBeenCalled();
++  });
++
++  it('skips the SW step when there is no registration or no SW support', async () => {
++    const f = fakes();
++    await waitForReady(f.deps);
++    expect(f.sw.getRegistration).toHaveBeenCalled();
++    await waitForReady({ ...f.deps, sw: undefined });
++    expect(f.fonts.load).toHaveBeenCalledTimes(2);
++  });
++
++  it('with a registration, waits for serviceWorker.ready before the font', async () => {
++    const f = fakes({ registration: {} });
++    let done = false;
++    const p = waitForReady(f.deps).then(() => {
++      done = true;
++    });
++    await Promise.resolve();
++    await Promise.resolve();
++    expect(done).toBe(false);
++    expect(f.fonts.load).not.toHaveBeenCalled();
++    f.resolveReady({});
++    await p;
++    expect(done).toBe(true);
++  });
++
++  it('rejects when the font fails, removing the failed face so a retry starts fresh', async () => {
++    const f = fakes({ fontOk: false });
++    await expect(waitForReady(f.deps)).rejects.toThrow('NetworkError');
++    expect(f.fonts.delete).toHaveBeenCalledWith(f.faces[0]);
++  });
++
++  it('rejects when the probe matches no face', async () => {
++    const f = fakes({ probeFaces: 0 });
++    await expect(waitForReady(f.deps)).rejects.toThrow(/did not load/);
++  });
++});
++
++describe('bootAudio', () => {
++  it('loads every catalog id and the shell voice lines keyed by id', () => {
++    const list = bootAudio();
++    expect(list).toContainEqual(['vo.shell.greeting', 'assets/audio/vo/vo.shell.greeting.m4a']);
++    for (const id of AUDIO_IDS) expect(list).toContainEqual([id, AUDIO_CATALOG[id].path]);
++    expect(list.filter(([key]) => key.startsWith('vo.') && !key.startsWith('vo.shell.'))).toEqual([]);
++  });
++});
++
++describe('bootTextures (Story 1.5)', () => {
++  it('loads the map atlas and the map plate', () => {
++    expect(bootTextures()).toEqual([
++      { kind: 'atlas', key: 'atlas.map', png: 'assets/atlases/map.png', json: 'assets/atlases/map.json' },
++      { kind: 'image', key: 'bg.map', path: 'assets/bg/map.png' },
++    ]);
++  });
++});
+diff --git a/app/src/scenes/Boot.ts b/app/src/scenes/Boot.ts
+new file mode 100644
+index 0000000..fc46c27
+--- /dev/null
++++ b/app/src/scenes/Boot.ts
+@@ -0,0 +1,114 @@
++// Boot (Story 1.2): sky + loading-strip only (no text, no bar, no button). Loads the shared/map
++// assets (the SFX/music catalog, every vo.shell.* voice line, and since Story 1.5 the map atlas and
++// plate), then waits for the readiness gate (SW + self-hosted Baloo 2).
++// On a loader error or gate rejection the kart slows and waits; the load retries on window
++// `online` or every Tokens.Timing.loadRetryMs. Errors go only to console.warn.
++// When ready: launches AudioUnlockOverlay (it sleeps itself) and starts Start.
++import { Scene } from "phaser";
++import {
++  bootAudio,
++  bootTextures,
++  kartTimeScale,
++  nextLoadState,
++  waitForReady,
++  type LoadEvent,
++  type LoadState,
++} from "../core/boot-load";
++import { Tokens } from "../core/tokens";
++import {
++  createLoadingStrip,
++  type LoadingStrip,
++} from "../core/ui/loading-strip";
++
++const LOADER_ERROR = "loaderror";
++const LOADER_COMPLETE = "complete";
++const ONLINE = "online";
++/** Audio cache key → URL of everything Boot loads. */
++const BOOT_AUDIO = bootAudio();
++/** Textures Boot loads (Story 1.5: atlas.map + bg.map). */
++const BOOT_TEXTURES = bootTextures();
++
++export class Boot extends Scene {
++  private state: LoadState = "loading";
++  private strip: LoadingStrip | undefined;
++  private readonly onOnline = (): void => this.dispatch("online");
++
++  constructor() {
++    super("Boot");
++  }
++
++  create(): void {
++    this.state = "loading";
++    this.cameras.main.setBackgroundColor(Tokens.colors.sky.css);
++    this.strip = createLoadingStrip(this, Tokens.safeRect);
++
++    window.addEventListener(ONLINE, this.onOnline);
++    this.events.once("shutdown", () =>
++      window.removeEventListener(ONLINE, this.onOnline),
++    );
++    this.time.addEvent({
++      delay: Tokens.Timing.loadRetryMs,
++      loop: true,
++      callback: () => this.dispatch("retryTick"),
++    });
++
++    this.attempt();
++  }
++
++  private dispatch(event: LoadEvent): void {
++    const prev = this.state;
++    const next = nextLoadState(prev, event);
++    if (next === prev) return;
++    this.state = next;
++    this.strip?.setTimeScale(kartTimeScale(next));
++    if (next === "ready") {
++      this.scene.launch("AudioUnlockOverlay");
++      this.scene.start("Start");
++    } else if (next === "loading") {
++      this.attempt();
++    }
++  }
++
++  /** One load attempt: queue the assets not yet cached, then the readiness gate. */
++  private attempt(): void {
++    const missing = BOOT_AUDIO.filter(([key]) => !this.cache.audio.exists(key));
++    const missingTextures = BOOT_TEXTURES.filter((t) => !this.textures.exists(t.key));
++    if (missing.length === 0 && missingTextures.length === 0) {
++      this.gate();
++      return;
++    }
++    let failed = false;
++    const onError = (file: { key: string; src?: string }): void => {
++      failed = true;
++      console.warn(`boot: failed to load "${file.key}"`, file.src);
++    };
++    this.load.on(LOADER_ERROR, onError);
++    this.load.once(LOADER_COMPLETE, () => {
++      this.load.off(LOADER_ERROR, onError);
++      if (failed) this.dispatch("error");
++      else this.gate();
++    });
++    for (const [key, url] of missing) this.load.audio(key, url);
++    for (const tex of missingTextures) {
++      if (tex.kind === "atlas") this.load.atlas(tex.key, tex.png, tex.json);
++      else this.load.image(tex.key, tex.path);
++    }
++    this.load.start();
++  }
++
++  private gate(): void {
++    waitForReady({
++      isDev: import.meta.env.DEV,
++      sw: "serviceWorker" in navigator ? navigator.serviceWorker : undefined,
++      fonts: document.fonts,
++      fontFace: (family, source, descriptors) =>
++        new FontFace(family, source, descriptors),
++    }).then(
++      () => this.dispatch("complete"),
++      (error: unknown) => {
++        console.warn("boot: readiness gate failed — retrying", error);
++        this.dispatch("error");
++      },
++    );
++  }
++}
+diff --git a/app/src/scenes/Map.ts b/app/src/scenes/Map.ts
+new file mode 100644
+index 0000000..0dff56e
+--- /dev/null
++++ b/app/src/scenes/Map.ts
+@@ -0,0 +1,219 @@
++// Map (Story 1.5): the island. Draws the plate `bg.map`, the 7 station sprites from `atlas.map`
++// (full-frame on their ground pivots, spec-1-4 contract), a static parent-facing label under each
++// station and the kart as the map's tappable prop. Taps go through core/input (one router per scene):
++// awake station → bounce + name line (prompt), sleeping station → bounce + happy sound, kart →
++// prop bounce + small sound; every tap resets idle. Idle: core/map-idle drives the ambient motion
++// and up to 3 invitations (hint ring + bob + invite and name lines). Planning, idle, geometry and
++// routing are pure core code; this scene only wires Phaser. No navigation yet (Story 1.7).
++import { Scene, type GameObjects } from 'phaser';
++import { ATLASES, BACKGROUNDS } from '../content/assets';
++import { LAYOUTS } from '../content/layouts';
++import { STATIONS } from '../content/stations';
++import { inviteLine, stationNameLine } from '../content/voice-lines';
++import { audio } from '../core/audio-director';
++import { createHintRing, type HintRing } from '../core/hint-visuals';
++import { HotspotPolygon } from '../core/input/hotspot-polygon';
++import { boundingBox } from '../core/input/polygon';
++import { createTapRouter } from '../core/input/tap-router';
++import { createMapIdle, type MapIdle, type MapIdleEvent } from '../core/map-idle';
++import { planMap, type MapPlan, type PlannedStation } from '../core/map-plan';
++import { amplitude, prefersReducedMotion } from '../core/reduced-motion';
++import { Tokens } from '../core/tokens';
++import { createMapProp } from '../core/ui/map-prop';
++import { bob, bounce, isMoving, stopMotion } from '../core/ui/scale-motion';
++
++const SFX_HAPPY = 'sfx.shell.happy';
++const SFX_PROP = 'sfx.shell.prop';
++
++interface StationView {
++  readonly plan: PlannedStation;
++  readonly image: GameObjects.Image | undefined;
++}
++
++interface FrameData {
++  readonly spriteSourceSize?: { x: number; y: number; w: number; h: number };
++}
++
++export class MapScene extends Scene {
++  private idle: MapIdle | undefined;
++  private views = new Map<string, StationView>();
++  private ring: HintRing | undefined;
++  private reduced = false;
++  private plan: MapPlan | undefined;
++
++  constructor() {
++    super('Map');
++  }
++
++  create(): void {
++    this.cameras.main.setBackgroundColor(Tokens.colors.sky.css);
++    this.reduced = prefersReducedMotion(window);
++    this.views = new Map();
++    this.ring = undefined;
++
++    const layout = LAYOUTS.map;
++    const atlasKey = ATLASES.map.key;
++    const hasAtlas = this.textures.exists(atlasKey);
++    const labels = new Map<string, GameObjects.Text>();
++    const label = (text: string): GameObjects.Text => {
++      let t = labels.get(text);
++      if (!t) {
++        t = this.addLabel(text);
++        labels.set(text, t);
++      }
++      return t;
++    };
++
++    const plan = planMap(
++      layout,
++      STATIONS,
++      (frame) => hasAtlas && this.textures.get(atlasKey).has(frame),
++      (frame) => {
++        const data = this.textures.get(atlasKey).get(frame).customData as FrameData | undefined;
++        const ss = data?.spriteSourceSize;
++        return ss ? { x: ss.x, y: ss.y, width: ss.w, height: ss.h } : undefined;
++      },
++      {
++        atlasKey,
++        measureLabel: (text) => {
++          const t = label(text);
++          return { w: t.width, h: t.height };
++        },
++      },
++    );
++    this.plan = plan;
++    for (const w of plan.warnings) console.warn(w);
++
++    const bgKey = BACKGROUNDS.map.key;
++    if (this.textures.exists(bgKey)) {
++      this.add.image(plan.bg.x, plan.bg.y, bgKey).setOrigin(0).setScale(plan.bg.scale).setDepth(plan.bg.depth);
++    } else {
++      console.warn(`map: texture "${bgKey}" is missing — plate skipped`);
++    }
++
++    const router = createTapRouter(this);
++    router.onAnyTap = () => this.handle(this.idle?.tap() ?? []);
++
++    // Hotspots register back to front (by depth), so the frontmost target wins an overlap.
++    const kart = plan.kart;
++    let kartAdded = false;
++    const addKart = (): void => {
++      if (!kart || kartAdded) return;
++      kartAdded = true;
++      createMapProp(this, router, {
++        texture: atlasKey,
++        frame: kart.image,
++        rect: kart.hit,
++        depth: kart.depth,
++        reduced: this.reduced,
++        onTap: () => audio.sfx(SFX_PROP),
++      });
++    };
++    for (const s of plan.stations) {
++      if (kart && kart.depth < s.depth) addKart();
++      const image = s.image
++        ? this.add.image(s.image.x, s.image.y, atlasKey, s.image.frame).setOrigin(s.image.originX, s.image.originY).setScale(s.image.scale).setDepth(s.depth)
++        : undefined;
++      this.views.set(s.id, { plan: s, image });
++      new HotspotPolygon(router, s.hit, () => this.tapStation(s.id));
++      label(s.label).setPosition(s.labelPos.x, s.labelPos.y).setDepth(plan.labelDepth);
++    }
++    addKart();
++
++    this.idle = createMapIdle({
++      stations: plan.stations.map((s) => s.id),
++      awake: plan.stations.filter((s) => s.awake).map((s) => s.id),
++      timing: {
++        ambientMinMs: Tokens.Timing.mapAmbientMinMs,
++        ambientMaxMs: Tokens.Timing.mapAmbientMaxMs,
++        inviteFirstMs: Tokens.Timing.mapInviteFirstMs,
++        inviteGapMs: Tokens.Timing.mapInviteGapMs,
++        inviteMaxCount: Tokens.Timing.mapInviteMaxCount,
++        inviteHoldMs: Tokens.Timing.mapInviteHoldMs,
++      },
++    });
++    this.events.once('shutdown', () => {
++      this.ring?.destroy();
++      this.ring = undefined;
++      this.idle = undefined;
++    });
++  }
++
++  override update(_time: number, delta: number): void {
++    if (this.idle) this.handle(this.idle.tick(delta));
++  }
++
++  private handle(events: readonly MapIdleEvent[]): void {
++    for (const ev of events) {
++      if (ev.kind === 'ambient') this.ambient(ev.id);
++      else if (ev.kind === 'invite') this.invite(ev.id);
++      else this.endInvite(ev.id);
++    }
++  }
++
++  private addLabel(text: string): GameObjects.Text {
++    const spec = Tokens.components.stationLabel;
++    const type = spec.typography;
++    return this.add
++      .text(0, 0, text, {
++        fontFamily: type.fontFamily,
++        fontSize: `${type.fontSize}px`,
++        fontStyle: String(type.fontWeight),
++        color: spec.color.css,
++        stroke: spec.outline.color.css,
++        strokeThickness: spec.outline.width,
++        align: 'center',
++      })
++      .setOrigin(0.5, 0)
++      .setAlpha(spec.opacity);
++  }
++
++  /** Feedback starts in this pointerdown handler (≤ Timing.feedbackMaxMs). */
++  private tapStation(id: string): void {
++    const view = this.views.get(id);
++    if (!view) return;
++    if (view.image) {
++      bounce(this, view.image, view.plan.image?.scale ?? 1, amplitude(Tokens.ui.stationTapScale, this.reduced), Tokens.Timing.stationTapMs);
++    }
++    if (view.plan.awake) {
++      const line = stationNameLine(id);
++      audio.say(line);
++      audio.setPrompt(line);
++    } else {
++      audio.sfx(SFX_HAPPY);
++    }
++  }
++
++  private ambient(id: string): void {
++    const view = this.views.get(id);
++    if (!view?.image || isMoving(view.image)) return;
++    bounce(this, view.image, view.plan.image?.scale ?? 1, amplitude(Tokens.ui.ambientScale, this.reduced), Tokens.Timing.mapAmbientMoveMs);
++  }
++
++  private invite(id: string): void {
++    const view = this.views.get(id);
++    if (!view) return;
++    this.ring = createHintRing(this, boundingBox(view.plan.hit), { reduced: this.reduced, depth: this.plan?.ringDepth });
++    if (view.image) {
++      const pulse = Tokens.components.stationHotspot.pulse;
++      bob(
++        this,
++        view.image,
++        view.plan.image?.scale ?? 1,
++        amplitude(pulse.from, this.reduced),
++        amplitude(pulse.to, this.reduced),
++        pulse.durationMs,
++      );
++    }
++    const line = inviteLine(id);
++    audio.sayChain([line, stationNameLine(id)]);
++    audio.setPrompt(line);
++  }
++
++  private endInvite(id: string): void {
++    this.ring?.destroy();
++    this.ring = undefined;
++    const view = this.views.get(id);
++    if (view?.image) stopMotion(view.image, view.plan.image?.scale ?? 1);
++  }
++}
+diff --git a/app/public/assets/audio/vo/vo.shell.station-name.ice-cream.hash b/app/public/assets/audio/vo/vo.shell.station-name.ice-cream.hash
+new file mode 100644
+index 0000000..998f32c
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.station-name.ice-cream.hash
+@@ -0,0 +1 @@
++7b61df1d888514bbfd12754a2e249c98610a4d4292174d36a528576f5d524d01
+diff --git a/app/public/assets/audio/vo/vo.shell.station-name.pizza.hash b/app/public/assets/audio/vo/vo.shell.station-name.pizza.hash
+new file mode 100644
+index 0000000..681d687
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.station-name.pizza.hash
+@@ -0,0 +1 @@
++f8939b2888d14fd4fc590a581b5cce734c5e2ac1e098e9871cb00327ec5c5961
+diff --git a/app/public/assets/audio/vo/vo.shell.station-name.race.hash b/app/public/assets/audio/vo/vo.shell.station-name.race.hash
+new file mode 100644
+index 0000000..03a2c62
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.station-name.race.hash
+@@ -0,0 +1 @@
++67756a6e43e796904ffa6763cea271af3537bf59ab6b46ae8b31685f30f79d32
+diff --git a/app/public/assets/audio/vo/vo.shell.station-name.fishing.hash b/app/public/assets/audio/vo/vo.shell.station-name.fishing.hash
+new file mode 100644
+index 0000000..99484d1
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.station-name.fishing.hash
+@@ -0,0 +1 @@
++10e44528e5a331cdaff6068bda243a5f26a66b4baeaab286d36bba0245560d8b
+diff --git a/app/public/assets/audio/vo/vo.shell.station-name.touch-talk.hash b/app/public/assets/audio/vo/vo.shell.station-name.touch-talk.hash
+new file mode 100644
+index 0000000..94d3272
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.station-name.touch-talk.hash
+@@ -0,0 +1 @@
++4e01082c158388fa4a15e72412dbf6092ec74f87d3188759dc536cb55a387617
+diff --git a/app/public/assets/audio/vo/vo.shell.station-name.dino-puzzle.hash b/app/public/assets/audio/vo/vo.shell.station-name.dino-puzzle.hash
+new file mode 100644
+index 0000000..fa85338
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.station-name.dino-puzzle.hash
+@@ -0,0 +1 @@
++7f196a05aff6465f1778d7df8bedf975d5b7c291a5215ab500a310ddaad22e3f
+diff --git a/app/public/assets/audio/vo/vo.shell.station-name.shadow-match.hash b/app/public/assets/audio/vo/vo.shell.station-name.shadow-match.hash
+new file mode 100644
+index 0000000..6eb91d2
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.station-name.shadow-match.hash
+@@ -0,0 +1 @@
++a49af1822d61fbeb466ed1bfbf3feff1e10eb0b8cdfd1ed2332ac1d141b00406
+diff --git a/app/public/assets/audio/vo/vo.shell.invite.ice-cream.hash b/app/public/assets/audio/vo/vo.shell.invite.ice-cream.hash
+new file mode 100644
+index 0000000..355369d
+--- /dev/null
++++ b/app/public/assets/audio/vo/vo.shell.invite.ice-cream.hash
+@@ -0,0 +1 @@
++f04023d72b31069d994ce4ff625eaa4020ac78b39c275a8c3ce3a7ab3a2d925d

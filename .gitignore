@@ -1,0 +1,34 @@
+# Secrets — API keys (Gemini, ElevenLabs). Never commit.
+.env
+.env.*
+!.env.example
+
+# Local backups and listening samples (not part of the game)
+_backup/
+_samples/
+
+# Downloaded pack zips (the unpacked CC0 packs under assets/ are kept)
+assets/_dl/
+
+# App build output and dependencies (app/.gitignore covers these too)
+app/node_modules/
+app/dist/
+app/.generated/
+
+# Blender autosaves and Python caches
+*.blend1
+*.blend2
+__pycache__/
+*.pyc
+
+# Claude Code: keep the shared settings, ignore personal ones
+.claude/settings.local.json
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/

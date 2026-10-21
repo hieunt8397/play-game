@@ -1,0 +1,127 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 10-08-2026 12:41
+last_updated: 21-10-2026 08:00
+project: Bé Học Chơi
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-1: in-progress
+  1-1-khởi-tạo-app-từ-starter-phaser: done
+  1-2-màn-mở-đầu-nút-chơi-mở-khoá-âm-thanh: done
+  1-3-bé-nghe-giọng-đọc-tiếng-việt: done
+  1-4-pipeline-hình-render-blender-atlas-layout-bản-đồ: done
+  1-5-màn-con-đường-7-trạm-nhãn-lời-mời-trạm-ngủ: done
+  1-6-nút-nhà-và-loa-chống-chạm-nhầm: done
+  1-7-kart-chạy-tới-trạm-fr24: done
+  1-8-tiệm-kem-kéo-kem-đúng-vị-cho-shiba-fr4-fr6: done
+  1-9-gợi-ý-leo-thang-nfr4: done
+  1-10-tiệm-kem-lượt-3-5-câu-và-độ-khó-tăng-dần-fr5: done
+  1-11-chạy-offline-và-thử-trên-ipad-nfr7: review
+  epic-1-retrospective: optional
+
+  epic-2: in-progress
+  2-1-progressstore-lưu-bền-vững-và-nhớ-độ-khó-qua-các-lần-mở-app: review
+  2-2-danh-mục-trang-trí-ô-trên-đảo-và-reward-service-trao-thưởng: review  # superseded 2026-10-21: decorations removed (spec-bo-do-trang-tri)
+  2-3-chuỗi-sau-lượt-trên-bản-đồ-lưu-độ-khó-camera-lùi-trang-trí-b: review  # superseded 2026-10-21: decorations removed (spec-bo-do-trang-tri)
+  2-4-lớp-phủ-hỏi-chơi-tiếp-với-lời-mời-nhắc-lại-và-tự-đóng: review  # superseded 2026-10-21: play-again overlay removed, rounds restart in place (spec-choi-lien-mach)
+  2-5-giữ-lượt-dở-trong-phiên-và-tiếp-tục-đúng-câu-đang-dở: review
+  epic-2-retrospective: optional
+
+  epic-3: in-progress
+  3-1-đánh-thức-tiệm-pizza-bé-đếm-topping-nướng-bánh-cho-cáo-ăn: review
+  3-2-làm-pizza-thang-độ-khó-tới-5-lát-nhiều-loại-topping-và-lượt: review
+  3-3-đánh-thức-công-viên-khủng-long-ghép-3-mảnh-cho-khủng-long-số: review
+  3-4-ghép-khủng-long-thang-3-4-6-mảnh-và-lượt-dở: review
+  3-5-đánh-thức-cửa-hang-tìm-bóng-cùng-khủng-long-ba-sừng: review
+  3-6-tìm-bóng-thang-2-3-4-bóng-giống-nhau-dần-và-lượt-dở: review
+  epic-3-retrospective: optional
+
+  epic-4: in-progress
+  4-1-đường-đua-vạch-đường-thẳng-cho-kart-chạy-tới-cổng-caro: review
+  4-2-đường-đua-thang-hình-dạng-đường-và-giữ-vị-trí-kart-khi-lượt: review
+  4-3-câu-cá-chạm-câu-đúng-con-cá-theo-màu-và-hoa-văn: review
+  4-4-câu-cá-câu-theo-kích-thước-thang-3-5-cá-và-giữ-câu-dở: review
+  4-5-chạm-là-nói-cảnh-biển-chạm-vật-nghe-tên: review
+  4-6-chạm-là-nói-ba-cảnh-nút-đổi-cảnh-và-món-trang-trí-sau-8-vật: review  # superseded 2026-10-21: decorations removed (spec-bo-do-trang-tri)
+  epic-4-retrospective: optional
+
+  epic-5: in-progress
+  5-1-chạm-rồi-chạm-và-vật-không-bật-về-khi-nhấc-tay: done
+  5-2-shiba-dẫn-đường-chào-xoài-ơi-và-giọng-đọc-gọi-tên-xoài: done
+  5-3-lời-ngắn-chạm-là-không-phải-chờ: done
+  5-4-chạm-gì-cũng-có-phản-ứng: done
+  5-5-quà-bất-ngờ-bé-chọn-1-trong-2-và-tự-đặt-lên-đảo: done  # superseded 2026-10-21: decorations removed (spec-bo-do-trang-tri)
+  5-6-đảo-sinh-động-dấu-hiệu-trạm-và-chuyển-động-nền: done
+  5-7-câu-mời-bố-mẹ-cùng-chơi: done
+  5-8-khung-chơi-tự-do-phản-ứng-chọn-khác-và-phản-ứng-ngẫu-nhiên: review
+  epic-5-retrospective: optional
+
+  epic-6: in-progress
+  6-1-tiệm-kem-shiba-hắt-xì-lau-mũi-và-tháp-kem: review
+  6-2-pizza-chất-topping-thoải-mái-và-cáo-phản-ứng-theo-vị: backlog
+  6-3-đường-đua-đường-ngắn-chọn-màu-xe-và-rửa-xe: backlog
+  6-4-câu-cá-cá-ú-òa-sau-rong-và-bể-cá-của-bé: backlog
+  6-5-chạm-là-nói-nhiều-phản-ứng-và-chỗ-trốn: backlog
+  6-6-ghép-khủng-long-điệu-nhảy-riêng-và-mảnh-đặt-nhầm-ngộ-nghĩnh: backlog
+  6-7-tìm-bóng-vật-to-hơn-lắc-đầu-và-ló-ra-chào: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-trạm-nhà-xoài-trên-đảo-và-màn-sân-nhà: backlog
+  7-2-ú-òa-chuồng-thú: backlog
+  7-3-ban-nhạc-trên-đảo: backlog
+  7-4-giờ-đi-ngủ: backlog
+  epic-7-retrospective: optional
+
+  epic-8: backlog
+  8-1-bác-sĩ-thú-cưng: backlog
+  8-2-thay-đồ-cho-shiba: backlog
+  epic-8-retrospective: optional
+
+action_items:
+  - epic: 1
+    action: "Cài Python + pipx install edge-tts==7.2.8 + ffmpeg trước Story 1.3; thêm Blender 5.2.2 vào PATH hoặc đặt BLENDER_BIN trước Story 1.4 (readiness gate)"
+    owner: "Phụ huynh"
+    status: open
+  - epic: 1
+    action: "Chốt nơi host (GitHub Pages / Cloudflare Pages) và kiểm tra iPadOS của máy bé (≥ 16.4) trước Story 1.11"
+    owner: "Phụ huynh"
+    status: open
+  - epic: 2
+    action: "Chốt danh mục đồ trang trí và số ô mỗi trạm trước Story 2.2 (EXPERIENCE Open Question 2)"
+    owner: "Phụ huynh"
+    status: open
+  - epic: 1
+    action: "Tuỳ chọn: chạy bmad-prd Update để PRD khớp epics (FR5, FR19, FR22–23, UJ-1, NFR9)"
+    owner: "Phụ huynh"
+    status: open
