@@ -180,14 +180,10 @@ export const Timing = {
   dinoNextFadeMs: 500,
   /** Story 3.3: one cloud drift (± ui.dinoCloudDriftPx, yoyo) takes this long. */
   dinoCloudDriftMs: 8000,
-  /** Story 3.5 Hang tìm bóng: the triceratops fades in and rises over this (≥ 800 ms, never popping). */
-  trikeEnterMs: 900,
-  /** Story 3.5: one triceratops sway (± ui.trikeSwayDeg, yoyo) takes this long. */
-  trikeSwayMs: 3000,
-  /** Story 3.5: the nod frame and its bounce after a correct reveal. */
-  trikeNodMs: 600,
-  /** Story 3.5: the triceratops' chirp plays this long before the item's name is said. */
-  trikeCallMs: 500,
+  /** Hang tìm bóng (2026-10-22): the revealed item's happy hop and bounce (with its sparkle) after a correct reveal. */
+  shadowHappyMs: 600,
+  /** Hang tìm bóng (2026-10-22): the hop starts this long before the item's name is said. */
+  shadowNameDelayMs: 500,
   /** Story 3.5: the shadow cross-fades to the item's colour frame over this. */
   shadowRevealMs: 400,
   /** Story 3.5: the next item and its shadows fade in over this. */
@@ -246,8 +242,8 @@ export const Timing = {
   fishResurfaceMs: 3000,
   /** Câu cá: hit test also against fish positions this long ago (latency compensation). */
   fishHitLookbackMs: 150,
-  /** Story 4.5 Chạm là nói: a tapped prop's name follows its sound this much later. */
-  touchTalkNameDelayMs: 350,
+  /** Story 4.5 Chạm là nói: a tapped prop's name follows its sound this much later (2026-10-22: 800 ms, just past the longest real prop sound, ≤ 0.8 s). */
+  touchTalkNameDelayMs: 800,
   /** Story 4.5: one silent idle wiggle. */
   touchTalkWiggleMs: 900,
   /** Story 4.5: one controller tick covers at most this long (a stalled frame never skips a name). */

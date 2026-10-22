@@ -8,29 +8,29 @@
 //               the level-4 snap scale applies): the shadow whose edge is nearest wins
 //               (|p − slot| − shownR, a tie goes to the correct one). The correct shadow → `correct`;
 //               a decoy → it floats back to its pre-lift spot, then `hint.wrong()`;
-//   2. home   — within snapRadius/2 of its pre-lift spot (the hand, or where it rests): it settles back,
+//   2. home   — within snapRadius/2 of its pre-lift spot (the pedestal, or where it rests): it settles back,
 //               no hint;
 //   3. off    — anywhere else; not wrong. Story 5.1: inside the play rect (the drag bounds: the cave
 //               wall) it rests where it landed (`rest`, its new pre-lift spot); only a point outside it
 //               slides back after a delay (a new lift cancels the slide).
 // `correct`: the snap sfx (in the drop handler), `questionDone`, the question index advances, the item is
-// locked, the ambient is held ('reveal'), the item is sucked into the shadow and the shadow cross-fades to
-// its colour frame (scene tweens) → `revealed()` → the triceratops nods and chirps → (after
-// trikeCallMs) the item's name. The name's `speech:ended` (completed or not) then begins the next
+// locked, the item is sucked into the shadow and the shadow cross-fades to
+// its colour frame (scene tweens) → `revealed()` → the revealed item hops with a sparkle → (after
+// shadowNameDelayMs) the item's name. The name's `speech:ended` (completed or not) then begins the next
 // question, or celebrates and finishes the round after the last one.
 import type { ItemId } from '../../content/games/shadow-match.ts';
 import type { Point } from '../../content/layout-types.ts';
 import type { HintItem, HintStep } from '../../core/hint-machine.ts';
 import { inRect, type DropTarget } from '../../core/input/drop.ts';
 import type { Rect } from '../../core/safe-rect.ts';
-import { TRIKE_CALL, askLineId, nameLineId } from './lines.ts';
+import { askLineId, nameLineId } from './lines.ts';
 import { roundQuestions, type ShadowQuestion } from './questions.ts';
 
 export interface ShadowGeometry {
   /** The slot centres of the level's row (`slot.shadow-<n>-1..n`), slot 0 first. */
   readonly slots: readonly Point[];
-  /** Where the held item sits (`anchor.triceratops-hand`). */
-  readonly hand: Point;
+  /** Where item `item` waits: its centre, with its bottom on the pedestal top (`anchor.pedestal-top`). */
+  rest(item: ItemId): Point;
   /** An item's shown radius at its shadow: its longest side / 2 (design px). */
   shownR(item: ItemId): number;
   /** Story 5.1: the play area (the drag bounds): an off drop inside it rests where it landed. */
@@ -38,8 +38,8 @@ export interface ShadowGeometry {
   /** dropTarget.snapRadius (design px). */
   readonly snapRadius: number;
   readonly offDelayMs: number;
-  /** The name is said this long after the chirp (Timing.trikeCallMs). */
-  readonly callMs: number;
+  /** The name is said this long after the happy hop starts (Timing.shadowNameDelayMs). */
+  readonly nameDelayMs: number;
   /** After the last name, the round finishes this much later (Timing.roundCelebrationMs). */
   readonly finishDelayMs: number;
 }
@@ -50,7 +50,7 @@ export type SpeechTag = 'name';
 export type DropOutcome = 'home' | 'correct' | 'decoy' | 'off';
 
 export type ShadowCommand =
-  /** The question's shadows on the row's slots, a target per shadow, and the held item at the hand (`fade`: they fade in). */
+  /** The question's shadows on the row's slots, a target per shadow, and the held item on the pedestal (`fade`: they fade in). */
   | { readonly kind: 'showQuestion'; readonly index: number; readonly item: ItemId; readonly shadows: readonly ItemId[]; readonly correctSlot: number; readonly fade: boolean }
   /** The question's hint question (prompt = retry = the ask line). */
   | { readonly kind: 'beginQuestion'; readonly promptLineId: string; readonly retryLineId: string }
@@ -65,22 +65,19 @@ export type ShadowCommand =
   | { readonly kind: 'questionDone' }
   /** The held item becomes unpickable. */
   | { readonly kind: 'lockItem' }
-  /** Holds (or releases) the ambient sway during the reveal and the celebration. */
-  | { readonly kind: 'holdReveal'; readonly on: boolean }
   /** The last question's correct drop: from now on a Home tap completes the round (MiniGameBase.markFinishing). */
   | { readonly kind: 'markFinishing' }
   /** The item tweens into shadow `slot` (centre to the slot, scale → 1, alpha → 0). */
   | { readonly kind: 'suckIn'; readonly slot: number; readonly to: Point }
   /** Shadow `slot` cross-fades to the item's colour frame; then the scene calls `revealed()`. */
   | { readonly kind: 'reveal'; readonly slot: number; readonly item: ItemId }
-  /** The nod frame with a bounce. */
-  | { readonly kind: 'trikeNod' }
-  | { readonly kind: 'sfx'; readonly id: string }
+  /** The revealed item on shadow `slot` hops and bounces with a sparkle (replaces the triceratops nod). */
+  | { readonly kind: 'itemHappy'; readonly slot: number }
   /** `say(id)` with tag `tag`, `afterMs` from now (scene clock). */
   | { readonly kind: 'say'; readonly tag: SpeechTag; readonly id: string; readonly afterMs: number }
   /** The revealed item and the decoys fade out (the next question's `showQuestion` follows). */
   | { readonly kind: 'clearQuestion' }
-  /** The last question: happy frames, bounce and the happy tune. */
+  /** The last question: the revealed item bounces (components.character.celebrate) with a sparkle, and the happy tune. */
   | { readonly kind: 'celebrate' }
   | { readonly kind: 'finishRound'; readonly afterMs: number };
 
@@ -95,7 +92,7 @@ export class ShadowRound {
   private index = 0;
   private st: Stage = 'ask';
   private pendingReturn = false;
-  /** Story 5.1: the held item's pre-lift spot (the hand until it rests elsewhere). */
+  /** Story 5.1: the held item's pre-lift spot (the pedestal until it rests elsewhere). */
   private at: Point;
   /** The question being revealed (between the correct drop and its name). */
   private revealing: ShadowQuestion | undefined;
@@ -103,7 +100,7 @@ export class ShadowRound {
   constructor(geo: ShadowGeometry, seed: number, level: number) {
     this.geo = geo;
     this.qs = roundQuestions(seed, level);
-    this.at = geo.hand;
+    this.at = geo.rest(this.current.item);
   }
 
   get questionIndex(): number {
@@ -132,7 +129,7 @@ export class ShadowRound {
     return this.index >= this.questionCount;
   }
 
-  /** Lays out question 0 (its item and shadows fade in after the triceratops' entrance). */
+  /** Lays out question 0 (its item and shadows fade in). */
   start(): ShadowCommand[] {
     return this.begin(0, true);
   }
@@ -143,7 +140,7 @@ export class ShadowRound {
     this.st = 'ask';
     this.pendingReturn = false;
     this.revealing = undefined;
-    this.at = this.geo.hand;
+    this.at = this.geo.rest(this.current.item);
     const q = this.current;
     return [
       { kind: 'showQuestion', index, item: q.item, shadows: q.shadows, correctSlot: q.correctSlot, fade },
@@ -224,15 +221,14 @@ export class ShadowRound {
     this.pendingReturn = false;
   }
 
-  /** The shadow finished turning real-coloured: the triceratops nods and chirps, then names the item. */
+  /** The shadow finished turning real-coloured: the revealed item hops with a sparkle, then its name is said. */
   revealed(): ShadowCommand[] {
     const q = this.revealing;
     if (this.st !== 'reveal' || !q) return [];
     this.revealing = undefined;
     return [
-      { kind: 'trikeNod' },
-      { kind: 'sfx', id: TRIKE_CALL },
-      { kind: 'say', tag: 'name', id: nameLineId(q.item), afterMs: this.geo.callMs },
+      { kind: 'itemHappy', slot: q.correctSlot },
+      { kind: 'say', tag: 'name', id: nameLineId(q.item), afterMs: this.geo.nameDelayMs },
     ];
   }
 
@@ -243,7 +239,7 @@ export class ShadowRound {
       this.st = 'done';
       return [{ kind: 'celebrate' }, { kind: 'finishRound', afterMs: this.geo.finishDelayMs }];
     }
-    return [{ kind: 'clearQuestion' }, { kind: 'holdReveal', on: false }, ...this.begin(this.index, true)];
+    return [{ kind: 'clearQuestion' }, ...this.begin(this.index, true)];
   }
 
   /** The resumable state (AD-2): the open question; shadow-match keeps no partial progress. */
@@ -268,9 +264,9 @@ export class ShadowRound {
     this.revealing = q;
     this.index += 1;
     const slot = q.correctSlot;
-    const out: ShadowCommand[] = [{ kind: 'snapSfx' }, { kind: 'questionDone' }, { kind: 'lockItem' }, { kind: 'holdReveal', on: true }];
+    const out: ShadowCommand[] = [{ kind: 'snapSfx' }, { kind: 'questionDone' }, { kind: 'lockItem' }];
     if (this.isFinishing) out.push({ kind: 'markFinishing' });
-    out.push({ kind: 'suckIn', slot, to: this.geo.slots[slot] ?? this.geo.hand }, { kind: 'reveal', slot, item: q.item });
+    out.push({ kind: 'suckIn', slot, to: this.geo.slots[slot] ?? this.geo.rest(q.item) }, { kind: 'reveal', slot, item: q.item });
     return out;
   }
 }

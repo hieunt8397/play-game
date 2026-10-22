@@ -70,6 +70,20 @@ export const VOICE_LINES = [
   { id: 'vo.shell.invite.touch-talk', text: 'Xoài ơi, mình đi | chạm là nói nào!', keywordPauseMs: 300 },
   /** Hud Home tap inside a game (Story 1.6). Not yet approved. */
   { id: 'vo.shell.home', text: 'Về đảo nào!' },
+  // Story 7.1: the home station "Nhà Xoài" and its yard (content/home.ts). The station name carries the
+  // child's name as the place's own name (content/validate.ts › NAME_PLACE_LINES). Not yet approved.
+  { id: 'vo.shell.station-name.home', text: 'Nhà Xoài' },
+  { id: 'vo.shell.invite.home', text: 'Xoài ơi, mình về | nhà nào!', keywordPauseMs: 300 },
+  /** The yard's invitation (on entry) and its Speaker prompt. */
+  { id: 'vo.shell.invite.yard', text: 'Xoài ơi, chơi gì ở nhà nào?' },
+  /** Hud Home in a game opened from the yard (the yard's own Home says vo.shell.home). */
+  { id: 'vo.shell.home.yard', text: 'Về nhà nào!' },
+  // The yard corners' names (content/home.ts › YARD_CORNERS labels): said on an awake corner's tap.
+  { id: 'vo.shell.corner-name.pen', text: 'Chuồng thú' },
+  { id: 'vo.shell.corner-name.stage', text: 'Sân khấu' },
+  { id: 'vo.shell.corner-name.bed', text: 'Giường ngủ' },
+  { id: 'vo.shell.corner-name.clinic', text: 'Phòng khám' },
+  { id: 'vo.shell.corner-name.wardrobe', text: 'Tủ đồ' },
   // Tiệm kem (Story 1.8; 5.2): the single-flavour ask names Xoài — "Xoài ơi, kem … nào!" (+ its colour word: hồng, trắng, xanh); the
   // retry after a wrong scoop. "sô-cô-la" counts as 3 words, so its lines carry no colour word.
   // Played only through core/hint-director. Not yet approved.
@@ -188,6 +202,41 @@ export const VOICE_LINES = [
   { id: 'vo.shadow-match.name.car', text: 'Ô tô!' },
   { id: 'vo.shadow-match.name.truck', text: 'Xe tải!' },
   { id: 'vo.shadow-match.name.tractor', text: 'Máy cày!' },
+  // 2026-10-22 (spec-tim-bong-hinh-that-them-vat): the 18 new items.
+  { id: 'vo.shadow-match.ask.fox', text: 'Xoài ơi, bạn cáo ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.goldfish', text: 'Xoài ơi, bạn cá vàng ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.puffer', text: 'Xoài ơi, bạn cá nóc ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.swordfish', text: 'Xoài ơi, bạn cá kiếm ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.police', text: 'Xoài ơi, xe cảnh sát ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.firetruck', text: 'Xoài ơi, xe cứu hỏa ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.garbage-truck', text: 'Xoài ơi, xe chở rác ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.excavator', text: 'Xoài ơi, máy xúc ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.apple', text: 'Xoài ơi, quả táo ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.banana', text: 'Xoài ơi, quả chuối ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.pineapple', text: 'Xoài ơi, quả dứa ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.pear', text: 'Xoài ơi, quả lê ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.strawberry', text: 'Xoài ơi, quả dâu tây ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.carrot', text: 'Xoài ơi, củ cà rốt ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.mug', text: 'Xoài ơi, cái cốc ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.pan', text: 'Xoài ơi, cái chảo ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.ask.ice-cream', text: 'Xoài ơi, cây kem ở | bóng nào?', keywordPauseMs: 300 },
+  { id: 'vo.shadow-match.name.fox', text: 'Con cáo!' },
+  { id: 'vo.shadow-match.name.goldfish', text: 'Cá vàng!' },
+  { id: 'vo.shadow-match.name.puffer', text: 'Cá nóc!' },
+  { id: 'vo.shadow-match.name.swordfish', text: 'Cá kiếm!' },
+  { id: 'vo.shadow-match.name.police', text: 'Xe cảnh sát!' },
+  { id: 'vo.shadow-match.name.firetruck', text: 'Xe cứu hỏa!' },
+  { id: 'vo.shadow-match.name.garbage-truck', text: 'Xe chở rác!' },
+  { id: 'vo.shadow-match.name.excavator', text: 'Máy xúc!' },
+  { id: 'vo.shadow-match.name.apple', text: 'Quả táo!' },
+  { id: 'vo.shadow-match.name.banana', text: 'Quả chuối!' },
+  { id: 'vo.shadow-match.name.pineapple', text: 'Quả dứa!' },
+  { id: 'vo.shadow-match.name.pear', text: 'Quả lê!' },
+  { id: 'vo.shadow-match.name.strawberry', text: 'Quả dâu tây!' },
+  { id: 'vo.shadow-match.name.carrot', text: 'Củ cà rốt!' },
+  { id: 'vo.shadow-match.name.mug', text: 'Cái cốc!' },
+  { id: 'vo.shadow-match.name.pan', text: 'Cái chảo!' },
+  { id: 'vo.shadow-match.name.ice-cream', text: 'Cây kem!' },
   // Đường đua (Story 4.1): the prompt of each road (through hint) and its retry. Not yet approved.
   { id: 'vo.race.prompt', text: 'Xoài ơi, lái xe | tới cổng nhé!', keywordPauseMs: 300 },
   { id: 'vo.race.retry', text: 'Đưa ngón theo đường | tới cổng nhé!', keywordPauseMs: 300 },

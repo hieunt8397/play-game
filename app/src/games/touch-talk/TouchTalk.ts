@@ -1,10 +1,10 @@
 // Chạm là nói (Stories 4.5, 4.6; 2026-10-21 six scenes): scenes full of things (the beach, the street, the
 // kitchen, the bathroom, the bakery, the picnic); the child taps anything, it bounces and makes its sound,
 // then its Vietnamese name is said. No request, no right or wrong, no round end: Home is the only way out.
-// Six scene bubbles on the right edge (two columns of three, core/scene-bubbles.ts) switch scenes (a slide, a crossfade under reduced motion). Touching never grants anything (parent decision
-// 2026-10-21). The scene only wires Phaser: one Container per scene
-// (plate + props on their trimmed centres), one tap target per prop (its hull from the layout, live only
-// in the current scene), the bubbles, tweens, and the pure controller (talk.ts) that decides everything.
+// Six scene bubbles on the right edge (two columns of three, core/scene-bubbles.ts) switch scenes (a
+// slide, a crossfade under reduced motion). Touching never grants anything (parent decision 2026-10-21).
+// The scene only wires Phaser: one Container per scene (plate + props on their trimmed centres), one tap
+// target per prop (its hull from the layout, live only in the current scene), the bubbles, tweens, and the pure controller (talk.ts) that decides everything.
 import type { GameObjects } from 'phaser';
 import { ATLASES } from '../../content/assets';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCENE_SLOTS, propFrames, propHit, sceneThumbFrame, type TouchTalkScene } from '../../content/games/touch-talk';

@@ -170,7 +170,6 @@ const DN_STEG_EXPR = `0.1*sin(PI*t/${DN_STEG_SECONDS})*sin(2*PI*523*t-2.5*cos(2*
 export const SHADOW_PARTIALS = {
   'sfx.shadow-match.snap': [600, 340],
   'sfx.shadow-match.happy': [523, 659, 784, 1047],
-  'sfx.shadow-match.trike.happy': [659, 784],
 } as const;
 // snap: a soft "pụp" ~150 ms, a sine sweeping down 600 → 340 Hz with an exponential tail.
 const SM_SNAP_SECONDS = 0.15;
@@ -180,7 +179,7 @@ const SM_TUNE_EXPR = `0.1*(${[
   ...[523, 659, 784].map((hz, i) => tuneNote(hz, Number((i * TUNE_NOTE).toFixed(2)), TUNE_NOTE)),
   tuneNote(1047, Number((TUNE_NOTE * 3).toFixed(2)), TUNE_LAST),
 ].join('+')})`;
-// trike.happy (creature): the triceratops' two chirps E5 659 / G5 784 Hz, 400 ms (DN_TRI_EXPR).
+// 2026-10-22: the triceratops' chirp (sfx.shadow-match.trike.happy) is gone with the dinosaur.
 
 // --- Đường đua (Story 4.1) --------------------------------------------------------
 // Every partial ≥ 300 Hz, 50 ms fade-in, highpass 150 Hz, peak ≤ 0.1 = −20 dBFS. RACE_PARTIALS lists the
@@ -220,91 +219,13 @@ const FS_REEL_EXPR = `0.1*(0.5+0.5*cos(2*PI*20*t))^8*(0.7*sin(2*PI*1200*t)+0.3*s
 // happy: a C-major arpeggio C5 523 → E5 659 → G5 784 → C6 1047, the last note held (1.5 s).
 const FS_TUNE_EXPR = SM_TUNE_EXPR;
 
-// --- Chạm là nói (Stories 4.5, 4.6) -------------------------------------------------------
-// One short sound per prop, ≤ 350 ms (the name follows after Timing.touchTalkNameDelayMs), 50 ms fade-in,
-// peak ≤ 0.1 = −20 dBFS. A tonal sound lists its partials (tested ≥ 300 Hz) and is high-passed at 150 Hz;
-// a noise sound (splash, whoosh, rustle…) has no partials and is high-passed at `highpass` (≥ 300 Hz).
-// `creature` sounds (catalog `creature: true`) use the cubic fade-in of the creature calls.
-export interface TouchTalkSound {
-  readonly seconds: number;
-  readonly expr: string;
-  readonly partials: readonly number[];
-  readonly highpass?: number;
-  readonly creature?: boolean;
+// --- Real recordings ------------------------------------------------------------------
+// These ids are CC0 recordings mastered with `npm run audio:normalize` (README provenance), not synthesized:
+// this tool has no recipe for them and never overwrites them. Chạm là nói (2026-10-22, batch 3): all 60 prop
+// sounds; Tiệm kem (Story 6.1): Shiba's sneeze.
+export function isRecording(id: string): boolean {
+  return id === 'sfx.ice-cream.sneeze' || id.startsWith('sfx.touch-talk.');
 }
-/** A decaying sine burst: `hz` (+ an overtone at `ratio`) with an exponential tail `k`. */
-const ping = (hz: number, k: number, ratio = 0, start = 0): string =>
-  `between(t,${start},1)*exp(-${k}*(t-${start}))*(sin(2*PI*${hz}*t)${ratio ? `+0.4*sin(2*PI*${Math.round(hz * ratio)}*t)` : ''})`;
-/** Seeded noise (aevalsrc random(0) is deterministic) under an envelope. */
-const noise = (env: string): string => `${env}*(2*random(0)-1)`;
-export const TOUCH_TALK_SOUNDS: Readonly<Record<string, TouchTalkSound>> = {
-  // Sea (Story 4.5).
-  'sfx.touch-talk.boat': { seconds: 0.35, expr: `0.1*(${tuneNote(392, 0, 0.15)}+${tuneNote(330, 0.18, 0.15)})`, partials: [392, 330] },
-  'sfx.touch-talk.fish': { seconds: 0.25, expr: `0.1*${noise('exp(-14*t)')}`, partials: [], highpass: 1000 },
-  'sfx.touch-talk.crab': { seconds: 0.25, expr: `0.1*(${tuneNote(1800, 0.02, 0.04)}+${tuneNote(1800, 0.14, 0.04)})`, partials: [1800] },
-  'sfx.touch-talk.starfish': { seconds: 0.3, expr: `0.1*(${tuneNote(1568, 0, 0.12)}+${tuneNote(2093, 0.12, 0.16)})`, partials: [1568, 2093] },
-  'sfx.touch-talk.parasol': { seconds: 0.3, expr: `0.1*${noise('sin(PI*t/0.3)')}`, partials: [], highpass: 600 },
-  'sfx.touch-talk.bucket': { seconds: 0.3, expr: `0.07*${ping(1400, 12, 2.1)}`, partials: [1400, 2940] },
-  'sfx.touch-talk.seagull': { seconds: 0.32, expr: `0.1*(${tuneNote(1200, 0.01, 0.12)}+${tuneNote(1500, 0.17, 0.12)})`, partials: [1200, 1500], creature: true },
-  'sfx.touch-talk.coconut': { seconds: 0.2, expr: `0.1*${ping(800, 30)}`, partials: [800] },
-  'sfx.touch-talk.shell': { seconds: 0.35, expr: `0.07*${ping(2093, 6, 1.5)}`, partials: [2093, 3140] },
-  'sfx.touch-talk.beach-ball': { seconds: 0.3, expr: '0.1*sin(PI*t/0.3)*sin(2*PI*(600*t-(600-350)/(2*0.3)*t*t))', partials: [600, 350] },
-  // Street (Story 4.6).
-  'sfx.touch-talk.car': { seconds: 0.3, expr: `0.1*(${tuneNote(880, 0, 0.11)}+${tuneNote(880, 0.16, 0.11)})`, partials: [880] },
-  'sfx.touch-talk.bus': { seconds: 0.35, expr: `0.1*(${tuneNote(440, 0, 0.15)}+${tuneNote(349, 0.18, 0.15)})`, partials: [440, 349] },
-  'sfx.touch-talk.traffic-light': { seconds: 0.3, expr: `0.07*${ping(1319, 10, 2)}`, partials: [1319, 2638] },
-  'sfx.touch-talk.tree': { seconds: 0.3, expr: `0.07*${noise('sin(PI*t/0.3)')}`, partials: [], highpass: 2000 },
-  'sfx.touch-talk.house': { seconds: 0.3, expr: `0.1*(${ping(500, 40)}+${ping(500, 40, 0, 0.15)})`, partials: [500] },
-  'sfx.touch-talk.police-car': { seconds: 0.35, expr: `0.1*(${tuneNote(988, 0, 0.16)}+${tuneNote(784, 0.17, 0.16)})`, partials: [988, 784] },
-  'sfx.touch-talk.truck': { seconds: 0.35, expr: `0.1*${tuneNote(311, 0, 0.33)}`, partials: [311] },
-  'sfx.touch-talk.tractor': { seconds: 0.35, expr: `0.1*(${ping(420, 30)}+${ping(420, 30, 0, 0.12)}+${ping(420, 30, 0, 0.24)})`, partials: [420] },
-  'sfx.touch-talk.dumpster': { seconds: 0.3, expr: `0.07*${ping(600, 14, 2.7)}`, partials: [600, 1620] },
-  'sfx.touch-talk.cone': { seconds: 0.2, expr: `0.1*${ping(700, 35)}`, partials: [700] },
-  // Kitchen (Story 4.6).
-  'sfx.touch-talk.pot': { seconds: 0.35, expr: `0.07*${ping(980, 8, 2.4)}`, partials: [980, 2352] },
-  'sfx.touch-talk.frying-pan': { seconds: 0.35, expr: `0.07*${noise('(0.6+0.4*sin(2*PI*30*t))')}`, partials: [], highpass: 3000 },
-  'sfx.touch-talk.apple': { seconds: 0.2, expr: `0.1*${noise('exp(-25*t)')}`, partials: [], highpass: 1500 },
-  'sfx.touch-talk.bread': { seconds: 0.25, expr: `0.07*${noise('exp(-12*t)*(0.5+0.5*sin(2*PI*40*t))')}`, partials: [], highpass: 2500 },
-  'sfx.touch-talk.banana': { seconds: 0.25, expr: `0.07*${noise('sin(PI*t/0.25)')}`, partials: [], highpass: 1200 },
-  'sfx.touch-talk.carrot': { seconds: 0.15, expr: `0.1*${noise('exp(-40*t)')}`, partials: [], highpass: 2000 },
-  'sfx.touch-talk.mug': { seconds: 0.3, expr: `0.07*${ping(1760, 12, 2.2)}`, partials: [1760, 3872] },
-  'sfx.touch-talk.spoon': { seconds: 0.25, expr: `0.07*${ping(2637, 16)}`, partials: [2637] },
-  'sfx.touch-talk.egg': { seconds: 0.2, expr: `0.1*${noise('exp(-30*t)')}`, partials: [], highpass: 2500 },
-  'sfx.touch-talk.watermelon': { seconds: 0.25, expr: `0.1*${ping(330, 20)}`, partials: [330] },
-  // Bathroom (2026-10-21, batch 2; temporary until the CC0 sounds of batch 3).
-  'sfx.touch-talk.bathtub': { seconds: 0.3, expr: `0.1*${noise('exp(-10*t)')}`, partials: [], highpass: 800 },
-  'sfx.touch-talk.rubber-duck': { seconds: 0.3, expr: `0.1*(${tuneNote(1400, 0, 0.1)}+${tuneNote(1700, 0.14, 0.12)})`, partials: [1400, 1700] },
-  'sfx.touch-talk.toothbrush': { seconds: 0.3, expr: `0.07*${noise('sin(PI*t/0.3)*(0.6+0.4*sin(2*PI*20*t))')}`, partials: [], highpass: 3000 },
-  'sfx.touch-talk.toothbrush-cup': { seconds: 0.3, expr: `0.07*${ping(2200, 14, 1.8)}`, partials: [2200, 3960] },
-  'sfx.touch-talk.towel': { seconds: 0.3, expr: `0.07*${noise('sin(PI*t/0.3)')}`, partials: [], highpass: 800 },
-  'sfx.touch-talk.slippers': { seconds: 0.3, expr: `0.1*${noise('(exp(-30*t)+between(t,0.15,1)*exp(-30*(t-0.15)))')}`, partials: [], highpass: 1500 },
-  'sfx.touch-talk.mirror': { seconds: 0.3, expr: `0.1*(${tuneNote(2637, 0, 0.12)}+${tuneNote(3136, 0.14, 0.14)})`, partials: [2637, 3136] },
-  'sfx.touch-talk.shampoo': { seconds: 0.25, expr: '0.1*sin(PI*t/0.25)*sin(2*PI*(500*t+(900-500)/(2*0.25)*t*t))', partials: [500, 900] },
-  'sfx.touch-talk.soap': { seconds: 0.25, expr: `0.1*(${tuneNote(900, 0, 0.08)}+${tuneNote(1200, 0.12, 0.08)})`, partials: [900, 1200] },
-  'sfx.touch-talk.potty': { seconds: 0.25, expr: `0.07*(${ping(520, 35)}+${ping(620, 35, 0, 0.12)})`, partials: [520, 620] },
-  // Bakery (2026-10-21, batch 2).
-  'sfx.touch-talk.birthday-cake': { seconds: 0.35, expr: `0.1*(${tuneNote(1047, 0, 0.09)}+${tuneNote(1319, 0.11, 0.09)}+${tuneNote(1568, 0.22, 0.11)})`, partials: [1047, 1319, 1568] },
-  'sfx.touch-talk.cupcake': { seconds: 0.2, expr: `0.1*${ping(900, 25)}`, partials: [900] },
-  'sfx.touch-talk.donut': { seconds: 0.3, expr: '0.1*sin(PI*t/0.3)*sin(2*PI*(400*t+(700-400)/(2*0.3)*t*t))', partials: [400, 700] },
-  'sfx.touch-talk.cookie': { seconds: 0.25, expr: `0.07*${noise('exp(-20*t)*(0.5+0.5*sin(2*PI*35*t))')}`, partials: [], highpass: 2000 },
-  'sfx.touch-talk.croissant': { seconds: 0.25, expr: `0.07*${noise('exp(-14*t)')}`, partials: [], highpass: 3000 },
-  'sfx.touch-talk.muffin': { seconds: 0.2, expr: `0.1*${ping(440, 28)}`, partials: [440] },
-  'sfx.touch-talk.waffle': { seconds: 0.3, expr: `0.07*(${ping(1600, 40)}+${ping(1600, 40, 0, 0.1)}+${ping(1600, 40, 0, 0.2)})`, partials: [1600] },
-  'sfx.touch-talk.apple-pie': { seconds: 0.35, expr: `0.07*${noise('sin(PI*t/0.35)')}`, partials: [], highpass: 1200 },
-  'sfx.touch-talk.cinnamon-roll': { seconds: 0.3, expr: '0.1*sin(PI*t/0.3)*sin(2*PI*(900*t-(900-600)/(2*0.3)*t*t))', partials: [900, 600] },
-  'sfx.touch-talk.chocolate-cake': { seconds: 0.35, expr: `0.07*${ping(1175, 8, 1.5)}`, partials: [1175, 1763] },
-  // Picnic (2026-10-21, batch 2).
-  'sfx.touch-talk.picnic-basket': { seconds: 0.3, expr: `0.07*${noise('sin(PI*t/0.3)*(0.5+0.5*sin(2*PI*15*t))')}`, partials: [], highpass: 1500 },
-  'sfx.touch-talk.sandwich': { seconds: 0.3, expr: `0.1*${noise('(exp(-18*t)+between(t,0.15,1)*exp(-18*(t-0.15)))')}`, partials: [], highpass: 1800 },
-  'sfx.touch-talk.grapes': { seconds: 0.3, expr: `0.07*(${ping(1000, 40)}+${ping(1250, 40, 0, 0.1)}+${ping(1500, 40, 0, 0.2)})`, partials: [1000, 1250, 1500] },
-  'sfx.touch-talk.cheese': { seconds: 0.2, expr: `0.1*${ping(750, 22)}`, partials: [750] },
-  'sfx.touch-talk.teapot': { seconds: 0.33, expr: `0.1*${tuneNote(1760, 0, 0.32)}`, partials: [1760] },
-  'sfx.touch-talk.frisbee': { seconds: 0.3, expr: `0.1*${noise('sin(PI*t/0.3)')}`, partials: [], highpass: 1000 },
-  'sfx.touch-talk.radio': { seconds: 0.32, expr: `0.1*(${tuneNote(784, 0, 0.12)}+${tuneNote(988, 0.15, 0.15)})`, partials: [784, 988] },
-  'sfx.touch-talk.cooler': { seconds: 0.3, expr: `0.07*${ping(2500, 14, 1.4)}`, partials: [2500, 3500] },
-  'sfx.touch-talk.pillow': { seconds: 0.25, expr: `0.1*${noise('exp(-12*t)')}`, partials: [], highpass: 400 },
-  'sfx.touch-talk.butterfly': { seconds: 0.28, expr: `0.1*(${tuneNote(2349, 0, 0.1)}+${tuneNote(2794, 0.12, 0.12)})`, partials: [2349, 2794] },
-};
 
 // --- music.island ------------------------------------------------------------
 // 12 s loop. Every frequency is an integer Hz (pad C4 262 / E4 330 / G4 392, arpeggio C5 523 /
@@ -325,11 +246,6 @@ function source(expr: string, seconds: number): string[] {
 
 /** ffmpeg arguments that write `id` to `outFile` (pure; unit-tested). */
 export function buildArgs(id: AudioId, outFile: string): string[] {
-  const tt = TOUCH_TALK_SOUNDS[id];
-  if (tt) {
-    const filter = tt.creature ? CREATURE_FILTER : ['afade=t=in:st=0:d=0.05', `highpass=f=${tt.highpass ?? 150}`].join(',');
-    return ['-hide_banner', '-y', ...source(tt.expr, tt.seconds), '-af', filter, ...ENCODE, outFile];
-  }
   switch (id) {
     case 'sfx.shell.pop':
       return ['-hide_banner', '-y', ...source(POP_EXPR, POP_SECONDS), '-af', POP_FILTER, ...ENCODE, outFile];
@@ -369,8 +285,6 @@ export function buildArgs(id: AudioId, outFile: string): string[] {
       return ['-hide_banner', '-y', ...source(SM_SNAP_EXPR, SM_SNAP_SECONDS), '-af', PZ_SNAP_FILTER, ...ENCODE, outFile];
     case 'sfx.shadow-match.happy':
       return ['-hide_banner', '-y', ...source(SM_TUNE_EXPR, TUNE_SECONDS), '-af', TUNE_FILTER, ...ENCODE, outFile];
-    case 'sfx.shadow-match.trike.happy':
-      return ['-hide_banner', '-y', ...source(DN_TRI_EXPR, DN_TRI_SECONDS), '-af', CREATURE_FILTER, ...ENCODE, outFile];
     case 'sfx.race.engine':
       return ['-hide_banner', '-y', ...source(RC_ENGINE_EXPR, RC_ENGINE_SECONDS), '-af', TUNE_FILTER, ...ENCODE, outFile];
     case 'sfx.race.horn':
@@ -408,8 +322,19 @@ function main(): void {
     console.error(`audio:placeholders: ${(error as Error).message}`);
     process.exit(1);
   }
-  for (const [id, entry] of Object.entries(AUDIO_CATALOG) as Array<[AudioId, (typeof AUDIO_CATALOG)[AudioId]]>) {
+  const entries = Object.entries(AUDIO_CATALOG) as Array<[AudioId, (typeof AUDIO_CATALOG)[AudioId]]>;
+  // Every recording must exist before anything is regenerated, so a failed run never leaves a half-updated public/.
+  const missing = entries.filter(([id, e]) => isRecording(id) && !existsSync(resolve(appRoot, 'public', e.path)));
+  if (missing.length > 0) {
+    for (const [, e] of missing) console.error(`audio:placeholders: the recording public/${e.path} is missing — master it with npm run audio:normalize (README provenance)`);
+    process.exit(1);
+  }
+  for (const [id, entry] of entries) {
     const out = resolve(appRoot, 'public', entry.path);
+    if (isRecording(id)) {
+      console.log(`audio:placeholders: kept the recording public/${entry.path}`);
+      continue;
+    }
     mkdirSync(dirname(out), { recursive: true });
     const r = spawnSync(ffmpeg, buildArgs(id, out), { encoding: 'utf8' });
     if (r.status !== 0 || !existsSync(out)) {

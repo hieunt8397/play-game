@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { iouReport, silhouetteIoU, type Mask } from './shadow-distinct';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import sharp from 'sharp';
+import { framePages, iouReport, shadowDistinct, silhouetteIoU, type Mask } from './shadow-distinct';
 
 /** A w × h mask filled where `inside(x, y)`. */
 function mask(w: number, h: number, inside: (x: number, y: number) => boolean): Mask {
@@ -51,5 +55,38 @@ describe('silhouetteIoU (Story 3.6)', () => {
     expect(r.info).toHaveLength(3);
     expect(r.problems.some((p) => p.includes('"horse" and "donkey"') && p.includes('IoU 1.000'))).toBe(true);
     expect(r.problems.every((p) => !p.includes('truck'))).toBe(true);
+  });
+});
+
+describe('multi-page atlases (2026-10-22)', () => {
+  const f = (filename: string, x: number, w: number, h: number) => ({ filename, frame: { x, y: 0, w, h }, rotated: false });
+
+  it('framePages: a multiatlas maps every frame to its page image; a JSON hash maps to the one png', () => {
+    const multi = framePages({ textures: [{ image: 'a-0.png', frames: [f('x/shadow/00', 0, 4, 4)] }, { image: 'a-1.png', frames: [f('y/shadow/00', 2, 3, 3)] }] }, 'unused.png');
+    expect(multi.get('x/shadow/00')?.image).toBe('a-0.png');
+    expect(multi.get('y/shadow/00')?.image).toBe('a-1.png');
+    expect(multi.get('y/shadow/00')?.frame.frame).toEqual({ x: 2, y: 0, w: 3, h: 3 });
+    const hash = framePages({ frames: { 'x/shadow/00': { frame: { x: 0, y: 0, w: 4, h: 4 } } } }, 'a.png');
+    expect(hash.get('x/shadow/00')?.image).toBe('a.png');
+  });
+
+  it('shadowDistinct reads each frame from its own page; a missing page is named', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shadow-distinct-'));
+    // Two 8×8 pages: a full square on page 0, the same square on page 1.
+    const page = () => sharp({ create: { width: 8, height: 8, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 1 } } }).png().toBuffer();
+    writeFileSync(join(dir, 'sm-0.png'), await page());
+    writeFileSync(join(dir, 'sm-1.png'), await page());
+    const json = (pages: string[]) => ({ textures: pages.map((image, k) => ({ image, frames: [f(k === 0 ? 'item-horse/shadow/00' : 'item-donkey/shadow/00', 0, 8, 8)] })) });
+    writeFileSync(join(dir, 'sm.json'), JSON.stringify(json(['sm-0.png', 'sm-1.png'])));
+    const items = [
+      { id: 'horse', shapeGroup: 'quadruped' },
+      { id: 'donkey', shapeGroup: 'quadruped' },
+    ];
+    const ok = await shadowDistinct(dir, items, 0.85, { json: 'sm.json', png: 'sm-0.png' });
+    expect(ok.info).toEqual(['shadow-match silhouettes horse / donkey (quadruped): IoU 1.000']);
+    expect(ok.problems).toEqual(['shadow-match items "horse" and "donkey" (quadruped): their shadows overlap at IoU 1.000 (max 0.85)']);
+    writeFileSync(join(dir, 'sm.json'), JSON.stringify(json(['sm-0.png', 'sm-9.png'])));
+    const missing = await shadowDistinct(dir, items, 0.85, { json: 'sm.json', png: 'sm-0.png' });
+    expect(missing.problems).toEqual(['shadow-match silhouettes: page sm-9.png of sm.json is missing']);
   });
 });

@@ -11,8 +11,8 @@
 //   - `dino-puzzle` (Stories 3.3/3.4): around every start bay `anchor.dino-bay-<n>` for each species,
 //     sized to the species' largest displayed loose piece (games/dino-puzzle/starts.ts) + ui.hintRingPad.
 //   - `shadow-match` (Story 3.5): a circle of shadowR + ui.hintRingPad around every `slot.shadow-*` and
-//     one of heldR + pad at `anchor.triceratops-hand`.
-// Story 3.5 also measures `bg.shadow-match` itself: the ledge under every shadow (the 5th-percentile
+//     one of heldR + pad at `anchor.item-rest` (the item on its pedestal).
+// Story 3.5 also measures `bg.shadow-match` itself: the cave wall under every shadow (the 5th-percentile
 // luminance in its shadowR square) must give ≥ 5:1 against colors.shadowTarget, and every pixel of
 // `hit.cave` must reach ui.caveMinLuminance (no dark cave).
 // The plates are read with sharp; `ringContrastProblems` is the pure part (unit-tested).
@@ -24,7 +24,7 @@ import { SCOOP_RENDER_SLOT, scoopFrame } from '../../src/content/games/ice-cream
 import { HITS as PIZZA_HITS } from '../../src/content/games/pizza.ts';
 import { BAY_ANCHORS, PIECE_IDS, SPECIES, pieceFrames } from '../../src/content/games/dino-puzzle.ts';
 import { displayedSize } from '../../src/games/dino-puzzle/starts.ts';
-import { CAVE_HIT, HAND_ANCHOR, ITEM_IDS, itemFrames } from '../../src/content/games/shadow-match.ts';
+import { CAVE_HIT, REST_ANCHOR, ITEM_IDS, itemFrames } from '../../src/content/games/shadow-match.ts';
 import { heldRadius, shadowRadius } from '../../src/games/shadow-match/geometry.ts';
 import { pointInPolygon } from '../layout/geometry.ts';
 import { atlasFrames } from '../layout/rules.ts';
@@ -289,7 +289,7 @@ export async function hintContrastProblems(publicDir: string, layoutDir: string)
     { id: 'map', rings: mapRings },
     { id: 'pizza', rings: (l) => pizzaRings(l, readJson(resolve(publicDir, ATLASES.pizza.json))) },
     { id: 'dino-puzzle', rings: (l) => dinoRings(l, atlasFrames(readJson(resolve(publicDir, ATLASES['dino-puzzle'].json))) as { frames?: Record<string, FrameJson> }) },
-    { id: 'shadow-match', rings: (l) => shadowMatchRings(l, readJson(resolve(publicDir, ATLASES['shadow-match'].json))) },
+    { id: 'shadow-match', rings: (l) => shadowMatchRings(l, atlasFrames(readJson(resolve(publicDir, ATLASES['shadow-match'].json))) as { frames?: Record<string, FrameJson> }) },
     { id: 'race', rings: raceRings },
     { id: 'fishing', rings: (l) => fishingRings(l, readJson(resolve(publicDir, ATLASES.fishing.json))) },
   ];
@@ -311,9 +311,9 @@ export async function hintContrastProblems(publicDir: string, layoutDir: string)
 
 // --- Story 3.5: Hang tìm bóng ------------------------------------------------------------------------------
 
-/** The shadows (colors.shadowTarget) need this contrast against the ledge they are drawn on. */
+/** The shadows (colors.shadowTarget) need this contrast against the cave wall they are drawn on. */
 export const SHADOW_MIN_CONTRAST = 5;
-/** The ledge's luminance is measured at this low percentile of the pixels under a shadow. */
+/** The wall's luminance is measured at this low percentile of the pixels under a shadow. */
 export const SHADOW_LUMINANCE_PERCENTILE = 0.05;
 
 /** A raw RGB(A) plate: `channels` bytes per pixel, row-major. */
@@ -365,7 +365,7 @@ export function shadowContrastProblems(bg: RawImage, sites: readonly ShadowSite[
       continue;
     }
     const c = contrastOfLuminance(l, lc);
-    if (c < min) problems.push(`shadow contrast "shadow-match" ${s.label}: the ledge under the shadow gives ${c.toFixed(2)}:1 against the shadow colour (min ${min}:1; ${Math.round(p * 100)}th-percentile luminance ${l.toFixed(3)})`);
+    if (c < min) problems.push(`shadow contrast "shadow-match" ${s.label}: the wall under the shadow gives ${c.toFixed(2)}:1 against the shadow colour (min ${min}:1; ${Math.round(p * 100)}th-percentile luminance ${l.toFixed(3)})`);
   }
   return problems;
 }
@@ -415,8 +415,8 @@ export function shadowMatchRings(layout: ScreenLayout, atlas: { frames?: Record<
     if (!id.startsWith('shadow-')) continue;
     rings.push({ label: `slot.${id}`, ring: { cx: s.x, cy: s.y, rx: shadowR + pad, ry: shadowR + pad } });
   }
-  const hand = layout.anchors[HAND_ANCHOR];
-  if (hand) rings.push({ label: `anchor.${HAND_ANCHOR}`, ring: { cx: hand.x, cy: hand.y, rx: heldR + pad, ry: heldR + pad } });
+  const hand = layout.anchors[REST_ANCHOR];
+  if (hand) rings.push({ label: `anchor.${REST_ANCHOR}`, ring: { cx: hand.x, cy: hand.y, rx: heldR + pad, ry: heldR + pad } });
   return rings;
 }
 
@@ -438,7 +438,8 @@ export async function shadowMatchPlateProblems(publicDir: string, layoutDir: str
     bg = undefined;
   }
   if (!layout || !bg) return ['shadow contrast "shadow-match": the plate or the layout cannot be read'];
-  const atlas = readJson<{ frames?: Record<string, FrameJson> }>(resolve(publicDir, ATLASES['shadow-match'].json));
+  // 2026-10-22: a multiatlas (every page's frames by name).
+  const atlas = atlasFrames(readJson(resolve(publicDir, ATLASES['shadow-match'].json))) as { frames?: Record<string, FrameJson> };
   const { shadowR } = shadowRadii(atlas, layout.renderScale);
   return [
     ...shadowContrastProblems(bg, shadowSites(layout, shadowR), rgbOf(Tokens.colors.shadowTarget.value)),

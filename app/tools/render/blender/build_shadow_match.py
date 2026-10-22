@@ -1,26 +1,34 @@
-# Builds art/shadow-match.blend (Hang tìm bóng, Stories 3.5, 3.6) from the vendored island art/src/map-v3.blend.
+# Builds art/shadow-match.blend (Hang tìm bóng, Stories 3.5, 3.6; 2026-10-22: no dinosaur, back to the real
+# models, 25 items) from the vendored island art/src/map-v3.blend (only its render settings, world and Sun are kept).
 #
 # Run by `npm run art:build -- shadow-match` (tools/render/build.ts), never by hand:
 #   blender -b --factory-startup art/src/map-v3.blend --python-exit-code 1 --python build_shadow_match.py -- \
-#     --out <tmp>/shadow-match.blend --params <tmp>/params.json --items dog,cow,horse,donkey,stag,car,truck,tractor
-# params.json (written by build.ts from Tokens and content): colours (hex), art (incl. art.dino and
-# art.shadowMatch), shadowMatch {trikeSizePx, itemPx, counts}, design size, renderScale, the interactive rect.
+#     --out <tmp>/shadow-match.blend --params <tmp>/params.json --items dog,cow,horse,…
+# params.json (written by build.ts from Tokens and content): colours (hex), art (incl. art.shadowMatch),
+# shadowMatch {itemPx, counts}, design size, renderScale, the interactive rect.
 # --items: the content catalogue ids (SHAPE_ITEMS); an id without a row in ITEM_MODELS fails the build.
 #
-# Steps: prune the reference's Tiệm kem preview, its HintRing, the three station dinos and the `Cave`
-# collection; add camera `CamCave` (lens from `CamGame2`) aimed at a script-built cave mouth near the old
-# `Cave` spot: a low-poly rock arch (displaced icospheres, flat shading) in colors.caveMouth around a lit
-# inner back wall (art.shadowMatch.caveInner, never black) and two flat rock ledges facing the camera,
-# left and right of the mouth, lit by emission (LEDGE_EMISSION) so the shadows drawn over them keep
-# ≥ 5:1 against colors.shadowTarget on the real render. Story 3.6: each ledge is tall enough for two
-# tiers of shadows (LEDGE_SIZE, LEDGE_TIERS), so rows of 3 and 4 shadows stay high and wide of the hand. The gentle Quaternius triceratops (dressed like
-# Story 3.3's: common.py › dress_dino; never a meat-eater, never an attack pose) stands centre-back in the
-# mouth in a 3/4 front view, head lowered toward the item it holds:
-#   1 idle (head offered down) · 10 nod (head a further −12°) · 20–21 happy (head up, tail wag).
-# Each catalogue item (Quaternius animals, Kenney vehicles; source colours kept) is posed in side profile
-# at one staging spot ITEM_STAGE as its own sprite `item-<id>` (`silhouette`: the render step derives
-# `item-<id>/shadow/00` from `item-<id>/color/00`, tools/render/ghost.ts › silhouetteFrame). The layout
-# objects go in a hidden `layout` collection; render size; save.
+# Steps: remove the whole island (only its Sun, turned to light the cave from the front, and the lens of
+# `CamGame2` are used); add camera `CamCave` (lens from `CamGame2`) looking level into a script-built rock cave
+# that fills the frame (all in the plate collection `cave`). 2026-10-22 (spec-tim-bong-hinh-that-them-vat): the
+# pre-restyle rock look is back, scaled up for the bigger shadows:
+#   - a lit inner back wall (art.shadowMatch.caveInner, lit by emission so a shadow drawn on it keeps ≥ 5:1
+#     against colors.shadowTarget on the real render), gently bowed at the sides, a sandy rock floor
+#     (colors.caveMouth);
+#   - low-poly rocks (displaced icospheres in colors.caveMouth, as the old cave mouth's arch) framing the top
+#     edge and the top corners, and a few boulders on the floor in the bottom corners — never inside a
+#     shadow's square or a hint ring's reach;
+#   - a round pedestal at the bottom centre (art.shadowMatch.pedestal / pedestalTop; `anchor.pedestal-top` on
+#     its top: every held item stands on it; `hit.pedestal` its tap area; `anchor.item-rest` the screen rules'
+#     reference centre of a full-height held item).
+# Every placement is given in design px (SHADOW_SPOTS, REST_PX, the rocks) and turned into world points by a
+# ray from the camera, so the screen layout is exactly what the rules check.
+# Each catalogue item (Quaternius animals and cutefish, Kenney car-kit vehicles and food-kit things; source
+# colours kept) is posed by its ITEM_MODELS row — animals, fish and vehicles in side profile facing screen
+# right, fruit and kitchen things upright at their typical angle — as its own sprite `item-<id>`
+# (`silhouette`: the render step derives `item-<id>/shadow/00` from `item-<id>/color/00`,
+# tools/render/ghost.ts › silhouetteFrame), fitted to shadowMatch.itemPx (so a horse and a strawberry get the
+# same on-screen box). The layout objects go in a hidden `layout` collection; render size; soften; save.
 # Every sprite collection here is `movable` (no baked shadow). Every constant is in Blender world units
 # (metres) unless its name says otherwise.
 import json
@@ -35,123 +43,121 @@ from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cute import soften_scene  # noqa: E402
-from common import (  # noqa: E402
-    add_empty, descendants, dress_dino, eval_world_verts, flat_material, force_opaque, key_constant, move_to, parse_args, principled,
-)
+from cute import lathe, rounded_profile, soften_scene  # noqa: E402
+from common import add_empty, eval_world_verts, flat_material, force_opaque, hull_object, key_constant, move_to, parse_args, principled  # noqa: E402
 
 ASSETS = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', 'assets'))
-# The triceratops: the only dinosaur this builder ever imports.
-TRIKE_FILE = os.path.join(ASSETS, 'quaternius', 'dinosaurs', 'Triceratops.fbx')
-TRIKE_SPECIES = 'triceratops'
-TRIKE_PREFIX = 'Triceratops'
-
-PRUNE_COLLECTIONS = ['GameIce', 'Cave']  # the reference's Tiệm kem preview and the island's own cave
-PRUNE_OBJECTS = ['HintRing']
-STATION_DINOS = ['A_DinoNeck', 'A_DinoTri', 'A_DinoSteg']  # the three station dinos (the fence stays)
 LENS_FROM = 'CamGame2'
 CAMERA = 'CamCave'
+SUN = 'Sun'
+SUN_DIRECTION = (0.35, 0.8, -0.65)  # where the light travels: into the cave, down, a little to the right
+SUN_ENERGY = 1.4
 
 GROUND_Z = 0.45  # the island's grass
+FLOOR_Z = GROUND_Z + 0.02  # the cave floor, a little above the grass
 
-# --- the camera: south of the old cave spot (the town is behind it), looking north into the mouth ---
-CAM_LOCATION = (6.6, 3.62, 1.32)
-CAM_TARGET = (6.6, 6.4, 0.86)
+# --- the camera: level, looking north into the cave (the town is behind it) ------------------------------------
+CAM_LOCATION = (6.6, 3.4, 1.3)
+CAM_TARGET = (6.6, 7.4, 1.42)  # tilted up a touch: the wall/floor seam sits low, under every shadow
 
-# --- the cave mouth ------------------------------------------------------------------------------------
-CAVE_X = 6.52  # the mouth's centre line
-ARCH_Y = 6.62  # the arch boulders' centre plane
-WALL_Y = 7.15  # the lit inner back wall
-HIT_HALF_W = 0.5  # hit.cave: the wall seen through the opening (inside the pillars' inner edges)
-HIT_TOP_Z = 1.36  # and below the lintel's lowest stone
-WALL_HALF_W = 0.75  # the back wall reaches a little past the opening, hidden behind the pillars
-WALL_TOP_Z = 2.0
-FLOOR_FRONT_Y = 6.35  # the cave floor (caveMouth) from here to the wall
-# Arch boulders: (x offset from CAVE_X, y offset from ARCH_Y, z centre, radius, seed). Displaced
-# icospheres around the opening: two pillars and a lintel of stones, a little irregular.
-ARCH_STONES = [
-    # The left pillar, the lintel and the right pillar (the opening's inner edges ~0.52 from the centre).
-    (-0.76, 0.02, 0.62, 0.25, 1), (-0.78, 0.04, 1.02, 0.26, 2), (-0.72, 0.0, 1.42, 0.25, 3),
-    (-0.48, 0.02, 1.72, 0.25, 4), (-0.14, 0.0, 1.82, 0.26, 5), (0.2, 0.03, 1.8, 0.26, 6),
-    (0.5, 0.0, 1.7, 0.25, 7), (0.73, 0.02, 1.42, 0.25, 8), (0.79, 0.04, 1.02, 0.26, 9),
-    (0.76, 0.0, 0.62, 0.25, 10),
-    # The rock mass behind and around the arch (the hill the cave is dug into).
-    (-1.28, 0.4, 0.8, 0.46, 11), (1.3, 0.4, 0.8, 0.46, 12), (-1.08, 0.45, 1.8, 0.45, 13),
-    (1.1, 0.45, 1.85, 0.45, 14), (0.02, 0.5, 2.25, 0.48, 15), (-0.58, 0.5, 2.15, 0.42, 16), (0.62, 0.5, 2.15, 0.42, 17),
+# --- the back wall ---------------------------------------------------------------------------------------------
+WALL_Y = 7.4  # the wall's centre plane
+WALL_HALF_W = 4.2
+WALL_TOP_Z = 4.6
+WALL_BOW = 0.06  # the wall bows toward the camera by this × (x − centre)² at the sides
+WALL_STEPS = (30, 16)  # coarse: the wall reads as cut rock (its vertices jittered by WALL_JITTER)
+WALL_JITTER = (0.05, 0.07, 0.05)  # ± x, y (toward the camera), z per vertex (seeded), like the old stones' facets
+WALL_SEED = 31
+WALL_EMISSION = 0.3  # tuned with the measured-contrast rule (shadowTarget on the wall ≥ 5:1) without blowing the wall out to white
+FLOOR_NEAR_Y = 2.0
+FLOOR_EMISSION = 0.3
+# hit.cave: the bright wall between the shadows (design px corners), never under a shadow or a ring.
+CAVE_HIT_PX = [(440, 330), (584, 330), (584, 520), (440, 520)]  # bottom above the held item's hint ring (top ≈ 532)
+
+# --- the shadow slots (design px; Hang tìm bóng 2026-10-22: the rows arc over the pedestal) ---------------------
+# Each centre keeps shadowR (≈ itemPx / 2) inside the interactive rect and off the Hud keep-outs, ≥ 2·shadowR +
+# gap from its row mates and ≥ shadowR + snapRadius × hintSnapScale + heldR from the pedestal
+# (tools/layout/rules.ts › validateShadowMatch).
+SHADOW_SPOTS = {
+    2: [(225, 330), (799, 330)],
+    3: [(160, 410), (512, 190), (864, 410)],
+    4: [(140, 445), (372, 205), (652, 205), (884, 445)],
+}
+
+# --- the pedestal ----------------------------------------------------------------------------------------------
+REST_PX = (512, 618)  # anchor.item-rest: the centre of a full-height held item on the pedestal (rules reference)
+PEDESTAL_DIST = 2.45  # metres in front of the camera (along y)
+PEDESTAL_TOP_PX = 666  # the screen y of the pedestal top's centre
+PEDESTAL_R_PX = 80  # its radius on screen (design px)
+PEDESTAL_ROUND = 0.35
+PEDESTAL_SEG = 12  # a low-poly drum, like the rocks
+
+# --- the rocks (design px centre, radius px, depth in front of the wall in metres, seed) --------------------------
+# The old cave mouth's low-poly stones, around the top edge and the top corners only (never inside a shadow's
+# square or a hint ring's reach), and a few boulders on the floor in the bottom corners.
+FRAME_ROCKS = [
+    (-30, 40, 130, 0.25, 1), (120, -30, 120, 0.3, 2), (265, -50, 105, 0.35, 3),
+    (400, -62, 100, 0.4, 4), (530, -68, 100, 0.42, 5), (660, -62, 100, 0.4, 6),
+    (800, -45, 112, 0.35, 7), (940, -20, 125, 0.3, 8), (1060, 60, 120, 0.25, 9),
+    (20, 150, 100, 0.2, 10), (1010, 185, 95, 0.2, 11),
+    (-40, 330, 70, 0.15, 12), (1065, 330, 70, 0.15, 13),
 ]
+# (u, v, radius px, seed) — boulders standing on the floor
+FLOOR_ROCKS = [(40, 668, 62, 21), (130, 690, 40, 22), (230, 672, 26, 23), (985, 668, 62, 24), (895, 692, 40, 25), (800, 674, 26, 26)]
 STONE_SUBDIV = 2
 STONE_JITTER = 0.18  # radial displacement ± this fraction of the radius
 STONE_SQUASH_Y = 0.75  # stones are a little flatter front to back
 ROCK_EMISSION = 0.45  # the rock never reads black, even on its shaded facets
-CAVE_INNER_EMISSION = 0.75  # the inner wall is lit (never black, ≥ ui.caveMinLuminance)
 
-# --- the ledges: flat rock slabs facing the camera, left and right of the mouth -------------------------
-# name → (foot centre x, foot centre y); every slab stands on the ground and has LEDGE_SIZE.
-LEDGES = {
-    'left': (5.66, 5.95),
-    'right': (7.38, 5.95),
-}
-LEDGE_SIZE = (0.56, 1.06, 0.18)  # width, height, thickness: room for two tiers of shadows (Story 3.6)
-# Stones behind each slab (offsets in the slab's own frame: across, behind, up from its foot; radius,
-# seed), so the flat face reads as the cut face of a rock. They never cover the face.
-LEDGE_STONES = [(-0.2, 0.2, 0.88, 0.2, 21), (0.2, 0.22, 0.76, 0.22, 22), (0.0, 0.24, 1.06, 0.17, 23)]
-LEDGE_EMISSION = 0.9  # tuned until the measured-contrast rule passes (shadowTarget on the ledge ≥ 5:1)
-# The heights (world units above the ledge's foot) a shadow centre sits at on a ledge's front face.
-# `row2` keeps Story 3.5's row where it was; rows 3 and 4 use two tiers per ledge (and a middle one).
-LEDGE_TIERS = {
-    'row2': 0.496,
-    'upper': 0.81,  # low enough that the shadow clears the Home / Speaker keep-out zones
-    'middle': 0.62,
-    'lower': 0.34,
-}
-# Across offsets (world units from the face centre, + = screen right) of the shadow centres.
-CENTRE_ACROSS = 0.0
-# The lower tier sits a little toward the screen edge, so it stays out of the hand's level-4 snap reach.
-LOWER_OUT_ACROSS = 0.04
-# The shadow slots per shadow count: (ledge, across, tier). Row 2: one per ledge. Row 3: left upper,
-# left lower, right middle. Row 4: two tiers on each ledge.
-SHADOW_SPOTS = {
-    2: [('left', CENTRE_ACROSS, 'row2'), ('right', CENTRE_ACROSS, 'row2')],
-    3: [('left', CENTRE_ACROSS, 'upper'), ('left', -LOWER_OUT_ACROSS, 'lower'), ('right', CENTRE_ACROSS, 'middle')],
-    4: [('left', CENTRE_ACROSS, 'upper'), ('left', -LOWER_OUT_ACROSS, 'lower'), ('right', CENTRE_ACROSS, 'upper'), ('right', LOWER_OUT_ACROSS, 'lower')],
-}
-
-# --- the triceratops ----------------------------------------------------------------------------------
-TRIKE_SPOT = (6.46, 6.62)  # its ground pivot (XY centre of its idle bbox at its lowest z)
-TRIKE_FACING_DEG = -78.0  # world heading of the head: towards the camera (−90°), turned a little right (3/4 front)
-HAND_AHEAD_M = 0.62  # anchor.triceratops-hand: this far ahead of the ground pivot along the facing
-FIT_PASSES = 6
-IDLE_FRAME = 1
-NOD_FRAME = 10
-HAPPY_FRAMES = [20, 21]
-TRIKE_FRAMES = [IDLE_FRAME, NOD_FRAME, *HAPPY_FRAMES]
-TRIKE_STATES = {'idle': [IDLE_FRAME], 'nod': [NOD_FRAME], 'happy': HAPPY_FRAMES}
-HEAD_OFFER_DEG = 14.0  # idle: the head is lowered toward the held item
-NOD_EXTRA_DEG = 12.0  # nod: a further 12° down
-HEAD_HAPPY_DEG = 10.0  # happy: the head up from the idle pose
-TAIL_YAW_DEG = 15.0  # happy: the tail wags ± this
-IDLE_SUFFIX = '_Idle'
-
-# --- the items ------------------------------------------------------------------------------------------
-# id → (model under assets/, yaw in degrees (world heading of the model's front: 0 = +x = screen right),
-# action name suffix for the pose, or None). Every id of the content catalogue must have a row.
+# --- the items ------------------------------------------------------------------------------------------------
+# id → (model under assets/, pose, action name suffix or None). pose: yaw (degrees; the world heading of the
+# model's front, 0 = +x = screen right) and tilt (degrees; the top tipped toward the camera, after the yaw, so
+# a pan shows its round face). Every id of the content catalogue must have a row.
 ANIMALS = os.path.join('quaternius', 'animals')
+FISH = os.path.join('quaternius', 'cutefish')
 CARS = os.path.join('kenney', 'kenney_car-kit', 'Models', 'GLB format')
+FOOD = os.path.join('kenney', 'kenney_food-kit', 'Models', 'GLB format')
+SIDE = {'yaw': 0.0}
 ITEM_MODELS = {
-    'dog': (os.path.join(ANIMALS, 'ShibaInu.fbx'), 0.0, '|Idle'),
-    'cow': (os.path.join(ANIMALS, 'Cow.fbx'), 0.0, '|Idle'),
-    'horse': (os.path.join(ANIMALS, 'Horse.fbx'), 0.0, '|Idle'),
+    'dog': (os.path.join(ANIMALS, 'ShibaInu.fbx'), SIDE, '|Idle'),
+    'cow': (os.path.join(ANIMALS, 'Cow.fbx'), SIDE, '|Idle'),
+    'horse': (os.path.join(ANIMALS, 'Horse.fbx'), SIDE, '|Idle'),
     # Story 3.6: two more quadrupeds for the same-group level (both files have `AnimalArmature|Idle`).
-    'donkey': (os.path.join(ANIMALS, 'Donkey.fbx'), 0.0, '|Idle'),
-    'stag': (os.path.join(ANIMALS, 'Stag.fbx'), 0.0, '|Idle'),
-    'car': (os.path.join(CARS, 'sedan.glb'), 0.0, None),
-    'truck': (os.path.join(CARS, 'truck.glb'), 0.0, None),
-    'tractor': (os.path.join(CARS, 'tractor.glb'), 0.0, None),
+    'donkey': (os.path.join(ANIMALS, 'Donkey.fbx'), SIDE, '|Idle'),
+    'stag': (os.path.join(ANIMALS, 'Stag.fbx'), SIDE, '|Idle'),
+    'car': (os.path.join(CARS, 'sedan.glb'), SIDE, None),
+    'truck': (os.path.join(CARS, 'truck.glb'), SIDE, None),
+    'tractor': (os.path.join(CARS, 'tractor.glb'), SIDE, None),
+    # 2026-10-22 (spec-tim-bong-hinh-that-them-vat): 17 more. Dropped under the spec's Fallback (each one's shadow
+    # overlapped a group mate's above ui.shadowMaxIoU): bull (cow), taxi (car), ambulance (firetruck). The parent
+    # dropped the shark the same day (it read as a generic grey fish).
+    # The food-kit "cây kem" is ice-cream.glb (ice-cream-cne.glb is an empty cone) and "cái cốc" is cup.glb (mug.glb
+    # is a wooden tankard): the toddler-familiar models of the same items.
+    'fox': (os.path.join(ANIMALS, 'Fox.fbx'), SIDE, '|Idle'),
+    'goldfish': (os.path.join(FISH, 'Goldfish.fbx'), SIDE, None),
+    'puffer': (os.path.join(FISH, 'Puffer.fbx'), SIDE, None),
+    'swordfish': (os.path.join(FISH, 'Swordfish.fbx'), SIDE, None),
+    'police': (os.path.join(CARS, 'police.glb'), SIDE, None),
+    'firetruck': (os.path.join(CARS, 'firetruck.glb'), SIDE, None),
+    'garbage-truck': (os.path.join(CARS, 'garbage-truck.glb'), SIDE, None),
+    'excavator': (os.path.join(CARS, 'tractor-shovel.glb'), SIDE, None),
+    'apple': (os.path.join(FOOD, 'apple.glb'), {'yaw': 0.0, 'tilt': 10.0}, None),
+    'banana': (os.path.join(FOOD, 'banana.glb'), {'yaw': 0.0}, None),
+    'pineapple': (os.path.join(FOOD, 'pineapple.glb'), {'yaw': 0.0}, None),
+    'pear': (os.path.join(FOOD, 'pear.glb'), {'yaw': 0.0, 'tilt': 10.0}, None),
+    'strawberry': (os.path.join(FOOD, 'strawberry.glb'), {'yaw': 0.0, 'tilt': 10.0}, None),
+    'carrot': (os.path.join(FOOD, 'carrot.glb'), {'yaw': 0.0}, None),
+    'mug': (os.path.join(FOOD, 'cup.glb'), {'yaw': 0.0, 'tilt': 10.0}, None),
+    'pan': (os.path.join(FOOD, 'frying-pan.glb'), {'yaw': 0.0, 'tilt': 40.0}, None),
+    'ice-cream': (os.path.join(FOOD, 'ice-cream.glb'), {'yaw': 0.0, 'tilt': 10.0}, None),
 }
-# Models whose front is not their own −y (glTF vehicles face +z → −y after import; the Quaternius animals
-# face +y): the extra turn (degrees) that makes `yaw` the heading of the front.
-MODEL_FRONT_DEG = {'.fbx': 90.0, '.glb': -90.0}
-ITEM_STAGE = (6.6, 5.8)  # every item is rendered here, alone, standing on the ground
+# After import every model here faces −y (toward the camera): the Quaternius FBX animals and fish after Blender's
+# FBX axis conversion, the Kenney glTF models because glTF +z (their front) becomes −y. MODEL_FRONT_DEG is the extra
+# turn (degrees, counter-clockwise about z, added to `yaw`) that brings that front to yaw 0 = +x = screen right:
+# +90° for both file types (checked on the renders: every animal, fish and vehicle faces screen right).
+MODEL_FRONT_DEG = {'.fbx': 90.0, '.glb': 90.0}
+IDLE_FRAME = 1
+FIT_PASSES = 6
 
 RENDER_SIZE = (2048, 1536)
 
@@ -164,35 +170,27 @@ def warn(msg):
     print(f'build_shadow_match: WARNING {msg}')
 
 
-def remove_tree(obj):
-    for o in reversed(descendants(obj)):
-        bpy.data.objects.remove(o, do_unlink=True)
-
-
 def prune():
-    for name in PRUNE_COLLECTIONS:
-        coll = bpy.data.collections.get(name)
-        if coll is None:
-            fail(f'collection "{name}" to prune not found')
-        for o in list(coll.all_objects):
-            if o.name in bpy.data.objects:
-                bpy.data.objects.remove(o, do_unlink=True)
-        bpy.data.collections.remove(coll)
-    for name in PRUNE_OBJECTS:
-        o = bpy.data.objects.get(name)
-        if o is not None:  # HintRing may already be gone with GameIce
-            remove_tree(o)
-    for name in STATION_DINOS:
-        o = bpy.data.objects.get(name)
-        if o is None:
-            fail(f'station dino "{name}" to prune not found')
-        remove_tree(o)
+    """Removes the whole island: every object but the Sun and the lens source camera (behind the camera,
+    the island's trees and houses would cast shadows into the cave), then every emptied collection."""
+    keep = {SUN, LENS_FROM}
+    for o in list(bpy.data.objects):
+        if o.name not in keep:
+            bpy.data.objects.remove(o, do_unlink=True)
+    for c in list(bpy.data.collections):
+        if len(c.all_objects) == 0:
+            bpy.data.collections.remove(c)
 
 
-def import_new(op, **kw):
-    before = set(bpy.data.objects)
-    op(**kw)
-    return [o for o in bpy.data.objects if o not in before]
+def light_from_front():
+    """The island's Sun shines from the north (into the camera here): turned to come from behind the
+    camera, high and a little from the left, so the wall, the pedestal and the items face the light."""
+    sun = bpy.data.objects.get(SUN)
+    if sun is None or sun.type != 'LIGHT':
+        fail(f'light "{SUN}" not found')
+    sun.rotation_mode = 'QUATERNION'
+    sun.rotation_quaternion = Vector(SUN_DIRECTION).normalized().to_track_quat('-Z', 'Y')
+    sun.data.energy = SUN_ENERGY
 
 
 def make_camera(scene):
@@ -208,18 +206,22 @@ def make_camera(scene):
     cam.rotation_mode = 'XYZ'
     cam.rotation_euler = (Vector(CAM_TARGET) - Vector(CAM_LOCATION)).to_track_quat('-Z', 'Y').to_euler()
     scene.camera = cam
+    bpy.context.view_layer.update()
     return cam
 
 
 class Screen:
-    """World → design px through the scene camera (same projection as render_screen.py)."""
+    """World ↔ design px through the scene camera (same projection as render_screen.py)."""
 
     def __init__(self, scene, params):
         self.scene = scene
+        self.cam = scene.camera
         self.w, self.h = params['design']['width'], params['design']['height']
+        # The camera frame's corners in camera space (top-right, bottom-right, bottom-left, top-left).
+        self.frame = [Vector(c) for c in self.cam.data.view_frame(scene=scene)]
 
     def project(self, p):
-        v = world_to_camera_view(self.scene, self.scene.camera, Vector(p))
+        v = world_to_camera_view(self.scene, self.cam, Vector(p))
         return (v.x * self.w, (1 - v.y) * self.h)
 
     def rect(self, pts):
@@ -227,115 +229,171 @@ class Screen:
         xs, ys = [p[0] for p in sp], [p[1] for p in sp]
         return (min(xs), min(ys), max(xs), max(ys))
 
+    def ray(self, px):
+        """The camera position and the world direction through design point `px`."""
+        tr, _br, bl, tl = self.frame
+        u, v = px[0] / self.w, px[1] / self.h
+        local = tl + (tr - tl) * u + (bl - tl) * v
+        d = (self.cam.matrix_world.to_3x3() @ local).normalized()
+        return self.cam.matrix_world.translation.copy(), d
 
-def bounds(pts):
-    xs, ys, zs = [p.x for p in pts], [p.y for p in pts], [p.z for p in pts]
-    return (min(xs), max(xs)), (min(ys), max(ys)), (min(zs), max(zs))
+    def at_y(self, px, y):
+        """The world point on the plane y = `y` seen at design point `px`."""
+        o, d = self.ray(px)
+        return o + d * ((y - o.y) / d.y)
+
+    def on(self, obj, px):
+        """Where the ray through `px` first hits `obj` (world), or fails."""
+        o, d = self.ray(px)
+        inv = obj.matrix_world.inverted()
+        lo = inv @ o
+        ld = (inv.to_3x3() @ d).normalized()
+        ok, hit, _n, _i = obj.ray_cast(lo, ld)
+        if not ok:
+            fail(f'design point {px} does not hit "{obj.name}"')
+        return obj.matrix_world @ hit
+
+    def metres(self, px_len, y):
+        """A length of `px_len` design px seen on the plane y = `y`, in metres."""
+        a = self.at_y((self.w / 2, self.h / 2), y)
+        b = self.at_y((self.w / 2 + px_len, self.h / 2), y)
+        return (b - a).length
+
+    def floor(self, px):
+        """The floor point seen at design px (z = FLOOR_Z)."""
+        o, d = self.ray(px)
+        if d.z >= 0:
+            fail(f'design point {px} does not look down at the floor')
+        return o + d * ((FLOOR_Z - o.z) / d.z)
 
 
-def emissive(name, hex_colour, strength, roughness=0.9):
+# --- materials --------------------------------------------------------------------------------------------------
+
+def glow(name, hex_colour, strength, rough=0.9):
     """A flat material whose colour also glows at `strength` (lit, never black)."""
-    m = flat_material(name, hex_colour, roughness=roughness)
-    bsdf = principled(m)
-    bsdf.inputs['Emission Color'].default_value = bsdf.inputs['Base Color'].default_value
-    bsdf.inputs['Emission Strength'].default_value = strength
+    m = flat_material(name, hex_colour, roughness=rough)
+    b = principled(m)
+    b.inputs['Emission Color'].default_value = b.inputs['Base Color'].default_value
+    b.inputs['Emission Strength'].default_value = strength
     return m
 
 
-def link_mesh(name, bm, mat, coll, smooth=False):
+def no_cast(objs):
+    for o in objs:
+        o.visible_shadow = False
+
+
+# --- the cave ---------------------------------------------------------------------------------------------------
+
+def link_bm(name, bm, material, coll, smooth=False):
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
-    me.materials.append(mat)
-    for poly in me.polygons:
-        poly.use_smooth = smooth
+    me.materials.append(material)
+    for p in me.polygons:
+        p.use_smooth = smooth
     o = bpy.data.objects.new(name, me)
     coll.objects.link(o)
     return o
 
 
-# --- the cave mouth --------------------------------------------------------------------------------------
+def build_wall(params, coll):
+    """The back wall: a coarse grid bowed toward the camera at the sides, every inner vertex jittered (seeded)
+    so it reads as cut rock, triangulated (flat facets); local origin on (centre, WALL_Y, FLOOR_Z)."""
+    cx = CAM_LOCATION[0]
+    nx, nz = WALL_STEPS
+    rng = random.Random(WALL_SEED)
+    bm = bmesh.new()
+    rows = []
+    for k in range(nz + 1):
+        z = (WALL_TOP_Z - FLOOR_Z) * k / nz
+        row = []
+        for i in range(nx + 1):
+            x = -WALL_HALF_W + 2 * WALL_HALF_W * i / nx
+            edge = k in (0, nz) or i in (0, nx)
+            d = (0.0, 0.0, 0.0) if edge else tuple(rng.uniform(-a, a) for a in WALL_JITTER)
+            row.append(bm.verts.new((x + d[0], -WALL_BOW * x * x + d[1], z + d[2])))
+        rows.append(row)
+    for k in range(nz):
+        for i in range(nx):
+            bm.faces.new((rows[k][i], rows[k][i + 1], rows[k + 1][i + 1], rows[k + 1][i]))
+    bmesh.ops.triangulate(bm, faces=bm.faces)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    wall = link_bm('CaveWall', bm, glow('cave-inner', params['art']['shadowMatch']['caveInner'], WALL_EMISSION), coll)
+    wall.location = (cx, WALL_Y, FLOOR_Z)
+    no_cast([wall])  # its facets shade by their normals only (no cast patches across the shadows' backdrop)
+    bm = bmesh.new()
+    lo, hi = (-WALL_HALF_W * 2, FLOOR_NEAR_Y - WALL_Y), (WALL_HALF_W * 2, 0.3)
+    bm.faces.new([bm.verts.new((x, y, 0.0)) for x, y in ((lo[0], lo[1]), (hi[0], lo[1]), (hi[0], hi[1]), (lo[0], hi[1]))])
+    floor = link_bm('CaveFloor', bm, glow('cave-floor', params['colours']['caveMouth'], FLOOR_EMISSION), coll)
+    floor.location = (cx, WALL_Y, FLOOR_Z)
+    bpy.context.view_layer.update()
+    return wall, floor
+
 
 def stone(name, centre, radius, seed, mat, coll):
-    """A low-poly rock: an icosphere with every vertex pushed in or out by a seeded jitter, flat shaded."""
+    """A low-poly rock: an icosphere with every vertex pushed in or out by a seeded jitter (the old cave's)."""
     rng = random.Random(seed)
     bm = bmesh.new()
     bmesh.ops.create_icosphere(bm, subdivisions=STONE_SUBDIV, radius=radius)
     for v in bm.verts:
         v.co *= 1.0 + STONE_JITTER * (2.0 * rng.random() - 1.0)
         v.co.y *= STONE_SQUASH_Y
-    o = link_mesh(name, bm, mat, coll)
+    o = link_bm(name, bm, mat, coll)
     o.location = centre
     return o
 
 
-def quad(name, corners, mat, coll):
-    bm = bmesh.new()
-    vs = [bm.verts.new(c) for c in corners]
-    bm.faces.new(vs)
-    return link_mesh(name, bm, mat, coll)
+def build_rocks(screen, params, coll):
+    """The frame rocks and the floor boulders, each placed from its design px."""
+    rock = glow('cave-rock', params['colours']['caveMouth'], ROCK_EMISSION)
+    made = []
+    for i, (u, v, r_px, depth, seed) in enumerate(FRAME_ROCKS):
+        y = WALL_Y - depth
+        made.append(stone(f'CaveRock{i + 1}', screen.at_y((u, v), y), screen.metres(r_px, y), seed, rock, coll))
+    # The frame rocks cast no shadow on the wall (the shadows' backdrop stays even).
+    no_cast(made)
+    for i, (u, v, r_px, seed) in enumerate(FLOOR_ROCKS):
+        p = screen.floor((u, v))
+        r = screen.metres(r_px, p.y)
+        made.append(stone(f'CaveBoulder{i + 1}', (p.x, p.y, p.z + r * 0.55), r, seed, rock, coll))
+    return made
 
 
-def build_cave(params, coll):
-    colours = params['colours']
-    rock = emissive('cave-rock', colours['caveMouth'], ROCK_EMISSION)
-    inner = emissive('cave-inner', params['art']['shadowMatch']['caveInner'], CAVE_INNER_EMISSION)
-    floor = emissive('cave-floor', colours['caveMouth'], ROCK_EMISSION)
-    stones = [stone(f'CaveStone{i + 1}', (CAVE_X + dx, ARCH_Y + dy, z), r, seed, rock, coll) for i, (dx, dy, z, r, seed) in enumerate(ARCH_STONES)]
-    wall = quad('CaveWall', [
-        (CAVE_X - WALL_HALF_W, WALL_Y, GROUND_Z), (CAVE_X + WALL_HALF_W, WALL_Y, GROUND_Z),
-        (CAVE_X + WALL_HALF_W, WALL_Y, WALL_TOP_Z), (CAVE_X - WALL_HALF_W, WALL_Y, WALL_TOP_Z),
-    ], inner, coll)
-    cave_floor = quad('CaveFloor', [
-        (CAVE_X - WALL_HALF_W, FLOOR_FRONT_Y, GROUND_Z + 0.004), (CAVE_X + WALL_HALF_W, FLOOR_FRONT_Y, GROUND_Z + 0.004),
-        (CAVE_X + WALL_HALF_W, WALL_Y, GROUND_Z + 0.004), (CAVE_X - WALL_HALF_W, WALL_Y, GROUND_Z + 0.004),
-    ], floor, coll)
-    return {'stones': stones, 'wall': wall, 'floor': cave_floor}
+def soft_disc(r, z0, z1, round_=0.5):
+    """cute.rounded_profile with its rim rounding capped at 45 % of the height (a thin disc stays a disc)."""
+    return rounded_profile(r, z0, z1, min(round_, 0.45 * (z1 - z0) / r))
 
 
-def build_ledges(params, coll):
-    """The flat rock slabs: a box per ledge, its front face square to the camera's view in XY."""
-    mat = emissive('cave-ledge', params['colours']['caveMouth'], LEDGE_EMISSION)
-    rock = emissive('cave-ledge-rock', params['colours']['caveMouth'], ROCK_EMISSION)
-    cam = Vector(CAM_LOCATION)
-    out = {}
-    w, h, t = LEDGE_SIZE
-    for name, (x, y) in LEDGES.items():
-        bm = bmesh.new()
-        bmesh.ops.create_cube(bm, size=1.0)
-        bmesh.ops.scale(bm, vec=(w, t, h), verts=bm.verts)
-        bmesh.ops.translate(bm, vec=(0.0, 0.0, h / 2), verts=bm.verts)
-        o = link_mesh(f'CaveLedge-{name}', bm, mat, coll)
-        o.location = (x, y, GROUND_Z)
-        # The front face (−y) turned toward the camera.
-        to_cam = Vector((cam.x - x, cam.y - y))
-        o.rotation_euler = (0.0, 0.0, math.atan2(to_cam.y, to_cam.x) + math.pi / 2)
-        bpy.context.view_layer.update()
-        for i, (du, dv, dz, r, seed) in enumerate(LEDGE_STONES):
-            stone(f'CaveLedge-{name}-stone{i + 1}', o.matrix_world @ Vector((du, dv, dz)), r, seed, rock, coll)
-        out[name] = o
+def build_pedestal(screen, art, coll):
+    """The round pedestal: its top centre seen at (REST_PX.x, PEDESTAL_TOP_PX)."""
+    y = CAM_LOCATION[1] + PEDESTAL_DIST
+    top = screen.at_y((REST_PX[0], PEDESTAL_TOP_PX), y)
+    r = screen.metres(PEDESTAL_R_PX, y)
+    h = top.z - FLOOR_Z
+    if h <= 0.05:
+        fail(f'the pedestal top ({top.z:.2f}) is not above the floor')
+    root = add_empty('pedestal-root', (top.x, y, FLOOR_Z), coll)
+    base = lathe('Pedestal', soft_disc(r * 0.86, 0.0, h - r * 0.1, PEDESTAL_ROUND), glow('pedestal', art['pedestal'], 0.12, 0.5), coll, root, seg=PEDESTAL_SEG)
+    rim = lathe('PedestalTop', soft_disc(r, h - r * 0.09, h), glow('pedestal-top', art['pedestalTop'], 0.15, 0.5), coll, root, seg=PEDESTAL_SEG)
+    foot = lathe('PedestalFoot', soft_disc(r * 0.96, 0.0, r * 0.07), glow('pedestal-foot', art['pedestalTop'], 0.12, 0.5), coll, root, seg=PEDESTAL_SEG)
     bpy.context.view_layer.update()
-    return out
+    return {'root': root, 'top': Vector((top.x, y, top.z)), 'objs': [base, rim, foot]}
 
 
-def ledge_point(ledge, across, tier):
-    """A world point on the ledge's front face: `across` from its centre line, at LEDGE_TIERS[tier] above its foot."""
-    w, h, t = LEDGE_SIZE
-    z = LEDGE_TIERS[tier]
-    if abs(across) > w / 2 or not 0.0 <= z <= h:
-        fail(f'shadow spot ({ledge.name}, {across}, {tier}) is off the ledge face')
-    # The front face is the slab's −y; seen from the camera its local +x is screen right.
-    local = Vector((across, -t / 2 - 0.001, z))
-    return ledge.matrix_world @ local
+# --- the items ----------------------------------------------------------------------------------------------------
 
+def import_new(op, **kw):
+    before = set(bpy.data.objects)
+    op(**kw)
+    return [o for o in bpy.data.objects if o not in before]
 
-# --- the triceratops ---------------------------------------------------------------------------------------
 
 def find_action(actions, suffix):
     for a in actions:
-        # A re-import of a file the island already holds names its actions `….001`.
+        # A re-import of a file the scene already holds names its actions `….001`.
         name = a.name.rsplit('.', 1)[0] if a.name.rsplit('.', 1)[-1].isdigit() else a.name
-        if name.endswith(suffix) and '_Attack' not in name and 'Attack' not in name.rsplit('|', 1)[-1]:
+        if name.endswith(suffix) and 'Attack' not in name.rsplit('|', 1)[-1]:
             return a
     warn(f'action "*{suffix}" not found — the pose stays at rest')
     return None
@@ -362,115 +420,15 @@ def capture_pose(scene, arm, action):
     return pose
 
 
-def axis_closest_to(arm, pb, world_dir):
-    """The bone's local axis ('X' or 'Z') closest to `world_dir`."""
-    m = arm.matrix_world.to_3x3() @ pb.bone.matrix_local.to_3x3()
-    x, z = m.col[0].normalized(), m.col[2].normalized()
-    return 'X' if abs(x.dot(world_dir)) >= abs(z.dot(world_dir)) else 'Z'
+def item_rotation(ext, pose):
+    """yaw (the front to its heading), then tilt (the top toward the camera, about world x)."""
+    yaw = math.radians(pose.get('yaw', 0.0) + MODEL_FRONT_DEG.get(ext, 0.0))
+    return Matrix.Rotation(math.radians(pose.get('tilt', 0.0)), 4, 'X') @ Matrix.Rotation(yaw, 4, 'Z')
 
 
-def head_tip_z(arm):
-    bpy.context.view_layer.update()
-    return (arm.matrix_world @ arm.pose.bones['Head'].tail).z
-
-
-def pose_trike(scene, arm, actions, lateral):
-    """Keys 1 (Idle, head offered down), 10 (nod: a further 12° down), 20–21 (head up, tail wag ±)."""
-    idle = find_action(actions, f'{TRIKE_PREFIX}{IDLE_SUFFIX}')
-    base = capture_pose(scene, arm, idle)
-    head = arm.pose.bones.get('Head')
-    tail = arm.pose.bones.get('Tail1')
-    if head is None or tail is None:
-        warn('no Head/Tail1 bone — every frame keeps the idle pose')
-    # The sign of a head pitch that lifts the snout.
-    pitch_sign = 1.0
-    if head is not None:
-        for pb in arm.pose.bones:
-            pb.matrix_basis = base[pb.name]
-        axis = axis_closest_to(arm, head, lateral)
-        z0 = head_tip_z(arm)
-        head.matrix_basis = base['Head'] @ Matrix.Rotation(math.radians(HEAD_HAPPY_DEG), 4, axis)
-        pitch_sign = 1.0 if head_tip_z(arm) >= z0 else -1.0
-    up = Vector((0.0, 0.0, 1.0))
-    plan = [
-        (IDLE_FRAME, -HEAD_OFFER_DEG, 0),
-        (NOD_FRAME, -HEAD_OFFER_DEG - NOD_EXTRA_DEG, 0),
-        (HAPPY_FRAMES[0], -HEAD_OFFER_DEG + HEAD_HAPPY_DEG, 1),
-        (HAPPY_FRAMES[1], -HEAD_OFFER_DEG + HEAD_HAPPY_DEG, -1),
-    ]
-    for frame, pitch, wag in plan:
-        for pb in arm.pose.bones:
-            pb.matrix_basis = base[pb.name]
-        if head is not None:
-            head.matrix_basis = base['Head'] @ Matrix.Rotation(math.radians(pitch * pitch_sign), 4, axis_closest_to(arm, head, lateral))
-        if wag and tail is not None:
-            tail.matrix_basis = base['Tail1'] @ Matrix.Rotation(math.radians(TAIL_YAW_DEG * wag), 4, axis_closest_to(arm, tail, up))
-        for pb in arm.pose.bones:
-            pb.keyframe_insert('location', frame=frame)
-            pb.keyframe_insert('rotation_quaternion' if pb.rotation_mode == 'QUATERNION' else 'rotation_euler', frame=frame)
-            pb.keyframe_insert('scale', frame=frame)
-    key_constant(arm)
-    scene.frame_set(IDLE_FRAME)
-
-
-def import_trike(params, coll):
-    if not os.path.isfile(TRIKE_FILE):
-        fail(f'{TRIKE_FILE} is missing')
-    before_actions = set(bpy.data.actions)
-    new = import_new(bpy.ops.import_scene.fbx, filepath=TRIKE_FILE)
-    actions = [a for a in bpy.data.actions if a not in before_actions]
-    arm = next((o for o in new if o.type == 'ARMATURE'), None)
-    meshes = [o for o in new if o.type == 'MESH']
-    if arm is None or not meshes:
-        fail('Triceratops.fbx has no armature or mesh')
-    for o in new:
-        move_to(o, coll)
-    force_opaque(new)
-    # The importer may leave an action active: the eyes are placed on the rest pose.
-    assign_action(arm, None)
-    for pb in arm.pose.bones:
-        pb.matrix_basis = Matrix.Identity(4)
-    root = add_empty('triceratops-root', (0.0, 0.0, 0.0), coll)
-    arm.parent = root
-    bpy.context.view_layer.update()
-    bones = arm.data.bones
-    if 'Head' not in bones or 'Tail1' not in bones:
-        fail('Triceratops.fbx: no Head / Tail1 bone')
-    hv = arm.matrix_world @ bones['Head'].head_local
-    tv = arm.matrix_world @ bones['Tail1'].head_local
-    own = math.atan2(hv.y - tv.y, hv.x - tv.x)
-    root.rotation_euler = (0.0, 0.0, math.radians(TRIKE_FACING_DEG) - own)
-    bpy.context.view_layer.update()
-    forward = Vector((math.cos(math.radians(TRIKE_FACING_DEG)), math.sin(math.radians(TRIKE_FACING_DEG)), 0.0))
-    lateral = forward.cross(Vector((0.0, 0.0, 1.0))).normalized()
-    colours = {'colours': params['colours'], 'dino': params['art']['dino']}
-    dressed = dress_dino(arm, meshes, TRIKE_SPECIES, colours, forward, lateral, coll, TRIKE_FRAMES, None, warn)
-    pose_trike(bpy.context.scene, arm, actions, lateral)
-    return {'root': root, 'arm': arm, 'meshes': meshes, 'visible_eyes': dressed['visible_eyes'], 'forward': forward}
-
-
-def fit(screen, root, objs, size_px, spot, frame):
-    """Scales `root` so the objects' projected longest side at `frame` is size_px (design px), stands
-    them on the ground and moves their ground pivot (XY bbox centre) onto `spot`."""
-    scene = bpy.context.scene
-    for _ in range(FIT_PASSES):
-        scene.frame_set(frame)
-        bpy.context.view_layer.update()
-        pts = eval_world_verts(objs, bpy.context.evaluated_depsgraph_get())
-        x0, y0, x1, y1 = screen.rect(pts)
-        k = size_px / max(x1 - x0, y1 - y0)
-        root.scale = root.scale * k
-        bpy.context.view_layer.update()
-        pts = eval_world_verts(objs, bpy.context.evaluated_depsgraph_get())
-        (bx0, bx1), (by0, by1), (bz0, _bz1) = bounds(pts)
-        root.location += Vector((spot[0] - (bx0 + bx1) / 2, spot[1] - (by0 + by1) / 2, GROUND_Z - bz0))
-    bpy.context.view_layer.update()
-
-
-# --- the items ------------------------------------------------------------------------------------------------
-
-def import_item(item_id, coll):
-    path, yaw, action_suffix = ITEM_MODELS[item_id]
+def build_item(item_id, coll):
+    """The item's model under a root empty at the origin, posed by its ITEM_MODELS row. Returns (root, meshes)."""
+    path, pose, action_suffix = ITEM_MODELS[item_id]
     full = os.path.join(ASSETS, path)
     if not os.path.isfile(full):
         fail(f'item "{item_id}": {full} is missing')
@@ -493,23 +451,45 @@ def import_item(item_id, coll):
     arm = next((o for o in new if o.type == 'ARMATURE'), None)
     if arm is not None:
         action = find_action(actions, action_suffix) if action_suffix else None
-        pose = capture_pose(bpy.context.scene, arm, action)
+        pose_bones = capture_pose(bpy.context.scene, arm, action)
         assign_action(arm, None)
         for pb in arm.pose.bones:
-            pb.matrix_basis = pose[pb.name]
+            pb.matrix_basis = pose_bones[pb.name]
             pb.keyframe_insert('location', frame=IDLE_FRAME)
             pb.keyframe_insert('rotation_quaternion' if pb.rotation_mode == 'QUATERNION' else 'rotation_euler', frame=IDLE_FRAME)
             pb.keyframe_insert('scale', frame=IDLE_FRAME)
         key_constant(arm)
-    root.rotation_euler = (0.0, 0.0, math.radians(yaw + MODEL_FRONT_DEG.get(ext, 0.0)))
+    root.rotation_mode = 'QUATERNION'
+    root.rotation_quaternion = item_rotation(ext, pose).to_quaternion()
     bpy.context.view_layer.update()
-    return {'root': root, 'objs': [o for o in new if o.type == 'MESH']}
+    return root, [o for o in new if o.type == 'MESH']
 
+
+def fit(screen, root, objs, size_px, stand):
+    """Scales `root` so the objects' projected longest side is size_px (design px) and stands them with their
+    XY bbox centre on `stand` (their lowest point at stand.z)."""
+    scene = bpy.context.scene
+    for _ in range(FIT_PASSES):
+        scene.frame_set(IDLE_FRAME)
+        bpy.context.view_layer.update()
+        pts = eval_world_verts(objs, bpy.context.evaluated_depsgraph_get())
+        x0, y0, x1, y1 = screen.rect(pts)
+        root.scale = root.scale * (size_px / max(x1 - x0, y1 - y0))
+        bpy.context.view_layer.update()
+        pts = eval_world_verts(objs, bpy.context.evaluated_depsgraph_get())
+        bx = (min(p.x for p in pts) + max(p.x for p in pts)) / 2
+        by = (min(p.y for p in pts) + max(p.y for p in pts)) / 2
+        root.location += Vector((stand.x - bx, stand.y - by, stand.z - min(p.z for p in pts)))
+    bpy.context.view_layer.update()
+
+
+# --- main -----------------------------------------------------------------------------------------------------------
 
 def main():
     args = parse_args('build_shadow_match', required=('out', 'params', 'items'))
     params = args['params']
     content = params['shadowMatch']
+    art = params['art']['shadowMatch']
     items = [i for i in args['items'].split(',') if i]
     if not items:
         fail('--items is empty')
@@ -526,7 +506,7 @@ def main():
 
     prune()
     make_camera(scene)
-    bpy.context.view_layer.update()
+    light_from_front()
     screen = Screen(scene, params)
 
     plate = bpy.data.collections.new('cave')
@@ -537,15 +517,9 @@ def main():
     scene.collection.children.link(layout)
     layout.hide_render = True
 
-    cave = build_cave(params, plate)
-    ledges = build_ledges(params, plate)
-
-    tcoll = bpy.data.collections.new(f'sprite.{TRIKE_SPECIES}')
-    sprites.children.link(tcoll)
-    tcoll['states'] = json.dumps(TRIKE_STATES, separators=(',', ':'))
-    tcoll['movable'] = 1
-    trike = import_trike(params, tcoll)
-    fit(screen, trike['root'], trike['meshes'] + trike['visible_eyes'], content['trikeSizePx'], TRIKE_SPOT, IDLE_FRAME)
+    wall, _floor = build_wall(params, plate)
+    build_rocks(screen, params, plate)
+    pedestal = build_pedestal(screen, art, plate)
 
     built = {}
     for i in items:
@@ -554,58 +528,49 @@ def main():
         coll['states'] = json.dumps({'color': [IDLE_FRAME]}, separators=(',', ':'))
         coll['movable'] = 1
         coll['silhouette'] = 1
-        it = import_item(i, coll)
-        fit(screen, it['root'], it['objs'], content['itemPx'], ITEM_STAGE, IDLE_FRAME)
-        built[i] = it
+        root, objs = build_item(i, coll)
+        fit(screen, root, objs, content['itemPx'], pedestal['top'])
+        built[i] = objs
 
-    bpy.context.view_layer.update()
-    scene.frame_set(IDLE_FRAME)
+    rest = screen.at_y(REST_PX, pedestal['top'].y)
+    add_empty('anchor.item-rest', tuple(rest), layout)
+    # The pedestal top's centre (every held item stands on it) and its tap area (Story 5.4 reaction).
+    add_empty('anchor.pedestal-top', tuple(pedestal['top']), layout)
     dg = bpy.context.evaluated_depsgraph_get()
-    pts = eval_world_verts(trike['meshes'] + trike['visible_eyes'], dg)
-    (x0, x1), (y0, y1), (z0, _z1) = bounds(pts)
-    pivot = Vector(((x0 + x1) / 2, (y0 + y1) / 2, z0))
-    add_empty('anchor.triceratops', pivot, layout)
-    hand = pivot + trike['forward'] * HAND_AHEAD_M
-    add_empty('anchor.triceratops-hand', (hand.x, hand.y, GROUND_Z), layout)
+    hull_object('hit.pedestal', [tuple(p) for p in eval_world_verts(pedestal['objs'], dg)], layout)
     for n in counts:
-        for k, (ledge, across, tier) in enumerate(SHADOW_SPOTS[n]):
-            add_empty(f'slot.shadow-{n}-{k + 1}', ledge_point(ledges[ledge], across, tier), layout)
-    # hit.cave: the opening on the inner wall (the bright area seen through the mouth).
-    quad('hit.cave', [
-        (CAVE_X - HIT_HALF_W, WALL_Y - 0.002, GROUND_Z), (CAVE_X + HIT_HALF_W, WALL_Y - 0.002, GROUND_Z),
-        (CAVE_X + HIT_HALF_W, WALL_Y - 0.002, HIT_TOP_Z), (CAVE_X - HIT_HALF_W, WALL_Y - 0.002, HIT_TOP_Z),
-    ], cave['wall'].data.materials[0], layout)
+        for k, px in enumerate(SHADOW_SPOTS[n]):
+            p = screen.on(wall, px)
+            add_empty(f'slot.shadow-{n}-{k + 1}', (p.x, p.y - 0.002, p.z), layout)
+    bm = bmesh.new()
+    bm.faces.new([bm.verts.new(screen.on(wall, px) - Vector((0.0, 0.003, 0.0))) for px in CAVE_HIT_PX])
+    hit = bpy.data.meshes.new('hit.cave')
+    bm.to_mesh(hit)
+    bm.free()
+    layout.objects.link(bpy.data.objects.new('hit.cave', hit))
 
-    report(screen, trike, built, ledges, counts, params)
+    report(screen, built, pedestal, counts)
     scene.frame_set(IDLE_FRAME)
-    soften_scene(bpy.context.scene)  # the soft toy look (cute.py), last so every builder-made mesh gets it
+    soften_scene(bpy.context.scene)  # the soft shading (cute.py), last so every builder-made mesh gets it
     bpy.ops.wm.save_as_mainfile(filepath=args['out'], compress=True)
     print(f'build_shadow_match: saved {args["out"]}')
 
 
-def report(screen, trike, built, ledges, counts, params):
+def report(screen, built, pedestal, counts):
     """Diagnostics in design px (the rules themselves run in TypeScript on the render)."""
-    scene = bpy.context.scene
     fmt = lambda r: f'({r[0]:.0f},{r[1]:.0f})-({r[2]:.0f},{r[3]:.0f}) {r[2] - r[0]:.0f}×{r[3] - r[1]:.0f}'  # noqa: E731
-    for f in TRIKE_FRAMES:
-        scene.frame_set(f)
-        pts = eval_world_verts(trike['meshes'] + trike['visible_eyes'], bpy.context.evaluated_depsgraph_get())
-        print(f'build_shadow_match: triceratops frame {f} {fmt(screen.rect(pts))}')
-    scene.frame_set(IDLE_FRAME)
     dg = bpy.context.evaluated_depsgraph_get()
-    a = screen.project(bpy.data.objects['anchor.triceratops'].location)
-    h = screen.project(bpy.data.objects['anchor.triceratops-hand'].location)
-    print(f'build_shadow_match: anchor {a[0]:.0f},{a[1]:.0f} hand {h[0]:.0f},{h[1]:.0f}')
-    for i, it in built.items():
-        print(f'build_shadow_match: item-{i} {fmt(screen.rect(eval_world_verts(it["objs"], dg)))}')
-    for name, o in ledges.items():
-        print(f'build_shadow_match: ledge {name} {fmt(screen.rect([o.matrix_world @ v.co for v in o.data.vertices]))}')
+    h = screen.project(bpy.data.objects['anchor.item-rest'].location)
+    print(f'build_shadow_match: rest {h[0]:.0f},{h[1]:.0f}')
+    print(f'build_shadow_match: pedestal {fmt(screen.rect(eval_world_verts(pedestal["objs"], dg)))}')
+    seam = screen.project((CAM_LOCATION[0], WALL_Y, FLOOR_Z))
+    print(f'build_shadow_match: wall/floor seam at y {seam[1]:.0f}')
+    for i, objs in built.items():
+        print(f'build_shadow_match: item-{i} {fmt(screen.rect(eval_world_verts(objs, dg)))}')
     for n in counts:
         for k in range(n):
             s = screen.project(bpy.data.objects[f'slot.shadow-{n}-{k + 1}'].location)
-            print(f'build_shadow_match: slot shadow-{n}-{k + 1} {s[0]:.0f},{s[1]:.0f} ({math.dist(s, h):.0f} px from the hand)')
-    cave = bpy.data.objects['hit.cave']
-    print(f'build_shadow_match: cave {fmt(screen.rect([cave.matrix_world @ v.co for v in cave.data.vertices]))}')
+            print(f'build_shadow_match: slot shadow-{n}-{k + 1} {s[0]:.0f},{s[1]:.0f} ({math.dist(s, h):.0f} px from the pedestal)')
 
 
 main()

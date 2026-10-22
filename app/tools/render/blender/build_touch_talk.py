@@ -38,7 +38,10 @@ from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cute import import_joined, soften_scene, tt_model  # noqa: E402
+from cute import (  # noqa: E402
+    EYE_GLOSS, blob, build_bus, build_tractor, build_truck, chibi_face, ellipsoid_point, import_joined, lathe, lathe_bm, mat, mesh_obj,
+    on_body, place, rbox, rod, rounded_profile, soften_scene, torus, tt_model,
+)
 from common import add_empty, eval_world_verts, flat_material, hex_to_linear, hull_object, key_constant, move_to, parse_args, principled  # noqa: E402
 
 RENDER_SIZE = (2048, 1536)
@@ -72,8 +75,6 @@ IDLE_FRAME = 1
 REACT_FRAME = 10
 STATES = {'idle': [IDLE_FRAME], 'react': [REACT_FRAME]}
 FIT_PASSES = 5
-GLOSS = 0.38  # the props' toy-plastic roughness
-EYE_GLOSS = 0.2
 
 # propId → (kind, builder, world anchor (x, y, z), placement, yaw°, target longest side (design px)).
 # placement: 'ground' = its lowest point on z; 'centre' = its centre at (x, y, z).
@@ -92,10 +93,11 @@ SEA_PROPS = {
     'starfish': ('script', 'starfish', (6.82, 5.28, SAND_Z), 'ground', 10.0, 110),
     'shell': ('script', 'shell', (7.4, 5.25, SAND_Z), 'ground', 15.0, 105),
 }
-# 2026-10-21 (six scenes, two bubble columns): sea props moved left by this many design px from their
-# anchor (the anchor is re-unprojected on its own height): the seagull flies over the parasol, the boat
-# sails where the seagull was, and the bucket and the front row close up, all clear of the bubbles.
-SEA_SHIFT_PX = {'seagull': -436.0, 'boat': -185.0, 'bucket': -40.0, 'coconut': -12.0, 'crab': -6.0, 'starfish': -24.0, 'shell': -31.0}
+# 2026-10-21 (six scenes, two bubble columns): sea props moved across the screen by this many design px
+# from their anchor (positive moves right, negative left; the anchor is re-unprojected on its own height):
+# the boat sails where the seagull was, the seagull flies right of it under the Speaker, and the bucket and the front row close up,
+# all clear of the Home/Speaker zones and the bubbles.
+SEA_SHIFT_PX = {'seagull': 222.0, 'boat': -215.0, 'bucket': -40.0, 'coconut': -12.0, 'crab': -6.0, 'starfish': -24.0, 'shell': -31.0}
 # Recolours of imported models: propId → colour token for every material (the texture link is dropped).
 RECOLOUR = {'pot': 'creatureBlue', 'frying-pan': 'tire'}
 # The react pose (frame 10): (rotation about x, y, z in degrees, scale (x, y, z)); sub-part rotations below.
@@ -114,8 +116,8 @@ REACT_POSE = {
 FISH_LEAP_DEG = 30.0  # the fish leaps nose-up out of the shallows
 CRAB_CLAW_DEG = 30.0
 GULL_WING_DEG = 35.0
-STAR_TURN_DEG = 15.0
-FLY_WING_DEG = 30.0  # the butterfly's wings fold forward about its body (z)  # about the leaning star's own axis (its body's local z)
+STAR_TURN_DEG = 15.0  # about the leaning star's own axis (its body's local z)
+FLY_WING_DEG = 30.0  # the butterfly's wings fold forward about its body (z)
 BALL_SECTOR_DEG = 60.0  # beach-ball stripes: face material = floor(azimuth / 60°) % 3
 PARASOL_SECTORS = 8
 
@@ -166,17 +168,6 @@ class Screen:
 
 
 # --- materials ----------------------------------------------------------------------------------------------
-
-_MATS = {}
-
-
-def mat(hex_colour, rough=GLOSS):
-    """A shared plain material per (colour, roughness)."""
-    key = (hex_colour.upper(), round(rough, 3))
-    if key not in _MATS:
-        _MATS[key] = flat_material(f'tt-{hex_colour.lstrip("#").lower()}-{int(rough * 100)}', hex_colour, rough)
-    return _MATS[key]
-
 
 def _socket(sockets, identifier):
     return next(s for s in sockets if s.identifier == identifier)
@@ -302,188 +293,6 @@ def recolour(pid, objs, colours):
         for link in list(b.inputs['Base Color'].links):
             m.node_tree.links.remove(link)
         b.inputs['Base Color'].default_value = hex_to_linear(colours[token])
-
-
-# --- soft shapes (every shape's scale is baked into its mesh, so children are never skewed) -----------------
-
-def mesh_obj(name, bm, material, coll, smooth=True):
-    me = bpy.data.meshes.new(name)
-    bm.to_mesh(me)
-    bm.free()
-    for m in (material if isinstance(material, list) else [material]):
-        me.materials.append(m)
-    for poly in me.polygons:
-        poly.use_smooth = smooth
-    o = bpy.data.objects.new(name, me)
-    coll.objects.link(o)
-    return o
-
-
-def place(o, parent, loc=(0.0, 0.0, 0.0), rot=(0.0, 0.0, 0.0)):
-    o.parent = parent
-    o.location = loc
-    o.rotation_euler = tuple(math.radians(a) for a in rot)
-    return o
-
-
-def blob(name, material, coll, parent, loc=(0.0, 0.0, 0.0), size=(1.0, 1.0, 1.0), rot=(0.0, 0.0, 0.0), seg=(40, 20), shape=None):
-    """A smooth ellipsoid (radii `size`), optionally deformed by `shape(unit direction) → point`."""
-    bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=seg[0], v_segments=seg[1], radius=1.0)
-    for v in bm.verts:
-        d = v.co.normalized()
-        p = shape(d) if shape else d
-        v.co = Vector((p.x * size[0], p.y * size[1], p.z * size[2]))
-    return place(mesh_obj(name, bm, material, coll), parent, loc, rot)
-
-
-def lathe_bm(profile, seg=40):
-    """A surface of revolution about z from a (radius, z) profile (radius 0 closes an end)."""
-    bm = bmesh.new()
-    rings = []
-    for r, z in profile:
-        if r < 1e-6:
-            rings.append([bm.verts.new((0.0, 0.0, z))])
-        else:
-            rings.append([bm.verts.new((r * math.cos(2 * math.pi * j / seg), r * math.sin(2 * math.pi * j / seg), z)) for j in range(seg)])
-    for a, b in zip(rings, rings[1:]):
-        if len(a) == 1 and len(b) == 1:
-            continue
-        for j in range(seg):
-            k = (j + 1) % seg
-            if len(a) == 1:
-                bm.faces.new((a[0], b[k], b[j]))
-            elif len(b) == 1:
-                bm.faces.new((a[j], a[k], b[0]))
-            else:
-                bm.faces.new((a[j], a[k], b[k], b[j]))
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return bm
-
-
-def lathe(name, profile, material, coll, parent, loc=(0.0, 0.0, 0.0), rot=(0.0, 0.0, 0.0), seg=40):
-    return place(mesh_obj(name, lathe_bm(profile, seg), material, coll), parent, loc, rot)
-
-
-def rounded_profile(r, z0, z1, round_=0.3, steps=6):
-    """A capped cylinder's profile with rounded rims (radius r, from z0 to z1, rims of round_ × r)."""
-    c = round_ * r
-    out = [(0.0, z0)]
-    for i in range(steps + 1):
-        t = math.pi / 2 * i / steps
-        out.append((r - c + c * math.sin(t), z0 + c - c * math.cos(t)))
-    for i in range(steps + 1):
-        t = math.pi / 2 * i / steps
-        out.append((r - c + c * math.cos(t), z1 - c + c * math.sin(t)))
-    out.append((0.0, z1))
-    return out
-
-
-def capsule_profile(r, length, steps=8):
-    out = [(r * math.sin(math.pi / 2 * i / steps), r - r * math.cos(math.pi / 2 * i / steps)) for i in range(steps + 1)]
-    out += [(r * math.cos(math.pi / 2 * i / steps), length - r + r * math.sin(math.pi / 2 * i / steps)) for i in range(steps + 1)]
-    return out
-
-
-def rod(name, a, b, r, material, coll, parent, seg=16):
-    """A capsule from a to b (parent space)."""
-    a, b = Vector(a), Vector(b)
-    o = mesh_obj(name, lathe_bm(capsule_profile(r, max((b - a).length, 2 * r + 1e-4)), seg), material, coll)
-    o.parent = parent
-    o.location = a
-    o.rotation_mode = 'QUATERNION'
-    o.rotation_quaternion = (b - a).to_track_quat('Z', 'Y')
-    return o
-
-
-def rbox(name, size, radius, material, coll, parent, loc=(0.0, 0.0, 0.0), rot=(0.0, 0.0, 0.0), seg=4):
-    """A box with rounded edges and corners."""
-    bm = bmesh.new()
-    bmesh.ops.create_cube(bm, size=1.0)
-    bmesh.ops.scale(bm, vec=size, verts=bm.verts)
-    r = min(radius, min(size) / 2 * 0.98)
-    bmesh.ops.bevel(bm, geom=list(bm.verts) + list(bm.edges), offset=r, segments=seg, profile=0.5, affect='EDGES', clamp_overlap=True)
-    return place(mesh_obj(name, bm, material, coll), parent, loc, rot)
-
-
-def torus_bm(major, minor, arc=(0.0, 360.0), seg=40, tube=14):
-    closed = arc[1] - arc[0] >= 360.0
-    n = seg if closed else seg + 1
-    bm = bmesh.new()
-    grid = []
-    for i in range(n):
-        a = math.radians(arc[0] + (arc[1] - arc[0]) * i / seg)
-        ring = []
-        for k in range(tube):
-            b = 2 * math.pi * k / tube
-            ring.append(bm.verts.new(((major + minor * math.cos(b)) * math.cos(a), (major + minor * math.cos(b)) * math.sin(a), minor * math.sin(b))))
-        grid.append(ring)
-    for i in range(seg if closed else seg):
-        i2 = (i + 1) % n
-        for k in range(tube):
-            k2 = (k + 1) % tube
-            bm.faces.new((grid[i][k], grid[i2][k], grid[i2][k2], grid[i][k2]))
-    if not closed:
-        bm.faces.new(list(reversed(grid[0])))
-        bm.faces.new(grid[-1])
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    return bm
-
-
-def torus(name, major, minor, material, coll, parent, loc=(0.0, 0.0, 0.0), rot=(0.0, 0.0, 0.0), arc=(0.0, 360.0)):
-    return place(mesh_obj(name, torus_bm(major, minor, arc), material, coll), parent, loc, rot)
-
-
-def ellipsoid_point(radii, direction):
-    """The point of an ellipsoid (centred at the origin) along `direction` and its outward normal."""
-    d = Vector(direction).normalized()
-    t = 1.0 / math.sqrt(sum((d[i] / radii[i]) ** 2 for i in range(3)))
-    p = d * t
-    n = Vector(tuple(p[i] / radii[i] ** 2 for i in range(3))).normalized()
-    return p, n
-
-
-def chibi_face(prefix, parent, coll, c, eyes, size, cheeks=(), smile=None):
-    """Big glossy ink eyes with a white shine (Tiệm kem style), pink cheeks and a small smile. `eyes`,
-    `cheeks`: [(point, outward normal)] in the parent's space; `smile`: (point, normal, width)."""
-    ink = mat(c['iconInk'], EYE_GLOSS)
-    shine = mat(c['white'], EYE_GLOSS)
-    blush = mat(c['tintPink'], 0.6)
-    for i, (p, n) in enumerate(eyes):
-        q = Vector(n).to_track_quat('Z', 'Y')
-        e = blob(f'{prefix}-eye-{i}', ink, coll, parent, size=(0.78 * size, size, 0.45 * size), seg=(24, 12))
-        e.rotation_mode = 'QUATERNION'
-        e.rotation_quaternion = q
-        e.location = Vector(p) + Vector(n) * 0.12 * size
-        right = q @ Vector((1.0, 0.0, 0.0))
-        s = blob(f'{prefix}-shine-{i}', shine, coll, parent, size=(0.26 * size, 0.3 * size, 0.12 * size), seg=(16, 8))
-        s.rotation_mode = 'QUATERNION'
-        s.rotation_quaternion = q
-        s.location = e.location + Vector(n) * 0.4 * size + (q @ Vector((0.0, 1.0, 0.0))) * 0.42 * size - right * 0.25 * size
-    for i, (p, n) in enumerate(cheeks):
-        k = blob(f'{prefix}-cheek-{i}', blush, coll, parent, size=(0.55 * size, 0.38 * size, 0.14 * size), seg=(16, 8))
-        k.rotation_mode = 'QUATERNION'
-        k.rotation_quaternion = Vector(n).to_track_quat('Z', 'Y')
-        k.location = Vector(p) + Vector(n) * 0.05 * size
-    if smile is not None:
-        p, n, w = smile
-        m = mesh_obj(f'{prefix}-smile', torus_bm(w / 2, w * 0.09, (200.0, 340.0), seg=16, tube=8), ink, coll)
-        m.parent = parent
-        m.rotation_mode = 'QUATERNION'
-        m.rotation_quaternion = Vector(n).to_track_quat('Z', 'Y')
-        m.location = Vector(p) + Vector(n) * 0.04 * w + (m.rotation_quaternion @ Vector((0.0, 1.0, 0.0))) * (w * 0.35)
-
-
-def on_body(radii, centre, direction):
-    p, n = ellipsoid_point(radii, direction)
-    return Vector(centre) + p, n
-
-
-def wheel(name, at, radius, c, coll, parent, hub_hex=None):
-    """A toy wheel: a fat tyre and a domed hub, its axle along x."""
-    torus(f'{name}-tyre', radius * 0.68, radius * 0.32, mat(c['tire'], 0.55), coll, parent, at, (0.0, 90.0, 0.0))
-    side = 1 if at[0] >= 0 else -1
-    blob(f'{name}-hub', mat(hub_hex or c['hub'], GLOSS), coll, parent, (at[0] + side * radius * 0.12, at[1], at[2]), (radius * 0.22, radius * 0.42, radius * 0.42))
 
 
 # --- script-built props: the sea ------------------------------------------------------------------------------
@@ -702,54 +511,7 @@ def build_coconut(root, coll, c):
 # --- script-built props: the street ---------------------------------------------------------------------------
 # Vehicles: length along y, front at -y, axles along x.
 
-def build_bus(root, coll, c):
-    yellow = mat(c['bus'])
-    glass = mat(c['glass'], 0.2)
-    rbox('bus-body', (1.15, 2.7, 1.15), 0.26, yellow, coll, root, (0.0, 0.0, 0.88))
-    rbox('bus-windows', (1.19, 2.2, 0.4), 0.12, glass, coll, root, (0.0, 0.12, 1.1))
-    for k in range(4):
-        rbox(f'bus-pillar-{k}', (1.21, 0.08, 0.44), 0.03, yellow, coll, root, (0.0, -0.75 + 0.55 * k + 0.12, 1.1))
-    rbox('bus-windshield', (0.92, 0.1, 0.48), 0.12, glass, coll, root, (0.0, -1.32, 1.1))
-    rbox('bus-roof', (0.95, 2.3, 0.1), 0.05, mat(c['white']), coll, root, (0.0, 0.0, 1.47))
-    rbox('bus-stripe', (1.18, 2.72, 0.1), 0.05, mat(c['creatureOrange']), coll, root, (0.0, 0.0, 0.66))
-    rbox('bus-bumper', (1.05, 0.14, 0.14), 0.06, mat(c['hub']), coll, root, (0.0, -1.36, 0.42))
-    for s in (-1, 1):
-        blob(f'bus-light-{s}', mat(c['tintButter'], 0.2), coll, root, (s * 0.38, -1.36, 0.62), (0.11, 0.05, 0.11))
-        for y in (-0.82, 0.82):
-            wheel(f'bus-wheel-{s}-{y}', (s * 0.54, y, 0.34), 0.36, c, coll, root)
-
-
-def build_truck(root, coll, c):
-    blue = mat(c['creatureBlue'])
-    rbox('truck-chassis', (1.0, 2.6, 0.3), 0.1, mat(c['tire'], 0.6), coll, root, (0.0, 0.1, 0.45))
-    cab = rbox('truck-cab', (1.1, 0.95, 1.05), 0.26, blue, coll, root, (0.0, -0.75, 1.05))
-    rbox('truck-windshield', (0.88, 0.1, 0.42), 0.12, mat(c['glass'], 0.2), coll, cab, (0.0, -0.47, 0.18))
-    rbox('truck-side-window', (1.14, 0.5, 0.38), 0.1, mat(c['glass'], 0.2), coll, cab, (0.0, 0.05, 0.2))
-    rbox('truck-box', (1.2, 1.7, 1.3), 0.2, mat(c['creatureOrange']), coll, root, (0.0, 0.55, 1.25))
-    rbox('truck-box-band', (1.24, 1.74, 0.14), 0.06, mat(c['white']), coll, root, (0.0, 0.55, 1.25))
-    rbox('truck-bumper', (1.0, 0.14, 0.14), 0.06, mat(c['hub']), coll, root, (0.0, -1.24, 0.55))
-    for s in (-1, 1):
-        blob(f'truck-light-{s}', mat(c['tintButter'], 0.2), coll, root, (s * 0.36, -1.24, 0.78), (0.1, 0.05, 0.1))
-        for y in (-0.75, 0.85):
-            wheel(f'truck-wheel-{s}-{y}', (s * 0.54, y, 0.36), 0.38, c, coll, root)
-
-
-def build_tractor(root, coll, c):
-    green = mat(c['creatureGreen'])
-    rbox('tractor-hood', (0.72, 1.25, 0.62), 0.22, green, coll, root, (0.0, -0.45, 0.82))
-    rbox('tractor-grill', (0.5, 0.08, 0.34), 0.08, mat(c['hub']), coll, root, (0.0, -1.08, 0.8))
-    rbox('tractor-seat-base', (0.9, 0.9, 0.5), 0.18, green, coll, root, (0.0, 0.45, 0.75))
-    roof_z = 2.05
-    rbox('tractor-roof', (1.15, 1.1, 0.12), 0.06, mat(c['white']), coll, root, (0.0, 0.45, roof_z))
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            rod(f'tractor-post-{sx}-{sy}', (sx * 0.45, 0.45 + sy * 0.4, 0.95), (sx * 0.45, 0.45 + sy * 0.4, roof_z), 0.045, mat(c['white']), coll, root)
-    rod('tractor-exhaust', (0.18, -0.6, 1.0), (0.18, -0.6, 1.55), 0.06, mat(c['tire'], 0.5), coll, root)
-    blob('tractor-light', mat(c['tintButter'], 0.2), coll, root, (0.0, -1.1, 1.02), (0.1, 0.05, 0.1))
-    hub = c['tintButter']
-    for s in (-1, 1):
-        wheel(f'tractor-big-{s}', (s * 0.62, 0.5, 0.58), 0.6, c, coll, root, hub)
-        wheel(f'tractor-small-{s}', (s * 0.5, -0.8, 0.34), 0.34, c, coll, root, hub)
+# The bus, truck and tractor are shared with Hang tìm bóng (cute.py).
 
 
 def build_cone(root, coll, c):
@@ -1146,7 +908,7 @@ def shifted(scene, screen, spec, dx):
 # Each is a copy of the `sea` scene's settings (render size, engine, colour management, world) with its
 # own geometry, camera and props, built while it is the window's active scene. Their props are fitted
 # into PROP_BOXES (design px: x0, y0, x1, y1), a grid whose boxes are 72 px apart (24 px pad each side +
-# the 24 px gap) and clear of the edges, the Home/Speaker zones and the bubble column; each prop stands
+# the 24 px gap) and clear of the edges, the Home/Speaker zones and the two-column bubble area; each prop stands
 # on its row's surface (PLATE_ROW_Z) at its box's bottom centre.
 # 2026-10-21 (six scenes): the bubbles take two columns, so every box ends by x = 746 (its padded hull
 # stays left of the wider bubble keep-out, x ≥ 780); boxes are ≥ 80 px apart.
@@ -1157,7 +919,7 @@ PROP_BOXES = [
 ]
 # Props turned towards the camera (degrees about x, then about y: a lean) before the yaw. A positive x
 # tilt turns a flat prop's top towards the camera (the cookie, the donut, the waffle, the frisbee).
-PROP_TILT = {'spoon': (0.0, -28.0), 'cookie': (62.0, 0.0), 'donut': (50.0, 0.0), 'waffle': (55.0, 0.0), 'frisbee': (60.0, 0.0), 'towel': (25.0, 0.0)}
+PROP_TILT = {'spoon': (0.0, -28.0), 'cookie': (62.0, 0.0), 'donut': (50.0, 0.0), 'waffle': (55.0, 0.0), 'frisbee': (35.0, 0.0), 'toothbrush': (30.0, 0.0)}
 # Thin props are made chunkier across (x, y) so their tap hull stays wide enough (toddler-style proportions);
 # a tuple is (x, y, z) in the model's own axes.
 PROP_STRETCH = {'traffic-light': 1.8, 'spoon': 1.5, 'toothbrush': (2.0, 1.0, 2.4)}
@@ -1452,11 +1214,12 @@ BAKERY_ROW_Z = (1.7, 0.9, 0.0)  # back row on a wall shelf, middle row on the co
 PICNIC_ROW_Z = (0.0, 0.0, 0.0)  # everything on the grass
 ROOM_SCALE = 0.9  # Tiny Treats modules (2 m wide, 4 m walls) at this scale, as the kitchen
 BATH_PLANT_SCREEN_X = [263.0, 538.0]  # design px: potted plants by the wall in the middle row's gaps
-BATH_MAT_SCALE = (3.4, 1.6)
+BATH_MAT_SCALE = (2.8, 1.3)
+BATH_MAT_HAZE = (0.18, 0.8)
 BAKERY_FLOOR_Z = -0.6  # the shop floor: the display table's top is at 0, the counter's at 0.9
 BAKERY_TABLE_SCREEN_Y = (478.0, 700.0)  # design y of the display table's back and front edges (z 0)
 BAKERY_TABLE_HALF = 14.0
-AWNING_Z = (2.75, 3.45)  # the striped awning band across the top of the back wall
+AWNING_Z = (3.05, 3.7)  # the striped awning band across the top of the back wall
 AWNING_STRIPES = 24
 PICNIC_BLANKET_SCALE = (1.0, 0.75)
 PICNIC_BLANKET_SCREEN = (398.0, 545.0)  # design px of the blanket's centre (z 0)
@@ -1575,7 +1338,7 @@ def build_bathroom(sea, params):
     haze(objs, art['haze'], *KITCHEN_HAZE)
     front = unproject(scene, (PROP_BOXES[6][0] + PROP_BOXES[9][2]) / 2, (PROP_BOXES[6][1] + PROP_BOXES[6][3]) / 2, 0.0)
     rug = kit.put('mat', 'Bubbly-Bathroom', 'bathroom-mat', (front.x, front.y + 0.5, 0.002), (BATH_MAT_SCALE[0], BATH_MAT_SCALE[1], 1.0))
-    haze([rug], art['haze'], *KITCHEN_HAZE)
+    haze([rug], art['haze'], *BATH_MAT_HAZE)
     room_light(scene, unproject(scene, RENDER_DESIGN[0] / 2, PROP_BOXES[3][3], 0.0).y)
     box_props(scene, params, sprites, layout, BATHROOM_PROPS, BATHROOM_ROW_Z)
 
@@ -1609,11 +1372,11 @@ def build_bakery(sea, params):
         x = -half * m + k * w
         rbox(f'bakery-awning-{k}', (w, 0.3, z1 - z0), 0.04, stripe[k % 2], plate, None, (x, wall_y - 0.45, (z0 + z1) / 2))
         blob(f'bakery-scallop-{k}', stripe[k % 2], plate, None, (x, wall_y - 0.45, z0), (w / 2, 0.15, w / 2.6), seg=(24, 12))
-    # The display table for the front row: a pink cloth with a white scalloped trim on a white table, top at z 0.
+    # The display table for the front row: a pink cloth with a white scalloped trim on a pink table, top at z 0.
     yb = unproject(scene, RENDER_DESIGN[0] / 2, BAKERY_TABLE_SCREEN_Y[0], 0.0).y
     yf = unproject(scene, RENDER_DESIGN[0] / 2, BAKERY_TABLE_SCREEN_Y[1], 0.0).y
-    rbox('bakery-table', (2 * BAKERY_TABLE_HALF, yb - yf, -fz), 0.08, mat(c['white'], 0.6), plate, None, (0.0, (yb + yf) / 2, fz / 2))
-    rbox('bakery-cloth', (2 * BAKERY_TABLE_HALF + 0.06, yb - yf + 0.06, 0.06), 0.03, mat(c['counterPink'], 0.75), plate, None, (0.0, (yb + yf) / 2, -0.03))
+    rbox('bakery-table', (2 * BAKERY_TABLE_HALF, yb - yf, -fz), 0.08, mat(c['counterPink'], 0.6), plate, None, (0.0, (yb + yf) / 2, fz / 2))
+    rbox('bakery-cloth', (2 * BAKERY_TABLE_HALF + 0.06, yb - yf + 0.06, 0.06), 0.03, mat(c['tintPink'], 0.75), plate, None, (0.0, (yb + yf) / 2, -0.03))
     trim = mat(c['white'], 0.7)
     for k in range(int(2 * BAKERY_TABLE_HALF / 0.5)):
         blob(f'bakery-trim-{k}', trim, plate, None, (-BAKERY_TABLE_HALF + 0.25 + 0.5 * k, yf - 0.03, -0.1), (0.25, 0.04, 0.12), seg=(16, 8))

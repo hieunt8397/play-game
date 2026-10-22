@@ -11,6 +11,7 @@ import {
   voicePath,
   type VoiceLine,
 } from "./voice-lines.ts";
+import { isHomeStation } from "./stations.ts";
 
 export interface AudioEntryInput {
   readonly path: string;
@@ -201,7 +202,8 @@ export function validateStations(input: StationsInput): string[] {
     const invite = inviteLine(s.id);
     if (s.awake && !ids.has(invite))
       problems.push(`station "${s.id}": awake but voice line "${invite}" is missing`);
-    if (input.playable) {
+    // Story 7.1: the home station opens the yard, not a game: no GAME_CONTENT entry.
+    if (input.playable && !isHomeStation(s.id)) {
       const playable = input.playable.includes(s.id);
       if (s.awake && !playable)
         problems.push(`station "${s.id}": awake but GAME_CONTENT has no "${s.id}" entry`);
@@ -240,6 +242,11 @@ export const BANNED_PHRASES: readonly string[] = ['sai', 'không đúng', 'giỏ
  */
 export const NAME_WORD = 'xoài';
 export const NAME_INTENTS: readonly string[] = ['greeting', 'invite', 'ask', 'prompt', 'scene'];
+/**
+ * Story 7.1: lines where "Xoài" is part of a place's own name, never praise: the home station "Nhà Xoài"
+ * (its parent label and name line, required by spec-7-1). Only these exact ids are exempt.
+ */
+export const NAME_PLACE_LINES: readonly string[] = ['vo.shell.station-name.home'];
 
 /**
  * Story 5.3 (NFR15): the "câu yêu cầu" intents — the hint system's prompt and retry families — whose
@@ -335,7 +342,7 @@ function validateVoice(
       }
     }
     const intent = id.split('.')[2] ?? '';
-    if (voiceWords(line.text).includes(NAME_WORD.normalize('NFC')) && !NAME_INTENTS.includes(intent)) {
+    if (voiceWords(line.text).includes(NAME_WORD.normalize('NFC')) && !NAME_INTENTS.includes(intent) && !NAME_PLACE_LINES.includes(id)) {
       problems.push(`voice "${id}": the name "Xoài" is only for greetings, invitations and prompts (never praise)`);
     }
     for (const [a, b] of bannedPairsIn(line.text)) {

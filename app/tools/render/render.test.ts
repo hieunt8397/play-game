@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { STATIONS } from '../../src/content/stations.ts';
+import { ITEM_IDS } from '../../src/content/games/shadow-match.ts';
 import { resolveBlender } from '../shared/binaries.ts';
 import { ART_DIR, RENDER_DIR, blenderArgs, runBlender, screenSpec, tail } from './blender.ts';
 import { ASSETS_DIR, build, buildParams, cutsArg, decorationModels, iconModels, itemsArg } from './build.ts';
@@ -70,9 +71,10 @@ describe('art:build', () => {
         ovenBody: '#C98A5B',
       },
       dino: { apatosaurusBelly: '#CFEFFF', triceratopsBelly: '#D7F2C9', stegosaurusBelly: '#FFE2C2', horn: '#FFF3D6' },
-      shadowMatch: { caveInner: '#F6EEDC' },
+      shadowMatch: { caveInner: '#F6EEDC', pedestal: '#FF8FB8', pedestalTop: '#FFF1E0' },
       fishing: { yellow: '#FFD23F', orange: '#FF9A3C', blue: '#2F6FDB', stripe: '#FFFFFF', dot: '#FFFFFF', line: '#F5F5F5' },
-      touchTalk: { white: '#FFFFFF', beak: '#FFC93C', pavement: '#C9CED6', bus: '#FFD23F', skyTop: '#9ED6F7', skyHorizon: '#E6F6FF', seaNear: '#A6E6F6', seaFar: '#6CC8EE', sandLight: '#F5D9A3', sandWet: '#E8C489', verge: '#B4E09A', pavementLine: '#C0C6D0', haze: '#EEF6FC', fin: '#FFD45C', gullTip: '#B8C4D6', shell: '#FFB3C1', coconut: '#7CC46B', boatHull: '#FF7B72', tire: '#3B4252', hub: '#EEF1F5', glass: '#BDE6FF', banana: '#FFD84A', bananaTip: '#8A5A33', egg: '#FFF1DC', melonRind: '#3E9E52', melonStripe: '#2C7A3D', melonLight: '#D9F5C2', melonFlesh: '#FF5D73' },
+      touchTalk: { white: '#FFFFFF', beak: '#FFC93C', pavement: '#C9CED6', bus: '#FFD23F', skyTop: '#9ED6F7', skyHorizon: '#E6F6FF', seaNear: '#A6E6F6', seaFar: '#6CC8EE', sandLight: '#F5D9A3', sandWet: '#E8C489', verge: '#B4E09A', pavementLine: '#C0C6D0', haze: '#EEF6FC', fin: '#FFD45C', gullTip: '#B8C4D6', shell: '#FFB3C1', coconut: '#7CC46B', boatHull: '#FF7B72', tire: '#3B4252', hub: '#EEF1F5', glass: '#BDE6FF', banana: '#FFD84A', bananaTip: '#8A5A33', egg: '#FFF1DC', melonRind: '#3E9E52', melonStripe: '#2C7A3D', melonLight: '#D9F5C2', melonFlesh: '#FF5D73', grassNear: '#A2DA84' },
+      home: { wood: '#E8B27A', woodDark: '#C98B55', curtain: '#FF7FAE', drum: '#FF6B6B', drumRim: '#FFFFFF', drumHead: '#FFF4E0', stick: '#F3D9B1', kit: '#FFFFFF', cross: '#F0525B', wardrobe: '#C9A8FF', wardrobeDoor: '#E2D3FF', knob: '#FFE08A', shirt: '#FF9A3C' },
       map: {
         road: '#EE9F68',
         roadEdge: '#FFFFFF',
@@ -244,7 +246,7 @@ describe('render', () => {
     expect(svg).toContain('<circle cx="2.0" cy="4.0"');
     expect(svg).toContain('<polyline');
     expect(svg).toContain('<rect');
-    expect(STATIONS).toHaveLength(7);
+    expect(STATIONS).toHaveLength(8); // Story 7.1: + the home station
   });
 
   it('replaceDir swaps a directory and restores the old one when the move fails', () => {
@@ -333,7 +335,8 @@ describe('Story 3.3: dino-puzzle screen', () => {
 // "nothing written" snapshots above (test files run in parallel).
 describe('Story 3.5: shadow-match builder arguments', () => {
   it('build_shadow_match.py gets --items with the content catalogue ids; other screens do not', () => {
-    expect(itemsArg()).toBe('dog,cow,horse,donkey,stag,car,truck,tractor');
+    expect(itemsArg()).toBe(ITEM_IDS.join(','));
+    expect(itemsArg().split(',').slice(0, 8)).toEqual(['dog', 'cow', 'horse', 'donkey', 'stag', 'car', 'truck', 'tractor']);
     expect(itemsArg(['a', 'b'])).toBe('a,b');
     let args: readonly string[] = [];
     const run = vi.fn((_bin: string, a: readonly string[]) => {

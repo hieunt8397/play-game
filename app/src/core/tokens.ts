@@ -147,22 +147,21 @@ const ui = {
    * loose piece is drawn enlarged to draggableItem.minSize, so this caps the enlargement at 2.25×.
    */
   dinoPieceMinRawPx: 40,
-  /** Story 3.5 Hang tìm bóng: the trimmed longest side (design px) of `triceratops/idle/00`. */
-  trikeSizePx: 300,
-  /** Story 3.5: allowed deviation (design px) from trikeSizePx. */
-  trikeSizeTolerance: 30,
-  /** Story 3.5: the triceratops rises this far (design px) while it fades in on entrance. */
-  trikeRisePx: 24,
-  /** Story 3.5: the triceratops sways ± this (degrees) around its ground pivot (ambient). */
-  trikeSwayDeg: 1.5,
-  /** Story 3.5: the nod after a correct reveal bounces 1 → this → 1. */
-  trikeNodBounceScale: 1.06,
-  /** Story 3.5: each shadow-match item's trimmed longest side (design px), the size of its shadow. */
-  shadowItemPx: 150,
-  /** Story 3.5: allowed deviation (design px) from shadowItemPx. */
-  shadowItemTolerance: 10,
-  /** Story 3.5: the item the triceratops holds is drawn at this × its shadow size. */
+  /**
+   * Story 3.5 Hang tìm bóng: each shadow-match item's trimmed longest side (design px), the size of its
+   * shadow. 2026-10-22: 150 → 210 (≈ 1.4×; the triceratops is gone, the shadows use its space).
+   */
+  shadowItemPx: 210,
+  /** Story 3.5: allowed deviation (design px) from shadowItemPx (2026-10-22: 10 → 14, scaled with it). */
+  shadowItemTolerance: 14,
+  /** Story 3.5: the item waiting on the pedestal is drawn at this × its shadow size. */
   shadowHeldScale: 0.7,
+  /** 2026-10-22: a correct reveal makes the revealed item hop up this far (design px) and back. */
+  shadowHappyHopPx: 28,
+  /** 2026-10-22: … while it bounces 1 → this → 1. */
+  shadowHappyBounceScale: 1.12,
+  /** 2026-10-22: the sparkle burst of a correct reveal ends this far (design px) beyond the item's shown radius. */
+  shadowSparkleReachPx: 24,
   /** Story 3.5: every pixel of `hit.cave` on `bg.shadow-match` has at least this relative luminance (no dark cave). */
   caveMinLuminance: 0.35,
   /** Story 3.6: two shadows of one shape group overlap (alpha-mask IoU, bottom-centre aligned) at most this much. */
@@ -189,6 +188,10 @@ const ui = {
   raceGuideGlowPx: 240,
   /** Story 4.1: the checkered gate's trimmed width (design px) is at least this. */
   raceGateMinPx: 150,
+  /** 2026-10-22: the gate's yaw follows the road's arrival direction over its last this many px of arc. */
+  raceGateTangentPx: 40,
+  /** 2026-10-22: the gate's pivot (post-feet midpoint) sits this many px of arc before the road's end. */
+  raceGateBackPx: 16,
   /** Story 4.1: a waiting kart blinks between alpha 1 and this. */
   raceWaitAlpha: 0.55,
   /** Story 4.1: the driven part of the road is overlaid in hintCore at this alpha. */
@@ -207,7 +210,7 @@ const ui = {
   raceMinTurnRadiusPx: 50,
   /** Story 4.2: road samples this far apart in arc are at least tracePath.width apart (the band never touches itself). */
   raceSelfClearArcPx: 220,
-  /** Story 4.2: consecutive layout points of a curve, zigzag or loop road are at most this far apart. */
+  /** Story 4.2: consecutive layout points of every road shape except straight (curve, zigzag, loop, wave, hairpin, snake, spiral) are at most this far apart. */
   racePathPointGapPx: 24,
   /** Story 4.2: a loop's start and end (its mouth) are at most this far apart. */
   raceLoopMouthMaxPx: 150,
@@ -333,9 +336,15 @@ const art = {
     /** The triceratops' horns and frill: pastel, never a dark or sharp-looking colour. */
     horn: colour('#FFF3D6'),
   },
-  /** Story 3.5 Hang tìm bóng: the lit inner back wall of the cave mouth (bright, never black). */
+  /**
+   * Story 3.5 Hang tìm bóng: the lit inner back wall of the cave (bright, never black; the rocks and floor use
+   * colors.caveMouth). 2026-10-22 (spec-tim-bong-hinh-that-them-vat): back to the rock cave and the real
+   * models; only the pedestal (no dinosaur) is kept from the cute restyle.
+   */
   shadowMatch: {
     caveInner: colour('#F6EEDC'),
+    pedestal: colour('#FF8FB8'),
+    pedestalTop: colour('#FFF1E0'),
   },
   /**
    * Story 4.3 Câu cá: the three fish bodies (relative luminances ≈ 0.68 / 0.45 / 0.17, pairwise ≥ 0.2 apart,
@@ -399,6 +408,25 @@ const art = {
     chimneyBrick: colour('#E8825E'),
     chimneyCap: colour('#F3E6CC'),
     chimneySoot: colour('#8A5A48'),
+  },
+  /**
+   * Story 7.1: the yard (build_home.py): the stage's wood, the drum, the vet box's cross, the wardrobe and
+   * the shirt on its hook. The lawn, sky and haze reuse art.touchTalk (the picnic lawn's palette).
+   */
+  home: {
+    wood: colour('#E8B27A'),
+    woodDark: colour('#C98B55'),
+    curtain: colour('#FF7FAE'),
+    drum: colour('#FF6B6B'),
+    drumRim: colour('#FFFFFF'),
+    drumHead: colour('#FFF4E0'),
+    stick: colour('#F3D9B1'),
+    kit: colour('#FFFFFF'),
+    cross: colour('#F0525B'),
+    wardrobe: colour('#C9A8FF'),
+    wardrobeDoor: colour('#E2D3FF'),
+    knob: colour('#FFE08A'),
+    shirt: colour('#FF9A3C'),
   },
   fishing: {
     yellow: colour('#FFD23F'),

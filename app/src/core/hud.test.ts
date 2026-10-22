@@ -1,8 +1,8 @@
 // Story 1.6: Hud layout, Speaker wave, Speaker / Home controller and the Hud mode.
 import { describe, expect, it, vi } from 'vitest';
 import { Bus } from './bus';
-import { HudController, hudLayout, SFX_POP, VO_HOME, waveFrame, wavePeriodMs, type HudView } from './hud';
-import { getHudMode, setHudMode } from './hud-mode';
+import { homeLine, HudController, hudLayout, SFX_POP, VO_HOME, VO_HOME_YARD, waveFrame, wavePeriodMs, type HudView } from './hud';
+import { getHomeTarget, getHudMode, setHomeTarget, setHudMode } from './hud-mode';
 import { NO_INSETS, visibleDesignRect } from './input/space';
 import { Tokens } from './tokens';
 
@@ -128,5 +128,47 @@ describe('hud-mode', () => {
     const bus = new Bus();
     expect(() => bus.emit('hud:home')).not.toThrow();
     expect(bus.listenerCount('hud:home')).toBe(0);
+  });
+});
+
+describe('Story 7.1: the yard and the Home line', () => {
+  it('homeLine: "Về nhà nào!" only in a game opened from the yard; "Về đảo nào!" in island games and in the yard', () => {
+    expect(homeLine('game', 'yard')).toBe(VO_HOME_YARD);
+    expect(homeLine('game', 'island')).toBe(VO_HOME);
+    expect(homeLine('yard', 'yard')).toBe(VO_HOME);
+    expect(homeLine('yard', 'island')).toBe(VO_HOME);
+  });
+
+  it("'yard' mode shows Home; its press says Về đảo nào and emits hud:home", () => {
+    const { c, calls } = controller(() => undefined);
+    c.setMode('yard');
+    expect(calls.at(-1)).toBe('home:true');
+    c.home();
+    expect(calls.slice(-4)).toEqual(['press:home', `sfx:${SFX_POP}`, `say:${VO_HOME}`, 'emit:hud:home']);
+  });
+
+  it("a game opened from the yard: Home says Về nhà nào (deps.homeTarget)", () => {
+    const calls: string[] = [];
+    const c = new HudController({
+      replay: () => undefined,
+      say: (id) => {
+        calls.push(`say:${id}`);
+        return 1;
+      },
+      sfx: () => undefined,
+      emitHome: () => calls.push('emit'),
+      homeTarget: () => 'yard',
+      view: { pressSpeaker: () => undefined, pressHome: () => undefined, showWave: () => undefined, showHome: () => undefined },
+    });
+    c.setMode('game');
+    c.home();
+    expect(calls).toEqual([`say:${VO_HOME_YARD}`, 'emit']);
+  });
+
+  it('setHomeTarget / getHomeTarget keep where a game Home leads', () => {
+    setHomeTarget('yard');
+    expect(getHomeTarget()).toBe('yard');
+    setHomeTarget('island');
+    expect(getHomeTarget()).toBe('island');
   });
 });

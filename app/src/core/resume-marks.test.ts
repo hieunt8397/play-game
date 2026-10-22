@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Point, ScreenLayout } from '../content/layout-types';
-import { STATIONS } from '../content/stations';
+import { GAME_STATIONS } from '../content/stations';
 import { GAME_IDS } from '../content/types';
 import { islandInteractiveRect, RESUME_MARK_EXTENT, RESUME_MARK_OUTLINE_PX, resumeMarkPlan } from './resume-marks';
 import { Tokens } from './tokens';
@@ -50,7 +50,8 @@ describe('resumeMarkPlan on the real map layout', () => {
   const layout = JSON.parse(readFileSync(new URL('../content/generated/map.layout.json', import.meta.url), 'utf8')) as ScreenLayout;
 
   it('every one of the 7 stations gets a mark whose whole circle lies inside the interactive rect', () => {
-    expect(STATIONS.map((s) => s.id).sort()).toEqual([...GAME_IDS].sort());
+    // Story 7.1: the home station opens the yard (its games' marks are drawn there).
+    expect(GAME_STATIONS.map((s) => s.id).sort()).toEqual([...GAME_IDS].sort());
     const plan = resumeMarkPlan(GAME_IDS, layout.hits);
     expect(plan.map((m) => m.id)).toEqual([...GAME_IDS]);
     for (const m of plan) {

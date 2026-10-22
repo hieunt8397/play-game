@@ -18,7 +18,8 @@ import { Tokens } from '../../src/core/tokens.ts';
 import { screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
 import { screen as pizzaScreen } from '../../src/content/games/pizza.ts';
 import { ITEM_IDS, SHADOW_COUNTS, screen as shadowScreen } from '../../src/content/games/shadow-match.ts';
-import { STATIONS } from '../../src/content/stations.ts';
+import { GAME_STATIONS, HOME_STATION } from '../../src/content/stations.ts';
+import { CORNER_IDS, HOME_SCREEN_REQUIREMENTS } from '../../src/content/home.ts';
 import { GAME_IDS } from '../../src/content/types.ts';
 import type { ScreenLayout } from '../../src/content/layout-types.ts';
 import {
@@ -43,6 +44,8 @@ import {
   validateFishing,
   touchTalkLimits,
   validateTouchTalk,
+  homeLimits,
+  validateHome,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
@@ -67,7 +70,7 @@ const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
  */
 export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayout, atlas: AtlasJsonLike) => string[]>>> = {
   map: (layout, atlas) => [
-    ...validateDecorations(layout, decorationLimits(STATIONS, GAME_IDS, DECORATIONS), atlas),
+    ...validateDecorations(layout, decorationLimits(GAME_STATIONS, GAME_IDS, DECORATIONS, [HOME_STATION]), atlas),
     ...validatePlayAgainIcons(Object.keys(GAME_ICONS), atlas, layout.renderScale, Tokens.ui.playAgainIconPx),
   ],
   'ice-cream': (layout, atlas) => validateIceCream(layout, iceCreamLimits(iceCreamScreen), atlas),
@@ -77,6 +80,8 @@ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayou
   'touch-talk': (layout, atlas) => validateTouchTalk(layout, touchTalkLimits(TOUCH_TALK_SCREEN, TOUCH_TALK_SCENES.map((s) => ({ id: s.id, props: s.props.map((p) => p.id) })), sceneBubbleKeepOutRect()), atlas),
   fishing: (layout, atlas) => validateFishing(layout, fishingLimits(FISHING_SCREEN, POND_HIT, ALL_FISH), atlas),
   race: (layout, atlas) => validateRace(layout, raceLimits(RACE_SCREEN, racePaths(raceLadder), CONE_ANCHORS, FLAG_ANCHORS), atlas),
+  // Story 7.1: the yard corners (frames, sizes, hulls).
+  home: (layout, atlas) => validateHome(layout, homeLimits(HOME_SCREEN_REQUIREMENTS, CORNER_IDS), atlas),
 };
 
 /** PNG zlib level of the shipped background. */

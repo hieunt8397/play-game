@@ -8,7 +8,7 @@ import { RoundTally } from '../../core/round-tally';
 import { Tokens } from '../../core/tokens';
 import { nextLevel } from '../../core/difficulty';
 import { isJsonOnly, makeSnapshot, readResume } from '../../core/snapshot';
-import { levelIndex, roundRoads } from './questions';
+import { levelIndex, roundRoads, startFacing } from './questions';
 import { RaceRound, resumeQuestion, startCommands, type RaceCommand } from './round';
 
 /** A road of 400 samples: a resume may restore up to index 397. */
@@ -32,9 +32,10 @@ describe('roundRoads (Story 4.1)', () => {
   });
 
   it('clamps the level and handles a non-finite seed', () => {
-    expect(levelIndex(5)).toBe(3);
+    expect(levelIndex(5)).toBe(5);
+    expect(levelIndex(12)).toBe(ladder.length - 1);
     expect(levelIndex(-1)).toBe(0);
-    expect(roundRoads(3, 5)).toEqual(roundRoads(3, 3));
+    expect(roundRoads(3, 12)).toEqual(roundRoads(3, ladder.length - 1));
     expect(roundRoads(Number.NaN, 0)).toEqual(roundRoads(0, 0));
   });
 });
@@ -171,8 +172,45 @@ describe('Story 4.2 — the shape ladder, resume, difficulty', () => {
     const z = roundRoads(7, 2);
     expect(z).toHaveLength(4);
     for (const id of z) expect(id).toMatch(/^zigzag-[123]$/);
-    expect(roundRoads(7, 9)).toEqual(roundRoads(7, 3));
-    expect(levelIndex(9)).toBe(3);
+    expect(roundRoads(7, 9)).toEqual(roundRoads(7, 7));
+    expect(levelIndex(9)).toBe(7);
+  });
+
+  it('Harder roads: 5-road rounds at the top (snake, spiral) cover every id of the level, never two equal in a row; RaceRound plays all 5', () => {
+    for (const shape of ['snake', 'spiral']) {
+      const level = ladder.findIndex((l) => l.shape === shape);
+      const seen = new Set<string>();
+      for (let seed = 0; seed < 300; seed++) for (const id of roundRoads(seed, level)) seen.add(id);
+      expect(seen).toEqual(new Set(ladder[level]!.pathIds));
+      const r = roundRoads(11, level);
+      expect(r).toHaveLength(5);
+      for (const id of r) expect(id).toMatch(new RegExp(`^${shape}-[123]$`));
+    }
+    const top = ladder.length - 1;
+    const round = new RaceRound(T, 11, top);
+    expect(round.questionCount).toBe(5);
+    const begun: string[] = [];
+    for (const c of round.start()) if (c.kind === 'beginRoad') begun.push(c.pathId);
+    for (let i = 0; i < 5; i++) {
+      const after = round.arrived();
+      if (i < 4) {
+        expect(kinds(after)).toContain('nextRoad');
+        for (const c of round.nextRoadReady()) if (c.kind === 'beginRoad') begun.push(c.pathId);
+      } else expect(kinds(after)).toContain('finishRound');
+    }
+    expect(begun).toEqual(roundRoads(11, top));
+  });
+
+  it('startFacing: the kart faces the first heading of the road (snake-2 / spiral-2 start toward screen-left); near-vertical keeps +1', () => {
+    const layout = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'content', 'generated', 'race.layout.json'), 'utf8')) as { paths: Record<string, { x: number; y: number }[]> };
+    const min = Tokens.ui.raceFacingMinDx;
+    expect(startFacing(layout.paths['snake-2']!, 1, min)).toBe(-1);
+    expect(startFacing(layout.paths['spiral-2']!, 1, min)).toBe(-1);
+    expect(startFacing(layout.paths['snake-1']!, 1, min)).toBe(1);
+    expect(startFacing(layout.paths['straight-1']!, 1, min)).toBe(1);
+    expect(startFacing(layout.paths['snake-2']!, -1, min)).toBe(1);
+    expect(startFacing([{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0.01, y: 10 }], 1, min)).toBe(1);
+    expect(startFacing([], 1, min)).toBe(1);
   });
 
   it('Home at 60 % of road 2 → snapshot ⊇ {v 1, level, seed, questionIndex 1, partial {traceIndex}}; plain JSON', () => {
@@ -222,11 +260,15 @@ describe('Story 4.2 — the shape ladder, resume, difficulty', () => {
     expect(resumeQuestion(undefined, 397)).toBeNull();
   });
 
-  it('nextLevel with the race ladder (4): L2 perfect → 3; L2 maxHint 3 → 2; L3 perfect → 3', () => {
-    expect(ladder).toHaveLength(4);
+  it('nextLevel with the race ladder (8): L2 perfect → 3; L2 maxHint 3 → 2; L3 (loop) perfect → 4 (wave); the top (spiral) perfect stays', () => {
+    expect(ladder).toHaveLength(8);
     expect(nextLevel(2, { questions: 4, firstTryCorrect: 4, maxHintLevel: 0 }, ladder.length)).toBe(3);
     expect(nextLevel(2, { questions: 4, firstTryCorrect: 3, maxHintLevel: 3 }, ladder.length)).toBe(2);
-    expect(nextLevel(3, { questions: 3, firstTryCorrect: 3, maxHintLevel: 0 }, ladder.length)).toBe(3);
+    const up = nextLevel(3, { questions: 3, firstTryCorrect: 3, maxHintLevel: 0 }, ladder.length);
+    expect(up).toBe(4);
+    expect(ladder[up]!.shape).toBe('wave');
+    for (const id of roundRoads(7, up)) expect(id).toMatch(/^wave-[123]$/);
+    expect(nextLevel(7, { questions: 5, firstTryCorrect: 5, maxHintLevel: 0 }, ladder.length)).toBe(7);
   });
 
   it('source scan: no file under src/games/race calls .wrong( (the race is never wrong; maxHintLevel ≤ 3)', () => {

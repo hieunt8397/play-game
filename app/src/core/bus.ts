@@ -15,6 +15,14 @@ export interface EventMap {
    * same game in place with its next start data (MiniGameBase emits it from free play).
    */
   'round:next': { gameId: GameId };
+  /**
+   * Story 7.1: the yard (scenes/HomeYard) asks Map to open the game of an awake corner (its assets are
+   * already loaded). Map starts it with its usual start data and routes its last event back to the yard.
+   * `gameId` is a string: a yard game that is not registered (yet) is ignored by Map.
+   */
+  'yard:open': { gameId: string };
+  /** Story 7.1: Home in the yard — Map closes the yard and wakes on the island (kart at `home-stop`). */
+  'yard:leave': undefined;
   'hint:level': { gameId: GameId; level: HintLevel };
   'hud:home': undefined;
   /** core/hud-mode: the Hud shows Home only in 'game' mode (Story 1.6; MiniGameBase sets 'game' in 1.7). */

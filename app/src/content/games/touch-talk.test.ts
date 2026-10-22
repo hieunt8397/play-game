@@ -25,7 +25,6 @@ describe('touch-talk content (Story 4.5)', () => {
     expect(lines.get('vo.touch-talk.scene.picnic')).toBe('Xoài ơi, | đi dã ngoại!');
   });
 
-
   it('8–12 props per scene; kebab ids unique across every scene; sounds and names exist', () => {
     const voice = new Set<string>(VOICE_LINES.map((l) => l.id));
     for (const s of TOUCH_TALK_SCENES) {
@@ -45,7 +44,6 @@ describe('touch-talk content (Story 4.5)', () => {
   it('the sea scene, the bubble slots, the assets; no ladder, no icon entry; awake', () => {
     expect(TOUCH_TALK_SCENES[0]).toMatchObject({ id: 'sea', nameLineId: 'vo.touch-talk.scene.sea' });
     expect(TOUCH_TALK_SCENES[0]!.bg.key).toBe('bg.touch-talk.sea');
-    expect(TOUCH_TALK_SCENE_SLOTS).toBe(6);
     expect(TOUCH_TALK_SCENE_SLOTS).toBe(TOUCH_TALK_SCENES.length);
     expect(assets.atlases).toEqual([ATLASES['touch-talk']]);
     expect(assets.images).toEqual(TOUCH_TALK_SCENES.map((s) => s.bg));

@@ -43,7 +43,7 @@ describe('createTalkController (Story 4.5)', () => {
     expect(log).toEqual(['prompt vo.touch-talk.scene.sea']);
   });
 
-  it('Tap prop: bounce + sfx at once; after 350 ms setPrompt + say its name', () => {
+  it('Tap prop: bounce + sfx at once; after touchTalkNameDelayMs (800 ms) setPrompt + say its name', () => {
     const { talk, log } = rig();
     talk.tap('crab');
     expect(log).toEqual(['bounce crab', 'sfx sfx.touch-talk.crab']);
@@ -61,7 +61,7 @@ describe('createTalkController (Story 4.5)', () => {
     expect(log).toEqual([]);
   });
 
-  it('Re-tap while named: bounce + sfx, no new say; Re-tap while waiting: one say 350 ms after the first tap', () => {
+  it('Re-tap while named: bounce + sfx, no new say; Re-tap while waiting: one say touchTalkNameDelayMs after the first tap', () => {
     const a = rig();
     a.talk.tap('crab');
     tickFor(a.talk, DELAY);

@@ -1,8 +1,8 @@
-// Hang tìm bóng (Stories 3.5, 3.6): a friendly triceratops at a bright cave mouth holds an animal or a vehicle;
-// the child drags it onto its purple-grey shadow on the rock ledges. The item is sucked into the shadow,
-// the shadow turns real-coloured, the triceratops nods and chirps and the item's name is said. The scene
-// only wires Phaser: the plate `bg.shadow-match`, the full-frame sprites of `atlas.shadow-match` (the
-// triceratops on its ground pivot; shadows and items on their trimmed centres), a DragController for the
+// Hang tìm bóng (Stories 3.5, 3.6; 2026-10-22 no dinosaur, cute restyle): in a soft pastel cave an animal
+// or a vehicle waits big on a small pedestal at the bottom centre; the child drags it onto its purple-grey
+// shadow on the cave wall. The item is sucked into the shadow, the shadow turns real-coloured, the item
+// hops with a sparkle and its name is said. The scene only wires Phaser: the plate `bg.shadow-match`, the
+// sprites of `atlas.shadow-match` (shadows and items on their trimmed centres), a DragController for the
 // held item, one drop target per shadow (`pad` = that shadow's shown radius, so the level-4 snap scale
 // applies to the forgiving margin only) and tweens. Every decision (drop resolution, the hand-over to
 // the next question, the round end) is the pure round model (round.ts, questions.ts); prompts and
@@ -10,7 +10,7 @@
 // from LAYOUTS['shadow-match']; timers are scene-clock events and tweens (removed or frozen with the scene).
 import type { GameObjects, Time, Tweens } from 'phaser';
 import { ATLASES, BACKGROUNDS } from '../../content/assets';
-import { HAND_ANCHOR, SFX, TRIKE_ANCHOR, itemFrames, shadowSlot, trikeFrames, type ItemId } from '../../content/games/shadow-match';
+import { PEDESTAL_ANCHOR, PEDESTAL_HIT, SFX, itemFrames, shadowSlot, type ItemId } from '../../content/games/shadow-match';
 import type { Point, ScreenLayout } from '../../content/layout-types';
 import { LAYOUTS } from '../../content/layouts';
 import { audio } from '../../core/audio-director';
@@ -18,10 +18,13 @@ import { bus } from '../../core/bus';
 import type { HintItem, HintStep } from '../../core/hint-director';
 import { createSelectionRing, type SelectionRing } from '../../core/hint-visuals';
 import { createDraggable, defaultPlayRect, type Draggable } from '../../core/input/drag-controller';
+import { pointInPolygon } from '../../core/input/polygon';
 import { createDropTarget, type DropTarget } from '../../core/input/drop';
 import { createTapRouter, type TapRouter } from '../../core/input/tap-router';
 import { amplitude, prefersReducedMotion } from '../../core/reduced-motion';
 import { Tokens } from '../../core/tokens';
+import { bounce, stopMotion } from '../../core/ui/scale-motion';
+import { sparkle } from '../../core/ui/sparkle';
 import { originFor, trimmedCentre, trimmedSize, type TrimmedRect } from '../../core/ui/sprite-pivot';
 import { MiniGameBase } from '../mini-game-base';
 import { heldHitRadius, shownRadius, type Size } from './geometry';
@@ -29,13 +32,9 @@ import { levelOf } from './questions';
 import { ShadowRound, hintStepFor, startCommands, type ShadowCommand, type ShadowGeometry, type ShadowProgress, type SpeechTag } from './round';
 
 const EASE_OUT = 'Quad.easeOut';
-const SINE = 'Sine.easeInOut';
-/** Ambient hold reasons (MiniGameBase): the reveal and the celebration. */
-const HOLD_REVEAL = 'reveal';
-const HOLD_CELEBRATE = 'celebrate';
 
-/** Draw order: shadows, the revealed item, the triceratops, the held item, the lifted item. */
-const LAYERS = ['shadow', 'revealed', 'trike', 'item', 'lifted'] as const;
+/** Draw order: shadows, the revealed item, its sparkle, the held item, the lifted item. */
+const LAYERS = ['shadow', 'revealed', 'sparkle', 'item', 'lifted'] as const;
 const Depth = Object.fromEntries(LAYERS.map((name, i) => [name, i + 1])) as Readonly<Record<(typeof LAYERS)[number], number>>;
 
 interface FrameData {
@@ -51,7 +50,7 @@ interface ShadowView {
   readonly hint: HintItem;
 }
 
-/** The item the triceratops holds. */
+/** The item on the pedestal. */
 interface HeldView {
   readonly item: ItemId;
   readonly image: GameObjects.Image | undefined;
@@ -63,6 +62,10 @@ interface HeldView {
   /** Story 5.1: the running move's onDone, run when another move replaces it. */
   tweenDone?: (() => void) | undefined;
   returnTimer: Time.TimerEvent | undefined;
+  /** True between a lift and its settle. */
+  lifted: boolean;
+  /** Story 5.4: removes the pedestal's tap reaction for this item. */
+  unreact: () => void;
 }
 
 /** What one question puts on screen. */
@@ -80,9 +83,6 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
   /** Story 5.1: the ring around the tap-selected held item. */
   private selection: SelectionRing | undefined;
   private layout: ScreenLayout = LAYOUTS['shadow-match'];
-  private trike: GameObjects.Image | undefined;
-  /** Story 5.4: removes the triceratops' tap reaction. */
-  private unreactTrike: (() => void) | undefined;
   private question: QuestionView | undefined;
   /** The reveal waits for the suck-in tween. */
   private sucking = false;
@@ -91,9 +91,8 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
   private tokens = new Map<number, SpeechTag>();
   private issuing: SpeechTag | undefined;
   private warned = new Set<string>();
-  /** The running nod (its bounce and the timer back to idle), stopped by the celebration and the next question. */
-  private nodBounce: Tweens.Tween | undefined;
-  private nodTimer: Time.TimerEvent | undefined;
+  /** The revealed item's running hop, stopped by the celebration and the next question. */
+  private hop: Tweens.Tween | undefined;
 
   constructor() {
     super('shadow-match');
@@ -105,16 +104,12 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
     this.cameras.main.setBackgroundColor(Tokens.colors.sky.css);
     this.reduced = prefersReducedMotion(window);
     this.layout = LAYOUTS['shadow-match'];
-    this.unreactTrike?.();
-    this.unreactTrike = undefined;
-    this.trike = undefined;
     this.question = undefined;
     this.sucking = false;
     this.afterSuck = [];
     this.tokens = new Map();
     this.issuing = undefined;
-    this.nodBounce = undefined;
-    this.nodTimer = undefined;
+    this.hop = undefined;
     const bg = BACKGROUNDS['shadow-match'].key;
     if (this.textures.exists(bg)) this.add.image(0, 0, bg).setOrigin(0).setScale(1 / this.layout.renderScale);
     else console.warn(`shadow-match: texture "${bg}" is missing — plate skipped`);
@@ -140,8 +135,8 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
     const plan = startCommands(round, this.resumeAt);
     for (const w of plan.warnings) console.warn(w);
     if (plan.accepted) this.acceptResume();
-    // The triceratops comes in first; then the first item and its shadows fade in and the question begins.
-    this.enterTrike(() => this.applyAll(plan.commands));
+    // The first item and its shadows fade in and the question begins.
+    this.applyAll(plan.commands);
   }
 
   protected progress(): ShadowProgress {
@@ -178,12 +173,6 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
     return ss ? { x: ss.x, y: ss.y, width: ss.w, height: ss.h } : undefined;
   }
 
-  private hasFrame(frame: string): boolean {
-    if (this.frameRect(frame)) return true;
-    this.warnOnce(frame, `shadow-match: frame "${frame}" is missing`);
-    return false;
-  }
-
   private warnOnce(what: string, msg: string): void {
     if (this.warned.has(what)) return;
     this.warned.add(what);
@@ -197,15 +186,21 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
     return rect ? trimmedSize(rect, this.layout.renderScale) : { w: px, h: px };
   }
 
+  /** Where `item` waits: centred over `anchor.pedestal-top`, its bottom on the pedestal top (it scales with ui.shadowHeldScale). */
+  private restFor(item: ItemId): Point {
+    const top = this.anchor(PEDESTAL_ANCHOR);
+    return { x: top.x, y: top.y - (this.itemSize(item).h * Tokens.ui.shadowHeldScale) / 2 };
+  }
+
   private geometry(): ShadowGeometry {
     return {
       slots: this.rowSlots(),
-      hand: this.anchor(HAND_ANCHOR),
+      rest: (item) => this.restFor(item),
       shownR: (item) => shownRadius(this.itemSize(item)),
       playRect: defaultPlayRect,
       snapRadius: Tokens.components.dropTarget.snapRadius,
       offDelayMs: Tokens.Timing.dragOffCounterReturnDelayMs,
-      callMs: Tokens.Timing.trikeCallMs,
+      nameDelayMs: Tokens.Timing.shadowNameDelayMs,
       finishDelayMs: Tokens.Timing.roundCelebrationMs,
     };
   }
@@ -221,110 +216,83 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
     return this.add.image(at.x, at.y, ATLASES['shadow-match'].key, frame).setOrigin(o.x, o.y).setScale(scale / this.layout.renderScale);
   }
 
-  // --- the triceratops ------------------------------------------------------------------------------------
+  // --- the revealed item's joy (2026-10-22: replaces the triceratops' nod and chirp) -------------------------
 
-  /** Fades in (and rises, unless reduced motion) over trikeEnterMs, then starts its sway and calls `done`. */
-  private enterTrike(done: () => void): void {
-    const pivot = this.anchor(TRIKE_ANCHOR);
-    if (!this.hasFrame(trikeFrames.idle)) {
-      this.time.delayedCall(Tokens.Timing.trikeEnterMs, done);
-      return;
-    }
-    const o = originFor(pivot, this.layout.design);
-    const rise = this.reduced ? 0 : Tokens.ui.trikeRisePx;
-    const img = this.add
-      .image(pivot.x, pivot.y + rise, ATLASES['shadow-match'].key, trikeFrames.idle)
-      .setOrigin(o.x, o.y)
-      .setScale(1 / this.layout.renderScale)
-      .setDepth(Depth.trike)
-      .setAlpha(0);
-    this.trike = img;
-    this.tweens.add({
-      targets: img,
-      alpha: 1,
-      y: pivot.y,
-      duration: Tokens.Timing.trikeEnterMs,
-      ease: EASE_OUT,
-      onComplete: () => {
-        this.addSway(img);
-        // Story 5.4: a tap on the triceratops bounces it, except while it nods or celebrates.
-        this.unreactTrike?.();
-        this.unreactTrike = this.react({ image: img, base: 1 / this.layout.renderScale, enabled: () => !(this.nodBounce?.isPlaying() ?? false) && !this.holding(HOLD_CELEBRATE) });
-        done();
-      },
-    });
-  }
-
-  /** The ambient sway ± ui.trikeSwayDeg around the ground pivot (none under reduced motion). */
-  private addSway(img: GameObjects.Image): void {
-    if (this.reduced) return;
-    const deg = Tokens.ui.trikeSwayDeg;
-    img.setAngle(-deg);
-    this.addAmbient(this.tweens.add({ targets: img, angle: deg, duration: Tokens.Timing.trikeSwayMs, ease: SINE, yoyo: true, repeat: -1 }));
-  }
-
-  private setTrikeFrame(frame: string): void {
-    if (this.trike && this.hasFrame(frame)) this.trike.setFrame(frame, false, false);
-  }
-
-  /** A bounce of the triceratops through `scales` (amplitudes reduced under reduced motion), `repeat` times over `durationMs`. */
-  private bounceTrike(scales: readonly number[], repeat: number, durationMs: number, onStep?: (step: number) => void): Tweens.Tween | undefined {
-    const img = this.trike;
-    if (!img) return undefined;
+  /** A bounce of `img` (around `base` scale) through `scales` (amplitudes reduced under reduced motion), `repeat` times over `durationMs`. */
+  private bounceImage(img: GameObjects.Image, base: number, scales: readonly number[], repeat: number, durationMs: number): Tweens.Tween {
     const s = scales.map((k) => amplitude(k, this.reduced));
-    const base = 1 / this.layout.renderScale;
     const steps = s.length - 1;
     return this.tweens.addCounter({
       from: 0,
       to: 1,
       duration: durationMs,
       onUpdate: (t) => {
-        const cycle = (t.getValue() ?? 0) * repeat;
-        const local = cycle % 1;
+        const local = ((t.getValue() ?? 0) * repeat) % 1;
         const k = Math.min(steps - 1, Math.floor(local * steps));
         const f = local * steps - k;
-        onStep?.(Math.floor(cycle));
         img.setScale(base * (s[k]! + (s[k + 1]! - s[k]!) * Math.sin((f * Math.PI) / 2)));
       },
       onComplete: () => img.setScale(base),
     });
   }
 
-  /** The nod frame with a bounce 1 → ui.trikeNodBounceScale → 1, back to idle after trikeNodMs. */
-  private nod(): void {
-    this.stopNod();
-    this.setTrikeFrame(trikeFrames.nod);
-    this.nodBounce = this.bounceTrike([1, Tokens.ui.trikeNodBounceScale, 1], 1, Tokens.Timing.trikeNodMs);
-    this.nodTimer = this.time.delayedCall(Tokens.Timing.trikeNodMs, () => {
-      this.nodTimer = undefined;
-      this.setTrikeFrame(trikeFrames.idle);
+  /** A sparkle burst around the revealed item on slot `slot`. */
+  private sparkleAt(slot: number, item: ItemId): void {
+    const at = this.rowSlots()[slot] ?? this.centre();
+    sparkle(this, at, { radius: shownRadius(this.itemSize(item)) + Tokens.ui.shadowSparkleReachPx, durationMs: Tokens.Timing.shadowHappyMs, depth: Depth.sparkle, reduced: this.reduced });
+  }
+
+  /**
+   * The revealed item on slot `slot` hops up ui.shadowHappyHopPx and back (no hop under reduced motion)
+   * while it bounces 1 → ui.shadowHappyBounceScale → 1, with a sparkle burst.
+   */
+  private happy(slot: number): void {
+    const q = this.question;
+    const item = q?.shadows[slot]?.item;
+    this.stopHop();
+    if (item !== undefined) this.sparkleAt(slot, item);
+    const img = q?.revealed;
+    if (!img) return;
+    const at = this.rowSlots()[slot] ?? this.centre();
+    bounce(this, img, 1 / this.layout.renderScale, amplitude(Tokens.ui.shadowHappyBounceScale, this.reduced), Tokens.Timing.shadowHappyMs);
+    if (this.reduced) return;
+    this.hop = this.tweens.add({
+      targets: img,
+      y: at.y - Tokens.ui.shadowHappyHopPx,
+      duration: Tokens.Timing.shadowHappyMs / 2,
+      ease: 'Sine.easeOut',
+      yoyo: true,
+      onComplete: () => img.setY(at.y),
     });
   }
 
-  /** Stops a running nod: its bounce (scale back to 1) and its pending return to the idle frame. */
-  private stopNod(): void {
-    this.nodBounce?.stop();
-    this.nodBounce = undefined;
-    this.nodTimer?.remove(false);
-    this.nodTimer = undefined;
-    this.trike?.setScale(1 / this.layout.renderScale);
+  /** Stops a running hop: the revealed item back on its slot at its true size. */
+  private stopHop(): void {
+    this.hop?.stop();
+    this.hop = undefined;
+    const q = this.question;
+    const img = q?.revealed;
+    if (!q || !img) return;
+    stopMotion(img, 1 / this.layout.renderScale);
+    img.setY((this.rowSlots()[q.correctSlot] ?? this.centre()).y);
   }
 
-  /** The last question: happy frames, the celebrate bounce and the happy tune. */
+  /** The last question: the revealed item's celebrate bounce with a sparkle, and the happy tune. */
   private celebrate(): void {
-    this.stopNod();
-    this.holdAmbient(HOLD_CELEBRATE, true);
+    this.stopHop();
     audio.sfx(SFX.happy);
+    const q = this.question;
+    if (!q) return;
+    const item = q.shadows[q.correctSlot]?.item;
+    if (item !== undefined) this.sparkleAt(q.correctSlot, item);
+    if (!q.revealed) return;
     const spec = Tokens.components.character.celebrate;
-    const frames = trikeFrames.happy.filter((f) => this.hasFrame(f));
-    this.bounceTrike(spec.scales, spec.repeat, spec.durationMs, (step) => {
-      if (frames.length > 0 && this.trike) this.trike.setFrame(frames[step % frames.length]!, false, false);
-    });
+    this.bounceImage(q.revealed, 1 / this.layout.renderScale, spec.scales, spec.repeat, spec.durationMs);
   }
 
   // --- one question ------------------------------------------------------------------------------------------
 
-  /** The shadows on the row's slots (a target each, `pad` = its shown radius) and the held item at the hand. */
+  /** The shadows on the row's slots (a target each, `pad` = its shown radius) and the held item on the pedestal. */
   private showQuestion(item: ItemId, shadows: readonly ItemId[], correctSlot: number, fade: boolean): void {
     const slots = this.rowSlots();
     const snapR = Tokens.components.dropTarget.snapRadius;
@@ -344,10 +312,10 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
     }
   }
 
-  /** The held item at the hand: drawn at ui.shadowHeldScale × its shadow size, draggable. */
+  /** The held item on the pedestal: drawn at ui.shadowHeldScale × its shadow size, draggable. */
   private addHeld(item: ItemId): HeldView {
     const spec = Tokens.components.draggableItem;
-    const hand = this.anchor(HAND_ANCHOR);
+    const hand = this.restFor(item);
     const size = this.itemSize(item);
     const k = Tokens.ui.shadowHeldScale;
     const lift = spec.liftShadow;
@@ -356,7 +324,17 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
       .setDepth(Depth.item)
       .setVisible(false);
     const image = this.centredImage(itemFrames(item).color, hand, k)?.setDepth(Depth.item);
-    const view: HeldView = { item, image, shadow, drag: undefined, hitR: heldHitRadius(size), pos: { ...hand }, tween: undefined, returnTimer: undefined };
+    const view: HeldView = { item, image, shadow, drag: undefined, hitR: heldHitRadius(size), pos: { ...hand }, tween: undefined, returnTimer: undefined, lifted: false, unreact: () => undefined };
+    // Story 5.4: a tap on the pedestal bounces the item waiting on it (with the reaction's "pụp").
+    const pedestal = this.layout.hits[PEDESTAL_HIT];
+    if (image && pedestal) {
+      view.unreact = this.react({
+        image,
+        area: { contains: (p) => pointInPolygon(p, pedestal) },
+        base: k / this.layout.renderScale,
+        enabled: () => view.drag !== undefined && !view.lifted && view.tween === undefined && view.pos.x === hand.x && view.pos.y === hand.y,
+      });
+    }
     if (this.router) {
       view.drag = createDraggable(this.router, {
         circle: { x: hand.x, y: hand.y, r: view.hitR },
@@ -397,6 +375,9 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
     this.applyAll(this.round?.lift() ?? []);
     view.tween?.stop();
     view.tween = undefined;
+    view.lifted = true;
+    // A running pedestal-tap bounce (Story 5.4) stops first, so it never overrides the lift scale.
+    if (view.image) stopMotion(view.image, this.heldScale(false));
     view.image?.setScale(this.heldScale(true)).setDepth(Depth.lifted);
     view.shadow.setVisible(true).setDepth(Depth.lifted);
   }
@@ -413,6 +394,7 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
   }
 
   private settle(view: HeldView, outcome: () => ShadowCommand[]): void {
+    view.lifted = false;
     view.image?.setScale(this.heldScale(false)).setDepth(Depth.item);
     view.shadow.setVisible(false).setDepth(Depth.item);
     this.applyAll(outcome());
@@ -501,8 +483,7 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
 
   /** The revealed item and the decoys fade out and go. */
   private clearQuestion(): void {
-    if (this.nodTimer) this.setTrikeFrame(trikeFrames.idle);
-    this.stopNod();
+    this.stopHop();
     const q = this.question;
     this.question = undefined;
     if (!q) return;
@@ -511,6 +492,7 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
       q.held.tween?.stop();
       q.held.returnTimer?.remove();
       q.held.drag?.destroy();
+      q.held.unreact();
       q.held.image?.destroy();
       q.held.shadow.destroy();
     }
@@ -584,16 +566,13 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
         held?.drag?.destroy();
         if (held) held.drag = undefined;
         return;
-      case 'holdReveal':
-        this.holdAmbient(HOLD_REVEAL, c.on);
-        return;
       case 'markFinishing':
         this.markFinishing();
         return;
       case 'suckIn': {
-        // Story 5.3: reveal, chirp, name and the next item's fade — a tap after the arm delay fast-forwards it.
+        // Story 5.3: reveal, hop, name and the next item's fade — a tap after the arm delay fast-forwards it.
         const T = Tokens.Timing;
-        this.skippable(T.shadowRevealMs + T.trikeCallMs + T.celebrationLineMs + T.shadowItemFadeMs);
+        this.skippable(T.shadowRevealMs + T.shadowNameDelayMs + T.celebrationLineMs + T.shadowItemFadeMs);
         this.suckIn(c.to);
         return;
       }
@@ -602,11 +581,8 @@ export class ShadowMatch extends MiniGameBase<'shadow-match'> {
         if (this.sucking) this.afterSuck.push(() => this.reveal(c.slot, c.item));
         else this.reveal(c.slot, c.item);
         return;
-      case 'trikeNod':
-        this.nod();
-        return;
-      case 'sfx':
-        audio.sfx(c.id);
+      case 'itemHappy':
+        this.happy(c.slot);
         return;
       case 'say':
         this.time.delayedCall(c.afterMs, () => this.say(c.tag, () => audio.say(c.id)));

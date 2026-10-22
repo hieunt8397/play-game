@@ -8,6 +8,7 @@ import { GAME_SCENES } from './games/registry';
 import { AudioUnlockOverlay } from './scenes/AudioUnlockOverlay';
 import { Boot } from './scenes/Boot';
 import { Hud } from './scenes/Hud';
+import { HomeYard } from './scenes/HomeYard';
 import { MapScene } from './scenes/Map';
 import { Start } from './scenes/Start';
 
@@ -31,9 +32,10 @@ const config: Types.Core.GameConfig = {
   input: {
     activePointers: ACTIVE_POINTERS,
   },
-  // The games between Map and Hud, so Hud renders above them (Story 1.7);
+  // The games between Map and Hud, so Hud renders above them (Story 1.7); Story 7.1: the yard shell scene
+  // (HomeYard) right after Map, below its games;
   // AudioUnlockOverlay last so it renders above the shell scenes (it also bringToTop()s on wake).
-  scene: [Boot, Start, MapScene, ...GAME_SCENES, Hud, AudioUnlockOverlay],
+  scene: [Boot, Start, MapScene, HomeYard, ...GAME_SCENES, Hud, AudioUnlockOverlay],
 };
 
 installPageGuards();

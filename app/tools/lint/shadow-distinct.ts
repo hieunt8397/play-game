@@ -2,10 +2,10 @@
 // items of one shape group must cast shadows that really differ on the committed render: the alpha masks
 // of their `item-<id>/shadow/00` frames (alpha ≥ MASK_ALPHA) are scaled to the same longest side,
 // aligned by bottom-centre, and their intersection-over-union must stay ≤ ui.shadowMaxIoU. Every pair's
-// IoU is reported as an info line. `silhouetteIoU` is the pure part (unit-tested); the atlas page is
+// IoU is reported as an info line. `silhouetteIoU` is the pure part (unit-tested); the atlas pages are
 // read with sharp.
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import sharp from 'sharp';
 import { ATLASES } from '../../src/content/assets.ts';
 import { SHAPE_ITEMS, itemFrames } from '../../src/content/games/shadow-match.ts';
@@ -63,6 +63,24 @@ interface FrameJson {
   readonly rotated?: boolean;
 }
 
+/** One page of a Phaser multiatlas JSON (2026-10-22: the shadow-match atlas spans several pages). */
+interface PageJson {
+  readonly image: string;
+  readonly frames: readonly (FrameJson & { readonly filename: string })[];
+}
+
+/** Every frame by name with the page image it sits on: a JSON hash (one page, `png`) or a multiatlas. */
+export function framePages(json: unknown, png: string): Map<string, { frame: FrameJson; image: string }> {
+  const out = new Map<string, { frame: FrameJson; image: string }>();
+  const multi = json as { textures?: readonly PageJson[]; frames?: Record<string, FrameJson> };
+  if (Array.isArray(multi.textures)) {
+    for (const page of multi.textures) for (const f of page.frames) out.set(f.filename, { frame: f, image: page.image });
+  } else {
+    for (const [name, f] of Object.entries(multi.frames ?? {})) out.set(name, { frame: f, image: png });
+  }
+  return out;
+}
+
 /** The pairs of one group whose IoU exceeds `max` (problems), and every pair's IoU (info). */
 export function iouReport(masks: ReadonlyMap<string, Mask>, items: readonly { id: string; shapeGroup: string }[], max: number): { problems: string[]; info: string[] } {
   const problems: string[] = [];
@@ -84,34 +102,50 @@ export function iouReport(masks: ReadonlyMap<string, Mask>, items: readonly { id
 }
 
 /**
- * Reads every `item-<id>/shadow/00` from the committed `atlas.shadow-match` page under `publicDir` and
- * checks every same-group pair. A missing atlas, a missing or rotated frame is a problem naming it.
+ * Reads every `item-<id>/shadow/00` from the committed `atlas.shadow-match` (a single page or, since
+ * 2026-10-22, a multiatlas whose pages sit beside its JSON) under `publicDir` and checks every same-group
+ * pair. A missing atlas or page, a missing or rotated frame is a problem naming it.
  */
-export async function shadowDistinct(publicDir: string, items: readonly { id: string; shapeGroup: string }[] = SHAPE_ITEMS, max: number = Tokens.ui.shadowMaxIoU): Promise<{ problems: string[]; info: string[] }> {
-  const ref = ATLASES['shadow-match'];
+export async function shadowDistinct(publicDir: string, items: readonly { id: string; shapeGroup: string }[] = SHAPE_ITEMS, max: number = Tokens.ui.shadowMaxIoU, ref: { json: string; png: string } = ATLASES['shadow-match']): Promise<{ problems: string[]; info: string[] }> {
   const jsonFile = resolve(publicDir, ref.json);
-  const pngFile = resolve(publicDir, ref.png);
-  if (!existsSync(jsonFile) || !existsSync(pngFile)) return { problems: [`shadow-match silhouettes: atlas ${ref.json} or ${ref.png} is missing`], info: [] };
-  const frames = (JSON.parse(readFileSync(jsonFile, 'utf8')) as { frames?: Record<string, FrameJson> }).frames ?? {};
-  const { data, info } = await sharp(pngFile).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  if (!existsSync(jsonFile)) return { problems: [`shadow-match silhouettes: atlas ${ref.json} is missing`], info: [] };
+  const frames = framePages(JSON.parse(readFileSync(jsonFile, 'utf8')), ref.png.slice(ref.png.lastIndexOf('/') + 1));
+  const pages = new Map<string, { data: Buffer; width: number; channels: number } | undefined>();
+  const page = async (image: string) => {
+    if (!pages.has(image)) {
+      const file = resolve(dirname(jsonFile), image);
+      if (!existsSync(file)) pages.set(image, undefined);
+      else {
+        const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        pages.set(image, { data, width: info.width, channels: info.channels });
+      }
+    }
+    return pages.get(image);
+  };
   const problems: string[] = [];
   const masks = new Map<string, Mask>();
   for (const it of items) {
     const name = itemFrames(it.id as (typeof SHAPE_ITEMS)[number]['id']).shadow;
-    const f = frames[name];
-    if (!f) {
+    const entry = frames.get(name);
+    if (!entry) {
       problems.push(`shadow-match silhouettes: frame "${name}" is missing from ${ref.json}`);
       continue;
     }
+    const f = entry.frame;
     if (f.rotated) {
       problems.push(`shadow-match silhouettes: frame "${name}" is rotated in ${ref.json} (the rule reads unrotated rects)`);
+      continue;
+    }
+    const img = await page(entry.image);
+    if (!img) {
+      problems.push(`shadow-match silhouettes: page ${entry.image} of ${ref.json} is missing`);
       continue;
     }
     const { x, y, w, h } = f.frame;
     const m = new Uint8Array(w * h);
     for (let yy = 0; yy < h; yy++) {
       for (let xx = 0; xx < w; xx++) {
-        const a = data[((y + yy) * info.width + (x + xx)) * info.channels + 3]!;
+        const a = img.data[((y + yy) * img.width + (x + xx)) * img.channels + 3]!;
         m[yy * w + xx] = a >= MASK_ALPHA ? 1 : 0;
       }
     }

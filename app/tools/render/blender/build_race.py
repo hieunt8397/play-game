@@ -13,9 +13,12 @@
 # `sprite.kart`: its driver
 # gets a pink cap, two big eyes and a waving arm (hidden at frame 1, waving ±25° on frames 10–13); it is
 # yawed to drive toward screen-right with the driver's face toward the camera and scaled to the kart
-# size. The arch becomes `sprite.gate`. The layout objects (`path.<shape>-1..3` for the straight, curve,
-# zigzag and loop roads, `anchor.kart`, `anchor.gate`, `anchor.cone-1..4`, `anchor.flag-1..2`) go in a
-# hidden `layout` collection; render size; save.
+# size. The arch becomes `sprite.gate`, rendered at six yaws (`gate/<deg>/00`, GATE_YAWS) with
+# `anchor.gate-cross-<deg>` / `anchor.gate-post-<deg>` telling the runtime how each frame sits on screen.
+# The layout objects (`path.<shape>-1..3` for the straight, curve, zigzag, loop and (2026-10-22, harder
+# roads) wave, hairpin, snake and spiral roads, `anchor.kart`, `anchor.gate`, `anchor.gate-cross-*`,
+# `anchor.gate-post-*`, `anchor.cone-1..4`, `anchor.flag-1..2`) go in a hidden `layout` collection;
+# render size; save.
 # Every constant is in Blender world units (metres) unless its name says otherwise.
 import json
 import math
@@ -63,6 +66,9 @@ ROADS = {
     'straight-3': [(-0.89, 1.44), (2.48, 0.44), (5.56, -0.46)],  # gently falling
 }
 ROAD_LIFT = 0.01  # path points sit this far above the ground
+# 2026-10-22: the flat flowers on the grass (island Nature `Flower*`) are painted over by the road band, so a
+# road point never stands on one (a petal would lift it ≈ 0.1–0.15 and kink the projected band).
+ROAD_GROUND_IGNORE_PREFIXES = ('Flower',)
 
 # --- Story 4.2: the shaped roads, generated from parametric tables (world units) -------------------------
 ROAD_STEP_WU = 0.15  # every shape is sampled this far apart in arc (≈ 17 design px ≤ ui.racePathPointGapPx)
@@ -82,8 +88,33 @@ ROAD_SHAPES = [
     {'id': 'loop-1', 'kind': 'loop', 'params': {'centre': (2.5, 0.5), 'r': 1.9, 'ccw': True}},
     {'id': 'loop-2', 'kind': 'loop', 'params': {'centre': (2.2, 0.55), 'r': 1.85, 'ccw': False}},
     {'id': 'loop-3', 'kind': 'loop', 'params': {'centre': (2.8, 0.45), 'r': 1.95, 'ccw': True}},
+    # --- 2026-10-22 (harder roads): longer and twistier, never narrower. On screen the open grass for a road
+    # centre is about x 150–900, y 230–600 design px (world y ≈ 2.3 … −1.45): the Home/Speaker zones, the
+    # flags (back), the cones (front) and the three trees (top-left, left, right) stay clear of every band.
+    # wave: `periods` full sine periods of amplitude `amp` from x0 to x1 around y0 (amp < 0 starts downward);
+    # each amplitude is the largest that keeps the crests at a projected turn radius of about 56 px (min 50).
+    {'id': 'wave-1', 'kind': 'wave', 'params': {'x0': -0.6, 'x1': 5.6, 'y0': 0.4, 'amp': 0.65, 'periods': 2.0}},
+    {'id': 'wave-2', 'kind': 'wave', 'params': {'x0': -0.6, 'x1': 5.6, 'y0': 0.0, 'amp': -0.68, 'periods': 2.0}},
+    {'id': 'wave-3', 'kind': 'wave', 'params': {'x0': -0.6, 'x1': 5.6, 'y0': 0.5, 'amp': 0.47, 'periods': 2.5}},
+    # The track kinds are turtle drives: from `start` heading `heading` (degrees, 0 = +x = screen-right),
+    # ('line', length) straight on, ('arc', r, deg) turning deg degrees (> 0 = left = counter-clockwise).
+    # hairpin: out to the right, a U-turn (legs 2r ≥ 1.8 apart, ≈ 170 px), back left; the return leg is
+    # shorter, so the gate stands on the start side but beside (not on top of) the kart.
+    {'id': 'hairpin-1', 'kind': 'track', 'params': {'start': (-0.3, -1.2), 'heading': 0.0, 'moves': [('line', 4.3), ('arc', 0.9, 180.0), ('line', 3.2)]}},
+    {'id': 'hairpin-2', 'kind': 'track', 'params': {'start': (-0.6, 2.1), 'heading': 0.0, 'moves': [('line', 4.9), ('arc', 0.95, -180.0), ('line', 4.3)]}},
+    {'id': 'hairpin-3', 'kind': 'track', 'params': {'start': (-0.4, -0.6), 'heading': 0.0, 'moves': [('line', 4.8), ('arc', 1.0, 180.0), ('line', 2.6)]}},
+    # snake: a serpentine over three rows (2r = 1.76 apart, ≈ 165–190 px) with two U-turns, ≈ 2000 px long.
+    {'id': 'snake-1', 'kind': 'track', 'params': {'start': (-0.6, 2.1), 'heading': 0.0, 'moves': [('line', 5.4), ('arc', 0.88, -180.0), ('line', 4.2), ('arc', 0.88, 180.0), ('line', 4.0)]}},
+    {'id': 'snake-2', 'kind': 'track', 'params': {'start': (5.6, 2.1), 'heading': 180.0, 'moves': [('line', 5.4), ('arc', 0.88, 180.0), ('line', 4.2), ('arc', 0.88, -180.0), ('line', 4.0)]}},
+    {'id': 'snake-3', 'kind': 'track', 'params': {'start': (-0.2, -1.42), 'heading': 0.0, 'moves': [('line', 4.6), ('arc', 0.88, 180.0), ('line', 4.0), ('arc', 0.88, -180.0), ('line', 3.0)]}},
+    # spiral: 1¼ turns inward (a half, a half and a quarter turn), a stadium spiral whose coils stay ≥ 1.1
+    # apart; it ends in the middle heading up, with open grass above the end for the gate.
+    {'id': 'spiral-1', 'kind': 'track', 'params': {'start': (-0.35, -1.4), 'heading': 0.0, 'moves': [('line', 4.2), ('arc', 1.85, 180.0), ('line', 3.2), ('arc', 1.3, 180.0), ('line', 1.1), ('arc', 0.6, 90.0)]}},
+    {'id': 'spiral-2', 'kind': 'track', 'params': {'start': (5.0, -1.4), 'heading': 180.0, 'moves': [('line', 4.0), ('arc', 1.85, -180.0), ('line', 3.2), ('arc', 1.3, -180.0), ('line', 1.1), ('arc', 0.6, -90.0)]}},
+    {'id': 'spiral-3', 'kind': 'track', 'params': {'start': (0.3, -1.3), 'heading': 0.0, 'moves': [('line', 3.6), ('arc', 1.8, 180.0), ('line', 2.8), ('arc', 1.25, 180.0), ('line', 0.9), ('arc', 0.6, 90.0)]}},
 ]
 DENSE_STEPS = 400  # a shape is first sampled this finely, then resampled every ROAD_STEP_WU
+TRACK_DENSE_WU = 0.01  # a track drive is first sampled this finely (arc length), then resampled
 
 # --- the plate cones (Kenney car-kit cone.glb), clear of every road band --------------------------------
 # Story 4.2: the swaying cones along the front grass (one `sprite.cone`, rendered at CONES[0]).
@@ -125,8 +156,16 @@ WAVE_FRAMES = [10, 11, 12, 13]
 KART_STATES = {'idle': [IDLE_FRAME], 'wave': WAVE_FRAMES}
 
 # --- the gate (sprite.gate) ----------------------------------------------------------------------------------
-GATE_AT = (5.72, 0.33)  # its render pose: the end of straight-1
+GATE_AT = (2.5, 0.33)  # its render pose: mid-screen (under the camera target), so its posts stand upright on screen wherever the runtime puts it
 GATE_SCALE = 0.55
+# 2026-10-22 (gate faces the road): the root is yawed about its pivot (the post-feet midpoint, so every
+# frame keeps `anchor.gate`) to each of these degrees, one state `gate/<deg>/00` each at timeline frame
+# GATE_YAW_FRAME0 + i. 0° = the arch facing the camera (posts left/right); the arch is symmetric, so 0–150°
+# covers every crossing direction. For each yaw the layout gets `anchor.gate-cross-<deg>` (pivot + the
+# crossing direction, |post offset| long) and `anchor.gate-post-<deg>` (one post foot): the runtime picks
+# the frame whose on-screen crossing direction best matches the road's arrival.
+GATE_YAWS = [0, 30, 60, 90, 120, 150]
+GATE_YAW_FRAME0 = 2  # frames 2–7: before the kart's wave frames, so its arm (shown from frame 10 on) stays hidden
 
 
 def fail(msg):
@@ -337,7 +376,7 @@ def build_gate(scene, sprites):
         fail('no arch objects in the Race collection')
     coll = bpy.data.collections.new('sprite.gate')
     sprites.children.link(coll)
-    coll['states'] = json.dumps({'idle': [IDLE_FRAME]}, separators=(',', ':'))
+    coll['states'] = json.dumps({str(d): [GATE_YAW_FRAME0 + i] for i, d in enumerate(GATE_YAWS)}, separators=(',', ':'))
     coll['movable'] = 1
     for o in objs:
         move_to(o, coll)
@@ -356,8 +395,28 @@ def build_gate(scene, sprites):
     gz = ground_z(scene, GATE_AT[0], GATE_AT[1], {o.name for o in coll.all_objects})
     root.scale = (GATE_SCALE, GATE_SCALE, GATE_SCALE)
     root.location = (GATE_AT[0], GATE_AT[1], gz)
+    # One post foot relative to the pivot at 0° (world, horizontal, scaled): the yaw states turn it about z.
+    post = foot[1] - mid
+    post = Vector((post.x, post.y, 0.0)) * GATE_SCALE
+    root.rotation_mode = 'XYZ'
+    root.rotation_euler = (0.0, 0.0, 0.0)
+    root.keyframe_insert('rotation_euler', frame=IDLE_FRAME)
+    for i, d in enumerate(GATE_YAWS):
+        root.rotation_euler = (0.0, 0.0, math.radians(d))
+        root.keyframe_insert('rotation_euler', frame=GATE_YAW_FRAME0 + i)
+    key_constant(root)
     bpy.context.view_layer.update()
-    return coll, root
+    return coll, root, post
+
+
+def gate_yaw_anchors(root, post, layout):
+    """`anchor.gate-cross-<deg>` and `anchor.gate-post-<deg>` for every yaw state (see GATE_YAWS)."""
+    pivot = root.matrix_world.translation.copy()
+    cross = Vector((-post.y, post.x, 0.0))  # z × post: the direction a road crosses the arch
+    for d in GATE_YAWS:
+        rot = Matrix.Rotation(math.radians(d), 4, 'Z')
+        add_empty(f'anchor.gate-cross-{d}', pivot + (rot @ cross), layout)
+        add_empty(f'anchor.gate-post-{d}', pivot + (rot @ post), layout)
 
 
 def build_cone(scene, sprites):
@@ -471,6 +530,42 @@ def shape_loop(p):
     return [(cx + r * math.cos(math.radians(a0 + (a1 - a0) * t)), cy + r * math.sin(math.radians(a0 + (a1 - a0) * t))) for t in ts]
 
 
+def shape_wave(p):
+    """`periods` full sine periods of amplitude `amp` from x0 to x1 around y0."""
+    ts = [i / DENSE_STEPS for i in range(DENSE_STEPS + 1)]
+    return [(p['x0'] + (p['x1'] - p['x0']) * t, p['y0'] + p['amp'] * math.sin(2 * math.pi * p['periods'] * t)) for t in ts]
+
+
+def shape_track(rid, p):
+    """A turtle drive: from `start` heading `heading` (deg), ('line', length) and ('arc', r, deg; > 0 = left) moves."""
+    x, y = p['start']
+    h = math.radians(p['heading'])
+    out = [(x, y)]
+    for m in p['moves']:
+        if m[0] == 'line':
+            length = m[1]
+            if length <= 0:
+                fail(f'road "{rid}": a line move needs a positive length')
+            n = max(1, math.ceil(length / TRACK_DENSE_WU))
+            dx, dy = math.cos(h), math.sin(h)
+            out += [(x + dx * length * j / n, y + dy * length * j / n) for j in range(1, n + 1)]
+            x, y = x + dx * length, y + dy * length
+        elif m[0] == 'arc':
+            r, turn = m[1], math.radians(m[2])
+            if r <= 0 or turn == 0:
+                fail(f'road "{rid}": an arc move needs a positive radius and a non-zero turn')
+            sign = 1.0 if turn > 0 else -1.0
+            cx, cy = x - sign * r * math.sin(h), y + sign * r * math.cos(h)
+            a0 = math.atan2(y - cy, x - cx)
+            n = max(4, math.ceil(abs(turn) * r / TRACK_DENSE_WU))
+            out += [(cx + r * math.cos(a0 + turn * j / n), cy + r * math.sin(a0 + turn * j / n)) for j in range(1, n + 1)]
+            x, y = cx + r * math.cos(a0 + turn), cy + r * math.sin(a0 + turn)
+            h += turn
+        else:
+            fail(f'road "{rid}": unknown track move "{m[0]}"')
+    return out
+
+
 def road_points():
     """Every road id → its world XY points: the straight roads as given, the shapes generated."""
     roads = {rid: list(pts) for rid, pts in ROADS.items()}
@@ -484,6 +579,10 @@ def road_points():
             raw = shape_zigzag(p)
         elif kind == 'loop':
             raw = shape_loop(p)
+        elif kind == 'wave':
+            raw = shape_wave(p)
+        elif kind == 'track':
+            raw = shape_track(s['id'], p)
         else:
             fail(f'road "{s["id"]}": unknown shape kind "{kind}"')
         roads[s['id']] = resample_xy(raw, ROAD_STEP_WU)
@@ -514,11 +613,18 @@ def main():
     cone = build_cone(scene, sprites)
     flag = build_flag(scene, sprites)
     kart, _kgz = build_kart(scene, colours, sprites)
-    gate, gate_root = build_gate(scene, sprites)
+    gate, gate_root, gate_post = build_gate(scene, sprites)
     scene.frame_set(IDLE_FRAME)
     bpy.context.view_layer.update()
 
     sprite_names = {o.name for c in (kart, gate, cone, flag) for o in c.all_objects}
+    road_ignore = sprite_names | {o.name for o in bpy.data.objects if o.name.startswith(ROAD_GROUND_IGNORE_PREFIXES)}
+    # The gate is out of the depsgraph while the roads probe the ground: a ray stepping through its post
+    # (which sinks below the grass) would land on the sand under it and kink the road.
+    gate_objs = list(gate.all_objects)
+    for o in gate_objs:
+        o.hide_viewport = True
+    bpy.context.view_layer.update()
     for rid, pts in road_points().items():
         if rid in ROADS and not 3 <= len(pts) <= 7:
             fail(f'road "{rid}" needs 3–7 points')
@@ -527,8 +633,11 @@ def main():
         spline = curve.splines.new('POLY')
         spline.points.add(len(pts) - 1)
         for pt, (x, y) in zip(spline.points, pts):
-            pt.co = (x, y, ground_z(scene, x, y, sprite_names) + ROAD_LIFT, 1.0)
+            pt.co = (x, y, ground_z(scene, x, y, road_ignore) + ROAD_LIFT, 1.0)
         layout.objects.link(bpy.data.objects.new(f'path.{rid}', curve))
+    for o in gate_objs:
+        o.hide_viewport = False
+    bpy.context.view_layer.update()
 
     dg = bpy.context.evaluated_depsgraph_get()
     kpts = eval_world_verts([o for o in kart.all_objects if o.type == 'MESH' and not o.hide_render], dg)
@@ -538,6 +647,7 @@ def main():
     ky = (min(p.y for p in wpts) + max(p.y for p in wpts)) / 2
     add_empty('anchor.kart', (kx, ky, min(p.z for p in kpts)), layout)
     add_empty('anchor.gate', gate_root.matrix_world.translation.copy(), layout)
+    gate_yaw_anchors(gate_root, gate_post, layout)
     for i, (x, y) in enumerate(CONES, 1):
         add_empty(f'anchor.cone-{i}', (x, y, ground_z(scene, x, y, sprite_names)), layout)
     for i, (x, y) in enumerate(FLAGS, 1):

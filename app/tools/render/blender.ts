@@ -28,6 +28,8 @@ export const SCREENS: Readonly<Record<string, ScreenSpec>> = {
   race: { source: 'art/src/map-v3.blend', builder: 'build_race.py' },
   fishing: { source: 'art/src/map-v3.blend', builder: 'build_fishing.py' },
   'touch-talk': { source: 'art/src/map-v3.blend', builder: 'build_touch_talk.py' },
+  // Story 7.1: the yard behind the island's home station.
+  home: { source: 'art/src/map-v3.blend', builder: 'build_home.py' },
 };
 
 /** Throws listing the known screens when `screen` is not one. */

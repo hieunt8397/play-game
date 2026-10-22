@@ -11,7 +11,7 @@ const MEAT_EATER = new RegExp(['t-', '?rex'].join(''), 'i');
 const groupSize = (g: string): number => SHAPE_ITEMS.filter((i) => i.shapeGroup === g).length;
 
 describe('shadow-match content (Stories 3.5, 3.6)', () => {
-  it('the catalogue: dog, cow, horse, donkey, stag (quadruped), car (car), truck, tractor (truck)', () => {
+  it('the catalogue: the 8 old items, then the 17 added on 2026-10-22 (bull, taxi and ambulance dropped by the silhouette rule, the shark by the parent)', () => {
     expect(SHAPE_ITEMS.map((i) => [i.id, i.shapeGroup])).toEqual([
       ['dog', 'quadruped'],
       ['cow', 'quadruped'],
@@ -21,8 +21,30 @@ describe('shadow-match content (Stories 3.5, 3.6)', () => {
       ['car', 'car'],
       ['truck', 'truck'],
       ['tractor', 'truck'],
+      ['fox', 'quadruped'],
+      ['goldfish', 'fish'],
+      ['puffer', 'fish'],
+      ['swordfish', 'fish'],
+      ['police', 'car'],
+      ['firetruck', 'truck'],
+      ['garbage-truck', 'truck'],
+      ['excavator', 'truck'],
+      ['apple', 'fruit'],
+      ['banana', 'fruit'],
+      ['pineapple', 'fruit'],
+      ['pear', 'fruit'],
+      ['strawberry', 'fruit'],
+      ['carrot', 'fruit'],
+      ['mug', 'kitchen'],
+      ['pan', 'kitchen'],
+      ['ice-cream', 'kitchen'],
     ]);
-    expect(ITEM_IDS).toEqual(['dog', 'cow', 'horse', 'donkey', 'stag', 'car', 'truck', 'tractor']);
+    // Resume: every old id is kept.
+    expect(ITEM_IDS.slice(0, 8)).toEqual(['dog', 'cow', 'horse', 'donkey', 'stag', 'car', 'truck', 'tractor']);
+    // The groups that fill a 4-shadow row (the `same` level); car, fish (since the shark was dropped) and kitchen never do.
+    const groups = [...new Set(SHAPE_ITEMS.map((i) => i.shapeGroup))];
+    expect(groups.filter((g) => groupSize(g) >= 4)).toEqual(['quadruped', 'truck', 'fruit']);
+    expect(groups.filter((g) => groupSize(g) < 4)).toEqual(['car', 'fish', 'kitchen']);
   });
 
   it('the ladder: 2 / 3 / 4 shadows, 4 questions each, groups distinct → mixed → same', () => {
@@ -72,28 +94,26 @@ describe('shadow-match content (Stories 3.5, 3.6)', () => {
     for (const ok of ['khoai', 'football', 'hoàng', 'baller', 'sunflowerseed', 'Con chó!']) expect(FORBIDDEN_ITEM.test(ok), ok).toBe(false);
   });
 
-  it('the screen: ids and frames generated from SHAPE_ITEMS × SHADOW_COUNTS (8 items, 9 slots)', () => {
-    expect(screen.anchors).toEqual(['triceratops', 'triceratops-hand']);
-    expect(screen.hits).toEqual(['cave']);
+  it('the screen: ids and frames generated from SHAPE_ITEMS × SHADOW_COUNTS (25 items, 9 slots)', () => {
+    expect(screen.anchors).toEqual(['item-rest', 'pedestal-top']);
+    expect(screen.hits).toEqual(['cave', 'pedestal']);
     expect(screen.slots).toEqual(['shadow-2-1', 'shadow-2-2', 'shadow-3-1', 'shadow-3-2', 'shadow-3-3', 'shadow-4-1', 'shadow-4-2', 'shadow-4-3', 'shadow-4-4']);
     expect(shadowSlots(3)).toEqual(['shadow-3-1', 'shadow-3-2', 'shadow-3-3']);
-    expect(screen.frames).toEqual([
-      'triceratops/idle/00',
-      'triceratops/nod/00',
-      'triceratops/happy/00',
-      'triceratops/happy/01',
-      ...ITEM_IDS.flatMap((id) => [`item-${id}/color/00`, `item-${id}/shadow/00`]),
-    ]);
+    // 2026-10-22: no triceratops frame any more.
+    expect(screen.frames).toEqual(ITEM_IDS.flatMap((id) => [`item-${id}/color/00`, `item-${id}/shadow/00`]));
+    expect(screen.frames.some((f) => f.includes('triceratops'))).toBe(false);
   });
 
-  it('loads its one-page atlas, plate, every shadow-match line and SFX (the chirp is a creature sound)', () => {
+  it('loads its atlas (2026-10-22: up to 3 pages), plate, every shadow-match line and SFX (no dinosaur chirp)', () => {
     expect(assets.atlases).toEqual([ATLASES['shadow-match']]);
-    expect(ATLASES['shadow-match'].pages).toBeUndefined();
+    expect(ATLASES['shadow-match'].pages).toBe(3);
     expect(assets.images).toEqual([BACKGROUNDS['shadow-match']]);
     const vo = VOICE_LINES.map((l) => l.id).filter((id) => id.startsWith('vo.shadow-match.'));
-    expect(vo).toHaveLength(17);
-    expect(assets.audio).toEqual([...vo, SFX.snap, SFX.happy, SFX.trikeHappy]);
-    expect(AUDIO_CATALOG[SFX.trikeHappy].creature).toBe(true);
+    // An ask and a name line per item, plus the parent line.
+    expect(vo).toHaveLength(2 * SHAPE_ITEMS.length + 1);
+    expect(assets.audio).toEqual([...vo, SFX.snap, SFX.happy]);
+    expect(assets.audio.some((id) => id.includes('trike'))).toBe(false);
+    expect(Object.keys(AUDIO_CATALOG).some((id) => id.startsWith('sfx.shadow-match.trike'))).toBe(false);
     expect(VOICE_LINES.map((l) => l.id)).toEqual(expect.arrayContaining(['vo.shell.invite.shadow-match']));
   });
 
@@ -107,6 +127,14 @@ describe('shadow-match content (Stories 3.5, 3.6)', () => {
     for (const id of ids) {
       const m = /^vo\.shadow-match\.(ask|name)\.(.+)$/.exec(id);
       if (m) expect(known.has(m[2]!), id).toBe(true);
+    }
+  });
+
+  it('voice: the ask line is "Xoài ơi, <askName> ở | bóng nào?" (keyword pause 300 ms) and the name line is the item\'s name', () => {
+    for (const item of SHAPE_ITEMS) {
+      const ask = VOICE_LINES.find((l) => l.id === `vo.shadow-match.ask.${item.id}`);
+      expect(ask, item.id).toMatchObject({ text: `Xoài ơi, ${item.askName} ở | bóng nào?`, keywordPauseMs: 300 });
+      expect(VOICE_LINES.find((l) => l.id === `vo.shadow-match.name.${item.id}`)?.text, item.id).toBe(item.name);
     }
   });
 });

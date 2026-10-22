@@ -1,13 +1,14 @@
 // Hud (Story 1.6): a parallel scene above Map and the games. Speaker (top-right, every mode) replays
 // the current prompt with a two-ring wave until that line ends; Home (top-left, 'game' mode only)
-// says "Về đảo nào!" and emits `hud:home`. Launched once by Map, never on Start. Wiring only: the
+// says "Về đảo nào!" and emits `hud:home`. Story 7.1: Home also shows in the yard ('yard' mode), and in a
+// game opened from the yard it says "Về nhà nào!" (core/hud › homeLine). Launched once by Map, never on Start. Wiring only: the
 // layout, wave maths and tap logic live in core/hud.ts; taps go through InputGuard on the `hud` layer.
 import { Scene, type GameObjects, type Tweens } from 'phaser';
 import { audio } from '../core/audio-director';
 import { bus } from '../core/bus';
 import { speakerReplay } from '../core/hint-director';
 import { HudController, hudLayout, waveFrame, wavePeriodMs, type HudLayout } from '../core/hud';
-import { getHudMode } from '../core/hud-mode';
+import { getHomeTarget, getHudMode } from '../core/hud-mode';
 import { createTapRouter } from '../core/input/tap-router';
 import { createTapTarget } from '../core/input/tap-target';
 import { currentView, designInsets, NO_INSETS, visibleDesignRect } from '../core/input/space';
@@ -89,6 +90,8 @@ export class Hud extends Scene {
       say: (id) => audio.say(id),
       sfx: (id) => audio.sfx(id),
       emitHome: () => bus.emit('hud:home'),
+      // Story 7.1: "Về nhà nào!" in a game opened from the yard (core/hud › homeLine).
+      homeTarget: getHomeTarget,
       view: {
         pressSpeaker: () => pressButton(this, speaker),
         pressHome: () => pressButton(this, home),

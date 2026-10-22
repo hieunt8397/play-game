@@ -2,7 +2,7 @@
 title: 'Chạm là nói: thêm 3 cảnh Phòng tắm, Tiệm bánh, Dã ngoại'
 type: 'feature'
 created: '2026-10-21'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'NO_VCS'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -59,11 +59,11 @@ All under `app/`.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] content (props, scenes, plates, voice lines, SFX catalogue) + tests.
-- [ ] two-column bubble layout + keep-out + shifted prop boxes + tests.
-- [ ] `build_touch_talk.py` -- three plates and 30 props; rebuild (`BLENDER_BIN=… npm run art:build -- touch-talk && npm run render -- touch-talk && npm run atlas -- touch-talk`), open every new plate and atlas page and iterate until each prop reads clearly.
-- [ ] `npm run tts`, `npx tsx`/`node tools/audio/make-placeholders.ts` for the new SFX, `npm run audio:check`.
-- [ ] `app/README.md` provenance.
+- [x] content (props, scenes, plates, voice lines, SFX catalogue) + tests.
+- [x] two-column bubble layout + keep-out + shifted prop boxes + tests.
+- [x] `build_touch_talk.py` -- three plates and 30 props; rebuild (`BLENDER_BIN=… npm run art:build -- touch-talk && npm run render -- touch-talk && npm run atlas -- touch-talk`), open every new plate and atlas page and iterate until each prop reads clearly.
+- [x] `npm run tts`, `npx tsx`/`node tools/audio/make-placeholders.ts` for the new SFX, `npm run audio:check`.
+- [x] `app/README.md` provenance.
 
 **Acceptance Criteria:**
 - Given the game, when the child taps any new prop, then it bounces, sounds and its Vietnamese name is spoken in the Thắm voice.
@@ -71,9 +71,31 @@ All under `app/`.
 
 ## Implementation Notes
 
+- Bubble order: sea, street, kitchen (column under the Speaker), then bathroom, bakery, picnic (column to its left). Keep-out rect grows automatically from `sceneBubbleCentres` (now x ≥ 780 at y 224–617).
+- PROP_BOXES end at x 746 (padded hulls ≤ 770); street streetlights now placed by screen x (`STREETLIGHT_SCREEN_X`). Sea props moved by `SEA_SHIFT_PX` (seagull moved right under the Speaker at 130 px, boat into its old spot) because the Home zone blocked the left.
+- Bathroom rows: shelf / floor / floor; bakery: shelf / counter (on a floor at −0.6) / pink display table; picnic: all on grass. New token `art.touchTalk.grassNear`. `PROP_STRETCH` accepts an (x, y, z) tuple (toothbrush).
+- New SFX generated only for the 30 new ids (running the whole make-placeholders would rewrite every catalogue file); peaks ≤ −20 dBFS measured. `audio:check` measures only creature sounds (none new).
+- Atlas fits in 2 pages (max 3).
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | verif, edge, blind | STAR_TURN_DEG comment moved onto FLY_WING_DEG | low | two comments on one line, the starfish constant bare | patch |
+| 2 | edge, blind | SEA_SHIFT_PX comment has the sign backwards | low | shifted() adds dx; positive moves right | patch |
+| 3 | blind | seagull shrunk 140 → 130 px | low | frozen Never: existing props change only in position/boxes | patch (restore, move instead) |
+| 4 | blind | single-"column" wording left in rules.ts, render.ts, PROP_BOXES comment, talk-scenes test | low | comments/describe names only | patch |
+| 5 | blind | style: double blank line, redundant toBe(6), 190-char header line | low | read in diff | patch |
+| 6 | edge | a right safe-area inset moves both bubble columns left onto props checked only at zero inset | medium | the second column's left edge (keep-out x 780) sits 34 px from the props' right edge (746); a landscape phone with a notch (right inset ~44–59 px) shifts it into the prop area; the iPad target has no side inset | defer |
+| 7 | edge | screen_x_at divides by p.y − cam.y | false | every call uses fixed on-screen points below the horizon of a fixed camera, so the ray always reaches the ground in front of the camera | reject |
+| 8 | blind | bakery names (bánh nướng, bánh cuộn, bánh kem nhỏ) lack review notes; nine names start with "Bánh" | low | names approved by the parent as written; REVIEW_WORDS does not list them | reject (parent decision) |
+| 9 | blind | "Cái cốc!" names both the kitchen mug and the bathroom toothbrush-cup | low | approved list says "Cái cốc" for toothbrush-cup | reject (parent decision) |
+| 10 | blind | picnic tuft keep-out uses hard-coded numbers; tufts may sit under props | low | cosmetic; the rendered picnic plate reads clean | reject |
+| 11 | blind | several placeholder sounds nearly identical | low | temporary by decision; batch 3 replaces every prop sound | reject |
+| 12 | blind | Python pixel constants vs TS bubble keep-out not cross-checked | low | the render's validateTouchTalk on the regenerated layout fails if a prop enters the keep-out | reject |
+| 13 | blind | sceneBubbleCentres opens a third column for count > 6; no test of index → bubble mapping or picnic → sea slide | low | no caller passes > 6; rules test pins all six centres; the slide is direction-agnostic in talk.ts | reject |
 
 ## Verification
 

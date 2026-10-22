@@ -70,9 +70,11 @@ function goodTree(): string {
   for (const t of dino.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
   put(root, ATLASES['dino-puzzle'].json, JSON.stringify(dino));
   put(root, BACKGROUNDS['dino-puzzle'].path, pngHeader(2048, 1536));
-  // Story 3.5: the shadow-match atlas JSON is the real one (its frame sizes are checked).
-  put(root, ATLASES['shadow-match'].png, pngHeader(2048, 2048));
-  put(root, ATLASES['shadow-match'].json, readFileSync(join(APP, 'public', ATLASES['shadow-match'].json)));
+  // Story 3.5: the shadow-match atlas JSON is the real one (its frame sizes are checked); 2026-10-22: a
+  // multiatlas, each page a PNG header.
+  const sm = JSON.parse(readFileSync(join(APP, 'public', ATLASES['shadow-match'].json), 'utf8')) as { textures: { image: string }[] };
+  for (const t of sm.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
+  put(root, ATLASES['shadow-match'].json, JSON.stringify(sm));
   put(root, BACKGROUNDS['shadow-match'].path, pngHeader(2048, 1536));
   // Story 4.1: the race atlas JSON is the real one (the kart and gate sizes are checked).
   put(root, ATLASES.race.png, pngHeader(2048, 2048));
@@ -87,6 +89,10 @@ function goodTree(): string {
   for (const t of tt.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
   put(root, ATLASES['touch-talk'].json, JSON.stringify(tt));
   for (const plate of TOUCH_TALK_PLATES) put(root, BACKGROUNDS[`touch-talk-${plate}`].path, pngHeader(2048, 1536));
+  // Story 7.1: the yard atlas JSON is the real one (the corner sizes are checked).
+  put(root, ATLASES.home.png, pngHeader(2048, 2048));
+  put(root, ATLASES.home.json, readFileSync(join(APP, 'public', ATLASES.home.json)));
+  put(root, BACKGROUNDS.home.path, pngHeader(2048, 1536));
   return root;
 }
 
@@ -104,6 +110,7 @@ function layoutDir(): string {
   put(dir, 'race.layout.json', JSON.stringify(realLayout('race')));
   put(dir, 'fishing.layout.json', JSON.stringify(realLayout('fishing')));
   put(dir, 'touch-talk.layout.json', JSON.stringify(realLayout('touch-talk')));
+  put(dir, 'home.layout.json', JSON.stringify(realLayout('home')));
   return dir;
 }
 
@@ -220,10 +227,10 @@ describe('validate-content run(publicDir)', () => {
     const root = goodTree();
     const layouts = layoutDir();
     const real = realLayout('map');
-    real.slots['pizza-2'] = real.anchors.pizza;
+    real.slots['race-2'] = real.anchors.race; // Story 7.1: the pizza station keeps one slot (its pivot), so race's second slot is moved
     put(layouts, 'map.layout.json', JSON.stringify(real));
     const problems = run(root, layouts);
-    expect(problems.some((p) => /^layout "map": decoration "[a-z-]+" at slot "pizza-2": footprint intersects the hit polygon of "pizza"$/.test(p))).toBe(true);
+    expect(problems.some((p) => /^layout "map": decoration "[a-z-]+" at slot "race-2": footprint intersects the hit polygon of "race"$/.test(p))).toBe(true);
   });
 
   it('a file over 8 MiB fails and names it', () => {
@@ -306,18 +313,21 @@ describe('validate-content run(publicDir)', () => {
     expect(problems).toContain('layout "dino-puzzle": atlas "dino-puzzle": frame "stegosaurus/blink/00" is missing');
   });
 
-  it('Hang tìm bóng (Story 3.5): a slot under the Speaker, a shadow under 120 px and the hand inside a level-4 snap zone fail naming the id', () => {
+  it('Hang tìm bóng (Story 3.5): a slot under the Speaker, a shadow under 120 px and the pedestal inside a level-4 snap zone fail naming the id', () => {
     const root = goodTree();
     const layouts = layoutDir();
     put(layouts, 'map.layout.json', JSON.stringify(realLayout('map')));
     expect(run(root, layouts)).toEqual([]);
     const sl = realLayout('shadow-match');
     sl.slots['shadow-2-2'] = { x: 930, y: 150 };
-    sl.anchors['triceratops-hand'] = { x: sl.slots['shadow-2-1'].x + 250, y: 560 };
+    sl.anchors['item-rest'] = { x: sl.slots['shadow-2-1'].x + 250, y: 560 };
     put(layouts, 'shadow-match.layout.json', JSON.stringify(sl));
-    const json = JSON.parse(readFileSync(join(APP, 'public', ATLASES['shadow-match'].json), 'utf8'));
-    for (const f of ['item-cow/color/00', 'item-cow/shadow/00']) json.frames[f].spriteSourceSize.w = 200;
-    for (const f of ['item-cow/color/00', 'item-cow/shadow/00']) json.frames[f].spriteSourceSize.h = 160;
+    // 2026-10-22: a multiatlas (the frames sit on its pages).
+    const json = JSON.parse(readFileSync(join(APP, 'public', ATLASES['shadow-match'].json), 'utf8')) as { textures: { frames: { filename: string; spriteSourceSize: { w: number; h: number } }[] }[] };
+    for (const f of json.textures.flatMap((t) => t.frames).filter((f) => ['item-cow/color/00', 'item-cow/shadow/00'].includes(f.filename))) {
+      f.spriteSourceSize.w = 200;
+      f.spriteSourceSize.h = 160;
+    }
     put(root, ATLASES['shadow-match'].json, JSON.stringify(json));
     const problems = run(root, layouts);
     expect(problems).toContain('layout "shadow-match": slot "shadow-2-2": the shadow circle reaches into a Home/Speaker keep-out zone');

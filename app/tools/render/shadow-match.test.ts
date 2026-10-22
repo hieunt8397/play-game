@@ -37,8 +37,9 @@ describe('shadow-match screen (Story 3.5)', () => {
   it('a known screen built from the island by its own builder; the builder gets the sizes and the slot rows', () => {
     expect(screenSpec('shadow-match')).toEqual({ id: 'shadow-match', source: 'art/src/map-v3.blend', builder: 'build_shadow_match.py' });
     const p = buildParams();
-    expect(p.shadowMatch).toEqual({ trikeSizePx: 300, itemPx: 150, counts: [2, 3, 4] });
-    expect(p.art.shadowMatch).toEqual({ caveInner: '#F6EEDC' });
+    expect(p.shadowMatch).toEqual({ itemPx: 210, counts: [2, 3, 4] });
+    expect(p.art.shadowMatch).toMatchObject({ caveInner: '#F6EEDC' });
+    expect(p.shadowMatch).not.toHaveProperty('trikeSizePx');
     expect(p.colours).toMatchObject({ caveMouth: '#E9D8B4', shadowTarget: '#5B4E96', creatureGreen: '#5CC46A' });
   });
 

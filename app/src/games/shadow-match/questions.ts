@@ -1,4 +1,4 @@
-// Hang tìm bóng questions (Stories 3.5, 3.6), pure: which item the triceratops holds in each question,
+// Hang tìm bóng questions (Stories 3.5, 3.6), pure: which item waits on the pedestal in each question,
 // which shadows show and where the right one is. Derived from the round seed and level only, so a round
 // is reproducible (resume, tests). One rng draws, in order: the held items, then per question its decoys
 // and its correct slot. No retry loops.
@@ -6,7 +6,7 @@ import { SHAPE_ITEMS, ladder, type ItemId, type ShadowLevel, type ShapeItem } fr
 import { mulberry32, randInt, shuffled } from '../../core/rng.ts';
 
 export interface ShadowQuestion {
-  /** The item the triceratops holds (the child drags it). */
+  /** The item on the pedestal (the child drags it). */
   readonly item: ItemId;
   /** The shadows left to right (slot k + 1 = `slot.shadow-<n>-<k+1>`); `shadows[correctSlot] === item`. */
   readonly shadows: readonly ItemId[];

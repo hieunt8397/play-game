@@ -7,6 +7,7 @@ import pizzaLayout from './generated/pizza.layout.json';
 import raceLayout from './generated/race.layout.json';
 import shadowMatchLayout from './generated/shadow-match.layout.json';
 import touchTalkLayout from './generated/touch-talk.layout.json';
+import homeLayout from './generated/home.layout.json';
 import type { ScreenId } from './assets.ts';
 import type { ScreenLayout } from './layout-types.ts';
 
@@ -19,4 +20,5 @@ export const LAYOUTS: Readonly<Record<ScreenId, ScreenLayout>> = {
   race: raceLayout as ScreenLayout,
   fishing: fishingLayout as ScreenLayout,
   'touch-talk': touchTalkLayout as ScreenLayout,
+  home: homeLayout as ScreenLayout,
 };

@@ -13,6 +13,8 @@ import { baseRadius } from '../../src/games/pizza/geometry.ts';
 import type { PieceId, SpeciesId } from '../../src/content/games/dino-puzzle.ts';
 import { assign, clearOfSlots, displayedRect, hitRadius, pairsClear, rectGap, type StartGeo } from '../../src/games/dino-puzzle/starts.ts';
 import { heldRadius, shadowRadius } from '../../src/games/shadow-match/geometry.ts';
+import { GATE_ANCHOR, GATE_YAWS, gateCrossAnchor, gateFrame, gatePostAnchor } from '../../src/content/games/race.ts';
+import { gateViews, roadGate } from '../../src/games/race/gate.ts';
 
 export interface LayoutLimits {
   /** Interactive rect: x∈[x0,x1], y∈[y0,y1] (design px). */
@@ -58,6 +60,11 @@ export interface LayoutRuleInput {
    * (the Map router registers it after the stations, so it wins the overlap).
    */
   guide?: string;
+  /**
+   * Story 7.1: shell station ids allowed besides the GameIds (the home station, which opens the yard).
+   * They follow every station rule (hit, width, gaps, anchor, kart stop on the road).
+   */
+  shellStations?: readonly string[];
 }
 
 const inRect = (p: Point, r: LayoutLimits['rect']): boolean => p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1;
@@ -74,8 +81,10 @@ export function validateLayout(layout: ScreenLayout, input: LayoutRuleInput): st
   // Station set === GAME_IDS, each once.
   const ids = stations.map((s) => s.id as string);
   for (const id of ids.filter((id, i) => ids.indexOf(id) !== i)) problems.push(`station "${id}": listed more than once`);
-  for (const id of ids.filter((id) => !gameIds.includes(id))) problems.push(`station "${id}": not a GameId`);
+  const shell = input.shellStations ?? [];
+  for (const id of ids.filter((id) => !gameIds.includes(id) && !shell.includes(id))) problems.push(`station "${id}": not a GameId`);
   for (const id of gameIds.filter((id) => !ids.includes(id))) problems.push(`station "${id}": GameId has no station`);
+  for (const id of shell.filter((id) => !ids.includes(id))) problems.push(`station "${id}": shell station has no station`);
 
   const roadLine = layout.paths[road];
   if (!roadLine || roadLine.length < 2) problems.push(`path "${road}": missing or has fewer than 2 points`);
@@ -426,6 +435,8 @@ export interface DecorationRuleInput {
   stationDistOverride: Readonly<Record<string, number>>;
   /** Review loop 1: a slot lies at most this far (design px) from its station's slot 1 (the render pivot). */
   maxPivotDist: number;
+  /** Story 7.1: hit polygons of shell stations (no decorations) that every footprint must also stay clear of. */
+  extraHitIds?: readonly string[];
 }
 
 /** Spec 2.2 (review loop 1): a decoration slot sits beside its own station. */
@@ -445,8 +456,14 @@ export const DECO_STATION_DIST_OVERRIDE: Readonly<Record<string, number>> = {
 export const DECO_MAX_PIVOT_DIST = 110;
 
 /** The decoration rules from Tokens. */
-export function decorationLimits(stations: DecorationRuleInput['stations'], gameIds: readonly string[], catalogue: DecorationRuleInput['catalogue']): DecorationRuleInput {
+export function decorationLimits(
+  stations: DecorationRuleInput['stations'],
+  gameIds: readonly string[],
+  catalogue: DecorationRuleInput['catalogue'],
+  extraHitIds: readonly string[] = [],
+): DecorationRuleInput {
   return {
+    extraHitIds,
     stations,
     gameIds,
     catalogue,
@@ -530,7 +547,7 @@ export function validateDecorations(layout: ScreenLayout, input: DecorationRuleI
   }
   if (!atlas) return problems;
 
-  const hits = Object.entries(layout.hits).filter(([id]) => input.gameIds.includes(id));
+  const hits = Object.entries(layout.hits).filter(([id]) => input.gameIds.includes(id) || (input.extraHitIds ?? []).includes(id));
   const r = limits.rect;
   const rs = layout.renderScale;
   const unions = new Map<string, DecoRect>();
@@ -1037,11 +1054,6 @@ export interface ShadowRuleInput {
   /** Content SHADOW_COUNTS: the slot rows (`slot.shadow-<n>-1..n`). */
   counts: readonly number[];
   limits: LayoutLimits;
-  /** ui.trikeSizePx ± ui.trikeSizeTolerance: `triceratops/idle/00` trimmed longest side. */
-  trikeSizePx: number;
-  trikeSizeTolerance: number;
-  /** character.minSize. */
-  characterMin: number;
   /** ui.shadowItemPx ± ui.shadowItemTolerance: each item's trimmed longest side. */
   itemPx: number;
   itemTolerance: number;
@@ -1070,9 +1082,6 @@ export function shadowMatchLimits(ids: ScreenIds, items: readonly string[], coun
     items,
     counts,
     limits: layoutLimits(),
-    trikeSizePx: Tokens.ui.trikeSizePx,
-    trikeSizeTolerance: Tokens.ui.trikeSizeTolerance,
-    characterMin: Tokens.components.character.minSize,
     itemPx: Tokens.ui.shadowItemPx,
     itemTolerance: Tokens.ui.shadowItemTolerance,
     shadowMin: Tokens.components.shadowTarget.minSize,
@@ -1091,10 +1100,9 @@ export function shadowMatchLimits(ids: ScreenIds, items: readonly string[], coun
 
 /** The share of the screen one revealed shadow may cover ((2·shadowR)² ≤ this × the design area). */
 export const SHADOW_REVEAL_MAX_SHARE = 0.25;
-const TRIKE_IDLE_FRAME = 'triceratops/idle/00';
-const TRIKE_CENTRE_SPAN = 1 / 6;
-const TRIKE_ANCHOR_ID = 'triceratops';
-const HAND_ANCHOR_ID = 'triceratops-hand';
+/** 2026-10-22: the pedestal (`anchor.item-rest`) stands at the bottom centre: |x − width/2| ≤ width × this. */
+const REST_CENTRE_SPAN = 1 / 6;
+const REST_ANCHOR_ID = 'item-rest';
 
 /**
  * Story 3.5: the item sizes (design px, trimmed `item-<id>/color/00` ÷ renderScale) and the radii a
@@ -1117,8 +1125,8 @@ const circleInRect = (c: Point, r: number, rect: LayoutLimits['rect']): boolean 
  * `validate:content`). Each message names the id. An item's rect is its trimmed `color` size ÷
  * renderScale; shadowR = the largest item's longest side / 2; heldR = shadowR × heldScale.
  *   - required: every layout id and, with the atlas, every frame;
- *   - sizes: `triceratops/idle/00` longest side within trikeSizePx ± tolerance and ≥ characterMin;
- *     |anchor.triceratops.x − width/2| ≤ width/6; each item's longest side within itemPx ± tolerance
+ *   - sizes (2026-10-22: no triceratops; the item waits on a pedestal): |anchor.item-rest.x − width/2| ≤
+ *     width/6; each item's longest side within itemPx ± tolerance
  *     and ≥ shadowMin, and × heldScale ≥ itemMin; the held hit diameter (2·heldR + 2·hitPad) ≥
  *     targetMin; the `color` and `shadow` trimmed rects are equal;
  *   - slots (per row n): each circle (shadowR) inside the interactive rect and outside every Hud
@@ -1133,16 +1141,10 @@ export function validateShadowMatch(layout: ScreenLayout, input: ShadowRuleInput
   const r = input.limits.rect;
   const W = input.design.width;
   const H = input.design.height;
-  const trike = layout.anchors[TRIKE_ANCHOR_ID];
-  if (trike && Math.abs(trike.x - W / 2) > W * TRIKE_CENTRE_SPAN) problems.push(`anchor "${TRIKE_ANCHOR_ID}": x ${trike.x} is more than ${round2(W * TRIKE_CENTRE_SPAN)} from the centre ${W / 2}`);
+  const rest = layout.anchors[REST_ANCHOR_ID];
+  if (rest && Math.abs(rest.x - W / 2) > W * REST_CENTRE_SPAN) problems.push(`anchor "${REST_ANCHOR_ID}": x ${rest.x} is more than ${round2(W * REST_CENTRE_SPAN)} from the centre ${W / 2}`);
   if (!atlas) return problems;
   for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "shadow-match": frame "${f}" is missing`);
-  const idle = trimmedSize(atlas, TRIKE_IDLE_FRAME);
-  if (idle) {
-    const longest = Math.max(idle.w, idle.h) / rs;
-    if (Math.abs(longest - input.trikeSizePx) > input.trikeSizeTolerance) problems.push(`frame "${TRIKE_IDLE_FRAME}": longest side ${round2(longest)} is not ${input.trikeSizePx} ± ${input.trikeSizeTolerance}`);
-    if (longest < input.characterMin) problems.push(`frame "${TRIKE_IDLE_FRAME}": longest side ${round2(longest)} is under ${input.characterMin}`);
-  }
   for (const id of input.items) {
     const colorFrame = `item-${id}/color/00`;
     const shadowFrame = `item-${id}/shadow/00`;
@@ -1160,13 +1162,13 @@ export function validateShadowMatch(layout: ScreenLayout, input: ShadowRuleInput
   const { sizes, shadowR, heldR } = shadowSizes(atlas, input.items, rs, input.heldScale);
   if (sizes.size === 0) return problems;
   const heldHitD = 2 * heldR + 2 * input.hitPad;
-  if (heldHitD < input.targetMin) problems.push(`anchor "${HAND_ANCHOR_ID}": the held hit diameter ${round2(heldHitD)} is under ${input.targetMin}`);
+  if (heldHitD < input.targetMin) problems.push(`anchor "${REST_ANCHOR_ID}": the held hit diameter ${round2(heldHitD)} is under ${input.targetMin}`);
   if ((2 * shadowR) ** 2 > SHADOW_REVEAL_MAX_SHARE * W * H) problems.push(`shadow-match: a revealed shadow (${round2(2 * shadowR)} px square) covers more than ${SHADOW_REVEAL_MAX_SHARE * 100}% of the screen`);
-  const hand = layout.anchors[HAND_ANCHOR_ID];
+  const hand = layout.anchors[REST_ANCHOR_ID];
   if (hand) {
-    if (!circleInRect(hand, heldR, r)) problems.push(`anchor "${HAND_ANCHOR_ID}": the held circle (r ${round2(heldR)}) at ${fmt(hand)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
-    if (input.keepOut.some((k) => circleHitsRect(hand, heldR, k))) problems.push(`anchor "${HAND_ANCHOR_ID}": the held circle reaches into a Home/Speaker keep-out zone`);
-    if (hand.y < H * LOWER_THIRD) problems.push(`anchor "${HAND_ANCHOR_ID}": y ${hand.y} is above the lower third (${round2(H * LOWER_THIRD)})`);
+    if (!circleInRect(hand, heldR, r)) problems.push(`anchor "${REST_ANCHOR_ID}": the held circle (r ${round2(heldR)}) at ${fmt(hand)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    if (input.keepOut.some((k) => circleHitsRect(hand, heldR, k))) problems.push(`anchor "${REST_ANCHOR_ID}": the held circle reaches into a Home/Speaker keep-out zone`);
+    if (hand.y < H * LOWER_THIRD) problems.push(`anchor "${REST_ANCHOR_ID}": y ${hand.y} is above the lower third (${round2(H * LOWER_THIRD)})`);
   }
   const minHand = shadowR + input.snapRadius * input.hintSnapScale + heldR;
   for (const n of input.counts) {
@@ -1178,7 +1180,7 @@ export function validateShadowMatch(layout: ScreenLayout, input: ShadowRuleInput
       if (input.keepOut.some((k) => circleHitsRect(s.at, shadowR, k))) problems.push(`slot "${s.id}": the shadow circle reaches into a Home/Speaker keep-out zone`);
       if (hand) {
         const d = Math.hypot(s.at.x - hand.x, s.at.y - hand.y);
-        if (d < minHand) problems.push(`slot "${s.id}": ${round2(d)} px from anchor "${HAND_ANCHOR_ID}" (min ${round2(minHand)}: the held item would start inside a level-4 snap zone)`);
+        if (d < minHand) problems.push(`slot "${s.id}": ${round2(d)} px from anchor "${REST_ANCHOR_ID}" (min ${round2(minHand)}: the held item would start inside a level-4 snap zone)`);
       }
     }
     for (let i = 0; i < row.length; i++) {
@@ -1215,14 +1217,14 @@ export interface RaceRuleInput {
   minTurnRadius: number;
   /** Story 4.2: samples ≥ selfClearArc apart in arc are ≥ roadWidth apart. */
   selfClearArc: number;
-  /** Story 4.2: consecutive layout points of a curve/zigzag/loop road are ≤ pointGap apart. */
+  /** Story 4.2: consecutive layout points of a curve/zigzag/loop (and wave/hairpin/snake/spiral) road are ≤ pointGap apart. */
   pointGap: number;
   /** Story 4.2: a loop's first and last points are ≤ loopMouthMax apart. */
   loopMouthMax: number;
   /** kart.size: `kart/idle/00` trimmed longest side ÷ renderScale ∈ [kartSize, kartMaxScale × kartSize]. */
   kartSize: number;
   kartMaxScale: number;
-  /** ui.raceGateMinPx: `gate/idle/00` trimmed width ÷ renderScale ≥ this. */
+  /** ui.raceGateMinPx: `gate/0/00` (camera-facing) trimmed width ÷ renderScale ≥ this. */
   gateMin: number;
   keepOut: readonly Rect[];
   renderScale: number;
@@ -1279,8 +1281,9 @@ export const RACE_KART_MAX_SCALE = 1.6;
 /** Story 4.2: at least this many swaying cones. */
 export const RACE_MIN_CONES = 2;
 const RACE_KART_FRAME = 'kart/idle/00';
-const RACE_GATE_FRAME = 'gate/idle/00';
-const DENSE_SHAPES: ReadonlySet<string> = new Set(['curve', 'zigzag', 'loop']);
+const RACE_GATE_FRAME = 'gate/0/00';
+/** Shapes generated densely (every layout point ≤ pointGap apart); only `straight` roads are sparse corners. */
+export const DENSE_SHAPES: ReadonlySet<string> = new Set(['curve', 'zigzag', 'loop', 'wave', 'hairpin', 'snake', 'spiral']);
 const CONE_ID = /^cone-\d+$/;
 const FLAG_ID = /^flag-\d+$/;
 
@@ -1337,6 +1340,45 @@ export function circumradius(a: Point, b: Point, c: Point): number {
 /** Distance from `p` to the rect (0 inside). */
 const rectDistance = (p: Point, r: Rect): number => Math.hypot(Math.max(r.x - p.x, 0, p.x - (r.x + r.w)), Math.max(r.y - p.y, 0, p.y - (r.y + r.h)));
 
+/**
+ * 2026-10-22: each road's finish gate as the scene places it (games/race/gate.ts › roadGate): the chosen
+ * frame's trimmed rect lies inside the interactive rect and clear of every Hud keep-out rect; the post feet
+ * stand on opposite sides of the road (each ≥ roadWidth/2 across its arrival direction) and ≥ roadWidth/2
+ * from the whole road (the road passes between the posts).
+ */
+function gateProblems(layout: ScreenLayout, roads: readonly { id: string; pts: readonly Point[] }[], input: RaceRuleInput, atlas: AtlasJsonLike): string[] {
+  const problems: string[] = [];
+  const pivot = layout.anchors[GATE_ANCHOR];
+  if (!pivot) return problems;
+  const views = gateViews(layout.anchors, GATE_YAWS, { pivot: GATE_ANCHOR, cross: gateCrossAnchor, post: gatePostAnchor });
+  const rs = input.renderScale;
+  const r = input.limits.rect;
+  const half = input.roadWidth / 2;
+  for (const { id, pts } of roads) {
+    const g = roadGate(id, pts, views, (deg) => trimmedRect(atlas, gateFrame(deg)) !== undefined);
+    if (!g) {
+      problems.push(`path "${id}": no gate frame or yaw anchors to place its finish gate`);
+      continue;
+    }
+    const t = trimmedRect(atlas, gateFrame(g.deg))!;
+    const rect = { x: g.at.x + t.x / rs - pivot.x, y: g.at.y + t.y / rs - pivot.y, w: t.width / rs, h: t.height / rs };
+    const what = `path "${id}": the finish gate "${gateFrame(g.deg)}" at ${fmtRect(rect)}`;
+    if (rect.x < r.x0 || rect.y < r.y0 || rect.x + rect.w > r.x1 || rect.y + rect.h > r.y1) problems.push(`${what} leaves the interactive rect`);
+    if (input.keepOut.some((k) => rectsOverlap({ x: rect.x, y: rect.y, width: rect.w, height: rect.h }, { x: k.x, y: k.y, width: k.w, height: k.h }))) problems.push(`${what} reaches into a Home/Speaker keep-out zone`);
+    // The signed offset of each foot across the arrival direction: opposite signs, each at least half the band.
+    const across = [1, -1].map((s) => s * (g.dir.x * g.post.y - g.dir.y * g.post.x));
+    if (!(across[0]! >= half && across[1]! <= -half) && !(across[0]! <= -half && across[1]! >= half)) {
+      problems.push(`path "${id}": the finish gate posts are not on opposite sides of the road (${round2(Math.abs(across[0]!))} px across, min ${half})`);
+    }
+    for (const s of [1, -1]) {
+      const foot = { x: g.at.x + s * g.post.x, y: g.at.y + s * g.post.y };
+      const d = distToPolyline(foot, pts);
+      if (d < half) problems.push(`path "${id}": a finish gate post stands ${round2(d)} px from the road (min ${half}: the road must pass between the posts)`);
+    }
+  }
+  return problems;
+}
+
 /** Story 4.2: the geometry of one road's band (turn radius, self-clearance, density, loop mouth). */
 function roadShapeProblems(id: string, shape: string, pts: readonly Point[], input: RaceRuleInput): string[] {
   const problems: string[] = [];
@@ -1385,11 +1427,14 @@ function roadShapeProblems(id: string, shape: string, pts: readonly Point[], inp
  *   - required: every layout anchor, every ladder path (≥ 2 points) and, with the atlas, every frame;
  *   - road band: each path resampled every ≤ sampleStep px; every sample inside the interactive rect
  *     inset by roadWidth/2 and ≥ roadWidth/2 from every Hud keep-out rect;
- *   - band geometry (4.2): turn radius, self-clearance, point density (curve/zigzag/loop), loop mouth;
+ *   - band geometry (4.2): turn radius, self-clearance, point density (every shape but straight), loop
+ *     mouth (loops only);
  *   - ambient anchors: each listed `anchor.cone-*` / `anchor.flag-*` ≥ roadWidth/2 + gap from every
  *     path; ≥ minCones cones and exactly flagCount flags;
  *   - sizes (atlas): the kart's trimmed longest side ÷ renderScale ∈ [kartSize, kartMaxScale × kartSize];
- *     the gate's trimmed width ÷ renderScale ≥ gateMin.
+ *     the gate's trimmed width ÷ renderScale ≥ gateMin;
+ *   - finish gate (atlas, 2026-10-22): per road, the yaw frame the scene picks (games/race/gate.ts) stays
+ *     inside the interactive rect and clear of the Hud keep-out rects, and its posts straddle the road.
  */
 export function validateRace(layout: ScreenLayout, input: RaceRuleInput, atlas?: AtlasJsonLike): string[] {
   const problems = requiredIdProblems(layout, input.ids);
@@ -1434,6 +1479,7 @@ export function validateRace(layout: ScreenLayout, input: RaceRuleInput, atlas?:
       problems.push(`frame "${RACE_KART_FRAME}": longest side ${round2(longest)} is not in [${input.kartSize}, ${round2(input.kartMaxScale * input.kartSize)}]`);
     }
   }
+  problems.push(...gateProblems(layout, roads, input, atlas));
   const gate = trimmedSize(atlas, RACE_GATE_FRAME);
   if (gate && gate.w / rs < input.gateMin) problems.push(`frame "${RACE_GATE_FRAME}": width ${round2(gate.w / rs)} is under ${input.gateMin}`);
   return problems;
@@ -1528,7 +1574,7 @@ export interface TouchTalkRuleInput {
   /** ui.touchTalkPropMinPx..MaxPx: each `idle/00` trimmed longest side ÷ renderScale. */
   propMin: number;
   propMax: number;
-  /** The Home/Speaker zones and the scene-bubble column. */
+  /** The Home/Speaker zones and the scene-bubble area (two columns of three). */
   keepOut: readonly { readonly id: string; readonly rect: Rect }[];
   renderScale: number;
 }
@@ -1560,7 +1606,7 @@ const rectPolygon4 = (k: Rect): Point[] => [
  * the id.
  *   - required: every prop's `hit.prop-<id>` (≥ 3 points) and, with the atlas, `<id>/idle/00` and `<id>/react/00`;
  *   - each hull is at least targetMin wide, has every vertex inside the interactive rect, and touches no
- *     Home/Speaker zone and not the scene-bubble column;
+ *     Home/Speaker zone and not the two-column scene-bubble area;
  *   - within one scene, every pair of hulls is at least `gap` apart;
  *   - sizes (atlas): each `idle/00` trimmed longest side ÷ renderScale ∈ [propMin, propMax];
  *   - Story 4.6: every scene's `scene-thumb-<id>/idle/00` (in `ids.frames`); no prop id starts with `scene-thumb`.
@@ -1599,6 +1645,84 @@ export function validateTouchTalk(layout: ScreenLayout, input: TouchTalkRuleInpu
       const longest = Math.max(t.w, t.h) / input.renderScale;
       if (longest < input.propMin || longest > input.propMax) problems.push(`frame "${prop}/idle/00": longest side ${round2(longest)} is not in [${input.propMin}, ${input.propMax}]`);
     }
+  }
+  return problems;
+}
+
+// --- the yard (Story 7.1) --------------------------------------------------------------------------
+
+/** Story 7.1: a yard corner's idle frame is at least this tall or wide (design px): readable from afar. */
+export const HOME_CORNER_MIN_PX = 150;
+
+export interface HomeRuleInput {
+  ids: ScreenIds;
+  /** The corner ids: `hit.<id>`, `anchor.<id>` and frame `<id>/idle/00`. */
+  corners: readonly string[];
+  limits: LayoutLimits;
+  /** spacing.targetMin: each padded hull is at least this wide. */
+  targetMin: number;
+  /** spacing.targetGap: two corner hulls are at least this far apart. */
+  gap: number;
+  /** HOME_CORNER_MIN_PX: each `idle/00` trimmed longest side ÷ renderScale. */
+  cornerMin: number;
+  /** The Home/Speaker zones. */
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  renderScale: number;
+}
+
+/** The yard rules from Tokens and content (Story 7.1). */
+export function homeLimits(ids: ScreenIds, corners: readonly string[]): HomeRuleInput {
+  return {
+    ids,
+    corners,
+    limits: layoutLimits(),
+    targetMin: Tokens.spacing.targetMin,
+    gap: Tokens.spacing.targetGap,
+    cornerMin: HOME_CORNER_MIN_PX,
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    renderScale: RENDER_SCALE,
+  };
+}
+
+/**
+ * Yard screen rules (Story 7.1; run by `render`, `atlas` and `validate:content`), like validateTouchTalk.
+ * Each message names the id.
+ *   - required: every corner's `hit.<id>` (≥ 3 points) and `anchor.<id>`; with the atlas, `<id>/idle/00`;
+ *   - each hull is at least targetMin wide, has every vertex inside the interactive rect and touches no
+ *     Home/Speaker zone; every pair of hulls is at least `gap` apart;
+ *   - sizes (atlas): each `idle/00` trimmed longest side ÷ renderScale ≥ cornerMin.
+ */
+export function validateHome(layout: ScreenLayout, input: HomeRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const hulls: { id: string; poly: readonly Point[] }[] = [];
+  for (const id of input.corners) {
+    const poly = layout.hits[id];
+    if (!poly) continue;
+    if (poly.length < MIN_HIT_POINTS) {
+      problems.push(`hit "${id}": fewer than 3 points`);
+      continue;
+    }
+    hulls.push({ id, poly });
+    const w = minWidth(poly);
+    if (w < input.targetMin) problems.push(`hit "${id}": ${round2(w)} px wide (min ${input.targetMin})`);
+    const out = poly.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${id}": ${fmt(out)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (polygonDistance(poly, rectPolygon4(k.rect)) === 0) problems.push(`hit "${id}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  }
+  for (let i = 0; i < hulls.length; i++) {
+    for (let j = i + 1; j < hulls.length; j++) {
+      const d = polygonDistance(hulls[i]!.poly, hulls[j]!.poly);
+      if (d < input.gap) problems.push(`hits "${hulls[i]!.id}" and "${hulls[j]!.id}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "home": frame "${f}" is missing`);
+  for (const id of input.corners) {
+    const t = trimmedSize(atlas, `${id}/idle/00`);
+    if (!t) continue;
+    const longest = Math.max(t.w, t.h) / input.renderScale;
+    if (longest < input.cornerMin) problems.push(`frame "${id}/idle/00": longest side ${round2(longest)} is under ${input.cornerMin}`);
   }
   return problems;
 }

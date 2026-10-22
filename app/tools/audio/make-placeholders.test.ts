@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DINO_PARTIALS, FISHING_PARTIALS, TOUCH_TALK_SOUNDS, PIZZA_PARTIALS, RACE_PARTIALS, SHADOW_PARTIALS, WOOF_PARTIALS, WOOF_SECONDS, CHIRP_PARTIALS, CHIRP_SECONDS, buildArgs, resolveFfmpeg } from './make-placeholders.ts';
+import { AUDIO_IDS } from '../../src/content/audio-catalog.ts';
+import { ALL_PROPS } from '../../src/content/games/touch-talk.ts';
+import { DINO_PARTIALS, FISHING_PARTIALS, PIZZA_PARTIALS, RACE_PARTIALS, SHADOW_PARTIALS, WOOF_PARTIALS, WOOF_SECONDS, CHIRP_PARTIALS, CHIRP_SECONDS, buildArgs, isRecording, resolveFfmpeg } from './make-placeholders.ts';
 
 function valueAfter(args: string[], flag: string): string | undefined {
   const i = args.indexOf(flag);
@@ -193,20 +195,15 @@ describe('Hang tìm bóng SFX (Story 3.5)', () => {
     for (const hz of SHADOW_PARTIALS[id]) expect(hz).toBeGreaterThanOrEqual(300);
   });
 
-  it('snap ~150 ms, happy ~1.5 s; the trike chirp is the dino triceratops recipe (two chirps 659/784 Hz, 400 ms, cubic fade-in)', () => {
+  it('snap ~150 ms, happy ~1.5 s (2026-10-22: no triceratops chirp any more)', () => {
     expect(d('sfx.shadow-match.snap')).toBe(0.15);
     expect(d('sfx.shadow-match.happy')).toBe(1.5);
-    expect(d('sfx.shadow-match.trike.happy')).toBe(0.4);
     // The snap decays exponentially: at its end the envelope is near silence (≤ 5 % of the peak).
     const snap = valueAfter(buildArgs('sfx.shadow-match.snap', 'o.m4a'), '-i') ?? '';
     const k = Number(/exp\(-([0-9.]+)\*t\)/.exec(snap)?.[1]);
     expect(k).toBeGreaterThan(0);
     expect(Math.exp(-k * d('sfx.shadow-match.snap'))).toBeLessThanOrEqual(0.05);
-    const trike = buildArgs('sfx.shadow-match.trike.happy', 'o.m4a');
-    const dino = buildArgs('sfx.dino-puzzle.triceratops.happy', 'o.m4a');
-    expect(valueAfter(trike, '-i')).toBe(valueAfter(dino, '-i'));
-    expect(valueAfter(trike, '-af')).toBe(valueAfter(dino, '-af'));
-    expect(valueAfter(trike, '-af')).toMatch(/curve=cub/);
+    expect(Object.keys(SHADOW_PARTIALS)).toEqual(['sfx.shadow-match.snap', 'sfx.shadow-match.happy']);
   });
 });
 
@@ -251,18 +248,17 @@ describe('Câu cá SFX (Story 4.3)', () => {
   });
 });
 
-describe('Chạm là nói SFX (Stories 4.5, 4.6)', () => {
-  const IDS = Object.keys(TOUCH_TALK_SOUNDS);
-  it.each(IDS)('%s: ≤ 350 ms, fade-in ≥ 50 ms, a high-pass ≥ 150 Hz (noise ≥ 300 Hz), peak ≤ −20 dBFS, partials ≥ 300 Hz', (id) => {
-    const s = TOUCH_TALK_SOUNDS[id]!;
-    expect(s.seconds).toBeLessThanOrEqual(0.35);
-    const args = buildArgs(id as Parameters<typeof buildArgs>[0], 'o.m4a');
-    const af = valueAfter(args, '-af') ?? '';
-    expect(Number(/afade=t=in:st=0:d=([0-9.]+)/.exec(af)?.[1])).toBeGreaterThanOrEqual(0.05);
-    const hp = Number(/highpass=f=(\d+)/.exec(af)?.[1]);
-    expect(hp).toBeGreaterThanOrEqual(s.partials.length === 0 ? 300 : 150);
-    expect(valueAfter(args, '-i') ?? '').toMatch(/^aevalsrc='0\.(1|07)\*/);
-    for (const hz of s.partials) expect(hz).toBeGreaterThanOrEqual(300);
-    if (s.creature) expect(af).toMatch(/curve=cub/);
+describe('real recordings (Chạm là nói batch 3, Tiệm kem sneeze)', () => {
+  const touchTalk = AUDIO_IDS.filter((id) => id.startsWith('sfx.touch-talk.'));
+  it('every Chạm là nói prop sound (one per ALL_PROPS entry) and the sneeze are recordings: no recipe, so main() never overwrites them', () => {
+    expect([...touchTalk].sort()).toEqual(ALL_PROPS.map((p) => p.sfxId).sort());
+    for (const id of [...touchTalk, 'sfx.ice-cream.sneeze' as const]) {
+      expect(isRecording(id), id).toBe(true);
+      expect(() => buildArgs(id, 'o.m4a'), id).toThrow(/no recipe/);
+    }
+  });
+
+  it('every other catalog id still has a placeholder recipe', () => {
+    for (const id of AUDIO_IDS.filter((i) => !isRecording(i))) expect(() => buildArgs(id, 'o.m4a'), id).not.toThrow();
   });
 });

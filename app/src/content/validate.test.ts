@@ -4,7 +4,7 @@ import { validateContent, validateDecorationCatalogue, validateGames, validatePa
 import { PARENT_INVITE_LINES } from "./parent-invite";
 import { DECORATIONS } from "./decorations";
 import { GAME_CONTENT } from "./games/index";
-import { STATIONS } from "./stations";
+import { GAME_STATIONS, HOME_STATION, STATIONS } from "./stations";
 import { AUDIO_CATALOG } from "./audio-catalog";
 import { VOICE_LINES, stationNameLine, type VoiceLine } from "./voice-lines";
 
@@ -340,7 +340,7 @@ describe("validateContent › stations (Story 1.5)", () => {
     for (const s of STATIONS) {
       expect(VOICE_LINES.find((l) => l.id === stationNameLine(s.id))?.text).toBe(s.label);
     }
-    expect(STATIONS.filter((s) => s.awake).map((s) => s.id)).toEqual(["ice-cream", "pizza", "race", "fishing", "touch-talk", "dino-puzzle", "shadow-match"]);
+    expect(STATIONS.filter((s) => s.awake).map((s) => s.id)).toEqual(["ice-cream", "pizza", "race", "fishing", "touch-talk", "dino-puzzle", "shadow-match", "home"]);
   });
 });
 
@@ -383,13 +383,15 @@ describe("validateContent › games (Story 1.7)", () => {
 });
 
 describe("validateContent › decorations (Story 2.2)", () => {
-  const input = { gameIds: GAME_IDS, catalogue: DECORATIONS, stations: STATIONS };
+  const input = { gameIds: GAME_IDS, catalogue: DECORATIONS, stations: GAME_STATIONS };
 
   it("accepts the real catalogue and slots: 28 items, 1-2 slots per station (review loop 1b)", () => {
     expect(validateContent({ gameIds: GAME_IDS, decorations: input })).toEqual([]);
     expect(Object.values(DECORATIONS).flat()).toHaveLength(28);
-    expect(STATIONS.reduce((n, s) => n + s.slots.length, 0)).toBe(10);
-    for (const s of STATIONS) {
+    expect(STATIONS.reduce((n, s) => n + s.slots.length, 0)).toBe(9); // Story 7.1: pizza keeps 1
+    // Story 7.1: the home station has no slot (no decorations); the game stations keep theirs.
+    expect(STATIONS.find((s) => s.id === HOME_STATION)?.slots).toEqual([]);
+    for (const s of GAME_STATIONS) {
       expect(s.slots.length).toBeGreaterThanOrEqual(1);
       expect(s.slots.length).toBeLessThanOrEqual(2);
       expect(s.slots).toEqual(s.slots.map((_, i) => `${s.id}-${i + 1}`));
@@ -422,7 +424,7 @@ describe("validateContent › decorations (Story 2.2)", () => {
   });
 
   it("reports a station with no slot and slot ids that are not <id>-1..k", () => {
-    const stations = STATIONS.map((s) =>
+    const stations = GAME_STATIONS.map((s) =>
       s.id === "race" ? { ...s, slots: [] } : s.id === "pizza" ? { ...s, slots: ["pizza-1", "pizza-3"] } : s,
     );
     expect(validateDecorationCatalogue({ ...input, stations })).toEqual([

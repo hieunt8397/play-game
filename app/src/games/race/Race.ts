@@ -6,11 +6,29 @@
 // decision (roads, hint activity, the hand-over, the round end) is the pure round model (round.ts,
 // questions.ts); prompts and retries go through `hint` only. Timers are scene-clock events and tweens.
 // Story 4.2: a resumed road restores the kart where it was (waiting, the driven stretch lit); cones and
-// flags sway as ambient motion (held at hint level ≥ 2 and during every celebration); the kart draws above
-// the gate on the first half of the road and below it after (a loop's start lip is next to its gate).
+// flags sway as ambient motion (held at hint level ≥ 2 and during every celebration).
+// 2026-10-22: the gate shows the rendered yaw whose crossing direction matches the road's arrival, its pivot
+// on the road just before the end, so the road runs between its posts (games/race/gate.ts). The kart draws
+// above the gate while it is nearer the camera than the gate's pivot (lower on screen: a loop's start lip
+// beside the gate, a road arriving toward the camera) and below it otherwise.
 import type { GameObjects, Time, Tweens } from 'phaser';
 import { ATLASES, BACKGROUNDS } from '../../content/assets';
-import { CONE_ANCHORS, FLAG_ANCHORS, GATE_ANCHOR, KART_ANCHOR, RACE_KART, SFX, coneFrame, flagFrame, gateFrames, kartFrames } from '../../content/games/race';
+import {
+  CONE_ANCHORS,
+  FLAG_ANCHORS,
+  GATE_ANCHOR,
+  GATE_YAWS,
+  KART_ANCHOR,
+  RACE_KART,
+  SFX,
+  coneFrame,
+  flagFrame,
+  gateCrossAnchor,
+  gateFrame,
+  gateFrames,
+  gatePostAnchor,
+  kartFrames,
+} from '../../content/games/race';
 import type { Point, ScreenLayout } from '../../content/layout-types';
 import { LAYOUTS } from '../../content/layouts';
 import { audio } from '../../core/audio-director';
@@ -25,12 +43,14 @@ import { Tokens } from '../../core/tokens';
 import { originFor } from '../../core/ui/sprite-pivot';
 import { MiniGameBase } from '../mini-game-base';
 import { RaceRound, startCommands, type RaceCommand, type RaceProgress } from './round';
+import { startFacing } from './questions';
+import { gateViews, roadGate, type GateView } from './gate';
 
 const SINE = 'Sine.easeInOut';
 /** The hint level from which the guide glow runs and the wait blink stops. */
 const GLOW_LEVEL = 2;
 
-/** Draw order: the swaying cones and flags, the road, the driven overlay and the guide glow, the shadows, the kart, the gate (the kart moves above it on the first half of a road). */
+/** Draw order: the swaying cones and flags, the road, the driven overlay and the guide glow, the shadows, the kart, the gate (the kart moves above it while nearer the camera than its pivot). */
 const LAYERS = ['ambient', 'road', 'driven', 'glow', 'shadow', 'kart', 'gate', 'kartFront'] as const;
 /** Ambient hold reason: every celebration. */
 const HOLD_CELEBRATE = 'celebrate';
@@ -68,6 +88,9 @@ export class Race extends MiniGameBase<'race'> {
   private layout: ScreenLayout = LAYOUTS.race;
   private kart: GameObjects.Image | undefined;
   private gate: GameObjects.Image | undefined;
+  private gateViews: GateView[] = [];
+  /** The gate's pivot on the current road (the kart's depth switches across it). */
+  private gatePivot: Point | undefined;
   private kartShadow: GameObjects.Ellipse | undefined;
   private gateShadow: GameObjects.Ellipse | undefined;
   private road: GameObjects.Graphics | undefined;
@@ -121,7 +144,10 @@ export class Race extends MiniGameBase<'race'> {
     this.kartShadow = this.add.ellipse(0, 0, k, h, lift.color.value, lift.color.alpha).setDepth(Depth.shadow);
     this.gateShadow = this.add.ellipse(0, 0, Tokens.ui.raceGateMinPx, h, lift.color.value, lift.color.alpha).setDepth(Depth.shadow);
     this.kart = this.sprite(kartFrames.idle, KART_ANCHOR, Depth.kart);
-    this.gate = this.sprite(gateFrames.idle, GATE_ANCHOR, Depth.gate);
+    // Any rendered yaw will do here: beginRoad picks the road's frame.
+    const firstGate = gateFrames.all.find((f) => this.hasFrame(f)) ?? gateFrames.front;
+    this.gate = this.sprite(firstGate, GATE_ANCHOR, Depth.gate);
+    this.gateViews = gateViews(this.layout.anchors, GATE_YAWS, { pivot: GATE_ANCHOR, cross: gateCrossAnchor, post: gatePostAnchor });
     this.addSwaying(coneFrame, CONE_ANCHORS, Tokens.ui.raceConeSwayDeg, Tokens.Timing.raceConeSwayMs);
     this.addSwaying(flagFrame, FLAG_ANCHORS, Tokens.ui.raceFlagSwayDeg, Tokens.Timing.raceFlagSwayMs);
 
@@ -209,6 +235,42 @@ export class Race extends MiniGameBase<'race'> {
     return this.add.image(at.x, at.y, key, frame).setOrigin(o.x, o.y).setScale(1 / this.layout.renderScale).setDepth(depth);
   }
 
+  private hasFrame(frame: string): boolean {
+    const key = ATLASES.race.key;
+    return this.textures.exists(key) && this.textures.get(key).has(frame);
+  }
+
+  /**
+   * The gate for road `pathId`: the rendered yaw matching the road's arrival (the nearest available one,
+   * warned once, when its frame is missing), its pivot on the road just before the end, the shadow along
+   * its posts. Without a placement (no yaw anchors/frames, or a degenerate road) the camera-facing frame
+   * (or the first available) stands on the end point.
+   */
+  private placeGateAt(pathId: string, pts: readonly Point[], end: Point): void {
+    const ui = Tokens.ui;
+    const g = roadGate(pathId, pts, this.gateViews, (deg) => this.hasFrame(gateFrame(deg)));
+    if (!g) {
+      if (this.gateViews.length === 0 || !gateFrames.all.some((f) => this.hasFrame(f))) this.warnOnce('gate-yaws', 'race: no gate yaw frames/anchors — the gate stands on the road end facing the camera');
+      else this.warnOnce(`gate-road.${pathId}`, `race: path "${pathId}" has no arrival direction — the gate stands on its end facing the camera`);
+      const front = gateFrames.all.find((f) => this.hasFrame(f));
+      if (front) this.gate?.setFrame(front, false, false);
+      this.gate?.setPosition(end.x, end.y).setAlpha(1);
+      this.gateShadow?.setPosition(end.x, end.y).setRotation(0).setScale(1).setAlpha(1);
+      this.gatePivot = end;
+      return;
+    }
+    this.gatePivot = g.at;
+    if (g.fallback) this.warnOnce(`gate-yaw-${g.ideal}`, `race: frame "${gateFrame(g.ideal)}" is missing — showing "${gateFrame(g.deg)}"`);
+    // (false, false): keep the anchor origin (a plain setFrame resets it to 0.5).
+    this.gate?.setFrame(gateFrame(g.deg), false, false).setPosition(g.at.x, g.at.y).setAlpha(1);
+    const span = 2 * Math.hypot(g.post.x, g.post.y) + ui.raceShadowHeightPx / 2;
+    this.gateShadow
+      ?.setPosition(g.at.x, g.at.y)
+      .setRotation(Math.atan2(g.post.y, g.post.x))
+      .setScale(span / ui.raceGateMinPx, 1)
+      .setAlpha(1);
+  }
+
   private scaleOf(k = 1): number {
     return k / this.layout.renderScale;
   }
@@ -241,11 +303,11 @@ export class Race extends MiniGameBase<'race'> {
       target: this.gateTarget,
       path: () => trace.model.stretch(trace.s, trace.s + Tokens.ui.raceHintStretchPx),
     };
-    this.gate?.setPosition(end.x, end.y).setAlpha(1);
-    this.gateShadow?.setPosition(end.x, end.y).setAlpha(1);
-    this.facing = 1;
+    this.placeGateAt(pathId, pts, end);
+    // Face the road's first heading (a road may start toward screen-left) before the first drag.
+    this.facing = startFacing(pts, RACE_KART.artFacing, Tokens.ui.raceFacingMinDx);
     // (false, false): keep the anchor origin — a plain setFrame resets it to 0.5 and the full-frame kart leaves the screen.
-    this.kart?.setFrame(kartFrames.idle, false, false).setAlpha(1).setScale(this.scaleOf());
+    this.kart?.setFrame(kartFrames.idle, false, false).setAlpha(1).setScale(this.facing * this.scaleOf(), this.scaleOf());
     // Story 4.2: a resume restores the kart where it was: waiting, facing the road there, the driven stretch lit.
     if (restoreIndex > 0) trace.restore(restoreIndex);
     this.placeKart();
@@ -292,8 +354,9 @@ export class Race extends MiniGameBase<'race'> {
     const dx = trace.model.tangentAt(trace.s).x;
     if (Math.abs(dx) > Tokens.ui.raceFacingMinDx) this.facing = RACE_KART.artFacing * Math.sign(dx);
     if (this.kart) {
-      // The kart draws above the gate on the first half of the road and below it after.
-      this.kart.setPosition(p.x, p.y).setDepth(trace.s < trace.model.length / 2 ? Depth.kartFront : Depth.kart);
+      // The kart draws above the gate while nearer the camera than its pivot (lower on screen), below it otherwise.
+      const front = this.gatePivot !== undefined && p.y > this.gatePivot.y;
+      this.kart.setPosition(p.x, p.y).setDepth(front ? Depth.kartFront : Depth.kart);
       if (!this.pulse) this.kart.setScale(this.facing * this.scaleOf(), this.scaleOf());
     }
     this.kartShadow?.setPosition(p.x, p.y);

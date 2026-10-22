@@ -22,6 +22,10 @@
 # (`state.cloud`, `state.wave`, `anchor.cloud-1..3`, `anchor.wave-1..5`; the other clouds are removed),
 # then `dressing_check` fails on any dressing near a station / guide hit or over a slot footprint;
 # set the render size; save.
+# Story 7.1: the home station "Nhà Xoài" (`sprite.home`, HOME below): the Tiny Treats Homely House house with
+# a mailbox, built on the clear grass south of the road between the pizza and race stations (the plate pine
+# that stood there is removed); its hull, anchor and kart stop come from the station loop like the others; it
+# has no decoration slot (NO_SLOTS), and the pizza station keeps one slot (its second gave the house its ground).
 # Every constant below is in Blender world units (metres), read off the reference scene.
 import json
 import math
@@ -49,6 +53,8 @@ STATIONS = {
     'touch-talk': {'sprite': ['C:Town'], 'area': []},
     'dino-puzzle': {'sprite': ['O:A_DinoNeck', 'O:A_DinoTri', 'O:A_DinoSteg'], 'area': ['Fence*', 'FenceRail']},
     'shadow-match': {'sprite': ['C:Cave'], 'area': []},
+    # Story 7.1: built by build_home_station (no reference objects).
+    'home': {'sprite': [], 'area': []},
 }
 KART = {'sprite': ['C:Car']}
 
@@ -149,13 +155,15 @@ ROAD_TOP_Z = 0.53
 # ground points that mirrors those rules.
 SLOT_OFFSETS = {
     'ice-cream': [(1.315, -3.712), (2.715, -3.112)],
-    'pizza': [(-1.362, -3.225), (0.438, -3.825)],
+    'pizza': [(-1.362, -3.225)],  # Story 7.1: its second slot's ground is the home station's
     'race': [(-1.830, -3.535), (0.070, -3.335)],
     'fishing': [(0.309, -3.968)],
     'touch-talk': [(-2.360, 5.344)],
     'dino-puzzle': [(-4.918, -2.083)],
     'shadow-match': [(-2.262, -6.488)],
 }
+# Story 7.1: stations without decoration slots (content/stations.ts › SLOT_COUNT 0).
+NO_SLOTS = ('home',)
 SLOT_ROAD_CLEARANCE = 0.3  # beyond the road edge
 SLOT_FOOTPRINT = 0.35  # radius around a slot point that must be clear ground
 SLOT_Z = 0.45  # island ground (used when the downward ray misses)
@@ -225,6 +233,24 @@ LANDMARKS_PRESENT = {
     'touch-talk': ['A_House0'],
 }
 LANDMARKS_NEW = ('ice-cream', 'pizza')
+
+# --- the home station (Story 7.1) ---------------------------------------------------------------------
+# The Homely House house (its front toward the camera) and its mailbox, as `sprite.home`. `at` is the
+# house's ground centre (world XY, m); the house is scaled so its projected width is `width_px` (design px);
+# the mailbox stands at `mailbox_at` (house-local metres before the scale is applied, at the house's scale).
+HOME = {
+    'id': 'home',
+    'house': ('house', 'Homely-House'),
+    'mailbox': ('mailbox', 'Homely-House'),
+    'at': (3.2, -6.05),  # between the decoration footprints of slots pizza-1 (x ≤ 594) and race-1 (x ≥ 783)
+    'yaw_deg': 0.0,
+    'width_px': 118.0,
+    'mailbox_at': (2.2, -2.0),  # in front of the right corner (the house model is ~5.9 units wide)
+    'mailbox_scale': 1.6,
+}
+HOME_FIT_PASSES = 4
+# Plate scenery on the home station's ground (a pine of the reference scene), removed.
+HOME_PRUNE = ['Pine3.6-5.4', 'PTr3.6-5.4']
 # The giant cone stands on the parasol side of the truck (away from the fishing hull), world XY (m).
 CONE_AT = (-8.2, -2.7)
 CONE_SCALE = 0.66
@@ -260,7 +286,7 @@ FOUNTAIN_JET_REACH = 0.42  # landing radius as a fraction of the fountain's half
 FOUNTAIN_BASIN = 0.35  # landing height as a fraction of the fountain's height
 FOUNTAIN_DROP_R = 0.07
 FOUNTAIN_COLUMN = [0.1, 0.25, 0.4]  # the centre column's droplet heights above the top, one per frame
-RING = {'at': (4.3, -7.45, 0.33), 'major': 0.42, 'minor': 0.17, 'tilt_deg': 12.0, 'yaw_rad': 0.3, 'stripes': 8}
+RING = {'at': (1.0, -7.45, 0.33), 'major': 0.42, 'minor': 0.17, 'tilt_deg': 12.0, 'yaw_rad': 0.3, 'stripes': 8}
 WHALE = {'id': 'whale', 'at': (7.3, -8.2, -0.15), 'yaw_deg': -25.0, 'scale': 0.8}
 WHALE_STATES = {'idle': [1], 'spout': [2, 3, 4, 5]}
 # Whale parts in its root space (unit whale, facing -Y): (name, material, location, scale[, rotation deg]).
@@ -470,6 +496,8 @@ def place_slots(scene, depsgraph, centres):
     """World points of every station's slots from SLOT_OFFSETS: {sid: [(x, y, z), ...]}."""
     slots = {}
     for sid in STATIONS:
+        if sid in NO_SLOTS:
+            continue
         offsets = SLOT_OFFSETS.get(sid, [])
         if not offsets:
             fail(f'station "{sid}" has no SLOT_OFFSETS entry')
@@ -876,6 +904,34 @@ def build_chimney(coll, mats):
     return descendants(root)
 
 
+def build_home_station(scene, screen, coll):
+    """Story 7.1: the home station sprite — the Homely House house (fitted to HOME['width_px']) and its mailbox."""
+    scene.render.resolution_x, scene.render.resolution_y = RENDER_SIZE  # the projection needs the final aspect
+    for o in list(bpy.data.objects):
+        if any(o.name.startswith(p) for p in HOME_PRUNE):
+            bpy.data.objects.remove(o, do_unlink=True)
+    bpy.context.view_layer.update()
+    x, y = HOME['at']
+    gz = ground_z(scene, bpy.context.evaluated_depsgraph_get(), x, y)
+    root = add_empty('landmark.home', (x, y, gz), coll)
+    root.rotation_euler = (0.0, 0.0, math.radians(HOME['yaw_deg']))
+    house = import_joined(tt_model(*HOME['house']), 'home-house')
+    move_to(house, coll)
+    house.parent = root
+    mailbox = import_joined(tt_model(*HOME['mailbox']), 'home-mailbox')
+    move_to(mailbox, coll)
+    mailbox.parent = root
+    mailbox.location = (HOME['mailbox_at'][0], HOME['mailbox_at'][1], 0.0)
+    mailbox.scale = (HOME['mailbox_scale'],) * 3
+    objs = [house, mailbox]
+    for _ in range(HOME_FIT_PASSES):
+        bpy.context.view_layer.update()
+        x0, _y0, x1, _y1 = projected_box(screen, objs)
+        root.scale = root.scale * (HOME['width_px'] / max(x1 - x0, 1e-6))
+    bpy.context.view_layer.update()
+    return [o for o in descendants(root)]
+
+
 def projected_box(screen, objs, scene=None, frames=None):
     """Design-px bbox (x0, y0, x1, y1) of the objects' evaluated vertices, unioned over `frames`."""
     pts = []
@@ -1176,6 +1232,10 @@ def build(args):
 
     recolour(params['colours'])
     recolour_road(params)
+
+    # Story 7.1: the home station (its sprite is built, not regrouped from the reference scene).
+    home_coll = bpy.data.collections['sprite.home']
+    groups['home'] = build_home_station(scene, Screen(scene, params), home_coll)
 
     # Story 5.6: the station landmarks (the new ones join their station sprite, never its anchor).
     check_landmarks(groups)

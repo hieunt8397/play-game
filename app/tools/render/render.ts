@@ -15,7 +15,8 @@ import sharp from 'sharp';
 
 import type { ScreenLayout } from '../../src/content/layout-types.ts';
 import { MAP_GUIDE, SCREEN_PLATES, type ScreenId } from '../../src/content/assets.ts';
-import { STATIONS } from '../../src/content/stations.ts';
+import { HOME_STATION, STATIONS } from '../../src/content/stations.ts';
+import { CORNER_IDS, HOME_SCREEN_REQUIREMENTS } from '../../src/content/home.ts';
 import { GAME_IDS } from '../../src/content/types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
 import {
@@ -36,6 +37,8 @@ import {
   validateFishing,
   touchTalkLimits,
   validateTouchTalk,
+  homeLimits,
+  validateHome,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
@@ -60,7 +63,7 @@ sharp.cache(false);
  * trim boxes in the atlas JSON shape for the screens listed in FRAME_RULE_SCREENS.
  */
 export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames?: AtlasJsonLike) => string[]>> = {
-  map: (layout) => validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, limits: layoutLimits(), guide: MAP_GUIDE.id }),
+  map: (layout) => validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, shellStations: [HOME_STATION], limits: layoutLimits(), guide: MAP_GUIDE.id }),
   // The atlas does not exist yet at render time: the frame rules run in `atlas` and `validate:content`.
   'ice-cream': (layout) => validateIceCream(layout, iceCreamLimits(iceCreamScreen)),
   pizza: (layout) => validatePizza(layout, pizzaLimits(pizzaScreen)),
@@ -70,14 +73,16 @@ export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames
   'shadow-match': (layout, frames) => validateShadowMatch(layout, shadowMatchLimits(shadowScreen, ITEM_IDS, SHADOW_COUNTS), frames),
   // Story 4.1: the road bands, the cones and the kart/gate sizes (from the rendered frames' trims).
   // Story 4.3: the pond bounds and the fish sizes (from the rendered frames' trims).
-  // Story 4.5: the prop hulls (width, edges, Hud zones, bubble column, gaps) and sizes.
+  // Story 4.5: the prop hulls (width, edges, Hud zones, the two-column bubble area, gaps) and sizes.
   'touch-talk': (layout, frames) => validateTouchTalk(layout, touchTalkLimits(TOUCH_TALK_SCREEN, TOUCH_TALK_SCENES.map((s) => ({ id: s.id, props: s.props.map((p) => p.id) })), sceneBubbleKeepOutRect()), frames),
   fishing: (layout, frames) => validateFishing(layout, fishingLimits(FISHING_SCREEN, POND_HIT, ALL_FISH), frames),
   race: (layout, frames) => validateRace(layout, raceLimits(RACE_SCREEN, racePaths(raceLadder), CONE_ANCHORS, FLAG_ANCHORS), frames),
+  // Story 7.1: the yard corners (hulls, Hud zones, gaps, sizes from the rendered frames' trims).
+  home: (layout, frames) => validateHome(layout, homeLimits(HOME_SCREEN_REQUIREMENTS, CORNER_IDS), frames),
 };
 
 /** Story 3.3: screens whose render-time rules get the rendered frames' trims. */
-export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk']);
+export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home']);
 
 /** Per-screen toLayout options: hit ids kept `stationGap` apart (map), unpadded drop areas (ice-cream, the dino lawn). */
 export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'separate' | 'unpadded'>>> = {

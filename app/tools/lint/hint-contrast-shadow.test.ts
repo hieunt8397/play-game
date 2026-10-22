@@ -1,4 +1,4 @@
-// Story 3.5: the measured shadow contrast on the ledges, the cave luminance and the shadow-match ring sites.
+// Story 3.5: the measured shadow contrast on the cave wall, the cave luminance and the shadow-match ring sites.
 import { describe, expect, it } from 'vitest';
 import type { ScreenLayout } from '../../src/content/layout-types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
@@ -9,11 +9,15 @@ import {
   shadowContrastProblems,
   shadowMatchPlateProblems,
   shadowMatchRings,
+  shadowRadii,
   shadowSites,
   type RawImage,
   type Rgb,
 } from './hint-contrast.ts';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { atlasFrames } from '../layout/rules.ts';
+import { ATLASES } from '../../src/content/assets.ts';
 
 const SHADOW = rgbOf(Tokens.colors.shadowTarget.value);
 
@@ -42,7 +46,7 @@ describe('shadowContrastProblems (Story 3.5)', () => {
   it('a ledge rendered too dark fails naming the slot', () => {
     const p = shadowContrastProblems(image(20, 20, [190, 180, 160]), [site], SHADOW);
     expect(p).toHaveLength(1);
-    expect(p[0]).toMatch(/^shadow contrast "shadow-match" slot\.shadow-2-1: the ledge under the shadow gives [0-9.]+:1 against the shadow colour \(min 5:1/);
+    expect(p[0]).toMatch(/^shadow contrast "shadow-match" slot\.shadow-2-1: the wall under the shadow gives [0-9.]+:1 against the shadow colour \(min 5:1/);
   });
 
   it('the 5th percentile: a few dark pixels (≤ 5 %) are tolerated, more are not', () => {
@@ -85,20 +89,38 @@ describe('shadow-match ring sites (Story 3.5)', () => {
     screenId: 'shadow-match',
     design: { width: 1024, height: 768 },
     renderScale: 2,
-    anchors: { triceratops: { x: 470, y: 492 }, 'triceratops-hand': { x: 508, y: 560 } },
+    anchors: { 'item-rest': { x: 512, y: 606 } },
     hits: {},
     slots: { 'shadow-2-1': { x: 150, y: 385 }, 'shadow-2-2': { x: 830, y: 385 } },
     paths: {},
   } as unknown as ScreenLayout;
 
-  it('a ring of shadowR + pad on every shadow slot and one of heldR + pad at the hand; ui.shadowItemPx without an atlas', () => {
+  it('a ring of shadowR + pad on every shadow slot and one of heldR + pad on the pedestal; ui.shadowItemPx without an atlas', () => {
     const pad = Tokens.ui.hintRingPad;
     const atlas = { frames: { 'item-horse/color/00': { spriteSourceSize: { x: 0, y: 0, w: 320, h: 200 } } } };
     const rings = shadowMatchRings(layout, atlas);
-    expect(rings.map((r) => r.label)).toEqual(['slot.shadow-2-1', 'slot.shadow-2-2', 'anchor.triceratops-hand']);
+    expect(rings.map((r) => r.label)).toEqual(['slot.shadow-2-1', 'slot.shadow-2-2', 'anchor.item-rest']);
     expect(rings[0]!.ring).toEqual({ cx: 150, cy: 385, rx: 80 + pad, ry: 80 + pad });
     expect(rings[2]!.ring.rx).toBeCloseTo(80 * Tokens.ui.shadowHeldScale + pad);
     expect(shadowMatchRings(layout, undefined)[0]!.ring.rx).toBe(Tokens.ui.shadowItemPx / 2 + pad);
+  });
+
+  it('2026-10-22: a multiatlas JSON (read through atlasFrames) gives the real frame sizes, not the ui.shadowItemPx fallback', () => {
+    const ss = (w: number, h: number) => ({ frame: { x: 0, y: 0, w, h }, spriteSourceSize: { x: 0, y: 0, w, h }, sourceSize: { w: 2048, h: 1536 } });
+    const multi = {
+      textures: [
+        { image: 'shadow-match-0.png', frames: [{ filename: 'item-dog/color/00', ...ss(200, 150) }] },
+        { image: 'shadow-match-1.png', frames: [{ filename: 'item-horse/color/00', ...ss(320, 200) }] },
+      ],
+    };
+    // Read raw, a multiatlas has no `frames`: the fallback would hide the real sizes.
+    expect(shadowRadii(multi as never, 2).shadowR).toBe(Tokens.ui.shadowItemPx / 2);
+    expect(shadowRadii(atlasFrames(multi) as never, 2).shadowR).toBe(80);
+    // The published atlas is a multiatlas whose frames give the radius.
+    const real = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'public', ATLASES['shadow-match'].json), 'utf8')) as { textures?: unknown[] };
+    expect(Array.isArray(real.textures)).toBe(true);
+    const { shadowR } = shadowRadii(atlasFrames(real) as never, 2);
+    expect(Math.abs(shadowR - Tokens.ui.shadowItemPx / 2)).toBeLessThanOrEqual(Tokens.ui.shadowItemTolerance / 2);
   });
 
   it('the shadow sites are the shadowR squares of the shadow slots, in plate px', () => {

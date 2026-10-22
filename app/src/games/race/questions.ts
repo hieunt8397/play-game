@@ -33,3 +33,16 @@ export function roundRoads(seed: number, level: number): string[] {
   }
   return out;
 }
+
+/**
+ * The kart's facing (±1, × the art facing) at a road's start: the sign of its first segment's unit dx
+ * when |dx| > minDx (the same rule as on the move), else +1 × artFacing. A road that starts heading
+ * screen-left (snake-2, spiral-2) shows the kart facing left before the first drag.
+ */
+export function startFacing(points: readonly { readonly x: number; readonly y: number }[], artFacing: number, minDx: number): number {
+  const a = points[0];
+  const b = points.find((p) => a !== undefined && (p.x !== a.x || p.y !== a.y));
+  if (!a || !b) return artFacing;
+  const dx = (b.x - a.x) / Math.hypot(b.x - a.x, b.y - a.y);
+  return Math.abs(dx) > minDx ? artFacing * Math.sign(dx) : artFacing;
+}

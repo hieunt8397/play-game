@@ -18,9 +18,9 @@ const fixedSize = () => ({ w: 100, h: 22 });
 describe('planMap (real layout)', () => {
   const plan = planMap(layout, STATIONS, allFrames, frameRect, { measureLabel: fixedSize });
 
-  it('plans all 7 stations with images, labels and their stored hit polygons; no warnings', () => {
+  it('plans all 8 stations (Story 7.1: + home) with images, labels and their stored hit polygons; no warnings', () => {
     expect(plan.warnings).toEqual([]);
-    expect(plan.stations).toHaveLength(7);
+    expect(plan.stations).toHaveLength(8);
     for (const s of plan.stations) {
       expect(s.hit).toBe(layout.hits[s.id]);
       expect(s.label.length).toBeGreaterThan(0);
@@ -34,7 +34,7 @@ describe('planMap (real layout)', () => {
         scale: 1 / layout.renderScale,
       });
     }
-    expect(plan.stations.filter((s) => s.awake).map((s) => s.id)).toEqual(['dino-puzzle', 'shadow-match', 'touch-talk', 'fishing', 'race', 'ice-cream', 'pizza']);
+    expect(plan.stations.filter((s) => s.awake).map((s) => s.id)).toEqual(['dino-puzzle', 'shadow-match', 'touch-talk', 'fishing', 'race', 'ice-cream', 'pizza', 'home']);
   });
 
   it('sorts by anchor y (back to front); bg lowest, labels above everything, ring below labels', () => {
@@ -99,7 +99,7 @@ describe('planMap (edge cases)', () => {
     const broken: ScreenLayout = { ...layout, hits };
     const plan = planMap(broken, STATIONS, allFrames, frameRect, { measureLabel: fixedSize });
     expect(plan.stations.map((s) => s.id)).not.toContain('race');
-    expect(plan.stations).toHaveLength(6);
+    expect(plan.stations).toHaveLength(7);
     expect(plan.warnings).toHaveLength(1);
     expect(plan.warnings[0]).toMatch(/station "race" is missing from the layout/);
   });

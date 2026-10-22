@@ -4,7 +4,8 @@ import { levelIndex, roundQuestions } from './questions';
 
 const group = (id: ItemId): string => SHAPE_ITEMS.find((i) => i.id === id)!.shapeGroup;
 const groupSize = (id: ItemId): number => SHAPE_ITEMS.filter((i) => i.shapeGroup === group(id)).length;
-const QUADRUPEDS = new Set<ItemId>(['dog', 'cow', 'horse', 'donkey', 'stag']);
+/** 2026-10-22: the items of the groups that fill a 4-shadow row (car, fish and kitchen have fewer). */
+const FULL_ROW = new Set<ItemId>(SHAPE_ITEMS.filter((i) => SHAPE_ITEMS.filter((o) => o.shapeGroup === i.shapeGroup).length >= 4).map((i) => i.id));
 
 describe('roundQuestions (Stories 3.5, 3.6)', () => {
   it('same seed and level → the same round', () => {
@@ -41,32 +42,31 @@ describe('roundQuestions (Stories 3.5, 3.6)', () => {
     expect(held.size).toBe(SHAPE_ITEMS.length);
   });
 
-  it('level 1: 3 shadows of ≥ 2 groups; a held item with a group mate has exactly one same-group decoy; the car has none', () => {
-    let car = 0;
+  it('level 1: 3 shadows of ≥ 2 groups; a held item with a group mate has exactly one same-group decoy (also in the 2- and 3-item groups)', () => {
+    const held = new Set<ItemId>();
     for (let seed = 0; seed < 1000; seed++) {
       for (const q of roundQuestions(seed, 1)) {
         expect(new Set(q.shadows.map(group)).size).toBeGreaterThanOrEqual(2);
         const mates = q.shadows.filter((s) => s !== q.item && group(s) === group(q.item));
         expect(mates, q.item).toHaveLength(groupSize(q.item) > 1 ? 1 : 0);
-        if (q.item === 'car') {
-          car++;
-          expect(q.shadows.filter((s) => s !== 'car').every((s) => group(s) !== 'car')).toBe(true);
-        }
-      }
-    }
-    expect(car).toBeGreaterThan(0);
-  });
-
-  it('level 2: 4 distinct quadrupeds held; each question shows 4 distinct quadruped shadows', () => {
-    const held = new Set<ItemId>();
-    for (let seed = 0; seed < 1000; seed++) {
-      for (const q of roundQuestions(seed, 2)) {
-        expect(QUADRUPEDS.has(q.item)).toBe(true);
-        for (const s of q.shadows) expect(QUADRUPEDS.has(s), s).toBe(true);
         held.add(q.item);
       }
     }
-    expect(held).toEqual(QUADRUPEDS);
+    // The small groups are held too: car (car, police), fish (goldfish, puffer, swordfish) and kitchen (mug, pan, ice-cream).
+    for (const id of ['car', 'police', 'goldfish', 'puffer', 'swordfish', 'mug', 'pan', 'ice-cream'] as const) expect(held.has(id), id).toBe(true);
+  });
+
+  it('level 2: held items come from groups of ≥ 4 (quadruped, truck, fruit; fish has 3 since the shark was dropped); each question shows 4 shadows of that one group', () => {
+    const held = new Set<ItemId>();
+    for (let seed = 0; seed < 1000; seed++) {
+      for (const q of roundQuestions(seed, 2)) {
+        expect(FULL_ROW.has(q.item), q.item).toBe(true);
+        for (const s of q.shadows) expect(group(s), s).toBe(group(q.item));
+        held.add(q.item);
+      }
+    }
+    expect(held).toEqual(FULL_ROW);
+    expect([...new Set([...held].map(group))].sort()).toEqual(['fruit', 'quadruped', 'truck']);
   });
 
   it('clamps the level (5 → 2, −1 / NaN → 0) and handles a non-finite seed', () => {

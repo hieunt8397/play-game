@@ -6,6 +6,7 @@
 // Story 2.5: `setResume` (Map, on round:abandon; a deep copy), `getResume`, `resumeIds`,
 // `resumeStartData` and `takeStartData` (the start choice: resume when held, then clear). Memory
 // only: a reload starts with no resume point.
+import type { StationId } from '../content/stations';
 import { GAME_IDS, type GameId, type GameStartData, type Snapshot } from '../content/types';
 import { ProgressStore, type ProgressStoreService } from './progress-store';
 import { readResume } from './snapshot';
@@ -17,8 +18,8 @@ const SEED_RANGE = 2 ** 31;
 export type DifficultySource = Pick<ProgressStoreService, 'getDifficulty'>;
 
 export class SessionStore {
-  /** The station of the last game started; Map parks the kart at its stop. */
-  lastStation: GameId | undefined = undefined;
+  /** The station of the last game started (Story 7.1: or the home station); Map parks the kart at its stop. */
+  lastStation: StationId | undefined = undefined;
   /** Kart arrivals this session (the first trip is capped at kartDriveMaxMs, later ones at kartDriveRepeatMaxMs). */
   kartTrips = 0;
   /** Story 5.2: the guide Shiba greeted on the first Map entry of this session (core/map-guide). */

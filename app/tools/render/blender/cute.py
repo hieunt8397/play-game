@@ -8,10 +8,15 @@
 #   with head / tail pivots and a tongue for the builders' idle, eat and happy frames. Its fur
 #   materials are named `Main` and `Main_Light`, so common.recolor_creature recolours it like the
 #   Quaternius animals it replaces.
+#   2026-10-22 (Hang tìm bóng): also the farm kinds 'cow', 'horse', 'donkey' and 'stag' (FARM_KINDS),
+#   each with its outline cue: horns + tail tuft, mane + long tail, long ears, antlers.
+# - Soft toy shapes (`mat`, `blob`, `rbox`, `lathe`, `rod`, `torus`, `wheel`, `chibi_face`, …) and the soft
+#   bus / truck / tractor (moved here from build_touch_talk.py on 2026-10-22, shared with build_shadow_match.py).
 import glob
 import math
 import os
 
+import bmesh
 import bpy
 from mathutils import Vector
 
@@ -182,9 +187,16 @@ NOSE_CREAM_SCALE = (0.15, 0.1, 0.1)  # the ice-cream blob sneezed onto the nose 
 
 
 def chibi(kind, name, coll, mats, nose_cream=False):
-    """A toy dog ('dog', shiba-like) or fox ('fox'). Returns a rig dict: root, head, tail, tongue, meshes,
+    """A toy dog ('dog', shiba-like) or fox ('fox'), or a farm kind (FARM_KINDS: cow, horse, donkey, stag;
+    _chibi_farm). Returns a rig dict: root, head, tail, tongue, meshes,
     eyes (Story 6.1: [(kind, part)] of the eyes and shines, for key_chibi's `eyes`), nose, and cream (the
     hidden nose-cream blob when `nose_cream`, made of `mats['cream']`; else None)."""
+    if kind in FARM_KINDS:
+        if nose_cream:
+            raise RuntimeError(f'cute: chibi "{kind}" has no nose cream')
+        return _chibi_farm(kind, name, coll, mats)
+    if kind not in ('dog', 'fox'):
+        raise RuntimeError(f'cute: chibi kind "{kind}" is not dog | fox | {" | ".join(FARM_KINDS)}')
     fox = kind == 'fox'
     root = _pivot(f'{name}-root', (0.0, 0.0, 0.0), None, coll)
     body = _pivot(f'{name}-body', (0.0, 0.0, 0.0), root, coll)
@@ -235,6 +247,129 @@ def chibi(kind, name, coll, mats, nose_cream=False):
     meshes = [o for o in coll.objects if o.type == 'MESH' and o.name.startswith(f'{name}-')]
     return {'root': root, 'body': body, 'head': head, 'tail': tail, 'tongue': tongue, 'meshes': meshes,
             'eyes': eyes, 'nose': nose, 'cream': cream}
+
+# --- chibi farm animals (2026-10-22, Hang tìm bóng) ----------------------------------------------------------
+# Same unit frame as chibi() (paws at z 0, facing -Y), a big head on a short body, but on longer legs with
+# hooves and a forward muzzle, so the five quadrupeds read apart in silhouette by their outline cue
+# (content/games/shadow-match.ts › features): cow horns + tail tuft, horse mane + long tail, donkey long
+# ears, stag antlers. `mats` = chibi_materials(...) plus optional 'hoof', 'horn', 'mane', 'patch',
+# 'muzzle' (each falls back to ink / light).
+# kind → leg height, torso radii (x, y, z), head radii, muzzle radii, ear (width, height, tilt°).
+FARM_KINDS = ('cow', 'horse', 'donkey', 'stag')
+FARM_SHAPES = {
+    'cow': {'leg': 0.24, 'torso': (0.44, 0.58, 0.4), 'head': (0.5, 0.44, 0.44), 'muzzle': (0.3, 0.2, 0.19), 'ear': (0.16, 0.08, 90.0)},
+    'horse': {'leg': 0.36, 'torso': (0.36, 0.56, 0.34), 'head': (0.44, 0.44, 0.44), 'muzzle': (0.24, 0.26, 0.2), 'ear': (0.09, 0.15, 10.0)},
+    'donkey': {'leg': 0.28, 'torso': (0.38, 0.5, 0.36), 'head': (0.46, 0.44, 0.44), 'muzzle': (0.26, 0.22, 0.2), 'ear': (0.1, 0.36, 12.0)},
+    'stag': {'leg': 0.4, 'torso': (0.32, 0.5, 0.31), 'head': (0.42, 0.4, 0.4), 'muzzle': (0.2, 0.2, 0.16), 'ear': (0.14, 0.08, 70.0)},
+}
+
+
+def _euler(rot):
+    from mathutils import Euler
+    return Euler(rot, 'XYZ')
+
+
+def _chibi_farm(kind, name, coll, mats):
+    sh = FARM_SHAPES[kind]
+    fur, light, ink = mats['fur'], mats['light'], mats['ink']
+    hoof = mats.get('hoof', ink)
+    horn = mats.get('horn', light)
+    mane = mats.get('mane', ink)
+    patch = mats.get('patch', ink)
+    muzzle = mats.get('muzzle', light)
+    root = _pivot(f'{name}-root', (0.0, 0.0, 0.0), None, coll)
+    body = _pivot(f'{name}-body', (0.0, 0.0, 0.0), root, coll)
+    leg = sh['leg']
+    tx, ty, tz_r = sh['torso']
+    tz = leg + tz_r * 0.85  # the torso's centre: its belly just above the legs
+    _part(f'{name}-torso', fur, (0, 0.08, tz), (tx, ty, tz_r), body, coll=coll)
+    _part(f'{name}-belly', light, (0, 0.02, tz - tz_r * 0.35), (tx * 0.8, ty * 0.78, tz_r * 0.6), body, coll=coll)
+    # four legs (soft capsules) on little hooves
+    front_y, back_y = 0.08 - ty * 0.55, 0.08 + ty * 0.6
+    for sx, side in ((-1, 'L'), (1, 'R')):
+        for ly, end in ((front_y, 'F'), (back_y, 'B')):
+            x = tx * 0.55 * sx
+            rod(f'{name}-leg{end}{side}', (x, ly, 0.06), (x, ly, tz), 0.1, fur, coll, body)
+            _part(f'{name}-hoof{end}{side}', hoof, (x, ly, 0.05), (0.105, 0.105, 0.06), body, coll=coll)
+    # neck and head (the head pivot sits on the neck top, a little forward)
+    hx, hy, hz_r = sh['head']
+    neck_top = (0.0, front_y - 0.12, tz + tz_r + 0.18)
+    rod(f'{name}-neck', (0.0, front_y + 0.05, tz), neck_top, 0.17 if kind != 'stag' else 0.14, fur, coll, body)
+    head = _pivot(f'{name}-head', neck_top, body, coll)
+    hz = 0.24  # the skull centre above the pivot
+    _part(f'{name}-skull', fur, (0, -0.06, hz), (hx, hy, hz_r), head, coll=coll)
+    mx, my, mz = sh['muzzle']
+    mu_y = -0.06 - hy * 0.8
+    mu_z = hz - hz_r * 0.42
+    _part(f'{name}-muzzle', muzzle, (0, mu_y, mu_z), (mx, my, mz), head, coll=coll)
+    nose = None
+    for sx, side in ((-1, 'L'), (1, 'R')):
+        n = _part(f'{name}-nostril{side}', ink, (mx * 0.42 * sx, mu_y - my * 0.9, mu_z + mz * 0.15), (0.035, 0.02, 0.045), head, coll=coll)
+        nose = nose or n
+    tongue = _part(f'{name}-tongue', mats['tongue'], (0, mu_y - my * 0.6, mu_z - mz * 0.7), HIDDEN_SCALE, head, coll=coll)
+    eyes = []
+    for sx, side in ((-1, 'L'), (1, 'R')):
+        ex, ey, ez = hx * 0.48 * sx, -0.06 - hy * 0.86, hz + hz_r * 0.12
+        eyes.append(('eye', _part(f'{name}-eye{side}', ink, (ex, ey, ez), EYE_SCALE, head, coll=coll)))
+        eyes.append(('shine', _part(f'{name}-shine{side}', mats['shine'], (ex - 0.03 * sx, ey - 0.055, ez + 0.05), SHINE_SCALE, head, coll=coll)))
+        _part(f'{name}-cheek{side}', mats['blush'], (hx * 0.72 * sx, -0.06 - hy * 0.62, hz - hz_r * 0.2), (0.08, 0.04, 0.055), head, coll=coll)
+    # ears
+    ew, eh, tilt = sh['ear']
+    for sx, side in ((-1, 'L'), (1, 'R')):
+        if kind == 'cow':  # floppy ears sticking out sideways, under the horns
+            _part(f'{name}-ear{side}', fur, (sx * (hx + 0.08), -0.02, hz + hz_r * 0.15), (0.17, 0.07, 0.09), head, rot=(0, math.radians(-15 * sx), 0), coll=coll)
+            _part(f'{name}-ear-in{side}', mats['blush'], (sx * (hx + 0.09), -0.06, hz + hz_r * 0.15), (0.11, 0.03, 0.05), head, coll=coll)
+        elif kind == 'stag':  # small ears out to the side, below the antlers
+            _part(f'{name}-ear{side}', fur, (sx * (hx + 0.04), 0.0, hz + hz_r * 0.42), (0.15, 0.06, 0.08), head, rot=(0, math.radians(-25 * sx), 0), coll=coll)
+        else:  # upright pointed ears: short (horse) or long (donkey), a little splayed
+            base_z = hz + hz_r * 0.78
+            rot = (math.radians(-8), math.radians(-tilt * sx), 0)
+            _part(f'{name}-ear{side}', fur, (sx * hx * 0.5, 0.0, base_z + eh * 0.85), (ew, ew * 0.7, eh), head, kind='cone', rot=rot, coll=coll)
+            _part(f'{name}-ear-in{side}', mats['blush'] if kind == 'donkey' else light, (sx * hx * 0.5, -0.04, base_z + eh * 0.8), (ew * 0.55, ew * 0.35, eh * 0.75), head, kind='cone', rot=rot, coll=coll)
+            if kind == 'donkey':  # the dark ear tips
+                tip = Vector((0.0, 0.0, eh * 1.55))
+                tip.rotate(_euler(rot))
+                _part(f'{name}-ear-tip{side}', ink, (sx * hx * 0.5 + tip.x, tip.y, base_z + eh * 0.85 + tip.z), (ew * 0.42, ew * 0.32, eh * 0.2), head, rot=rot, coll=coll)
+    # the kind's outline cue
+    tail = _pivot(f'{name}-tail', (0.0, 0.08 + ty * 0.92, tz + tz_r * 0.35), body, coll)
+    if kind == 'cow':
+        for sx, side in ((-1, 'L'), (1, 'R')):  # horns: short soft cones curving up and out
+            h0 = Vector((sx * hx * 0.5, -0.04, hz + hz_r * 0.62))
+            h1 = h0 + Vector((sx * 0.28, -0.02, 0.24))
+            rod(f'{name}-horn{side}', tuple(h0), tuple(h1), 0.085, horn, coll, head)
+            rod(f'{name}-horn-tip{side}', tuple(h1), tuple(h1 + Vector((sx * 0.03, 0.0, 0.18))), 0.065, horn, coll, head)
+        rod(f'{name}-tail-rope', (0.0, 0.0, 0.0), (0.0, 0.16, -tz_r * 1.25), 0.035, fur, coll, tail)
+        _part(f'{name}-tail-tuft', mane, (0.0, 0.17, -tz_r * 1.32), (0.07, 0.07, 0.11), tail, coll=coll)
+        for i, (px, py, pz, r) in enumerate([(0.3, 0.2, 0.12, 0.2), (-0.32, -0.05, 0.05, 0.18), (0.22, -0.3, -0.08, 0.15), (-0.2, 0.4, 0.16, 0.14)]):
+            _part(f'{name}-patch{i}', patch, (px * tx / 0.44 * 1.02, 0.08 + py, tz + pz), (r * 0.5, r, r * 0.8), body, coll=coll)
+        _part(f'{name}-head-patch', patch, (hx * 0.55, -0.06 - hy * 0.25, hz + hz_r * 0.45), (0.18, 0.2, 0.14), head, coll=coll)
+    elif kind == 'horse':
+        for i in range(6):  # the mane: soft tufts along the head's crown and down the back of the neck
+            t = i / 5
+            _part(f'{name}-mane{i}', mane, (0.0, 0.02 + 0.5 * t, hz + hz_r * (0.95 - 1.6 * t)), (0.1, 0.16, 0.14), head, coll=coll)
+        _part(f'{name}-forelock', mane, (0.0, -0.06 - hy * 0.45, hz + hz_r * 0.88), (0.12, 0.1, 0.1), head, coll=coll)
+        _part(f'{name}-tail-hair', mane, (0.0, 0.2, -tz_r * 0.85), (0.11, 0.16, 0.42), tail, rot=(math.radians(-28), 0, 0), coll=coll)
+    elif kind == 'donkey':
+        rod(f'{name}-tail-rope', (0.0, 0.0, 0.0), (0.0, 0.12, -tz_r * 1.05), 0.03, fur, coll, tail)
+        _part(f'{name}-tail-tuft', ink, (0.0, 0.13, -tz_r * 1.1), (0.06, 0.06, 0.09), tail, coll=coll)
+        for i in range(4):  # a short dark crest
+            _part(f'{name}-crest{i}', ink, (0.0, 0.02 + 0.12 * i, hz + hz_r * (0.92 - 0.35 * i)), (0.05, 0.08, 0.06), head, coll=coll)
+    elif kind == 'stag':
+        for sx, side in ((-1, 'L'), (1, 'R')):  # antlers: a soft beam out and up with three tines
+            b0 = Vector((sx * hx * 0.38, 0.0, hz + hz_r * 0.82))
+            b1 = b0 + Vector((sx * 0.22, 0.06, 0.32))
+            b2 = b1 + Vector((sx * 0.12, 0.04, 0.3))
+            rod(f'{name}-antler{side}-a', tuple(b0), tuple(b1), 0.045, horn, coll, head)
+            rod(f'{name}-antler{side}-b', tuple(b1), tuple(b2), 0.04, horn, coll, head)
+            rod(f'{name}-antler{side}-t1', tuple(b1), tuple(b1 + Vector((-sx * 0.1, -0.06, 0.2))), 0.035, horn, coll, head)
+            rod(f'{name}-antler{side}-t2', tuple(b2), tuple(b2 + Vector((-sx * 0.12, -0.04, 0.14))), 0.032, horn, coll, head)
+            rod(f'{name}-antler{side}-t3', tuple(b2), tuple(b2 + Vector((sx * 0.1, 0.02, 0.14))), 0.032, horn, coll, head)
+        _part(f'{name}-tail-puff', light, (0.0, 0.05, 0.02), (0.08, 0.08, 0.1), tail, coll=coll)
+        for i, (px, py, pz) in enumerate([(0.2, -0.1, 0.25), (-0.2, 0.0, 0.26), (0.1, 0.22, 0.28), (-0.12, 0.3, 0.24), (0.24, 0.32, 0.15)]):
+            _part(f'{name}-spot{i}', light, (px, 0.08 + py, tz + pz * tz_r / 0.31), (0.05, 0.05, 0.035), body, coll=coll)
+    meshes = [o for o in coll.objects if o.type == 'MESH' and o.name.startswith(f'{name}-')]
+    return {'root': root, 'body': body, 'head': head, 'tail': tail, 'tongue': tongue, 'meshes': meshes,
+            'eyes': eyes, 'nose': nose, 'cream': None}
 
 
 def _eye_scale(kind, eyes):
@@ -292,3 +427,256 @@ def _keyframes(ob):
                 for bag in strip.channelbags:
                     curves.extend(bag.fcurves)
     return [kp for fc in curves for kp in fc.keyframe_points]
+
+
+# --- soft toy shapes (2026-10-22: moved from build_touch_talk.py, shared with build_shadow_match.py) ---------
+# Materials are shared per (colour, roughness). Vehicles: length along y, front at -y, axles along x;
+# `c` maps colour names (Tokens colours + art.touchTalk) to hex.
+
+GLOSS = 0.38  # the props' toy-plastic roughness
+EYE_GLOSS = 0.2
+
+
+_MATS = {}
+
+
+def mat(hex_colour, rough=GLOSS):
+    """A shared plain material per (colour, roughness)."""
+    key = (hex_colour.upper(), round(rough, 3))
+    if key not in _MATS:
+        _MATS[key] = flat_material(f'tt-{hex_colour.lstrip("#").lower()}-{int(rough * 100)}', hex_colour, rough)
+    return _MATS[key]
+
+
+# --- soft shapes (every shape's scale is baked into its mesh, so children are never skewed) -----------------
+
+def mesh_obj(name, bm, material, coll, smooth=True):
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    for m in (material if isinstance(material, list) else [material]):
+        me.materials.append(m)
+    for poly in me.polygons:
+        poly.use_smooth = smooth
+    o = bpy.data.objects.new(name, me)
+    coll.objects.link(o)
+    return o
+
+
+def place(o, parent, loc=(0.0, 0.0, 0.0), rot=(0.0, 0.0, 0.0)):
+    o.parent = parent
+    o.location = loc
+    o.rotation_euler = tuple(math.radians(a) for a in rot)
+    return o
+
+
+def blob(name, material, coll, parent, loc=(0.0, 0.0, 0.0), size=(1.0, 1.0, 1.0), rot=(0.0, 0.0, 0.0), seg=(40, 20), shape=None):
+    """A smooth ellipsoid (radii `size`), optionally deformed by `shape(unit direction) → point`."""
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=seg[0], v_segments=seg[1], radius=1.0)
+    for v in bm.verts:
+        d = v.co.normalized()
+        p = shape(d) if shape else d
+        v.co = Vector((p.x * size[0], p.y * size[1], p.z * size[2]))
+    return place(mesh_obj(name, bm, material, coll), parent, loc, rot)
+
+
+def lathe_bm(profile, seg=40):
+    """A surface of revolution about z from a (radius, z) profile (radius 0 closes an end)."""
+    bm = bmesh.new()
+    rings = []
+    for r, z in profile:
+        if r < 1e-6:
+            rings.append([bm.verts.new((0.0, 0.0, z))])
+        else:
+            rings.append([bm.verts.new((r * math.cos(2 * math.pi * j / seg), r * math.sin(2 * math.pi * j / seg), z)) for j in range(seg)])
+    for a, b in zip(rings, rings[1:]):
+        if len(a) == 1 and len(b) == 1:
+            continue
+        for j in range(seg):
+            k = (j + 1) % seg
+            if len(a) == 1:
+                bm.faces.new((a[0], b[k], b[j]))
+            elif len(b) == 1:
+                bm.faces.new((a[j], a[k], b[0]))
+            else:
+                bm.faces.new((a[j], a[k], b[k], b[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return bm
+
+
+def lathe(name, profile, material, coll, parent, loc=(0.0, 0.0, 0.0), rot=(0.0, 0.0, 0.0), seg=40):
+    return place(mesh_obj(name, lathe_bm(profile, seg), material, coll), parent, loc, rot)
+
+
+def rounded_profile(r, z0, z1, round_=0.3, steps=6):
+    """A capped cylinder's profile with rounded rims (radius r, from z0 to z1, rims of round_ × r)."""
+    c = round_ * r
+    out = [(0.0, z0)]
+    for i in range(steps + 1):
+        t = math.pi / 2 * i / steps
+        out.append((r - c + c * math.sin(t), z0 + c - c * math.cos(t)))
+    for i in range(steps + 1):
+        t = math.pi / 2 * i / steps
+        out.append((r - c + c * math.cos(t), z1 - c + c * math.sin(t)))
+    out.append((0.0, z1))
+    return out
+
+
+def capsule_profile(r, length, steps=8):
+    out = [(r * math.sin(math.pi / 2 * i / steps), r - r * math.cos(math.pi / 2 * i / steps)) for i in range(steps + 1)]
+    out += [(r * math.cos(math.pi / 2 * i / steps), length - r + r * math.sin(math.pi / 2 * i / steps)) for i in range(steps + 1)]
+    return out
+
+
+def rod(name, a, b, r, material, coll, parent, seg=16):
+    """A capsule from a to b (parent space)."""
+    a, b = Vector(a), Vector(b)
+    o = mesh_obj(name, lathe_bm(capsule_profile(r, max((b - a).length, 2 * r + 1e-4)), seg), material, coll)
+    o.parent = parent
+    o.location = a
+    o.rotation_mode = 'QUATERNION'
+    o.rotation_quaternion = (b - a).to_track_quat('Z', 'Y')
+    return o
+
+
+def rbox(name, size, radius, material, coll, parent, loc=(0.0, 0.0, 0.0), rot=(0.0, 0.0, 0.0), seg=4):
+    """A box with rounded edges and corners."""
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.scale(bm, vec=size, verts=bm.verts)
+    r = min(radius, min(size) / 2 * 0.98)
+    bmesh.ops.bevel(bm, geom=list(bm.verts) + list(bm.edges), offset=r, segments=seg, profile=0.5, affect='EDGES', clamp_overlap=True)
+    return place(mesh_obj(name, bm, material, coll), parent, loc, rot)
+
+
+def torus_bm(major, minor, arc=(0.0, 360.0), seg=40, tube=14):
+    closed = arc[1] - arc[0] >= 360.0
+    n = seg if closed else seg + 1
+    bm = bmesh.new()
+    grid = []
+    for i in range(n):
+        a = math.radians(arc[0] + (arc[1] - arc[0]) * i / seg)
+        ring = []
+        for k in range(tube):
+            b = 2 * math.pi * k / tube
+            ring.append(bm.verts.new(((major + minor * math.cos(b)) * math.cos(a), (major + minor * math.cos(b)) * math.sin(a), minor * math.sin(b))))
+        grid.append(ring)
+    for i in range(seg if closed else seg):
+        i2 = (i + 1) % n
+        for k in range(tube):
+            k2 = (k + 1) % tube
+            bm.faces.new((grid[i][k], grid[i2][k], grid[i2][k2], grid[i][k2]))
+    if not closed:
+        bm.faces.new(list(reversed(grid[0])))
+        bm.faces.new(grid[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return bm
+
+
+def torus(name, major, minor, material, coll, parent, loc=(0.0, 0.0, 0.0), rot=(0.0, 0.0, 0.0), arc=(0.0, 360.0)):
+    return place(mesh_obj(name, torus_bm(major, minor, arc), material, coll), parent, loc, rot)
+
+
+def ellipsoid_point(radii, direction):
+    """The point of an ellipsoid (centred at the origin) along `direction` and its outward normal."""
+    d = Vector(direction).normalized()
+    t = 1.0 / math.sqrt(sum((d[i] / radii[i]) ** 2 for i in range(3)))
+    p = d * t
+    n = Vector(tuple(p[i] / radii[i] ** 2 for i in range(3))).normalized()
+    return p, n
+
+
+def chibi_face(prefix, parent, coll, c, eyes, size, cheeks=(), smile=None):
+    """Big glossy ink eyes with a white shine (Tiệm kem style), pink cheeks and a small smile. `eyes`,
+    `cheeks`: [(point, outward normal)] in the parent's space; `smile`: (point, normal, width)."""
+    ink = mat(c['iconInk'], EYE_GLOSS)
+    shine = mat(c['white'], EYE_GLOSS)
+    blush = mat(c['tintPink'], 0.6)
+    for i, (p, n) in enumerate(eyes):
+        q = Vector(n).to_track_quat('Z', 'Y')
+        e = blob(f'{prefix}-eye-{i}', ink, coll, parent, size=(0.78 * size, size, 0.45 * size), seg=(24, 12))
+        e.rotation_mode = 'QUATERNION'
+        e.rotation_quaternion = q
+        e.location = Vector(p) + Vector(n) * 0.12 * size
+        right = q @ Vector((1.0, 0.0, 0.0))
+        s = blob(f'{prefix}-shine-{i}', shine, coll, parent, size=(0.26 * size, 0.3 * size, 0.12 * size), seg=(16, 8))
+        s.rotation_mode = 'QUATERNION'
+        s.rotation_quaternion = q
+        s.location = e.location + Vector(n) * 0.4 * size + (q @ Vector((0.0, 1.0, 0.0))) * 0.42 * size - right * 0.25 * size
+    for i, (p, n) in enumerate(cheeks):
+        k = blob(f'{prefix}-cheek-{i}', blush, coll, parent, size=(0.55 * size, 0.38 * size, 0.14 * size), seg=(16, 8))
+        k.rotation_mode = 'QUATERNION'
+        k.rotation_quaternion = Vector(n).to_track_quat('Z', 'Y')
+        k.location = Vector(p) + Vector(n) * 0.05 * size
+    if smile is not None:
+        p, n, w = smile
+        m = mesh_obj(f'{prefix}-smile', torus_bm(w / 2, w * 0.09, (200.0, 340.0), seg=16, tube=8), ink, coll)
+        m.parent = parent
+        m.rotation_mode = 'QUATERNION'
+        m.rotation_quaternion = Vector(n).to_track_quat('Z', 'Y')
+        m.location = Vector(p) + Vector(n) * 0.04 * w + (m.rotation_quaternion @ Vector((0.0, 1.0, 0.0))) * (w * 0.35)
+
+
+def on_body(radii, centre, direction):
+    p, n = ellipsoid_point(radii, direction)
+    return Vector(centre) + p, n
+
+
+def wheel(name, at, radius, c, coll, parent, hub_hex=None):
+    """A toy wheel: a fat tyre and a domed hub, its axle along x."""
+    torus(f'{name}-tyre', radius * 0.68, radius * 0.32, mat(c['tire'], 0.55), coll, parent, at, (0.0, 90.0, 0.0))
+    side = 1 if at[0] >= 0 else -1
+    blob(f'{name}-hub', mat(hub_hex or c['hub'], GLOSS), coll, parent, (at[0] + side * radius * 0.12, at[1], at[2]), (radius * 0.22, radius * 0.42, radius * 0.42))
+
+
+# --- soft vehicles (Chạm là nói street, Hang tìm bóng) --------------------------------------------------------
+
+def build_bus(root, coll, c):
+    yellow = mat(c['bus'])
+    glass = mat(c['glass'], 0.2)
+    rbox('bus-body', (1.15, 2.7, 1.15), 0.26, yellow, coll, root, (0.0, 0.0, 0.88))
+    rbox('bus-windows', (1.19, 2.2, 0.4), 0.12, glass, coll, root, (0.0, 0.12, 1.1))
+    for k in range(4):
+        rbox(f'bus-pillar-{k}', (1.21, 0.08, 0.44), 0.03, yellow, coll, root, (0.0, -0.75 + 0.55 * k + 0.12, 1.1))
+    rbox('bus-windshield', (0.92, 0.1, 0.48), 0.12, glass, coll, root, (0.0, -1.32, 1.1))
+    rbox('bus-roof', (0.95, 2.3, 0.1), 0.05, mat(c['white']), coll, root, (0.0, 0.0, 1.47))
+    rbox('bus-stripe', (1.18, 2.72, 0.1), 0.05, mat(c['creatureOrange']), coll, root, (0.0, 0.0, 0.66))
+    rbox('bus-bumper', (1.05, 0.14, 0.14), 0.06, mat(c['hub']), coll, root, (0.0, -1.36, 0.42))
+    for s in (-1, 1):
+        blob(f'bus-light-{s}', mat(c['tintButter'], 0.2), coll, root, (s * 0.38, -1.36, 0.62), (0.11, 0.05, 0.11))
+        for y in (-0.82, 0.82):
+            wheel(f'bus-wheel-{s}-{y}', (s * 0.54, y, 0.34), 0.36, c, coll, root)
+
+
+def build_truck(root, coll, c):
+    blue = mat(c['creatureBlue'])
+    rbox('truck-chassis', (1.0, 2.6, 0.3), 0.1, mat(c['tire'], 0.6), coll, root, (0.0, 0.1, 0.45))
+    cab = rbox('truck-cab', (1.1, 0.95, 1.05), 0.26, blue, coll, root, (0.0, -0.75, 1.05))
+    rbox('truck-windshield', (0.88, 0.1, 0.42), 0.12, mat(c['glass'], 0.2), coll, cab, (0.0, -0.47, 0.18))
+    rbox('truck-side-window', (1.14, 0.5, 0.38), 0.1, mat(c['glass'], 0.2), coll, cab, (0.0, 0.05, 0.2))
+    rbox('truck-box', (1.2, 1.7, 1.3), 0.2, mat(c['creatureOrange']), coll, root, (0.0, 0.55, 1.25))
+    rbox('truck-box-band', (1.24, 1.74, 0.14), 0.06, mat(c['white']), coll, root, (0.0, 0.55, 1.25))
+    rbox('truck-bumper', (1.0, 0.14, 0.14), 0.06, mat(c['hub']), coll, root, (0.0, -1.24, 0.55))
+    for s in (-1, 1):
+        blob(f'truck-light-{s}', mat(c['tintButter'], 0.2), coll, root, (s * 0.36, -1.24, 0.78), (0.1, 0.05, 0.1))
+        for y in (-0.75, 0.85):
+            wheel(f'truck-wheel-{s}-{y}', (s * 0.54, y, 0.36), 0.38, c, coll, root)
+
+
+def build_tractor(root, coll, c):
+    green = mat(c['creatureGreen'])
+    rbox('tractor-hood', (0.72, 1.25, 0.62), 0.22, green, coll, root, (0.0, -0.45, 0.82))
+    rbox('tractor-grill', (0.5, 0.08, 0.34), 0.08, mat(c['hub']), coll, root, (0.0, -1.08, 0.8))
+    rbox('tractor-seat-base', (0.9, 0.9, 0.5), 0.18, green, coll, root, (0.0, 0.45, 0.75))
+    roof_z = 2.05
+    rbox('tractor-roof', (1.15, 1.1, 0.12), 0.06, mat(c['white']), coll, root, (0.0, 0.45, roof_z))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            rod(f'tractor-post-{sx}-{sy}', (sx * 0.45, 0.45 + sy * 0.4, 0.95), (sx * 0.45, 0.45 + sy * 0.4, roof_z), 0.045, mat(c['white']), coll, root)
+    rod('tractor-exhaust', (0.18, -0.6, 1.0), (0.18, -0.6, 1.55), 0.06, mat(c['tire'], 0.5), coll, root)
+    blob('tractor-light', mat(c['tintButter'], 0.2), coll, root, (0.0, -1.1, 1.02), (0.1, 0.05, 0.1))
+    hub = c['tintButter']
+    for s in (-1, 1):
+        wheel(f'tractor-big-{s}', (s * 0.62, 0.5, 0.58), 0.6, c, coll, root, hub)
+        wheel(f'tractor-small-{s}', (s * 0.5, -0.8, 0.34), 0.34, c, coll, root, hub)

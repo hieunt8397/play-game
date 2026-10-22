@@ -198,14 +198,11 @@ describe('Story 3.5 values', () => {
   it('art.shadowMatch, the shadow-match ui values and timings', () => {
     expect(Tokens.art.shadowMatch.caveInner.css).toBe('#F6EEDC');
     expect(Tokens.ui).toMatchObject({
-      trikeSizePx: 300,
-      trikeSizeTolerance: 30,
-      trikeRisePx: 24,
-      trikeSwayDeg: 1.5,
-      trikeNodBounceScale: 1.06,
-      shadowItemPx: 150,
-      shadowItemTolerance: 10,
+      shadowItemPx: 210,
+      shadowItemTolerance: 14,
       shadowHeldScale: 0.7,
+      shadowHappyHopPx: 28,
+      shadowHappyBounceScale: 1.12,
       caveMinLuminance: 0.35,
       shadowMaxIoU: 0.85,
       raceTurnSpanPx: 30,
@@ -216,19 +213,17 @@ describe('Story 3.5 values', () => {
       raceConeSwayDeg: 4,
       raceFlagSwayDeg: 3,
     });
-    expect(Tokens.Timing).toMatchObject({ trikeEnterMs: 900, trikeSwayMs: 3000, trikeNodMs: 600, trikeCallMs: 500, shadowRevealMs: 400, shadowItemFadeMs: 400, raceConeSwayMs: 2200, raceFlagSwayMs: 1700 });
+    expect(Tokens.Timing).toMatchObject({ shadowHappyMs: 600, shadowNameDelayMs: 500, shadowRevealMs: 400, shadowItemFadeMs: 400, raceConeSwayMs: 2200, raceFlagSwayMs: 1700 });
   });
 
-  it('the entrance takes at least 0.8 s; the nod and the call fit a character sound; the sway is slower than 1 Hz', () => {
-    expect(Tokens.Timing.trikeEnterMs).toBeGreaterThanOrEqual(800);
-    expect(Tokens.Timing.trikeNodMs).toBeLessThanOrEqual(Tokens.Timing.characterSoundMaxMs);
-    expect(Tokens.Timing.trikeCallMs).toBeLessThanOrEqual(Tokens.Timing.characterSoundMaxMs);
-    expect(Tokens.Timing.trikeSwayMs).toBeGreaterThanOrEqual(Tokens.Timing.flashMinPeriodMs);
+  it('the happy hop and the name delay fit a character sound', () => {
+    expect(Tokens.Timing.shadowHappyMs).toBeLessThanOrEqual(Tokens.Timing.characterSoundMaxMs);
+    expect(Tokens.Timing.shadowNameDelayMs).toBeLessThanOrEqual(Tokens.Timing.characterSoundMaxMs);
   });
 
-  it('the trike is at least the character minimum; a shadow at least the shadow-target minimum', () => {
-    expect(Tokens.ui.trikeSizePx - Tokens.ui.trikeSizeTolerance).toBeGreaterThanOrEqual(Tokens.components.character.minSize);
+  it('a shadow is at least the shadow-target minimum; 2026-10-22: items and shadows are ≈ 1.4× the old 150 px', () => {
     expect(Tokens.ui.shadowItemPx - Tokens.ui.shadowItemTolerance).toBeGreaterThanOrEqual(Tokens.components.shadowTarget.minSize);
+    expect(Tokens.ui.shadowItemPx / 150).toBeCloseTo(1.4, 1);
   });
 });
 

@@ -20,6 +20,10 @@
 // taps during the chain are queued (`queueTap`, the last one wins) and handed to `end`. Every animation
 // runs on the scene clock and tweens (never setTimeout), so a paused scene freezes the chain mid-step.
 // In a dev build `log` prints `post-round: <kind> <gameId> → onChainEnd <ms> ms`.
+// Story 7.1 (the yard): a game opened from a yard corner runs with `origin: 'yard'`. Its `round:leave` and
+// `round:abandon` take the fade return to the yard (no island chain: the round was settled on
+// `round:complete`, and there is no camera pull-back on the island); `round:next` restarts it in place as
+// for an island game. `routeYardOpen` decides whether the yard's `yard:open` starts a game.
 import type { GameId, RoundOutcome, Snapshot } from '../content/types';
 import { nextLevel } from './difficulty';
 import { Tokens } from './tokens';
@@ -73,6 +77,16 @@ export function chainAnimMs(reduced: boolean): number {
 export interface RunningGame {
   readonly id: GameId;
   readonly level: number;
+  /** Story 7.1: where the game was opened from (default the island); its last event returns there. */
+  readonly origin?: GameOrigin;
+}
+
+/** Story 7.1: where a game was opened from — an island station or a yard corner. */
+export type GameOrigin = 'island' | 'yard';
+
+/** Story 7.1: where the running game's return (fade) lands. */
+export function returnTarget(running: RunningGame | undefined): GameOrigin {
+  return running?.origin ?? 'island';
 }
 
 /** What Map does with a terminal event of a game. */
@@ -101,7 +115,8 @@ export function routeRoundComplete(running: RunningGame | undefined, outcome: Ro
  */
 export function routeRoundLeave(running: RunningGame | undefined, gameId: GameId, chainActive: boolean): TerminalRoute {
   if (!running || gameId !== running.id) return { action: 'ignore' };
-  if (chainActive) return { action: 'fade', gameId };
+  // Story 7.1: a yard game goes back to the yard with the fade (settled already on round:complete).
+  if (chainActive || running.origin === 'yard') return { action: 'fade', gameId };
   return { action: 'chain', start: { kind: 'complete', gameId } };
 }
 
@@ -113,6 +128,23 @@ export function routeRoundLeave(running: RunningGame | undefined, gameId: GameId
 export function routeRoundNext(running: RunningGame | undefined, gameId: GameId, chainActive: boolean): TerminalRoute {
   if (!running || gameId !== running.id || chainActive) return { action: 'ignore' };
   return { action: 'restart', gameId };
+}
+
+/** Story 7.1: what Map does with the yard's `yard:open`. */
+export type YardOpenRoute = { readonly action: 'ignore' } | { readonly action: 'open'; readonly gameId: GameId };
+
+/**
+ * Story 7.1: `yard:open` starts the corner's game only while the yard is open, no game runs, no chain
+ * runs and the id is a registered game (`isGame`, games/registry › isGameId); otherwise it is ignored.
+ */
+export function routeYardOpen(
+  running: RunningGame | undefined,
+  gameId: string,
+  state: { readonly yardOpen: boolean; readonly chainActive: boolean },
+  isGame: (id: string) => id is GameId,
+): YardOpenRoute {
+  if (running || !state.yardOpen || state.chainActive || !isGame(gameId)) return { action: 'ignore' };
+  return { action: 'open', gameId };
 }
 
 /**
@@ -179,6 +211,11 @@ export class PostRoundChain {
   /** A station tap during the chain: remembered, any earlier queued tap is dropped. */
   queueTap(id: string): void {
     if (this.activeFlag) this.queued = id;
+  }
+
+  /** Story 7.1: a game that left without the chain (a yard game) is no longer settled. */
+  forget(gameId: GameId): void {
+    if (this.settled === gameId) this.settled = undefined;
   }
 
   /** Story 5.8: steps 1–2 of a `complete` round now (on `round:complete`); the chain starts later at Home. */

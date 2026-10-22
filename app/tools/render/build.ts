@@ -39,6 +39,8 @@ export interface BuildParams {
     fishing: Record<string, string>;
     /** Story 4.5: art.touchTalk. */
     touchTalk: Record<string, string>;
+    /** Story 7.1: art.home (the yard's props). */
+    home: Record<string, string>;
     /** Story 5.6: art.map (the map road, water, foam, cone and chimney). */
     map: Record<string, string>;
   };
@@ -48,10 +50,10 @@ export interface BuildParams {
    */
   dino: { species: string[]; pieces: Record<string, string[]>; sizePx: number; sizeTolerance: number; walkMaxPx: number };
   /**
-   * Story 3.5: the shadow-match builder's sizes: the triceratops' idle longest side and each item's
-   * longest side (design px), and the slot rows to emit (content SHADOW_COUNTS).
+   * Story 3.5: the shadow-match builder's sizes: each item's longest side (design px), and the slot rows
+   * to emit (content SHADOW_COUNTS). 2026-10-22: no triceratops any more.
    */
-  shadowMatch: { trikeSizePx: number; itemPx: number; counts: number[] };
+  shadowMatch: { itemPx: number; counts: number[] };
   /** Story 4.3: the small fish's target size (fish.minSize + slack) and the big/small ratio. */
   fishing: { minSize: number; slackPx: number; sizeRatio: number };
   /** Story 3.1: components.counterTray.top (the pizza counter top). */
@@ -88,6 +90,7 @@ export function buildParams(): BuildParams {
       shadowMatch: Object.fromEntries(Object.entries(art.shadowMatch).map(([id, c]) => [id, c.css])),
       fishing: Object.fromEntries(Object.entries(art.fishing).map(([id, c]) => [id, c.css])),
       touchTalk: Object.fromEntries(Object.entries(art.touchTalk).map(([id, c]) => [id, c.css])),
+      home: Object.fromEntries(Object.entries(art.home).map(([id, c]) => [id, c.css])),
       map: Object.fromEntries(Object.entries(art.map).map(([id, c]) => [id, c.css])),
     },
     dino: {
@@ -97,7 +100,7 @@ export function buildParams(): BuildParams {
       sizeTolerance: Tokens.ui.dinoSizeTolerance,
       walkMaxPx: Tokens.ui.dinoWalkMaxPx,
     },
-    shadowMatch: { trikeSizePx: Tokens.ui.trikeSizePx, itemPx: Tokens.ui.shadowItemPx, counts: [...SHADOW_COUNTS] },
+    shadowMatch: { itemPx: Tokens.ui.shadowItemPx, counts: [...SHADOW_COUNTS] },
     fishing: { minSize: Tokens.components.fish.minSize, slackPx: Tokens.ui.fishSizeSlackPx, sizeRatio: Tokens.ui.fishSizeRatio },
     counterTrayTop: Tokens.components.counterTray.top.css,
     ovenSize: Tokens.components.oven.size,

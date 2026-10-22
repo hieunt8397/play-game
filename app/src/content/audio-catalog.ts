@@ -40,7 +40,6 @@ export const AUDIO_IDS = [
   'sfx.dino-puzzle.stegosaurus.happy',
   'sfx.shadow-match.snap',
   'sfx.shadow-match.happy',
-  'sfx.shadow-match.trike.happy',
   'sfx.race.engine',
   'sfx.race.horn',
   'sfx.race.happy',
@@ -153,8 +152,6 @@ export const AUDIO_CATALOG: Record<AudioId, AudioEntry> = {
   'sfx.shadow-match.snap': { path: 'assets/audio/sfx/sfx.shadow-match.snap.m4a', kind: 'sfx' },
   /** Hang tìm bóng: the round-end tune after the fourth name — a major arpeggio ~1.5 s. */
   'sfx.shadow-match.happy': { path: 'assets/audio/sfx/sfx.shadow-match.happy.m4a', kind: 'sfx' },
-  /** The triceratops' happy chirp after each reveal: two chirps 659 / 784 Hz, 400 ms (the sfx.dino-puzzle.triceratops.happy recipe). */
-  'sfx.shadow-match.trike.happy': { path: 'assets/audio/sfx/sfx.shadow-match.trike.happy.m4a', kind: 'sfx', creature: true },
   /** Đường đua (Story 4.1): the kart is grabbed — a soft rising two-partial "vroom" ~400 ms. All race SFX: 50 ms fade-in, peak ≈ −20 dBFS. Load with the game. */
   'sfx.race.engine': { path: 'assets/audio/sfx/sfx.race.engine.m4a', kind: 'sfx' },
   /** Đường đua: the kart reaches the gate — a happy two-tone beep ~300 ms. */
@@ -169,68 +166,126 @@ export const AUDIO_CATALOG: Record<AudioId, AudioEntry> = {
   'sfx.fishing.reel': { path: 'assets/audio/sfx/sfx.fishing.reel.m4a', kind: 'sfx' },
   /** Câu cá: the caught fish jumps — a major arpeggio ~1.5 s. */
   'sfx.fishing.happy': { path: 'assets/audio/sfx/sfx.fishing.happy.m4a', kind: 'sfx' },
-  /** Chạm là nói (Story 4.5): one short sound per sea prop (≤ 350 ms, 50 ms fade-in, peak ≈ −20 dBFS, partials ≥ 300 Hz). The seagull's call is a creature sound. Load with the game. */
+  /** Chạm là nói (Stories 4.5, 4.6; 2026-10-22 batch 3): every prop plays a real CC0 recording (Freesound, README provenance), trimmed to ≤ 0.8 s and mastered with `npm run audio:normalize` (50 ms fade-in, −20 LUFS, true peak ≤ −3 dBFS). Creature voices (`creature: true`) are lowered to a −19.5 dBFS peak and measured by `npm run audio:check`. Load with the game. */
+  /** Sea: a short ship-horn toot (Freesound #468846, CC0). */
   'sfx.touch-talk.boat': { path: 'assets/audio/sfx/sfx.touch-talk.boat.m4a', kind: 'sfx' },
+  /** Sea: a small water splash (Freesound #737233, CC0). */
   'sfx.touch-talk.fish': { path: 'assets/audio/sfx/sfx.touch-talk.fish.m4a', kind: 'sfx' },
+  /** Sea: quick claw clicks (Freesound #321604, CC0). */
   'sfx.touch-talk.crab': { path: 'assets/audio/sfx/sfx.touch-talk.crab.m4a', kind: 'sfx' },
+  /** Sea: a magic sparkle twinkle (Freesound #511485, CC0). */
   'sfx.touch-talk.starfish': { path: 'assets/audio/sfx/sfx.touch-talk.starfish.m4a', kind: 'sfx' },
+  /** Sea: an umbrella whooshing open (Freesound #629989, CC0). */
   'sfx.touch-talk.parasol': { path: 'assets/audio/sfx/sfx.touch-talk.parasol.m4a', kind: 'sfx' },
+  /** Sea: a plastic shovel digging wet sand (Freesound #651293, CC0). */
   'sfx.touch-talk.bucket': { path: 'assets/audio/sfx/sfx.touch-talk.bucket.m4a', kind: 'sfx' },
+  /** Sea: a seagull's single call (Freesound #263786, CC0), creature. */
   'sfx.touch-talk.seagull': { path: 'assets/audio/sfx/sfx.touch-talk.seagull.m4a', kind: 'sfx', creature: true },
+  /** Sea: a hollow wooden knock (Freesound #364704, CC0). */
   'sfx.touch-talk.coconut': { path: 'assets/audio/sfx/sfx.touch-talk.coconut.m4a', kind: 'sfx' },
+  /** Sea: a sea wave swelling (the sea in the shell) (Freesound #441852, CC0). */
   'sfx.touch-talk.shell': { path: 'assets/audio/sfx/sfx.touch-talk.shell.m4a', kind: 'sfx' },
+  /** Sea: a plastic ball bonk (Freesound #117111, CC0). */
   'sfx.touch-talk.beach-ball': { path: 'assets/audio/sfx/sfx.touch-talk.beach-ball.m4a', kind: 'sfx' },
-  /** Story 4.6: the street and kitchen props (the same rules). */
+  /** Street: a "beep beep" car horn (Freesound #423990, CC0). */
   'sfx.touch-talk.car': { path: 'assets/audio/sfx/sfx.touch-talk.car.m4a', kind: 'sfx' },
+  /** Street: the bus doors hissing shut (Freesound #446523, CC0). */
   'sfx.touch-talk.bus': { path: 'assets/audio/sfx/sfx.touch-talk.bus.m4a', kind: 'sfx' },
+  /** Street: two crosswalk bleeps (Freesound #267471, CC0). */
   'sfx.touch-talk.traffic-light': { path: 'assets/audio/sfx/sfx.touch-talk.traffic-light.m4a', kind: 'sfx' },
+  /** Street: leaves rustling (Freesound #538152, CC0). */
   'sfx.touch-talk.tree': { path: 'assets/audio/sfx/sfx.touch-talk.tree.m4a', kind: 'sfx' },
+  /** Street: a doorbell ding (Freesound #458868, CC0). */
   'sfx.touch-talk.house': { path: 'assets/audio/sfx/sfx.touch-talk.house.m4a', kind: 'sfx' },
+  /** Street: a short "wee-woo" whoop (Freesound #536773, CC0). */
   'sfx.touch-talk.police-car': { path: 'assets/audio/sfx/sfx.touch-talk.police-car.m4a', kind: 'sfx' },
+  /** Street: a soft truck-horn toot (Freesound #513741, CC0). */
   'sfx.touch-talk.truck': { path: 'assets/audio/sfx/sfx.touch-talk.truck.m4a', kind: 'sfx' },
+  /** Street: a tractor engine chugging (Freesound #707745, CC0). */
   'sfx.touch-talk.tractor': { path: 'assets/audio/sfx/sfx.touch-talk.tractor.m4a', kind: 'sfx' },
+  /** Street: a bin lid closing (Freesound #400826, CC0). */
   'sfx.touch-talk.dumpster': { path: 'assets/audio/sfx/sfx.touch-talk.dumpster.m4a', kind: 'sfx' },
+  /** Street: a hollow plastic donk (Freesound #455196, CC0). */
   'sfx.touch-talk.cone': { path: 'assets/audio/sfx/sfx.touch-talk.cone.m4a', kind: 'sfx' },
+  /** Kitchen: water bubbling in a pot (Freesound #532735, CC0). */
   'sfx.touch-talk.pot': { path: 'assets/audio/sfx/sfx.touch-talk.pot.m4a', kind: 'sfx' },
+  /** Kitchen: a sizzle in the pan (Freesound #234124, CC0). */
   'sfx.touch-talk.frying-pan': { path: 'assets/audio/sfx/sfx.touch-talk.frying-pan.m4a', kind: 'sfx' },
+  /** Kitchen: a crunchy apple bite (Freesound #584290, CC0). */
   'sfx.touch-talk.apple': { path: 'assets/audio/sfx/sfx.touch-talk.apple.m4a', kind: 'sfx' },
+  /** Kitchen: a knife sawing bread (Freesound #419756, CC0). */
   'sfx.touch-talk.bread': { path: 'assets/audio/sfx/sfx.touch-talk.bread.m4a', kind: 'sfx' },
+  /** Kitchen: a banana peel tearing (Freesound #398763, CC0). */
   'sfx.touch-talk.banana': { path: 'assets/audio/sfx/sfx.touch-talk.banana.m4a', kind: 'sfx' },
+  /** Kitchen: a knife chopping a vegetable (Freesound #839155, CC0). */
   'sfx.touch-talk.carrot': { path: 'assets/audio/sfx/sfx.touch-talk.carrot.m4a', kind: 'sfx' },
+  /** Kitchen: a slurp (Freesound #426324, CC0). */
   'sfx.touch-talk.mug': { path: 'assets/audio/sfx/sfx.touch-talk.mug.m4a', kind: 'sfx' },
+  /** Kitchen: a teaspoon clinking in a cup (Freesound #724608, CC0). */
   'sfx.touch-talk.spoon': { path: 'assets/audio/sfx/sfx.touch-talk.spoon.m4a', kind: 'sfx' },
+  /** Kitchen: an egg cracking (Freesound #244749, CC0). */
   'sfx.touch-talk.egg': { path: 'assets/audio/sfx/sfx.touch-talk.egg.m4a', kind: 'sfx' },
+  /** Kitchen: a juicy watermelon squelch (Freesound #159669, CC0). */
   'sfx.touch-talk.watermelon': { path: 'assets/audio/sfx/sfx.touch-talk.watermelon.m4a', kind: 'sfx' },
-  /** Chạm là nói 2026-10-21 (batch 2): bathroom, bakery and picnic props — temporary synthesized sounds (≤ 350 ms, 50 ms fade-in, peak ≈ −20 dBFS); CC0 recordings replace them in batch 3. */
+  /** Bathroom: a bath splash (Freesound #333351, CC0). */
   'sfx.touch-talk.bathtub': { path: 'assets/audio/sfx/sfx.touch-talk.bathtub.m4a', kind: 'sfx' },
+  /** Bathroom: a rubber-duck squeak (a toy, not a creature) (Freesound #685067, CC0). */
   'sfx.touch-talk.rubber-duck': { path: 'assets/audio/sfx/sfx.touch-talk.rubber-duck.m4a', kind: 'sfx' },
+  /** Bathroom: a toothbrush scrubbing (Freesound #426369, CC0). */
   'sfx.touch-talk.toothbrush': { path: 'assets/audio/sfx/sfx.touch-talk.toothbrush.m4a', kind: 'sfx' },
+  /** Bathroom: a clink in a glass (Freesound #837694, CC0). */
   'sfx.touch-talk.toothbrush-cup': { path: 'assets/audio/sfx/sfx.touch-talk.toothbrush-cup.m4a', kind: 'sfx' },
+  /** Bathroom: a cloth flap (Freesound #391945, CC0). */
   'sfx.touch-talk.towel': { path: 'assets/audio/sfx/sfx.touch-talk.towel.m4a', kind: 'sfx' },
+  /** Bathroom: two slipper shuffles (Freesound #848697, CC0). */
   'sfx.touch-talk.slippers': { path: 'assets/audio/sfx/sfx.touch-talk.slippers.m4a', kind: 'sfx' },
+  /** Bathroom: a fairy-bell shimmer (Freesound #759840, CC0). */
   'sfx.touch-talk.mirror': { path: 'assets/audio/sfx/sfx.touch-talk.mirror.m4a', kind: 'sfx' },
+  /** Bathroom: a squeeze-bottle squirt (Freesound #630484, CC0). */
   'sfx.touch-talk.shampoo': { path: 'assets/audio/sfx/sfx.touch-talk.shampoo.m4a', kind: 'sfx' },
+  /** Bathroom: a bubble pop (Freesound #669918, CC0). */
   'sfx.touch-talk.soap': { path: 'assets/audio/sfx/sfx.touch-talk.soap.m4a', kind: 'sfx' },
+  /** Bathroom: a toilet flush (Freesound #792460, CC0). */
   'sfx.touch-talk.potty': { path: 'assets/audio/sfx/sfx.touch-talk.potty.m4a', kind: 'sfx' },
+  /** Bakery: a party horn (Freesound #170583, CC0). */
   'sfx.touch-talk.birthday-cake': { path: 'assets/audio/sfx/sfx.touch-talk.birthday-cake.m4a', kind: 'sfx' },
+  /** Bakery: a cartoon "boing" (jaw harp) (Freesound #540790, CC0). */
   'sfx.touch-talk.cupcake': { path: 'assets/audio/sfx/sfx.touch-talk.cupcake.m4a', kind: 'sfx' },
+  /** Bakery: a cork "pop" (Freesound #741368, CC0). */
   'sfx.touch-talk.donut': { path: 'assets/audio/sfx/sfx.touch-talk.donut.m4a', kind: 'sfx' },
+  /** Bakery: a cookie crunch (Freesound #444786, CC0). */
   'sfx.touch-talk.cookie': { path: 'assets/audio/sfx/sfx.touch-talk.cookie.m4a', kind: 'sfx' },
+  /** Bakery: a dry flaky crackle (Freesound #723851, CC0). */
   'sfx.touch-talk.croissant': { path: 'assets/audio/sfx/sfx.touch-talk.croissant.m4a', kind: 'sfx' },
+  /** Bakery: a soft squish (Freesound #536765, CC0). */
   'sfx.touch-talk.muffin': { path: 'assets/audio/sfx/sfx.touch-talk.muffin.m4a', kind: 'sfx' },
+  /** Bakery: a toaster popping up (Freesound #444430, CC0). */
   'sfx.touch-talk.waffle': { path: 'assets/audio/sfx/sfx.touch-talk.waffle.m4a', kind: 'sfx' },
+  /** Bakery: an egg-timer bell "ding" (out of the oven) (Freesound #490326, CC0). */
   'sfx.touch-talk.apple-pie': { path: 'assets/audio/sfx/sfx.touch-talk.apple-pie.m4a', kind: 'sfx' },
+  /** Bakery: a swirly slide whistle (Freesound #403002, CC0). */
   'sfx.touch-talk.cinnamon-roll': { path: 'assets/audio/sfx/sfx.touch-talk.cinnamon-roll.m4a', kind: 'sfx' },
+  /** Bakery: a yummy "mmm!" (Freesound #170789, CC0). */
   'sfx.touch-talk.chocolate-cake': { path: 'assets/audio/sfx/sfx.touch-talk.chocolate-cake.m4a', kind: 'sfx' },
+  /** Picnic: a wicker creak (Freesound #687265, CC0). */
   'sfx.touch-talk.picnic-basket': { path: 'assets/audio/sfx/sfx.touch-talk.picnic-basket.m4a', kind: 'sfx' },
+  /** Picnic: a soft chomp (Freesound #723601, CC0). */
   'sfx.touch-talk.sandwich': { path: 'assets/audio/sfx/sfx.touch-talk.sandwich.m4a', kind: 'sfx' },
+  /** Picnic: a juicy squish (Freesound #242425, CC0). */
   'sfx.touch-talk.grapes': { path: 'assets/audio/sfx/sfx.touch-talk.grapes.m4a', kind: 'sfx' },
-  'sfx.touch-talk.cheese': { path: 'assets/audio/sfx/sfx.touch-talk.cheese.m4a', kind: 'sfx' },
+  /** Picnic: a little mouse squeak (Freesound #800274, CC0), creature. */
+  'sfx.touch-talk.cheese': { path: 'assets/audio/sfx/sfx.touch-talk.cheese.m4a', kind: 'sfx', creature: true },
+  /** Picnic: tea pouring (Freesound #335258, CC0). */
   'sfx.touch-talk.teapot': { path: 'assets/audio/sfx/sfx.touch-talk.teapot.m4a', kind: 'sfx' },
+  /** Picnic: a whirling flying disc (Freesound #807248, CC0). */
   'sfx.touch-talk.frisbee': { path: 'assets/audio/sfx/sfx.touch-talk.frisbee.m4a', kind: 'sfx' },
+  /** Picnic: a xylophone run (music) (Freesound #468152, CC0). */
   'sfx.touch-talk.radio': { path: 'assets/audio/sfx/sfx.touch-talk.radio.m4a', kind: 'sfx' },
+  /** Picnic: an ice cube clacking on the cooler lid (Freesound #406123, CC0). */
   'sfx.touch-talk.cooler': { path: 'assets/audio/sfx/sfx.touch-talk.cooler.m4a', kind: 'sfx' },
+  /** Picnic: a soft pillow thump (Freesound #640870, CC0). */
   'sfx.touch-talk.pillow': { path: 'assets/audio/sfx/sfx.touch-talk.pillow.m4a', kind: 'sfx' },
+  /** Picnic: a light wing flutter (Freesound #402450, CC0). */
   'sfx.touch-talk.butterfly': { path: 'assets/audio/sfx/sfx.touch-talk.butterfly.m4a', kind: 'sfx' },
   /** Island background loop, mastered to −30 LUFS (EXPERIENCE › Âm thanh: music ≤ −30 LUFS). */
   'music.island': { path: 'assets/audio/music/music.island.m4a', kind: 'music', loop: true },

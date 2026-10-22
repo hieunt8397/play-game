@@ -94,3 +94,18 @@
 - source_spec: none
   summary: Chạm là nói — replace every prop's synthesized SFX with a real CC0 sound (Freesound/BigSoundBank), mastered with audio:normalize and checked by audio:check, provenance rows in README.
   evidence: Parent chose real CC0 sounds 2026-10-21; batch 3 of 3.
+- source_spec: `_bmad-output/implementation-artifacts/spec-cham-la-noi-3-canh-moi.md`
+  summary: Chạm là nói's two-column scene bubbles follow the Speaker, so a right safe-area inset (landscape phone with a notch, ~44–59 px) shifts the left column into the prop area, which the layout rules only check at zero inset.
+  evidence: keep-out starts at x 780 and the props end at x 746 (34 px). iPad (the target) has no side inset. Fix: validate the keep-out at the largest supported right inset (or anchor the bubbles to the design rect, not the inset Speaker) and re-render if boxes must move.
+- source_spec: none
+  summary: Đường đua — stars (or coins) placed along each road; the kart collects them as it passes with a "ting" and a little sparkle; no penalty for missing one.
+  evidence: Parent chose it 2026-10-22 together with harder road shapes; split into its own spec after spec-duong-dua-them-duong-kho.
+- source_spec: `_bmad-output/implementation-artifacts/spec-tim-bong-bo-khung-long-lam-dep.md`
+  summary: ShadowMatch scene's new item joy (itemHappy hop/bounce/sparkle, stopHop reset, celebrate bounce) has no scene-level test.
+  evidence: The repo has no Phaser scene harness; only the pure round command and sparklePoints maths are tested.
+- source_spec: `_bmad-output/implementation-artifacts/spec-tim-bong-hinh-that-them-vat.md`
+  summary: Hang tìm bóng — bull (bò tót), taxi and ambulance (xe cứu thương) were dropped under the spec's Fallback because their measured shadows overlap a group mate's above ui.shadowMaxIoU (0.85). Bring them back only with a parent-approved change (another model, pose or a different shape group).
+  evidence: shadow-distinct IoU on the 2026-10-22 render: cow/bull 0.895, car/taxi 0.939 (same Kenney sedan body), firetruck/ambulance 0.860. Their ask/name lines were not added.
+- source_spec: `_bmad-output/implementation-artifacts/spec-tim-bong-hinh-that-them-vat.md`
+  summary: Hang tìm bóng — parent 2026-10-22: shark (cá mập) dropped, the cutefish model reads as a generic grey fish; the fish group now has 3 items (goldfish, puffer, swordfish) and is no longer used at the 4-shadow level. A fourth, clearly recognisable fish would bring it back to that level.
+  evidence: Parent review of the composites; excavator and banana kept.

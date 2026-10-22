@@ -1,4 +1,4 @@
-// Story 4.6: the controller over three scenes — switching, the slide lockout, the distinct-touched set
+// Story 4.6 (six scenes since 2026-10-21): the controller over the scenes — switching, the slide lockout, the distinct-touched set
 // (it never grants anything since 2026-10-21) and the resume.
 import { describe, expect, it } from 'vitest';
 import { TOUCH_TALK_SCENES } from '../../content/games/touch-talk';
@@ -28,7 +28,7 @@ function rig(resume: TalkResume | null = null) {
   return { talk, log, tickFor };
 }
 
-describe('three scenes (Story 4.6)', () => {
+describe('six scenes (Story 4.6; 2026-10-21)', () => {
   it('Switch: at sea, sceneTap(1) → slide(0,1), setPrompt + say the street; progress is already the street', () => {
     const { talk, log } = rig();
     talk.sceneTap(1);
@@ -64,7 +64,7 @@ describe('three scenes (Story 4.6)', () => {
     expect(log.filter((l) => l.startsWith('say'))).toHaveLength(2);
   });
 
-  it('Pending dropped: tap crab, switch within 350 ms → the crab name is never said', () => {
+  it('Pending dropped: tap crab, switch within touchTalkNameDelayMs → the crab name is never said', () => {
     const { talk, log, tickFor } = rig();
     talk.tap('crab');
     tickFor(100);

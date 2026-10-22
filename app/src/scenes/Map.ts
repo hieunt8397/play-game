@@ -45,6 +45,14 @@
 // drift, smaller bob, a still fountain). The whale spouts on the idle scheduler's `periodic` channel
 // (core/map-idle, with ambientBusyMs: never with a station bounce or an invitation), a frame loop on scene
 // `time` like the guide's wave (core/map-ambient › spoutFrame), then idle; it still plays under reduced motion.
+// Story 7.1: the home station "Nhà Xoài" (content/stations › HOME_STATION) is not a game: its trip loads the
+// yard's assets (content/home › HOME_ASSETS), zooms in like a station and starts the HomeYard shell scene
+// (Map sleeps). The yard asks for a corner's game with `yard:open` (core/post-round-chain › routeYardOpen):
+// Map starts it like an island game (takeStartData, release arming, resume marks) with `origin: 'yard'`
+// and the Hud's Home target 'yard', and sleeps the yard; the game's `round:leave` / `round:abandon` fade
+// back to the yard (never the island), `round:next` restarts it in place. `yard:leave` (Home in the yard)
+// stops the yard and wakes Map, the kart parked at `home-stop`; the yard's assets are released when it
+// shuts down.
 // Timing, routing and geometry are pure core code; this
 // scene only wires Phaser. The kart moves only in `update` (no timers or tweens), so a pause freezes it.
 import { Scene, type GameObjects, type Time } from 'phaser';
@@ -52,13 +60,15 @@ import { ATLASES, BACKGROUNDS, MAP_AMBIENT, MAP_GUIDE, MAP_KART } from '../conte
 import type { Point } from '../content/layout-types';
 import type { GameId } from '../content/types';
 import { LAYOUTS } from '../content/layouts';
-import { KART_START_ANCHOR, ROAD_PATH, STATIONS, stopAnchor } from '../content/stations';
+import { HOME_ASSETS, YARD_SCENE_KEY } from '../content/home';
+import { HOME_STATION, isHomeStation, KART_START_ANCHOR, ROAD_PATH, STATIONS, stopAnchor } from '../content/stations';
+import type { GameAssets } from '../content/games/types';
 import { inviteLine, islandPrompt, stationNameLine } from '../content/voice-lines';
 import { audio } from '../core/audio-director';
 import { bus } from '../core/bus';
 import { AssetTracker, loadPlan, releasePlan } from '../core/game-assets';
 import { createHintRing, type HintRing } from '../core/hint-visuals';
-import { setHudMode } from '../core/hud-mode';
+import { setHomeTarget, setHudMode } from '../core/hud-mode';
 import { HotspotPolygon } from '../core/input/hotspot-polygon';
 import { boundingBox, pointInPolygon } from '../core/input/polygon';
 import { createTapRouter, type TapRouter } from '../core/input/tap-router';
@@ -87,7 +97,10 @@ import {
   routeRoundComplete,
   routeRoundLeave,
   routeRoundNext,
+  routeYardOpen,
+  returnTarget,
   type ChainEnd,
+  type RunningGame,
   type ChainFinish,
   type TerminalRoute,
 } from '../core/post-round-chain';
@@ -102,6 +115,7 @@ import { createSceneSkip } from '../core/skip-scene';
 import { Tokens } from '../core/tokens';
 import { drawResumeMark } from '../core/ui/resume-mark';
 import { bob, bounce, isMoving, stopMotion } from '../core/ui/scale-motion';
+import { addStationLabel } from '../core/ui/station-label';
 import { attachTapReactions } from '../core/ui/tap-reactions';
 import { GAMES, isGameId, ladderLength } from '../games/registry';
 
@@ -161,7 +175,9 @@ export class MapScene extends Scene {
   private travelSign: number = MAP_KART.artFacing;
   private tracker = new AssetTracker();
   /** The MiniGame started from here and not yet terminal, with the level it started at. */
-  private running: { readonly id: GameId; readonly level: number } | undefined;
+  private running: RunningGame | undefined;
+  /** Story 7.1: the HomeYard scene is open (started by a home-station trip, until `yard:leave`). */
+  private yardOpen = false;
   /** Games whose assets this Map loaded and has not released yet (a re-targeted trip loads more than one). */
   private loadedGames = new Set<string>();
   /** Story 5.3: the post-round chain's skip (the pull-back fast-forwards on a tap). */
@@ -200,6 +216,7 @@ export class MapScene extends Scene {
     this.ring = undefined;
     this.tracker = new AssetTracker();
     this.running = undefined;
+    this.yardOpen = false;
     this.releases = new ReleaseArming();
     this.loadedGames = new Set();
     this.resumeMarks = new Map();
@@ -219,8 +236,8 @@ export class MapScene extends Scene {
 
     const plan = planMap(
       layout,
-      // A station is awake only when its game is registered.
-      STATIONS.map((s) => ({ ...s, awake: s.awake && isGameId(s.id) })),
+      // A station is awake only when its game is registered (Story 7.1: the home station opens the yard).
+      STATIONS.map((s) => ({ ...s, awake: s.awake && (isGameId(s.id) || isHomeStation(s.id)) })),
       (frame) => hasAtlas && this.textures.get(atlasKey).has(frame),
       (frame) => {
         const data = this.textures.get(atlasKey).get(frame).customData as FrameData | undefined;
@@ -289,7 +306,7 @@ export class MapScene extends Scene {
     const road = createRoad(roadPoints);
     this.stops = {};
     for (const s of plan.stations) {
-      const stop = isGameId(s.id) ? layout.anchors[stopAnchor(s.id)] : undefined;
+      const stop = isGameId(s.id) || isHomeStation(s.id) ? layout.anchors[stopAnchor(s.id)] : undefined;
       if (stop) this.stops[s.id] = road.project(stop);
     }
     const startAnchor: Point | undefined = layout.anchors[KART_START_ANCHOR];
@@ -385,6 +402,12 @@ export class MapScene extends Scene {
       keepAbandonSnapshot(this.running, gameId, snapshot, session);
       follow(routeRoundAbandon(this.running, gameId));
     });
+    // Story 7.1: the yard asks for a corner's game, or (Home) to go back to the island.
+    scoped.on('yard:open', ({ gameId }) => {
+      const route = routeYardOpen(this.running, gameId, { yardOpen: this.yardOpen, chainActive: chain.active }, isGameId);
+      if (route.action === 'open') this.openFromYard(route.gameId);
+    });
+    scoped.on('yard:leave', () => this.leaveYard());
     this.events.on(WAKE, this.onWake, this);
 
     // Hud runs in parallel above Map and the games; launched once, never on Start.
@@ -723,7 +746,8 @@ export class MapScene extends Scene {
         this.placeKart(c.x, c.y, c.dx);
         return;
       case 'enter':
-        void this.enterGame(c.gameId);
+        if (isHomeStation(c.gameId)) void this.enterYard();
+        else void this.enterGame(c.gameId);
         return;
     }
   }
@@ -752,13 +776,19 @@ export class MapScene extends Scene {
 
   // --- game assets, enter and return -------------------------------------------------------------
 
+  /** The assets a station trip loads: its game's, or (Story 7.1) the yard's for the home station. */
+  private stationAssets(id: string): GameAssets | undefined {
+    if (isHomeStation(id)) return HOME_ASSETS;
+    return isGameId(id) ? GAMES[id]?.assets : undefined;
+  }
+
   private loadGame(id: string): void {
-    const entry = isGameId(id) ? GAMES[id] : undefined;
-    if (!entry) {
+    const assets = this.stationAssets(id);
+    if (!assets) {
       this.tracker.track(id, []);
       return;
     }
-    const calls = loadPlan(entry.assets, (kind, key) => (kind === 'texture' ? this.textures.exists(key) : this.cache.audio.exists(key)));
+    const calls = loadPlan(assets, (kind, key) => (kind === 'texture' ? this.textures.exists(key) : this.cache.audio.exists(key)));
     this.tracker.track(id, calls.map((c) => c.key));
     this.loadedGames.add(id);
     if (calls.length === 0) return;
@@ -776,6 +806,7 @@ export class MapScene extends Scene {
     const entry = GAMES[id];
     if (!entry) return;
     session.lastStation = id;
+    setHomeTarget('island');
     const focus = LAYOUTS.map.anchors[id] ?? { x: this.kart?.body.x ?? 0, y: this.kart?.body.y ?? 0 };
     await enterStation(this, focus, this.reduced);
     if (!this.trip) return; // Map shut down meanwhile
@@ -787,13 +818,63 @@ export class MapScene extends Scene {
     for (const other of Object.keys(GAMES)) {
       if (this.scene.isActive(other) || this.scene.isPaused(other) || this.scene.isSleeping(other)) this.scene.stop(other);
     }
-    this.running = { id, level: data.level };
+    this.running = { id, level: data.level, origin: 'island' };
     this.releases.arm(id);
     this.listenShutdown(id);
     this.scene.manager.start(id, data);
     this.scene.sleep();
     this.trip.entered();
     this.syncIdle();
+  }
+
+  // --- the yard (Story 7.1) -----------------------------------------------------------------------
+
+  /** The home station's trip ended: zoom in, start the yard (its assets are loaded) and sleep. */
+  private async enterYard(): Promise<void> {
+    session.lastStation = HOME_STATION;
+    const focus = LAYOUTS.map.anchors[HOME_STATION] ?? { x: this.kart?.body.x ?? 0, y: this.kart?.body.y ?? 0 };
+    await enterStation(this, focus, this.reduced);
+    if (!this.trip) return; // Map shut down meanwhile
+    // The yard owns its assets now: a game's shutdown must not release them (releaseGame).
+    this.loadedGames.delete(HOME_STATION);
+    this.yardOpen = true;
+    this.scene.get(YARD_SCENE_KEY).events.once(SHUTDOWN, () => {
+      this.yardOpen = false;
+      this.releaseAssets(HOME_STATION);
+    });
+    this.scene.manager.start(YARD_SCENE_KEY);
+    this.scene.sleep();
+    this.trip.entered();
+    this.syncIdle();
+  }
+
+  /**
+   * `yard:open` (routed): start the corner's game like an island game — its assets were loaded by the
+   * yard — with origin 'yard' (its last event returns to the yard) and the Hud's Home target 'yard'.
+   */
+  private openFromYard(id: GameId): void {
+    const entry = GAMES[id];
+    if (!entry) return;
+    const data = takeStartData(id, ladderLength(entry));
+    this.syncResumeMarks();
+    for (const other of Object.keys(GAMES)) {
+      if (this.scene.isActive(other) || this.scene.isPaused(other) || this.scene.isSleeping(other)) this.scene.stop(other);
+    }
+    this.running = { id, level: data.level, origin: 'yard' };
+    setHomeTarget('yard');
+    this.loadedGames.add(id);
+    this.releases.arm(id);
+    this.listenShutdown(id);
+    this.scene.manager.start(id, data);
+    this.scene.sleep(YARD_SCENE_KEY);
+  }
+
+  /** `yard:leave` (Home in the yard): stop the yard and wake on the island, the kart at `home-stop`. */
+  private leaveYard(): void {
+    if (!this.yardOpen || this.running) return;
+    this.yardOpen = false;
+    this.scene.stop(YARD_SCENE_KEY);
+    this.scene.wake();
   }
 
   /**
@@ -826,9 +907,13 @@ export class MapScene extends Scene {
 
   private returnFrom(gameId: string): void {
     if (gameId !== this.running?.id) return;
+    // Story 7.1: a yard game fades back to the yard, never to the island.
+    const target = returnTarget(this.running);
     this.running = undefined;
+    this.chain?.forget(gameId);
     this.scene.stop(gameId);
-    this.scene.wake();
+    if (target === 'yard') this.scene.wake(YARD_SCENE_KEY);
+    else this.scene.wake();
   }
 
   /**
@@ -845,9 +930,9 @@ export class MapScene extends Scene {
   }
 
   private releaseAssets(id: string): void {
-    const entry = isGameId(id) ? GAMES[id] : undefined;
-    if (!entry) return;
-    for (const r of releasePlan(entry.assets)) {
+    const assets = this.stationAssets(id);
+    if (!assets) return;
+    for (const r of releasePlan(assets)) {
       if (r.kind === 'texture') {
         if (this.textures.exists(r.key)) this.textures.remove(r.key);
       } else {
@@ -892,20 +977,7 @@ export class MapScene extends Scene {
   }
 
   private addLabel(text: string): GameObjects.Text {
-    const spec = Tokens.components.stationLabel;
-    const type = spec.typography;
-    return this.add
-      .text(0, 0, text, {
-        fontFamily: type.fontFamily,
-        fontSize: `${type.fontSize}px`,
-        fontStyle: String(type.fontWeight),
-        color: spec.color.css,
-        stroke: spec.outline.color.css,
-        strokeThickness: spec.outline.width,
-        align: 'center',
-      })
-      .setOrigin(0.5, 0)
-      .setAlpha(spec.opacity);
+    return addStationLabel(this, text);
   }
 
   private ambient(id: string): void {

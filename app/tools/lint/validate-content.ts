@@ -22,7 +22,8 @@ import { GAME_ICONS } from '../../src/content/game-icons.ts';
 import { PARENT_INVITE_LINES } from '../../src/content/parent-invite.ts';
 import { GAME_CONTENT } from '../../src/content/games/index.ts';
 import type { ScreenLayout } from '../../src/content/layout-types.ts';
-import { KART_FRAME, STATIONS, stationFrame } from '../../src/content/stations.ts';
+import { GAME_STATIONS, HOME_STATION, KART_FRAME, STATIONS, stationFrame } from '../../src/content/stations.ts';
+import { CORNER_IDS, HOME_SCREEN_REQUIREMENTS } from '../../src/content/home.ts';
 import { Tokens } from '../../src/core/tokens.ts';
 import { m4aDurationMs } from '../audio/m4a-duration.ts';
 import {
@@ -49,6 +50,8 @@ import {
   validateFishing,
   touchTalkLimits,
   validateTouchTalk,
+  homeLimits,
+  validateHome,
   validateShadowMatch,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
@@ -86,6 +89,8 @@ export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
   race: RACE_SCREEN.frames,
   fishing: FISHING_SCREEN.frames,
   'touch-talk': TOUCH_TALK_SCREEN.frames,
+  // Story 7.1: the yard's corners.
+  home: HOME_SCREEN_REQUIREMENTS.frames,
 };
 
 function listFiles(dir: string): string[] {
@@ -127,10 +132,10 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[] 
     for (const k of missing) problems.push(`layout "${screen}": missing "${k}"`);
     if (missing.length > 0) continue;
     if (screen === 'map') {
-      for (const p of validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, limits: layoutLimits(), guide: MAP_GUIDE.id })) problems.push(`layout "${screen}": ${p}`);
+      for (const p of validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, shellStations: [HOME_STATION], limits: layoutLimits(), guide: MAP_GUIDE.id })) problems.push(`layout "${screen}": ${p}`);
       // Story 5.6: the ambient dressing's anchors (whale, fountain, cloud-1..3, wave-1..5), like its frames.
       for (const id of MAP_AMBIENT_ANCHORS) if (!layout.anchors[id]) problems.push(`layout "${screen}": anchor "${id}": missing (the ambient dressing)`);
-      const decorations = validateDecorations(layout, decorationLimits(STATIONS, GAME_IDS, DECORATIONS), readAtlas(publicDir, screen));
+      const decorations = validateDecorations(layout, decorationLimits(GAME_STATIONS, GAME_IDS, DECORATIONS, [HOME_STATION]), readAtlas(publicDir, screen));
       for (const p of decorations) problems.push(`layout "${screen}": ${p}`);
       const atlas = readAtlas(publicDir, screen);
       // Story 2.4: the play-again icon frames (icon/<id>/00, ≥ ui.playAgainIconPx).
@@ -147,6 +152,8 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[] 
       for (const p of validateTouchTalk(layout, touchTalkLimits(TOUCH_TALK_SCREEN, TOUCH_TALK_SCENES.map((s) => ({ id: s.id, props: s.props.map((p) => p.id) })), sceneBubbleKeepOutRect()), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'fishing') {
       for (const p of validateFishing(layout, fishingLimits(FISHING_SCREEN, POND_HIT, ALL_FISH), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+    } else if (screen === 'home') {
+      for (const p of validateHome(layout, homeLimits(HOME_SCREEN_REQUIREMENTS, CORNER_IDS), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'race') {
       for (const p of validateRace(layout, raceLimits(RACE_SCREEN, racePaths(raceLadder), CONE_ANCHORS, FLAG_ANCHORS), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     }
@@ -303,7 +310,7 @@ export function run(publicDir: string, layoutDir: string = LAYOUT_DIR): string[]
       voiceIds: VOICE_LINES.map((l) => l.id),
       audioIds: Object.keys(AUDIO_CATALOG),
     },
-    decorations: { gameIds: GAME_IDS, catalogue: DECORATIONS, stations: STATIONS },
+    decorations: { gameIds: GAME_IDS, catalogue: DECORATIONS, stations: GAME_STATIONS },
     // Story 5.7: 1–2 parent invitation lines per game, all listed (their ≤ 4 s check is in voice).
     parentInvite: { gameIds: GAME_IDS, voiceIds: VOICE_LINES.map((l) => l.id), lines: PARENT_INVITE_LINES },
     voice: {

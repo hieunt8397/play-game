@@ -166,7 +166,10 @@ describe('games/registry', () => {
   });
 
   it('awake stations are exactly the registered games', () => {
-    expect(STATIONS.filter((s) => s.awake).map((s) => s.id)).toEqual(Object.keys(GAMES));
+    // Story 7.1: the home station is awake too, but opens the yard (not a game).
+    expect(STATIONS.filter((s) => s.awake && s.id !== 'home').map((s) => s.id)).toEqual(Object.keys(GAMES));
+    expect(STATIONS.find((s) => s.id === 'home')?.awake).toBe(true);
+    expect(isGameId('home')).toBe(false);
     expect(isGameId('ice-cream')).toBe(true);
     expect(isGameId('pizza')).toBe(true);
     expect(isGameId('race')).toBe(true);

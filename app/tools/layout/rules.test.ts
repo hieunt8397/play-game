@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
-import { STATIONS } from '../../src/content/stations.ts';
+// Story 7.1: the 7 game stations (the home station is checked as a shell station below).
+import { GAME_STATIONS, HOME_STATION, slotIds } from '../../src/content/stations.ts';
+// A fixture with two pizza slots (the real pizza station keeps one since Story 7.1): the two-slot rules stay covered.
+const STATIONS = GAME_STATIONS.map((s) => (s.id === 'pizza' ? { ...s, slots: slotIds('pizza', 2) } : s));
 import { GAME_IDS } from '../../src/content/types.ts';
 import { DECORATIONS } from '../../src/content/decorations.ts';
 import { DECO_STATION_DIST_OVERRIDE, decorationLimits, layoutLimits, pngSizeOf, validateAssets, validateDecorations, validateLayout, validatePlayAgainIcons, type AssetRuleInput, type AtlasJsonLike } from './rules.ts';
@@ -72,6 +75,26 @@ describe('validateLayout', () => {
     expect(check(goodLayout(), [...STATIONS, STATIONS[0]!])).toContain('station "ice-cream": listed more than once');
     expect(check(goodLayout(), STATIONS.slice(1))).toContain('station "ice-cream": GameId has no station');
     expect(check(goodLayout(), STATIONS, GAME_IDS.slice(1))).toContain('station "ice-cream": not a GameId');
+  });
+
+  it('Story 7.1: a shell station (home) is allowed only when listed, and follows every station rule', () => {
+    const home = { id: HOME_STATION, label: 'Nhà Xoài', awake: true, slots: [] };
+    const withHome = (f: (l: MutableLayout) => void = () => undefined): ScreenLayout =>
+      edit((l) => {
+        l.hits.home = sq(450, 180, 100);
+        l.anchors.home = { x: 500, y: 260 };
+        l.anchors['home-stop'] = { x: 500, y: 600 };
+        f(l);
+      });
+    const run = (l: ScreenLayout, shell: readonly string[] = [HOME_STATION]): string[] =>
+      validateLayout(l, { stations: [...STATIONS, home], gameIds: GAME_IDS, shellStations: shell, limits: layoutLimits() });
+    expect(run(withHome())).toEqual([]);
+    expect(run(withHome(), [])).toEqual(['station "home": not a GameId']);
+    expect(validateLayout(goodLayout(), { stations: STATIONS, gameIds: GAME_IDS, shellStations: [HOME_STATION], limits: layoutLimits() })).toEqual([
+      'station "home": shell station has no station',
+    ]);
+    expect(run(withHome((l) => delete l.anchors['home-stop']))).toEqual(['anchor "home-stop": missing']);
+    expect(run(withHome((l) => (l.hits.home = sq(450, 340, 100))))[0]).toBe('hits "fishing" and "home": not separated (they overlap)');
   });
 
   it('Story 5.2 guide: anchor and hit present, inside the rect, at least targetMin wide; may overlap a station', () => {

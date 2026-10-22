@@ -1,6 +1,6 @@
 // Hud logic (Story 1.6): layout, Speaker wave and the button controller. Pure (no Phaser), so the
 // Hud scene only wires Graphics, TapTargets, tweens and Bus subscriptions to it.
-import type { HudMode } from './hud-mode';
+import type { HomeTarget, HudMode } from './hud-mode';
 import type { Insets } from './input/space';
 import type { Circle } from './input/tap-target';
 import { amplitude } from './reduced-motion';
@@ -9,6 +9,16 @@ import { Tokens } from './tokens';
 
 export const SFX_POP = 'sfx.shell.pop';
 export const VO_HOME = 'vo.shell.home';
+/** Story 7.1: Home in a game opened from the yard ("Về nhà nào!"). */
+export const VO_HOME_YARD = 'vo.shell.home.yard';
+
+/**
+ * Story 7.1: the Home line fits where Home goes: "Về nhà nào!" in a game opened from the yard, "Về đảo nào!"
+ * in an island game and in the yard itself (which goes back to the island).
+ */
+export function homeLine(mode: HudMode, target: HomeTarget): string {
+  return mode === 'game' && target === 'yard' ? VO_HOME_YARD : VO_HOME;
+}
 const MS_PER_S = 1000;
 
 export interface HudLayout {
@@ -82,6 +92,8 @@ export interface HudDeps {
   say(id: string): number;
   sfx(id: string): void;
   emitHome(): void;
+  /** Story 7.1: where Home in a game leads (core/hud-mode › getHomeTarget); default the island. */
+  homeTarget?: () => HomeTarget;
   view: HudView;
 }
 
@@ -106,7 +118,7 @@ export class HudController {
 
   setMode(mode: HudMode): void {
     this.mode = mode;
-    this.deps.view.showHome(mode === 'game');
+    this.deps.view.showHome(mode !== 'map');
   }
 
   /** Speaker onPress: press + pop at once, then replay; the wave follows the new token. */
@@ -119,12 +131,12 @@ export class HudController {
     this.deps.view.showWave(true);
   }
 
-  /** Home onPress: press + pop; in 'game' mode also the line and `hud:home`. */
+  /** Home onPress: press + pop; in 'game' (and Story 7.1 'yard') mode also the line and `hud:home`. */
   home(): void {
     this.deps.view.pressHome();
     this.deps.sfx(SFX_POP);
-    if (this.mode !== 'game') return;
-    this.deps.say(VO_HOME);
+    if (this.mode === 'map') return;
+    this.deps.say(homeLine(this.mode, this.deps.homeTarget?.() ?? 'island'));
     this.deps.emitHome();
   }
 

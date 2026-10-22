@@ -22,7 +22,7 @@ const shownR = (i: ItemId): number => SHOWN[i] ?? 75;
 
 function geometry(): ShadowGeometry {
   // Story 5.1: the play area; y < 80 lies outside it.
-  return { slots: SLOTS, hand: HAND, shownR, playRect: () => ({ x: 24, y: 80, w: 976, h: 648 }), snapRadius: SNAP, offDelayMs: 1500, callMs: 500, finishDelayMs: 1500 };
+  return { slots: SLOTS, rest: () => HAND, shownR, playRect: () => ({ x: 24, y: 80, w: 976, h: 648 }), snapRadius: SNAP, offDelayMs: 1500, nameDelayMs: 500, finishDelayMs: 1500 };
 }
 
 /** The slot indices whose target (pad = shownR of its shadow, r = snapRadius × scale) holds `p`. */
@@ -68,7 +68,7 @@ describe('ShadowRound — enter and drops (Story 3.5)', () => {
     expect(r.revealed()).toEqual([]);
   });
 
-  it('Correct: dropped 90 px from the right shadow’s edge → pụp, questionDone, lock, hold, suck in, reveal; revealed → nod, chirp, the name 500 ms later', () => {
+  it('Correct: dropped 90 px from the right shadow’s edge → pụp, questionDone, lock, hold, suck in, reveal; revealed → the item hops with a sparkle (no dinosaur, no chirp), the name 500 ms later', () => {
     const r = new ShadowRound(geometry(), 7, 0);
     r.start();
     const q = r.current;
@@ -78,15 +78,13 @@ describe('ShadowRound — enter and drops (Story 3.5)', () => {
       { kind: 'snapSfx' },
       { kind: 'questionDone' },
       { kind: 'lockItem' },
-      { kind: 'holdReveal', on: true },
       { kind: 'suckIn', slot: k, to: SLOTS[k] },
       { kind: 'reveal', slot: k, item: q.item },
     ]);
     expect(r.questionIndex).toBe(1);
     expect(r.stage).toBe('reveal');
     expect(r.revealed()).toEqual([
-      { kind: 'trikeNod' },
-      { kind: 'sfx', id: 'sfx.shadow-match.trike.happy' },
+      { kind: 'itemHappy', slot: k },
       { kind: 'say', tag: 'name', id: `vo.shadow-match.name.${q.item}`, afterMs: 500 },
     ]);
     expect(r.revealed()).toEqual([]);
@@ -196,8 +194,7 @@ describe('ShadowRound — the round (Story 3.5)', () => {
     expect(r.speechEnded('name')).toEqual([]);
     r.revealed();
     const next = r.speechEnded('name');
-    expect(kinds(next)).toEqual(['clearQuestion', 'holdReveal', 'showQuestion', 'beginQuestion']);
-    expect(find(next, 'holdReveal')).toEqual({ kind: 'holdReveal', on: false });
+    expect(kinds(next)).toEqual(['clearQuestion', 'showQuestion', 'beginQuestion']);
     const show = find(next, 'showQuestion')!;
     expect(show).toMatchObject({ index: 1, item: roundQuestions(7, 0)[1]!.item, fade: true });
     expect(show.correctSlot).not.toBe(first);
@@ -210,7 +207,7 @@ describe('ShadowRound — the round (Story 3.5)', () => {
     r.start();
     for (let i = 0; i < 3; i++) answer(r);
     const last = dropAt(r, SLOTS[correct(r)]!);
-    expect(kinds(last)).toEqual(['snapSfx', 'questionDone', 'lockItem', 'holdReveal', 'markFinishing', 'suckIn', 'reveal']);
+    expect(kinds(last)).toEqual(['snapSfx', 'questionDone', 'lockItem', 'markFinishing', 'suckIn', 'reveal']);
     expect(r.isFinishing).toBe(true);
     r.revealed();
     expect(r.speechEnded('name')).toEqual([{ kind: 'celebrate' }, { kind: 'finishRound', afterMs: 1500 }]);
