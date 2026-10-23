@@ -7,6 +7,9 @@
 // Story 2.3: an optional `toWorld(p)` maps the design point before hit-testing and before it reaches the
 // target (Map passes the camera's world point, so taps hit what the child sees while zoomed).
 // This folder is the only place that touches pointer events (ESLint enforces it).
+// Story 7.3: `multiTouch` (the band only) opts this router out of first-finger-wins for its own targets (see
+// guard.ts) and makes sure Phaser tracks enough touch pointers (`input.addPointer`: iPad Safari needs one per
+// finger; main.ts starts with ACTIVE_POINTERS). Every other router is unchanged.
 import { inputGuard, type GuardPointer, type GuardRouter, type GuardTarget, type InputGuard, type Layer } from './guard';
 import type { ScaleLike } from './pointer-adapter';
 import type { Point } from './polygon';
@@ -19,6 +22,10 @@ export interface RouterSceneLike {
   readonly input: {
     on(event: string, fn: (pointer: PointerLike) => void): unknown;
     off(event: string, fn: (pointer: PointerLike) => void): unknown;
+    /** Story 7.3: Phaser's `InputPlugin.addPointer` (more touch pointers; at most 10 in all). */
+    addPointer?(quantity: number): unknown;
+    /** Story 7.3: `manager.pointersTotal`: the touch pointers Phaser tracks now. */
+    readonly manager?: { readonly pointersTotal: number };
   };
   readonly events: {
     once(event: string, fn: () => void): unknown;
@@ -56,6 +63,18 @@ export interface TapRouterOptions {
   readonly guard?: InputGuard;
   /** Story 2.3: design point → the point targets are tested in (default: identity). */
   readonly toWorld?: (p: Point) => Point;
+  /**
+   * Story 7.3: this scene router lets several fingers press its targets at once (the band only; InputGuard
+   * `extra-multi`), and Phaser tracks at least `pointers` touch pointers. Default: first finger wins.
+   */
+  readonly multiTouch?: { readonly pointers: number };
+}
+
+/** Story 7.3: adds touch pointers until Phaser tracks `n` (they stay for the session; other scenes ignore extras). */
+export function ensurePointers(input: RouterSceneLike['input'], n: number): void {
+  const now = input.manager?.pointersTotal;
+  if (now === undefined || !input.addPointer || now >= n) return;
+  input.addPointer(n - now);
 }
 
 export const POINTER_DOWN = 'pointerdown';
@@ -79,8 +98,10 @@ export function createTapRouter(scene: RouterSceneLike, opts: TapRouterOptions =
     for (const fn of [...pauseListeners]) fn();
   };
 
+  if (opts.multiTouch) ensurePointers(scene.input, opts.multiTouch.pointers);
   const guardRouter: GuardRouter = {
     layer,
+    multiTouch: opts.multiTouch !== undefined && layer === 'scene',
     isActive: () => live && scene.sys.isActive(),
     hit(p) {
       let best: RouterTarget | undefined;

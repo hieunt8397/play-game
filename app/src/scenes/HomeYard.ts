@@ -33,9 +33,10 @@ import { bounce } from '../core/ui/scale-motion';
 import { addStationLabel } from '../core/ui/station-label';
 import { attachTapReactions } from '../core/ui/tap-reactions';
 import { GAMES, isGameId } from '../games/registry';
-import { queueLoad, wireLoader } from './game-loader';
+import { queueLoad, releaseAssets, wireLoader } from './game-loader';
 
 const WAKE = 'wake';
+const SLEEP = 'sleep';
 const SHUTDOWN = 'shutdown';
 
 interface CornerView {
@@ -109,11 +110,15 @@ export class HomeYard extends Scene {
       this.applyAll(this.controller?.home() ?? []);
     });
     this.events.on(WAKE, this.onWake, this);
+    this.events.on(SLEEP, this.onSleep, this);
     this.events.once(SHUTDOWN, () => {
       unwire();
       this.events.off(WAKE, this.onWake, this);
+      this.events.off(SLEEP, this.onSleep, this);
       this.openGuard?.remove(false);
       this.openGuard = undefined;
+      // Whatever the yard loaded and Map did not take is released with the yard.
+      this.applyAll(this.controller?.shutdown() ?? []);
       this.controller = undefined;
     });
 
@@ -157,6 +162,9 @@ export class HomeYard extends Scene {
       case 'leave':
         bus.emit('yard:leave');
         return;
+      case 'release':
+        if (isGameId(c.gameId)) releaseAssets(this, GAMES[c.gameId]?.assets);
+        return;
     }
   }
 
@@ -182,6 +190,11 @@ export class HomeYard extends Scene {
     });
   }
 
+  /** Map slept the yard to start the entering corner's game: Map owns its assets now. */
+  private onSleep(): void {
+    this.controller?.handedOff();
+  }
+
   /** The yard is back after its game (Map woke it), or a `yard:open` was not taken. */
   private onWake(): void {
     this.openGuard?.remove(false);
@@ -193,7 +206,7 @@ export class HomeYard extends Scene {
     void revealScene(this);
     setHudMode('yard');
     audio.setPrompt(this.lastCorner ? cornerNameLine(this.lastCorner) : YARD_INVITE_LINE);
-    this.controller?.woke();
+    this.applyAll(this.controller?.woke() ?? []);
     this.syncResumeMarks();
   }
 

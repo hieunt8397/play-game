@@ -97,9 +97,9 @@ development_status:
   epic-6-retrospective: optional
 
   epic-7: in-progress
-  7-1-trạm-nhà-xoài-trên-đảo-và-màn-sân-nhà: in-progress
-  7-2-ú-òa-chuồng-thú: backlog
-  7-3-ban-nhạc-trên-đảo: backlog
+  7-1-trạm-nhà-xoài-trên-đảo-và-màn-sân-nhà: review
+  7-2-ú-òa-chuồng-thú: review
+  7-3-ban-nhạc-trên-đảo: in-progress
   7-4-giờ-đi-ngủ: backlog
   epic-7-retrospective: optional
 

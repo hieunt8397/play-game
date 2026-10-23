@@ -8,6 +8,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AUDIO_CATALOG, type AudioId } from '../../src/content/audio-catalog.ts';
 import { FFMPEG, probeBinary, resolveBinary, type Env, type Probe } from '../shared/binaries.ts';
+import { bandArgs } from './make-band.ts';
 
 /** Encoder settings shared by every file (Technical Decisions › Asset pipeline). */
 const ENCODE = ['-ac', '1', '-ar', '44100', '-c:a', 'aac', '-b:a', '64k'];
@@ -222,9 +223,9 @@ const FS_TUNE_EXPR = SM_TUNE_EXPR;
 // --- Real recordings ------------------------------------------------------------------
 // These ids are CC0 recordings mastered with `npm run audio:normalize` (README provenance), not synthesized:
 // this tool has no recipe for them and never overwrites them. Chạm là nói (2026-10-22, batch 3): all 60 prop
-// sounds; Tiệm kem (Story 6.1): Shiba's sneeze.
+// sounds; Tiệm kem (Story 6.1): Shiba's sneeze; Ú òa chuồng thú (Story 7.2): the animals' calls and their muffled copies.
 export function isRecording(id: string): boolean {
-  return id === 'sfx.ice-cream.sneeze' || id.startsWith('sfx.touch-talk.');
+  return id === 'sfx.ice-cream.sneeze' || id.startsWith('sfx.touch-talk.') || id.startsWith('sfx.animal-pens.');
 }
 
 // --- music.island ------------------------------------------------------------
@@ -246,6 +247,9 @@ function source(expr: string, seconds: number): string[] {
 
 /** ffmpeg arguments that write `id` to `outFile` (pure; unit-tested). */
 export function buildArgs(id: AudioId, outFile: string): string[] {
+  // Ban nhạc (Story 7.3): the band's notes and its beat have their own recipes (tools/audio/make-band.ts).
+  const band = bandArgs(id, outFile);
+  if (band) return band;
   switch (id) {
     case 'sfx.shell.pop':
       return ['-hide_banner', '-y', ...source(POP_EXPR, POP_SECONDS), '-af', POP_FILTER, ...ENCODE, outFile];

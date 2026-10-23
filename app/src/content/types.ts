@@ -1,8 +1,8 @@
 // Shared content types (AD-1, AD-6). `content/` imports only types from other layers.
 import type { FlavourId } from './games/ice-cream.ts';
 
-/** Every mini-game id. Scene key === GameId === stationId (AD-1). */
-export const GAME_IDS = [
+/** The island mini-games: each has its own Map station. Scene key === GameId === stationId (AD-1). */
+export const ISLAND_GAME_IDS = [
   'ice-cream',
   'pizza',
   'race',
@@ -11,8 +11,24 @@ export const GAME_IDS = [
   'dino-puzzle',
   'shadow-match',
 ] as const;
+export type IslandGameId = (typeof ISLAND_GAME_IDS)[number];
+
+/**
+ * Story 7.2: the yard games (content/home.ts corners). They have no island station: the yard opens them
+ * (scene key === GameId still holds).
+ */
+export const YARD_GAME_IDS = ['animal-pens', 'band'] as const;
+export type YardGameId = (typeof YARD_GAME_IDS)[number];
+
+/** Every mini-game id: the island games, then the yard games. */
+export const GAME_IDS = [...ISLAND_GAME_IDS, ...YARD_GAME_IDS] as const;
 
 export type GameId = (typeof GAME_IDS)[number];
+
+/** Story 7.2: true for an island game (one with a Map station). */
+export function isIslandGameId(id: string): id is IslandGameId {
+  return (ISLAND_GAME_IDS as readonly string[]).includes(id);
+}
 
 /** Hint level 0 (none) … 4 (distractors dimmed, snap ×2) — AD-5. */
 export type HintLevel = 0 | 1 | 2 | 3 | 4;
@@ -34,6 +50,10 @@ export type SnapshotPartials = {
   race: { traceIndex: number };
   fishing: Record<string, never>;
   'touch-talk': { sceneId: string; touchedIds: string[] };
+  /** Story 7.2: the animal behind each door (left to right) and the reveals so far this round. */
+  'animal-pens': { behind: string[]; reveals: number };
+  /** Story 7.3: the band has no round, no score and nothing to resume (it starts in free play). */
+  band: Record<string, never>;
 };
 
 /** The closed questions of a round so far (Story 2.5): a resumed round judges `nextLevel` on all of them. */

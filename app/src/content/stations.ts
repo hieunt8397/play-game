@@ -7,14 +7,15 @@
 // Story 7.1: one shell station, `home` ("Nhà Xoài"), is not a game: its kart trip opens the yard
 // (scenes/HomeYard, content/home.ts) instead of a MiniGame. It is not a GameId (Scene key === GameId
 // stays true for real games) and has no decoration slot.
-import { GAME_IDS, type GameId } from './types.ts';
+// Story 7.2: only the island games (ISLAND_GAME_IDS) have a station; the yard games open from the yard.
+import { ISLAND_GAME_IDS, type IslandGameId } from './types.ts';
 
 /** Story 7.1: the shell station that opens the yard. */
 export const HOME_STATION = 'home' as const;
 export type HomeStationId = typeof HOME_STATION;
 /** Every island station id: the 7 games and the home station. */
-export type StationId = GameId | HomeStationId;
-export const STATION_IDS: readonly StationId[] = [...GAME_IDS, HOME_STATION];
+export type StationId = IslandGameId | HomeStationId;
+export const STATION_IDS: readonly StationId[] = [...ISLAND_GAME_IDS, HOME_STATION];
 
 /** Story 7.1: true for the home station (its trip opens the yard). */
 export function isHomeStation(id: string): id is HomeStationId {
@@ -77,8 +78,8 @@ export const STATIONS: readonly Station[] = [
 ];
 
 /** The 7 game stations (decorations, play-again icons and the GAME_IDS checks use these). */
-export const GAME_STATIONS: readonly (Station & { readonly id: GameId })[] = STATIONS.filter(
-  (s): s is Station & { readonly id: GameId } => s.id !== HOME_STATION,
+export const GAME_STATIONS: readonly (Station & { readonly id: IslandGameId })[] = STATIONS.filter(
+  (s): s is Station & { readonly id: IslandGameId } => s.id !== HOME_STATION,
 );
 
 /** Where the kart starts on the map (`anchor.kart-start`). */

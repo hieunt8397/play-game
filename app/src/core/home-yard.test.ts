@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { cornerNameLine, YARD_CORNERS, yardCorners, type CornerId } from '../content/home';
 import type { Point, ScreenLayout } from '../content/layout-types';
+import { AssetTracker } from './game-assets';
 import { planYard, SFX_HAPPY, YardController, type YardCommand } from './home-yard';
 /** Under MAX_TICK_MS (250): one tick covers it. The scene uses Timing.stationTapMs. */
 const DEPART = 200;
@@ -42,7 +43,7 @@ describe('planYard (Story 7.1)', () => {
     expect(pen.hit).toEqual(sq(40, 400, 160));
     expect(pen.depth).toBe(600);
     expect(pen.labelPos.y).toBeGreaterThan(600);
-    expect(plan.labelDepth).toBeGreaterThan(plan.ringDepth);
+    expect(plan.labelDepth).toBeGreaterThan(Math.max(...plan.corners.map((c) => c.depth)));
     expect(plan.bg).toEqual({ x: 0, y: 0, scale: 0.5, depth: -1 });
   });
 
@@ -99,11 +100,17 @@ describe('YardController (Story 7.1)', () => {
     expect(y.assetsSettled('band')).toEqual([{ kind: 'enter', corner: 'stage', gameId: 'band' }]);
   });
 
-  it('a failed load still settles (the game starts without the file): opens', () => {
+  it('a failed load still settles and opens: the game starts without the file (the Map contract, not "stay in the yard")', () => {
     const y = make();
-    y.tapCorner('pen');
+    const tracker = new AssetTracker();
+    const load = y.tapCorner('pen').find((c) => c.kind === 'load');
+    expect(load).toEqual({ kind: 'load', gameId: 'animal-pens' });
+    tracker.track('animal-pens', ['atlas.animal-pens', 'vo.animal-pens.name.cow']);
+    tracker.fileDone('atlas.animal-pens'); // loaded
+    tracker.fileDone('vo.animal-pens.name.cow'); // `loaderror`: scenes/game-loader settles it with a warning
     y.tick(DEPART);
-    expect(kinds(y.assetsSettled('animal-pens'))).toEqual(['enter']);
+    const cmds = tracker.drainSettled().flatMap((id) => y.assetsSettled(id));
+    expect(cmds).toEqual([{ kind: 'enter', corner: 'pen', gameId: 'animal-pens' }]);
   });
 
   it('re-tap of the target only bounces + says; another awake corner re-targets with its own load', () => {
@@ -124,18 +131,70 @@ describe('YardController (Story 7.1)', () => {
     y.tick(DEPART);
     expect(y.tapCorner('stage')).toEqual([]);
     expect(y.home()).toEqual([]);
-    y.woke();
+    y.handedOff();
+    expect(y.woke()).toEqual([]);
     expect(y.state).toBe('idle');
     expect(kinds(y.tapCorner('pen'))).toContain('load');
   });
 
-  it('Home in the yard: leave once (also while a corner is opening)', () => {
+  it('Home in the yard: leave once, only while idle (blocked while a corner opens)', () => {
     const y = make();
     y.tapCorner('pen');
-    expect(y.home()).toEqual([{ kind: 'leave' }]);
     expect(y.home()).toEqual([]);
+    expect(y.state).toBe('opening');
+    const idle = make();
+    expect(idle.home()).toEqual([{ kind: 'leave' }]);
+    expect(idle.home()).toEqual([]);
+    expect(idle.tapCorner('pen')).toEqual([]);
+    expect(idle.assetsSettled('animal-pens')).toEqual([]);
+  });
+});
+
+describe('YardController › assets the yard loaded (Story 7.1 review)', () => {
+  const enter = (y: YardController, corner: CornerId, gameId: string): void => {
+    y.tapCorner(corner);
+    y.assetsSettled(gameId);
+    y.tick(DEPART);
+  };
+
+  it('Map takes the opened game (handedOff): nothing to release when the yard wakes after it', () => {
+    const y = make();
+    enter(y, 'pen', 'animal-pens');
+    y.handedOff();
+    expect(y.woke()).toEqual([]);
+  });
+
+  it('a re-targeted corner (A, then B): A is released when the yard wakes; B belongs to Map', () => {
+    const y = make();
+    y.tapCorner('pen');
+    y.tapCorner('stage');
+    y.assetsSettled('animal-pens');
+    y.assetsSettled('band');
+    expect(kinds(y.tick(DEPART))).toEqual(['enter']);
+    y.handedOff();
+    expect(y.woke()).toEqual([{ kind: 'release', gameId: 'animal-pens' }]);
+  });
+
+  it('the open guard: a yard:open Map did not take releases the target too', () => {
+    const y = make();
+    enter(y, 'pen', 'animal-pens');
+    // no handedOff: Map ignored the open; the guard wakes the yard
+    expect(y.woke()).toEqual([{ kind: 'release', gameId: 'animal-pens' }]);
+    expect(y.state).toBe('idle');
+  });
+
+  it('the yard shuts down while a corner is opening: its load is released', () => {
+    const y = make();
+    y.tapCorner('pen');
+    expect(y.shutdown()).toEqual([{ kind: 'release', gameId: 'animal-pens' }]);
     expect(y.tapCorner('pen')).toEqual([]);
-    expect(y.assetsSettled('animal-pens')).toEqual([]);
+  });
+
+  it('handedOff outside entering does nothing', () => {
+    const y = make();
+    y.tapCorner('pen');
+    y.handedOff();
+    expect(y.shutdown()).toEqual([{ kind: 'release', gameId: 'animal-pens' }]);
   });
 
   it('an unknown corner id does nothing', () => {

@@ -4,7 +4,7 @@ import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
 import { GAME_STATIONS, HOME_STATION, slotIds } from '../../src/content/stations.ts';
 // A fixture with two pizza slots (the real pizza station keeps one since Story 7.1): the two-slot rules stay covered.
 const STATIONS = GAME_STATIONS.map((s) => (s.id === 'pizza' ? { ...s, slots: slotIds('pizza', 2) } : s));
-import { GAME_IDS } from '../../src/content/types.ts';
+import { ISLAND_GAME_IDS as GAME_IDS } from '../../src/content/types.ts'; // Story 7.2: the stations are the island games
 import { DECORATIONS } from '../../src/content/decorations.ts';
 import { DECO_STATION_DIST_OVERRIDE, decorationLimits, layoutLimits, pngSizeOf, validateAssets, validateDecorations, validateLayout, validatePlayAgainIcons, type AssetRuleInput, type AtlasJsonLike } from './rules.ts';
 

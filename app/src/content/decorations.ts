@@ -8,7 +8,7 @@
 // No meat-eating dinosaur anywhere (UX-DR75; validate:content scans for it); Shiba, the fox and the station dinos are already game characters.
 // Story 5.4: `sound` is the decoration's type (DECORATION_SOUNDS[sound]; unused at runtime since 2026-10-21).
 import type { AudioId } from './audio-catalog.ts';
-import type { GameId } from './types.ts';
+import type { IslandGameId } from './types.ts';
 
 /** Story 5.4: what a decoration sounds like when tapped (food: today's happy chime). */
 export type DecorationSound = 'food' | 'vehicle' | 'creature' | 'thing';
@@ -31,7 +31,7 @@ const ANIMALS = 'quaternius/animals';
 
 const item = (id: string, folder: string, file: string, sound: DecorationSound): DecorationItem => ({ id, model: `${folder}/${file}`, sound });
 
-export const DECORATIONS: Readonly<Record<GameId, readonly DecorationItem[]>> = {
+export const DECORATIONS: Readonly<Record<IslandGameId, readonly DecorationItem[]>> /* Story 7.2: island stations only */ = {
   'ice-cream': [
     item('parasol', COMMERCIAL, 'detail-parasol-a.glb', 'thing'),
     item('giant-cone', FOOD, 'ice-cream.glb', 'food'),

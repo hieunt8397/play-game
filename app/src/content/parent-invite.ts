@@ -18,4 +18,6 @@ export const PARENT_INVITE_LINES: Readonly<Record<GameId, readonly VoiceLineId[]
   race: ['vo.race.parent.1'],
   fishing: ['vo.fishing.parent.1'],
   'touch-talk': ['vo.touch-talk.parent.1'],
+  'animal-pens': ['vo.animal-pens.parent.1'],
+  band: ['vo.band.parent.1'],
 };

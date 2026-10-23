@@ -57,8 +57,8 @@ describe('creatureProblems', () => {
 });
 
 describe('creatureIds', () => {
-  it('the three dino calls and the touch-talk seagull and cheese (mouse squeak) are the catalog creatures', () => {
-    expect(creatureIds()).toEqual(['sfx.shell.woof', 'sfx.shell.chirp', 'sfx.ice-cream.sneeze', 'sfx.dino-puzzle.apatosaurus.happy', 'sfx.dino-puzzle.triceratops.happy', 'sfx.dino-puzzle.stegosaurus.happy', 'sfx.touch-talk.seagull', 'sfx.touch-talk.cheese']);
+  it('the three dino calls, the touch-talk seagull and cheese (mouse squeak) and the animal-pens calls (Story 7.2) are the catalog creatures', () => {
+    expect(creatureIds()).toEqual(['sfx.shell.woof', 'sfx.shell.chirp', 'sfx.ice-cream.sneeze', 'sfx.dino-puzzle.apatosaurus.happy', 'sfx.dino-puzzle.triceratops.happy', 'sfx.dino-puzzle.stegosaurus.happy', 'sfx.touch-talk.seagull', 'sfx.touch-talk.cheese', ...['dog', 'cat', 'rooster', 'cow', 'pig', 'sheep', 'horse'].flatMap((a) => [`sfx.animal-pens.${a}.call`, `sfx.animal-pens.${a}.muffled`])]);
     expect(creatureIds({ a: { ...AUDIO_CATALOG['sfx.shell.pop'] } })).toEqual([]);
   });
 });

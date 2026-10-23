@@ -47,10 +47,11 @@
 // `time` like the guide's wave (core/map-ambient › spoutFrame), then idle; it still plays under reduced motion.
 // Story 7.1: the home station "Nhà Xoài" (content/stations › HOME_STATION) is not a game: its trip loads the
 // yard's assets (content/home › HOME_ASSETS), zooms in like a station and starts the HomeYard shell scene
-// (Map sleeps). The yard asks for a corner's game with `yard:open` (core/post-round-chain › routeYardOpen):
-// Map starts it like an island game (takeStartData, release arming, resume marks) with `origin: 'yard'`
+// (Map sleeps). The yard asks for a corner's game with `yard:open`. The decisions are the pure reducer
+// core/shell-nav (navYardOpen → routeYardOpen, navRestart, navReturn, navLeaveYard); Map applies its effects:
+// it starts the game like an island game (takeStartData, release arming, resume marks) with `origin: 'yard'`
 // and the Hud's Home target 'yard', and sleeps the yard; the game's `round:leave` / `round:abandon` fade
-// back to the yard (never the island), `round:next` restarts it in place. `yard:leave` (Home in the yard)
+// back to the yard (never the island), `round:next` restarts it in place keeping that origin. `yard:leave` (Home in the yard)
 // stops the yard and wakes Map, the kart parked at `home-stop`; the yard's assets are released when it
 // shuts down.
 // Timing, routing and geometry are pure core code; this
@@ -58,7 +59,7 @@
 import { Scene, type GameObjects, type Time } from 'phaser';
 import { ATLASES, BACKGROUNDS, MAP_AMBIENT, MAP_GUIDE, MAP_KART } from '../content/assets';
 import type { Point } from '../content/layout-types';
-import type { GameId } from '../content/types';
+import { isIslandGameId, type GameId, type GameStartData } from '../content/types';
 import { LAYOUTS } from '../content/layouts';
 import { HOME_ASSETS, YARD_SCENE_KEY } from '../content/home';
 import { HOME_STATION, isHomeStation, KART_START_ANCHOR, ROAD_PATH, STATIONS, stopAnchor } from '../content/stations';
@@ -97,8 +98,6 @@ import {
   routeRoundComplete,
   routeRoundLeave,
   routeRoundNext,
-  routeYardOpen,
-  returnTarget,
   type ChainEnd,
   type RunningGame,
   type ChainFinish,
@@ -107,6 +106,7 @@ import {
 import { ProgressStore } from '../core/progress-store';
 import { amplitude, prefersReducedMotion } from '../core/reduced-motion';
 import { ReleaseArming } from '../core/release-arming';
+import { navEnterYard, navLeaveYard, navRestart, navReturn, navYardClosed, navYardOpen, type NavStep, type ShellNav } from '../core/shell-nav';
 import { resumeMarkPlan } from '../core/resume-marks';
 import { createRoad } from '../core/road';
 import { session, takeStartData } from '../core/session-store';
@@ -306,7 +306,7 @@ export class MapScene extends Scene {
     const road = createRoad(roadPoints);
     this.stops = {};
     for (const s of plan.stations) {
-      const stop = isGameId(s.id) || isHomeStation(s.id) ? layout.anchors[stopAnchor(s.id)] : undefined;
+      const stop = (isGameId(s.id) && isIslandGameId(s.id)) || isHomeStation(s.id) ? layout.anchors[stopAnchor(s.id)] : undefined;
       if (stop) this.stops[s.id] = road.project(stop);
     }
     const startAnchor: Point | undefined = layout.anchors[KART_START_ANCHOR];
@@ -404,10 +404,9 @@ export class MapScene extends Scene {
     });
     // Story 7.1: the yard asks for a corner's game, or (Home) to go back to the island.
     scoped.on('yard:open', ({ gameId }) => {
-      const route = routeYardOpen(this.running, gameId, { yardOpen: this.yardOpen, chainActive: chain.active }, isGameId);
-      if (route.action === 'open') this.openFromYard(route.gameId);
+      this.applyNav(navYardOpen(this.nav, gameId, { chainActive: chain.active, isGame: isGameId, startData: this.startDataOf }));
     });
-    scoped.on('yard:leave', () => this.leaveYard());
+    scoped.on('yard:leave', () => this.applyNav(navLeaveYard(this.nav)));
     this.events.on(WAKE, this.onWake, this);
 
     // Hud runs in parallel above Map and the games; launched once, never on Start.
@@ -802,7 +801,8 @@ export class MapScene extends Scene {
   }
 
   private async enterGame(id: string): Promise<void> {
-    if (!isGameId(id)) return;
+    // Story 7.2: only island games have a station (yard games open from the yard).
+    if (!isGameId(id) || !isIslandGameId(id)) return;
     const entry = GAMES[id];
     if (!entry) return;
     session.lastStation = id;
@@ -829,6 +829,61 @@ export class MapScene extends Scene {
 
   // --- the yard (Story 7.1) -----------------------------------------------------------------------
 
+  /** The navigation state the pure reducer (core/shell-nav) reads. */
+  private get nav(): ShellNav {
+    return { running: this.running, yardOpen: this.yardOpen };
+  }
+
+  /** Applies a core/shell-nav step: its state, then its effects (every Phaser call stays here). */
+  private applyNav(step: NavStep): void {
+    this.running = step.state.running;
+    this.yardOpen = step.state.yardOpen;
+    for (const e of step.effects) {
+      switch (e.kind) {
+        case 'setHomeTarget':
+          setHomeTarget(e.target);
+          break;
+        case 'startGame':
+          this.syncResumeMarks();
+          for (const other of Object.keys(GAMES)) {
+            if (this.scene.isActive(other) || this.scene.isPaused(other) || this.scene.isSleeping(other)) this.scene.stop(other);
+          }
+          this.loadedGames.add(e.gameId);
+          this.releases.arm(e.gameId);
+          this.listenShutdown(e.gameId);
+          this.scene.manager.start(e.gameId, e.data);
+          break;
+        case 'restartGame':
+          this.syncResumeMarks();
+          this.releases.markRestart(e.gameId);
+          this.scene.get(e.gameId).scene.restart(e.data);
+          break;
+        case 'stopGame':
+          this.scene.stop(e.gameId);
+          break;
+        case 'forget':
+          this.chain?.forget(e.gameId);
+          break;
+        case 'sleepYard':
+          this.scene.sleep(YARD_SCENE_KEY);
+          break;
+        case 'wakeYard':
+          this.scene.wake(YARD_SCENE_KEY);
+          break;
+        case 'stopYard':
+          this.scene.stop(YARD_SCENE_KEY);
+          break;
+        case 'wakeMap':
+          if (e.parkAt !== undefined) session.lastStation = e.parkAt;
+          this.scene.wake();
+          break;
+      }
+    }
+  }
+
+  /** Start data of a registered game: takeStartData (a held resume point resumes, then is cleared). */
+  private startDataOf = (id: GameId): GameStartData => takeStartData(id, ladderLength(GAMES[id] ?? {}));
+
   /** The home station's trip ended: zoom in, start the yard (its assets are loaded) and sleep. */
   private async enterYard(): Promise<void> {
     session.lastStation = HOME_STATION;
@@ -837,44 +892,15 @@ export class MapScene extends Scene {
     if (!this.trip) return; // Map shut down meanwhile
     // The yard owns its assets now: a game's shutdown must not release them (releaseGame).
     this.loadedGames.delete(HOME_STATION);
-    this.yardOpen = true;
+    this.applyNav(navEnterYard(this.nav));
     this.scene.get(YARD_SCENE_KEY).events.once(SHUTDOWN, () => {
-      this.yardOpen = false;
+      this.applyNav(navYardClosed(this.nav));
       this.releaseAssets(HOME_STATION);
     });
     this.scene.manager.start(YARD_SCENE_KEY);
     this.scene.sleep();
     this.trip.entered();
     this.syncIdle();
-  }
-
-  /**
-   * `yard:open` (routed): start the corner's game like an island game — its assets were loaded by the
-   * yard — with origin 'yard' (its last event returns to the yard) and the Hud's Home target 'yard'.
-   */
-  private openFromYard(id: GameId): void {
-    const entry = GAMES[id];
-    if (!entry) return;
-    const data = takeStartData(id, ladderLength(entry));
-    this.syncResumeMarks();
-    for (const other of Object.keys(GAMES)) {
-      if (this.scene.isActive(other) || this.scene.isPaused(other) || this.scene.isSleeping(other)) this.scene.stop(other);
-    }
-    this.running = { id, level: data.level, origin: 'yard' };
-    setHomeTarget('yard');
-    this.loadedGames.add(id);
-    this.releases.arm(id);
-    this.listenShutdown(id);
-    this.scene.manager.start(id, data);
-    this.scene.sleep(YARD_SCENE_KEY);
-  }
-
-  /** `yard:leave` (Home in the yard): stop the yard and wake on the island, the kart at `home-stop`. */
-  private leaveYard(): void {
-    if (!this.yardOpen || this.running) return;
-    this.yardOpen = false;
-    this.scene.stop(YARD_SCENE_KEY);
-    this.scene.wake();
   }
 
   /**
@@ -891,29 +917,18 @@ export class MapScene extends Scene {
   }
 
   /**
-   * Seamless play (2026-10-21): restarts the running game in place for its next round. Its round was
-   * settled on `round:complete` (difficulty saved, resume point cleared), so takeStartData gives the
-   * saved level and a fresh seed. Map stays asleep; the game keeps its assets.
+   * Seamless play (2026-10-21): restarts the running game in place for its next round (core/shell-nav ›
+   * navRestart keeps its origin: a yard game still returns to the yard). Its round was settled on
+   * `round:complete`, so takeStartData gives the saved level and a fresh seed. Map stays asleep; the game
+   * keeps its assets.
    */
   private restartGame(id: GameId): void {
-    const entry = GAMES[id];
-    if (!entry || this.running?.id !== id) return;
-    const data = takeStartData(id, ladderLength(entry));
-    this.running = { id, level: data.level };
-    this.syncResumeMarks();
-    this.releases.markRestart(id);
-    this.scene.get(id).scene.restart(data);
+    this.applyNav(navRestart(this.nav, id, this.startDataOf));
   }
 
+  /** The fade return (core/shell-nav › navReturn): a yard game wakes the yard, an island game wakes Map. */
   private returnFrom(gameId: string): void {
-    if (gameId !== this.running?.id) return;
-    // Story 7.1: a yard game fades back to the yard, never to the island.
-    const target = returnTarget(this.running);
-    this.running = undefined;
-    this.chain?.forget(gameId);
-    this.scene.stop(gameId);
-    if (target === 'yard') this.scene.wake(YARD_SCENE_KEY);
-    else this.scene.wake();
+    this.applyNav(navReturn(this.nav, gameId));
   }
 
   /**

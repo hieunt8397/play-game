@@ -1,8 +1,8 @@
 // Image assets per screen (Story 1.4). Paths are relative to the app base (public/). Produced by
 // `npm run render -- <screen>` + `npm run atlas -- <screen>`; checked by `npm run check`.
 
-// Story 7.1: 'home' is the yard behind the island's home station (content/home.ts).
-export const SCREEN_IDS = ['map', 'ice-cream', 'pizza', 'dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home'] as const;
+// Story 7.1: 'home' is the yard behind the island's home station (content/home.ts). Story 7.2: 'animal-pens', the yard's pen game. Story 7.3: 'band', the yard's stage game.
+export const SCREEN_IDS = ['map', 'ice-cream', 'pizza', 'dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band'] as const;
 export type ScreenId = (typeof SCREEN_IDS)[number];
 
 export interface AtlasRef {
@@ -67,6 +67,8 @@ export const ATLASES: Readonly<Record<ScreenId, AtlasRef>> = {
   fishing: atlas('fishing'),
   'touch-talk': atlas('touch-talk'),
   home: atlas('home'),
+  'animal-pens': atlas('animal-pens'),
+  band: atlas('band'),
 };
 
 export const BACKGROUNDS: Readonly<Record<BackgroundId, BackgroundRef>> = {
@@ -84,6 +86,8 @@ export const BACKGROUNDS: Readonly<Record<BackgroundId, BackgroundRef>> = {
   'touch-talk-bakery': plateBackground('touch-talk', 'bakery'),
   'touch-talk-picnic': plateBackground('touch-talk', 'picnic'),
   home: background('home'),
+  'animal-pens': background('animal-pens'),
+  band: background('band'),
 };
 
 /** Every background of a screen with its plate (undefined for a single-plate screen). */

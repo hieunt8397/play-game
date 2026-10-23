@@ -14,8 +14,10 @@
 //   - sleeping tap (idle or opening): bounce + the happy sound, nothing opens;
 //   - `enter` is emitted once, when the bounce time has passed and `assetsSettled(gameId)` was seen
 //     (either order); the scene then zooms on the corner and asks Map to open the game (`yard:open`);
-//   - entering ignores every tap; `woke()` (the yard is back after the game) returns to idle;
-//   - Home (`home()`, the Hud in 'yard' mode): `leave` once, unless the game is already entering.
+//   - entering ignores every tap; `handedOff()` (Map slept the yard to start the game) hands that game's
+//     assets to Map; `woke()` (the yard is back, or its open was not taken) returns to idle and `shutdown()`
+//     ends: both `release` every game the yard loaded and did not hand off (a re-targeted corner, an ignored open);
+//   - Home (`home()`, the Hud in 'yard' mode): `leave` once, only while idle (not while a corner opens or enters).
 import type { CornerId, YardCornerState } from '../content/home';
 import type { Point, ScreenLayout } from '../content/layout-types';
 import { estimateLabelSize, labelPosition, type PlannedImage, type Size } from './map-plan';
@@ -44,7 +46,6 @@ export interface YardPlan {
   /** Back to front (depth order) — also the hotspot registration order (front wins). */
   readonly corners: readonly PlannedCorner[];
   readonly labelDepth: number;
-  readonly ringDepth: number;
   readonly warnings: readonly string[];
 }
 
@@ -96,8 +97,7 @@ export function planYard(
   return {
     bg: { x: 0, y: 0, scale: 1 / layout.renderScale, depth: -1 },
     corners: planned,
-    ringDepth: maxDepth + 1,
-    labelDepth: maxDepth + 2,
+    labelDepth: maxDepth + 1,
     warnings,
   };
 }
@@ -109,7 +109,9 @@ export type YardCommand =
   | { readonly kind: 'sfx'; readonly id: string }
   | { readonly kind: 'load'; readonly gameId: string }
   | { readonly kind: 'enter'; readonly corner: CornerId; readonly gameId: string }
-  | { readonly kind: 'leave' };
+  | { readonly kind: 'leave' }
+  /** Drop the cache entries of a game the yard loaded but Map did not take. */
+  | { readonly kind: 'release'; readonly gameId: string };
 
 export type YardState = 'idle' | 'opening' | 'entering' | 'left';
 
@@ -180,21 +182,48 @@ export class YardController {
     return this.maybeEnter();
   }
 
-  /** Home in the yard: back to the island (once; not while the corner's game is already opening). */
+  /** Home in the yard: back to the island (once; not while a corner's game is opening or entering). */
   home(): YardCommand[] {
-    if (this._state === 'entering' || this._state === 'left') return [];
+    if (this._state !== 'idle') return [];
     this._state = 'left';
     this._target = undefined;
     return [{ kind: 'leave' }];
   }
 
-  /** The yard is back after its game (or the game could not start): idle, and every asset reloads next time. */
-  woke(): void {
+  /**
+   * Map took the entering corner's game (it slept the yard to start it): Map owns those assets now and
+   * releases them when the game shuts down, so the yard no longer does.
+   */
+  handedOff(): void {
+    if (this._state !== 'entering' || this._target === undefined) return;
+    const c = this.corner(this._target);
+    if (c) this.loaded.delete(c.gameId);
+  }
+
+  /**
+   * The yard is back after its game, or its `yard:open` was not taken (the open guard): idle. Every game the
+   * yard loaded and did not hand to Map (a re-targeted corner, an ignored open) is released; every asset
+   * reloads next time.
+   */
+  woke(): YardCommand[] {
     this._state = 'idle';
     this._target = undefined;
     this.departLeft = 0;
+    return this.releaseAll();
+  }
+
+  /** The yard shuts down: release whatever it loaded and did not hand to Map. */
+  shutdown(): YardCommand[] {
+    this._state = 'left';
+    this._target = undefined;
+    return this.releaseAll();
+  }
+
+  private releaseAll(): YardCommand[] {
+    const out: YardCommand[] = [...this.loaded].map((gameId) => ({ kind: 'release', gameId }));
     this.loaded.clear();
     this.settled.clear();
+    return out;
   }
 
   private maybeEnter(): YardCommand[] {

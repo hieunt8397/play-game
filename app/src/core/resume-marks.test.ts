@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Point, ScreenLayout } from '../content/layout-types';
 import { GAME_STATIONS } from '../content/stations';
-import { GAME_IDS } from '../content/types';
+// Story 7.2: the island stations are the island games (yard games are marked in the yard).
+import { ISLAND_GAME_IDS as GAME_IDS } from '../content/types';
 import { islandInteractiveRect, RESUME_MARK_EXTENT, RESUME_MARK_OUTLINE_PX, resumeMarkPlan } from './resume-marks';
 import { Tokens } from './tokens';
 

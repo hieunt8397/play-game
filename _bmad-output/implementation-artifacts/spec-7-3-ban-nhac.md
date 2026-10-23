@@ -2,7 +2,7 @@
 title: 'Story 7.3: Ban nhạc'
 type: 'feature'
 created: '2026-10-22'
-status: 'ready-for-dev'
+status: 'in-progress'
 baseline_commit: 'NO_VCS'
 route: 'dispatch'
 review_loop_iteration: 0

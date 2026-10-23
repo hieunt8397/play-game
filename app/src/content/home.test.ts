@@ -6,10 +6,8 @@ import {
   CORNER_IDS,
   cornerFrame,
   cornerNameLine,
-  cornerOfGame,
   HOME_ASSETS,
   HOME_SCREEN_REQUIREMENTS,
-  HOME_TO_YARD_LINE,
   YARD_CORNERS,
   YARD_INVITE_LINE,
   yardCorners,
@@ -27,8 +25,6 @@ describe('content/home (Story 7.1)', () => {
       ['wardrobe', 'dress-up'],
     ]);
     expect(YARD_CORNERS.map((c) => c.id)).toEqual([...CORNER_IDS]);
-    expect(cornerOfGame('band')?.id).toBe('stage');
-    expect(cornerOfGame('pizza')).toBeUndefined();
   });
 
   it('every label is the text of its name line; the yard lines exist', () => {
@@ -36,14 +32,14 @@ describe('content/home (Story 7.1)', () => {
       expect(VOICE_LINES.find((l) => l.id === cornerNameLine(c.id))?.text).toBe(c.label);
     }
     expect(isVoiceLineId(YARD_INVITE_LINE)).toBe(true);
-    expect(VOICE_LINES.find((l) => l.id === HOME_TO_YARD_LINE)?.text).toBe('Về nhà nào!');
+    expect(VOICE_LINES.find((l) => l.id === 'vo.shell.home.yard')?.text).toBe('Về nhà nào!');
     expect(VOICE_LINES.find((l) => l.id === stationNameLine(HOME_STATION))?.text).toBe('Nhà Xoài');
     expect(isVoiceLineId(inviteLine(HOME_STATION))).toBe(true);
   });
 
-  it('awake is derived from the registry: with 7.1 alone every corner sleeps; a registered game wakes its corner', () => {
+  it('awake is derived from the registry: a registered game wakes its corner (Story 7.2: the pen), the others sleep', () => {
     const playable = (id: string): boolean => Object.prototype.hasOwnProperty.call(GAME_CONTENT, id);
-    expect(yardCorners(playable).every((c) => !c.awake)).toBe(true);
+    expect(yardCorners(playable).filter((c) => c.awake).map((c) => c.id)).toEqual(['pen']);
     expect(yardCorners((id) => id === 'bedtime').filter((c) => c.awake).map((c) => c.id)).toEqual(['bed']);
   });
 

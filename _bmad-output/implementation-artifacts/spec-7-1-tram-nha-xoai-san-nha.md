@@ -2,7 +2,7 @@
 title: 'Story 7.1: Trạm Nhà Xoài trên đảo và màn sân nhà'
 type: 'feature'
 created: '2026-10-22'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'NO_VCS'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -174,6 +174,19 @@ The name rule ("Xoài" only in greeting, invite and prompt intents) gets one exc
 - Shell-station tests for `validateLayout`.
 - Existing station-count tests updated (8 stations, 9 slots). The two-slot decoration rule tests keep a two-slot pizza fixture.
 
+**Checks (2026-10-22).** `npm run check` exits 0 (1760 tests; validate:content: 9 layouts, 8 stations, 9 slots); `npm run audio:check` OK. The house first stood further right and touched the race-1 decoration footprints (`atlas` refused it); it now stands at world (3.2, −6.05), between the pizza-1 and race-1 footprints, with the swim ring moved to (1.0, −7.45).
+
+**Review patches (2026-10-22).**
+- Map's navigation decisions are now the pure reducer `core/shell-nav`. It covers `navEnterYard`, `navYardOpen` (→ `routeYardOpen`), `navRestart`, `navReturn`, `navLeaveYard` and `navYardClosed`. Map only applies the effects (`applyNav`). `core/yard-flow.test.ts` drives these real functions instead of a copy of `openFromYard`.
+- Fix: `navRestart` keeps the running game's `origin`. Before this, `Map.restartGame` rebuilt the record without it. After one continuous-play round, a yard game's leave or abandon then went to the island, and the yard stayed asleep with `yardOpen = true`. The test now checks the restarted record.
+- `returnFrom` (`navReturn`) calls `chain.forget` for every fade return, including island games. That is harmless: an island fade return happens on `round:abandon` (never settled) or on a leave during a chain. A test covers an island abandon after `round:next`.
+- Yard asset ownership:
+  - The yard tracks the games it loaded. `handedOff()` (on the yard's `sleep`, when Map starts the game) passes the opened game to Map.
+  - `woke()` and `shutdown()` return a `release` for every other game the yard loaded: a re-targeted corner, or an open Map ignored (the open guard).
+  - Home in the yard is blocked while a corner is `opening` as well as `entering`.
+  - HomeYard drops the released games' cache entries (`scenes/game-loader › releaseAssets`).
+- Removed dead code: `cornerOfGame`, `HOME_TO_YARD_LINE` (`core/hud › VO_HOME_YARD` is the one id), `YardPlan.ringDepth`. HomeYard's `lastCorner = undefined` in `create` stays: Phaser reuses the scene instance across yard visits, and `onWake` reads it.
+
 **Deferred.**
 - No idle invitations in the yard yet (nothing is awake). 7.2 can add them on the island's `map-idle` pattern.
 - The Epic 8 game ids are placeholders.
@@ -181,7 +194,24 @@ The name rule ("Xoài" only in greeting, invite and prompt intents) gets one exc
 
 ## Spec Change Log
 
+- 2026-10-22 (review): I/O row "Tap awake corner", error handling "asset load fails → stay in yard". The build keeps the existing Map contract instead (Story 1.7, AR51). A file that fails to load is settled with a warning, and the game starts without it, exactly as for an island station. A failed file can never strand the child, and island and yard behave the same. Covered by `core/home-yard.test.ts` › "a failed load still settles and opens". The frozen intent is unchanged; this records the deviation for the parent's review.
+
 ## Review Triage Log
+
+| # | Layer | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | blind, edge | restartGame drops origin 'yard': after round:next, leave/abandon lands on the island | high | Map.restartGame | patch (keep origin) |
+| 2 | verif | continuous-play test checked the original record, not the restarted one | high | yard-flow.test.ts | patch |
+| 3 | verif | no test on Map's yard wiring (hand copy of openFromYard) | medium | yard-flow.test.ts mapOpen | patch (pure core/shell-nav.ts reducer + tests) |
+| 4 | edge | yard-loaded assets leak on re-targeted corner, Home while opening, ignored yard:open | medium | home-yard.ts, HomeYard.ts | patch (yard tracks + releases unopened ids; Home blocked while opening) |
+| 5 | edge | Home while the yard loader is in flight | low | game-loader.ts | patch (with #4) |
+| 6 | verif | I/O row "load fails → stay in yard" differs from the Map contract (start without the file) | medium | game-loader.ts | patch (test + Spec Change Log) |
+| 7 | blind | dead code (cornerOfGame, HOME_TO_YARD_LINE, ringDepth) | low | home.ts, home-yard.ts | patch |
+| 8 | regression | returnFrom calls chain.forget for island games too | low | Map.returnFrom | patch (noted + island test) |
+| 9 | edge | Hud says "Về đảo nào!" during the yard zoom while Home is ignored | low | hud.ts | defer |
+| 10 | blind | home station shows no resume mark for a yard game snapshot; churn in syncResumeMarks | low | Map.ts, resume-marks.ts | defer (7.2+) |
+| 11 | art | wardrobe shirt sliver unreadable, island roof orange vs pink yard house, stage hull reaches the house door | low | yard-final.png, preview.png | defer (art pass) |
+| 12 | edge | double taps, Home in yard, wake/park, audio, HUD modes | false | verified by reviewer | reject |
 
 ## Verification
 

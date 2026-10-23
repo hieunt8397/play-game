@@ -50,6 +50,9 @@
 // `create()` fades it back in. Home before that leaves as above (`cleanup` removes the pending timer;
 // a fade already running ends without the emit). No free-play parent invitation any more (it would be
 // cut); the round-start lead invitation is unchanged.
+// Story 7.3: `startFreePlay()` is for a game with no round at all (the band): `round:complete` once with the empty
+// tally, then free play WITHOUT `onFreePlay` or the next-round timer (no `round:next`); Home then leaves with
+// `round:leave` (no resume snapshot).
 // Games never navigate (`scene.start/stop/…`) or load (`this.load`): Map owns both (ESLint enforces it).
 import { Scene, type Tweens } from 'phaser';
 import { PARENT_INVITE_ENABLED, PARENT_INVITE_LINES } from '../content/parent-invite';
@@ -372,6 +375,14 @@ export abstract class MiniGameBase<G extends GameId = GameId> extends Scene {
   /** Ends the round with the tallied outcome (`round:complete`, once) and enters free play (Story 5.8). */
   protected finishRound(): void {
     this.complete(this.tally.outcome(this.gameId));
+  }
+
+  /**
+   * Story 7.3: a game with no round (the band) starts in free play: `round:complete` once with the empty tally,
+   * no `onFreePlay`, no next round. Call it first in `build()` (it clears the Speaker prompt).
+   */
+  protected startFreePlay(): void {
+    this.enterFreePlay(this.tally.outcome(this.gameId), false);
   }
 
   /** `round:complete` (once) and free play: the scene stays, the voice goes quiet, taps still react. */

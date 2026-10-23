@@ -107,6 +107,46 @@ export const AUDIO_IDS = [
   'sfx.touch-talk.cooler',
   'sfx.touch-talk.pillow',
   'sfx.touch-talk.butterfly',
+  'sfx.animal-pens.dog.call',
+  'sfx.animal-pens.dog.muffled',
+  'sfx.animal-pens.cat.call',
+  'sfx.animal-pens.cat.muffled',
+  'sfx.animal-pens.rooster.call',
+  'sfx.animal-pens.rooster.muffled',
+  'sfx.animal-pens.cow.call',
+  'sfx.animal-pens.cow.muffled',
+  'sfx.animal-pens.pig.call',
+  'sfx.animal-pens.pig.muffled',
+  'sfx.animal-pens.sheep.call',
+  'sfx.animal-pens.sheep.muffled',
+  'sfx.animal-pens.horse.call',
+  'sfx.animal-pens.horse.muffled',
+  'sfx.band.drum.c4',
+  'sfx.band.drum.d4',
+  'sfx.band.drum.e4',
+  'sfx.band.drum.g4',
+  'sfx.band.drum.a4',
+  'sfx.band.horn.e4',
+  'sfx.band.horn.g4',
+  'sfx.band.horn.a4',
+  'sfx.band.horn.c5',
+  'sfx.band.horn.d5',
+  'sfx.band.frog.g4',
+  'sfx.band.frog.a4',
+  'sfx.band.frog.c5',
+  'sfx.band.frog.d5',
+  'sfx.band.frog.e5',
+  'sfx.band.xylophone.c5',
+  'sfx.band.xylophone.d5',
+  'sfx.band.xylophone.e5',
+  'sfx.band.xylophone.g5',
+  'sfx.band.xylophone.a5',
+  'sfx.band.bell.g5',
+  'sfx.band.bell.a5',
+  'sfx.band.bell.c6',
+  'sfx.band.bell.d6',
+  'sfx.band.bell.e6',
+  'music.band.beat',
 ] as const;
 
 export type AudioId = (typeof AUDIO_IDS)[number];
@@ -287,6 +327,60 @@ export const AUDIO_CATALOG: Record<AudioId, AudioEntry> = {
   'sfx.touch-talk.pillow': { path: 'assets/audio/sfx/sfx.touch-talk.pillow.m4a', kind: 'sfx' },
   /** Picnic: a light wing flutter (Freesound #402450, CC0). */
   'sfx.touch-talk.butterfly': { path: 'assets/audio/sfx/sfx.touch-talk.butterfly.m4a', kind: 'sfx' },
+  /** Ú òa chuồng thú (Story 7.2): each animal's real call (Freesound CC0, README provenance), trimmed (and sped up where longer) to ≤ 0.8 s, high-passed (≥ 200 Hz), mastered with `npm run audio:normalize`, its peak lowered to −19.5 dBFS (creature, `npm run audio:check`). `.muffled`: the same call lowpassed at 900 Hz with its peak at −30 dBFS, played while the door wiggles. Load with the game. */
+  /** two small-dog barks ("gâu gâu") (Freesound #163459, CC0), creature. */
+  'sfx.animal-pens.dog.call': { path: 'assets/audio/sfx/sfx.animal-pens.dog.call.m4a', kind: 'sfx', creature: true },
+  'sfx.animal-pens.dog.muffled': { path: 'assets/audio/sfx/sfx.animal-pens.dog.muffled.m4a', kind: 'sfx', creature: true },
+  /** a cat meow (Freesound #436541, CC0), creature. */
+  'sfx.animal-pens.cat.call': { path: 'assets/audio/sfx/sfx.animal-pens.cat.call.m4a', kind: 'sfx', creature: true },
+  'sfx.animal-pens.cat.muffled': { path: 'assets/audio/sfx/sfx.animal-pens.cat.muffled.m4a', kind: 'sfx', creature: true },
+  /** a rooster crow, sped up to fit 0.8 s (Freesound #435508, CC0), creature. */
+  'sfx.animal-pens.rooster.call': { path: 'assets/audio/sfx/sfx.animal-pens.rooster.call.m4a', kind: 'sfx', creature: true },
+  'sfx.animal-pens.rooster.muffled': { path: 'assets/audio/sfx/sfx.animal-pens.rooster.muffled.m4a', kind: 'sfx', creature: true },
+  /** a cow moo, sped up to fit 0.8 s (Freesound #275154, CC0), creature. */
+  'sfx.animal-pens.cow.call': { path: 'assets/audio/sfx/sfx.animal-pens.cow.call.m4a', kind: 'sfx', creature: true },
+  'sfx.animal-pens.cow.muffled': { path: 'assets/audio/sfx/sfx.animal-pens.cow.muffled.m4a', kind: 'sfx', creature: true },
+  /** a pig oink (Freesound #442906, CC0), creature. */
+  'sfx.animal-pens.pig.call': { path: 'assets/audio/sfx/sfx.animal-pens.pig.call.m4a', kind: 'sfx', creature: true },
+  'sfx.animal-pens.pig.muffled': { path: 'assets/audio/sfx/sfx.animal-pens.pig.muffled.m4a', kind: 'sfx', creature: true },
+  /** a ewe baa, sped up (Freesound #677221, CC0), creature. */
+  'sfx.animal-pens.sheep.call': { path: 'assets/audio/sfx/sfx.animal-pens.sheep.call.m4a', kind: 'sfx', creature: true },
+  'sfx.animal-pens.sheep.muffled': { path: 'assets/audio/sfx/sfx.animal-pens.sheep.muffled.m4a', kind: 'sfx', creature: true },
+  /** a horse whinny, sped up (Freesound #269571, CC0), creature. */
+  'sfx.animal-pens.horse.call': { path: 'assets/audio/sfx/sfx.animal-pens.horse.call.m4a', kind: 'sfx', creature: true },
+  'sfx.animal-pens.horse.muffled': { path: 'assets/audio/sfx/sfx.animal-pens.horse.muffled.m4a', kind: 'sfx', creature: true },
+  /** Ban nhạc (Story 7.3): a soft pitched tom, synthesised (tools/audio/make-band.ts). */
+  'sfx.band.drum.c4': { path: 'assets/audio/sfx/sfx.band.drum.c4.m4a', kind: 'sfx' },
+  'sfx.band.drum.d4': { path: 'assets/audio/sfx/sfx.band.drum.d4.m4a', kind: 'sfx' },
+  'sfx.band.drum.e4': { path: 'assets/audio/sfx/sfx.band.drum.e4.m4a', kind: 'sfx' },
+  'sfx.band.drum.g4': { path: 'assets/audio/sfx/sfx.band.drum.g4.m4a', kind: 'sfx' },
+  'sfx.band.drum.a4': { path: 'assets/audio/sfx/sfx.band.drum.a4.m4a', kind: 'sfx' },
+  /** Ban nhạc (Story 7.3): a toy horn, synthesised (tools/audio/make-band.ts). */
+  'sfx.band.horn.e4': { path: 'assets/audio/sfx/sfx.band.horn.e4.m4a', kind: 'sfx' },
+  'sfx.band.horn.g4': { path: 'assets/audio/sfx/sfx.band.horn.g4.m4a', kind: 'sfx' },
+  'sfx.band.horn.a4': { path: 'assets/audio/sfx/sfx.band.horn.a4.m4a', kind: 'sfx' },
+  'sfx.band.horn.c5': { path: 'assets/audio/sfx/sfx.band.horn.c5.m4a', kind: 'sfx' },
+  'sfx.band.horn.d5': { path: 'assets/audio/sfx/sfx.band.horn.d5.m4a', kind: 'sfx' },
+  /** Ban nhạc (Story 7.3): the singer frog's croak "ộp ộp" (creature), synthesised (tools/audio/make-band.ts). */
+  'sfx.band.frog.g4': { path: 'assets/audio/sfx/sfx.band.frog.g4.m4a', kind: 'sfx', creature: true },
+  'sfx.band.frog.a4': { path: 'assets/audio/sfx/sfx.band.frog.a4.m4a', kind: 'sfx', creature: true },
+  'sfx.band.frog.c5': { path: 'assets/audio/sfx/sfx.band.frog.c5.m4a', kind: 'sfx', creature: true },
+  'sfx.band.frog.d5': { path: 'assets/audio/sfx/sfx.band.frog.d5.m4a', kind: 'sfx', creature: true },
+  'sfx.band.frog.e5': { path: 'assets/audio/sfx/sfx.band.frog.e5.m4a', kind: 'sfx', creature: true },
+  /** Ban nhạc (Story 7.3): a wooden xylophone bar, synthesised (tools/audio/make-band.ts). */
+  'sfx.band.xylophone.c5': { path: 'assets/audio/sfx/sfx.band.xylophone.c5.m4a', kind: 'sfx' },
+  'sfx.band.xylophone.d5': { path: 'assets/audio/sfx/sfx.band.xylophone.d5.m4a', kind: 'sfx' },
+  'sfx.band.xylophone.e5': { path: 'assets/audio/sfx/sfx.band.xylophone.e5.m4a', kind: 'sfx' },
+  'sfx.band.xylophone.g5': { path: 'assets/audio/sfx/sfx.band.xylophone.g5.m4a', kind: 'sfx' },
+  'sfx.band.xylophone.a5': { path: 'assets/audio/sfx/sfx.band.xylophone.a5.m4a', kind: 'sfx' },
+  /** Ban nhạc (Story 7.3): a small bell, synthesised (tools/audio/make-band.ts). */
+  'sfx.band.bell.g5': { path: 'assets/audio/sfx/sfx.band.bell.g5.m4a', kind: 'sfx' },
+  'sfx.band.bell.a5': { path: 'assets/audio/sfx/sfx.band.bell.a5.m4a', kind: 'sfx' },
+  'sfx.band.bell.c6': { path: 'assets/audio/sfx/sfx.band.bell.c6.m4a', kind: 'sfx' },
+  'sfx.band.bell.d6': { path: 'assets/audio/sfx/sfx.band.bell.d6.m4a', kind: 'sfx' },
+  'sfx.band.bell.e6': { path: 'assets/audio/sfx/sfx.band.bell.e6.m4a', kind: 'sfx' },
+  /** Ban nhạc (Story 7.3): the soft idle beat — a tom and shaker loop of 4 beats at 80 BPM (3 s), mastered to ≤ −30 LUFS, synthesised (tools/audio/make-band.ts). Music channel: ducked under every voice line. */
+  'music.band.beat': { path: 'assets/audio/music/music.band.beat.m4a', kind: 'music', loop: true },
   /** Island background loop, mastered to −30 LUFS (EXPERIENCE › Âm thanh: music ≤ −30 LUFS). */
   'music.island': { path: 'assets/audio/music/music.island.m4a', kind: 'music', loop: true },
 };

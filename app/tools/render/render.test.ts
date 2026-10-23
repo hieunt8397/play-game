@@ -75,6 +75,7 @@ describe('art:build', () => {
       fishing: { yellow: '#FFD23F', orange: '#FF9A3C', blue: '#2F6FDB', stripe: '#FFFFFF', dot: '#FFFFFF', line: '#F5F5F5' },
       touchTalk: { white: '#FFFFFF', beak: '#FFC93C', pavement: '#C9CED6', bus: '#FFD23F', skyTop: '#9ED6F7', skyHorizon: '#E6F6FF', seaNear: '#A6E6F6', seaFar: '#6CC8EE', sandLight: '#F5D9A3', sandWet: '#E8C489', verge: '#B4E09A', pavementLine: '#C0C6D0', haze: '#EEF6FC', fin: '#FFD45C', gullTip: '#B8C4D6', shell: '#FFB3C1', coconut: '#7CC46B', boatHull: '#FF7B72', tire: '#3B4252', hub: '#EEF1F5', glass: '#BDE6FF', banana: '#FFD84A', bananaTip: '#8A5A33', egg: '#FFF1DC', melonRind: '#3E9E52', melonStripe: '#2C7A3D', melonLight: '#D9F5C2', melonFlesh: '#FF5D73', grassNear: '#A2DA84' },
       home: { wood: '#E8B27A', woodDark: '#C98B55', curtain: '#FF7FAE', drum: '#FF6B6B', drumRim: '#FFFFFF', drumHead: '#FFF4E0', stick: '#F3D9B1', kit: '#FFFFFF', cross: '#F0525B', wardrobe: '#C9A8FF', wardrobeDoor: '#E2D3FF', knob: '#FFE08A', shirt: '#FF9A3C' },
+      animalPens: { barn: '#E8735F', barnDark: '#C4574B', trim: '#FFF4E2', roof: '#8E5B43', door: '#F4B870', doorDark: '#D9914E', inside: '#5E3B2F', straw: '#F7D46B', hinge: '#6B4A3A' },
       map: {
         road: '#EE9F68',
         roadEdge: '#FFFFFF',

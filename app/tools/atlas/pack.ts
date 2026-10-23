@@ -20,7 +20,7 @@ import { screen as pizzaScreen } from '../../src/content/games/pizza.ts';
 import { ITEM_IDS, SHADOW_COUNTS, screen as shadowScreen } from '../../src/content/games/shadow-match.ts';
 import { GAME_STATIONS, HOME_STATION } from '../../src/content/stations.ts';
 import { CORNER_IDS, HOME_SCREEN_REQUIREMENTS } from '../../src/content/home.ts';
-import { GAME_IDS } from '../../src/content/types.ts';
+import { ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import type { ScreenLayout } from '../../src/content/layout-types.ts';
 import {
   MAX_FILE_BYTES,
@@ -46,9 +46,15 @@ import {
   validateTouchTalk,
   homeLimits,
   validateHome,
+  animalPensLimits,
+  validateAnimalPens,
+  bandLimits,
+  validateBand,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
+import { ANIMAL_IDS, ANIMAL_PENS_SCREEN, DOOR_FRAMES, DOOR_IDS, peekFrame } from '../../src/content/games/animal-pens.ts';
+import { BAND_SCREEN, INSTRUMENT_IDS } from '../../src/content/games/band.ts';
 import { sceneBubbleKeepOutRect } from '../layout/hud-keep-out.ts';
 import { ALL_FISH, FISHING_SCREEN, POND_HIT } from '../../src/content/games/fishing.ts';
 import { CONE_ANCHORS, FLAG_ANCHORS, RACE_SCREEN, ladder as raceLadder } from '../../src/content/games/race.ts';
@@ -70,7 +76,7 @@ const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
  */
 export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayout, atlas: AtlasJsonLike) => string[]>>> = {
   map: (layout, atlas) => [
-    ...validateDecorations(layout, decorationLimits(GAME_STATIONS, GAME_IDS, DECORATIONS, [HOME_STATION]), atlas),
+    ...validateDecorations(layout, decorationLimits(GAME_STATIONS, ISLAND_GAME_IDS, DECORATIONS, [HOME_STATION]), atlas),
     ...validatePlayAgainIcons(Object.keys(GAME_ICONS), atlas, layout.renderScale, Tokens.ui.playAgainIconPx),
   ],
   'ice-cream': (layout, atlas) => validateIceCream(layout, iceCreamLimits(iceCreamScreen), atlas),
@@ -82,6 +88,10 @@ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayou
   race: (layout, atlas) => validateRace(layout, raceLimits(RACE_SCREEN, racePaths(raceLadder), CONE_ANCHORS, FLAG_ANCHORS), atlas),
   // Story 7.1: the yard corners (frames, sizes, hulls).
   home: (layout, atlas) => validateHome(layout, homeLimits(HOME_SCREEN_REQUIREMENTS, CORNER_IDS), atlas),
+  // Story 7.2: the pen doors and every frame at every door.
+  'animal-pens': (layout, atlas) => validateAnimalPens(layout, animalPensLimits(ANIMAL_PENS_SCREEN, DOOR_IDS, [DOOR_FRAMES.closed, DOOR_FRAMES.open], ANIMAL_IDS.map(peekFrame)), atlas),
+  // Story 7.3: the band's instruments (frames, sizes, the bouncing frame, hulls).
+  band: (layout, atlas) => validateBand(layout, bandLimits(BAND_SCREEN, INSTRUMENT_IDS), atlas),
 };
 
 /** PNG zlib level of the shipped background. */

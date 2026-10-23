@@ -4,6 +4,8 @@
 import { GAME_CONTENT } from '../content/games/index';
 import type { GameAssets, GameContent } from '../content/games/types';
 import type { GameId } from '../content/types';
+import { AnimalPens } from './animal-pens/AnimalPens';
+import { Band } from './band/Band';
 import { DinoPuzzle } from './dino-puzzle/DinoPuzzle';
 import { Fishing } from './fishing/Fishing';
 import { IceCream } from './ice-cream/IceCream';
@@ -30,6 +32,10 @@ export const SCENE_CLASSES: Readonly<Partial<Record<GameId, GameSceneClass>>> = 
   race: Race,
   fishing: Fishing,
   'touch-talk': TouchTalk,
+  // Story 7.2: a yard game; registering it wakes the yard's pen corner (content/home.ts › yardCorners).
+  'animal-pens': AnimalPens,
+  // Story 7.3: a yard game; registering it wakes the yard's stage corner.
+  band: Band,
 };
 
 function buildGames(): Partial<Record<GameId, GameEntry>> {

@@ -2,10 +2,11 @@
 // yard's own loader while the corner bounces — the sleeping Map's loader would not advance its queue).
 // Same contract as Map's (Story 1.7, AR51): core/game-assets plans the calls and tracks the keys; a file
 // that fails (or downloads but fails processing) is settled with a warning and the game starts without it.
-// The cache entries are global: Map releases them when the game's scene shuts down.
+// The cache entries are global: Map releases them when the game's scene shuts down; the yard releases a game it
+// loaded and Map did not take (`releaseAssets`).
 import type { Scene } from 'phaser';
 import type { GameAssets } from '../content/games/types';
-import { loadPlan, type AssetTracker } from '../core/game-assets';
+import { loadPlan, releasePlan, type AssetTracker } from '../core/game-assets';
 
 const FILE_COMPLETE = 'filecomplete';
 const LOAD_ERROR = 'loaderror';
@@ -29,6 +30,18 @@ export function wireLoader(scene: Scene, tracker: AssetTracker, tag: string): ()
     scene.load.off(LOAD_ERROR, onError);
     scene.load.off(LOAD_COMPLETE, onComplete);
   };
+}
+
+/** Drops the cache entries of `assets` (core/game-assets › releasePlan), as Map does on a game's shutdown. */
+export function releaseAssets(scene: Scene, assets: GameAssets | undefined): void {
+  if (!assets) return;
+  for (const r of releasePlan(assets)) {
+    if (r.kind === 'texture') {
+      if (scene.textures.exists(r.key)) scene.textures.remove(r.key);
+    } else {
+      scene.cache.audio.remove(r.key);
+    }
+  }
 }
 
 /** Queues `assets` (skipping cached keys) under `id` in `tracker` and starts the loader; no assets → settled at once. */

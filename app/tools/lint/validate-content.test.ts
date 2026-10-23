@@ -93,6 +93,10 @@ function goodTree(): string {
   put(root, ATLASES.home.png, pngHeader(2048, 2048));
   put(root, ATLASES.home.json, readFileSync(join(APP, 'public', ATLASES.home.json)));
   put(root, BACKGROUNDS.home.path, pngHeader(2048, 1536));
+  // Story 7.2: the pen atlas JSON is the real one (the door and animal frames are checked at every door).
+  put(root, ATLASES['animal-pens'].png, pngHeader(2048, 2048));
+  put(root, ATLASES['animal-pens'].json, readFileSync(join(APP, 'public', ATLASES['animal-pens'].json)));
+  put(root, BACKGROUNDS['animal-pens'].path, pngHeader(2048, 1536));
   return root;
 }
 
@@ -111,6 +115,7 @@ function layoutDir(): string {
   put(dir, 'fishing.layout.json', JSON.stringify(realLayout('fishing')));
   put(dir, 'touch-talk.layout.json', JSON.stringify(realLayout('touch-talk')));
   put(dir, 'home.layout.json', JSON.stringify(realLayout('home')));
+  put(dir, 'animal-pens.layout.json', JSON.stringify(realLayout('animal-pens')));
   return dir;
 }
 

@@ -30,6 +30,10 @@ export const SCREENS: Readonly<Record<string, ScreenSpec>> = {
   'touch-talk': { source: 'art/src/map-v3.blend', builder: 'build_touch_talk.py' },
   // Story 7.1: the yard behind the island's home station.
   home: { source: 'art/src/map-v3.blend', builder: 'build_home.py' },
+  // Story 7.2: the yard's pen game (Ú òa chuồng thú).
+  'animal-pens': { source: 'art/src/map-v3.blend', builder: 'build_animal_pens.py' },
+  // Story 7.3: the yard's stage game (Ban nhạc).
+  band: { source: 'art/src/map-v3.blend', builder: 'build_band.py' },
 };
 
 /** Throws listing the known screens when `screen` is not one. */

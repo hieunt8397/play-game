@@ -42,11 +42,6 @@ export function yardCorners(isPlayable: (gameId: string) => boolean, corners: re
   return corners.map((c) => ({ ...c, awake: isPlayable(c.gameId) }));
 }
 
-/** The corner that opens `gameId`, if any. */
-export function cornerOfGame(gameId: string): YardCorner | undefined {
-  return YARD_CORNERS.find((c) => c.gameId === gameId);
-}
-
 /** A corner's frames: idle (the bounce is a scale motion on the same frame). */
 export const cornerFrame = (id: CornerId): string => `${id}/idle/00`;
 
@@ -55,9 +50,6 @@ export const cornerNameLine = (id: CornerId): string => `vo.shell.corner-name.${
 
 /** The yard's invitation ("Xoài ơi, chơi gì ở nhà nào?"), said on entry and the Speaker prompt there. */
 export const YARD_INVITE_LINE = 'vo.shell.invite.yard';
-
-/** The Home line of a game opened from the yard ("Về nhà nào!"); the yard's own Home says "Về đảo nào!". */
-export const HOME_TO_YARD_LINE = 'vo.shell.home.yard';
 
 /** What the yard's screen must provide (`npm run check` › validateHome). */
 export const HOME_SCREEN_REQUIREMENTS: ScreenRequirements = {

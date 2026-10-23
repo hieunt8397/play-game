@@ -152,10 +152,11 @@ describe('SnapshotPartials (compile-time)', () => {
       race: { traceIndex: 3 },
       fishing: {},
       'touch-talk': { sceneId: 'sea', touchedIds: [] },
+      'animal-pens': { behind: ['dog', 'cat', 'cow', 'pig'], reveals: 3 },
     };
     expect(isJsonOnly(touch)).toBe(true);
     expect(isJsonOnly(all)).toBe(true);
-    expect(Object.keys(all)).toHaveLength(7);
+    expect(Object.keys(all)).toHaveLength(8);
     expect(wrong.partial).toEqual({ placed: [] });
     expect(flavour.placed).toEqual(['banana']);
   });

@@ -16,7 +16,7 @@ import { DECORATIONS } from '../../src/content/decorations.ts';
 import { PIECES, SPECIES } from '../../src/content/games/dino-puzzle.ts';
 import { ITEM_IDS, SHADOW_COUNTS } from '../../src/content/games/shadow-match.ts';
 import { GAME_ICONS } from '../../src/content/game-icons.ts';
-import { GAME_IDS } from '../../src/content/types.ts';
+import { GAME_IDS, ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
 import { RENDER_SCALE, layoutLimits } from '../layout/rules.ts';
 import { resolveBlender, type Env } from '../shared/binaries.ts';
@@ -41,6 +41,10 @@ export interface BuildParams {
     touchTalk: Record<string, string>;
     /** Story 7.1: art.home (the yard's props). */
     home: Record<string, string>;
+    /** Story 7.2: art.animalPens (the barn, the doors, the straw). */
+    animalPens: Record<string, string>;
+    /** Story 7.3: art.band (the stage and the instruments). */
+    band: Record<string, string>;
     /** Story 5.6: art.map (the map road, water, foam, cone and chimney). */
     map: Record<string, string>;
   };
@@ -91,6 +95,8 @@ export function buildParams(): BuildParams {
       fishing: Object.fromEntries(Object.entries(art.fishing).map(([id, c]) => [id, c.css])),
       touchTalk: Object.fromEntries(Object.entries(art.touchTalk).map(([id, c]) => [id, c.css])),
       home: Object.fromEntries(Object.entries(art.home).map(([id, c]) => [id, c.css])),
+      animalPens: Object.fromEntries(Object.entries(art.animalPens).map(([id, c]) => [id, c.css])),
+      band: Object.fromEntries(Object.entries(art.band).map(([id, c]) => [id, c.css])),
       map: Object.fromEntries(Object.entries(art.map).map(([id, c]) => [id, c.css])),
     },
     dino: {
@@ -129,7 +135,7 @@ export interface DecorationModel {
 
 /** The catalogue in GAME_IDS order, model paths resolved under `assetsDir`. */
 export function decorationModels(assetsDir: string = ASSETS_DIR): DecorationModel[] {
-  return GAME_IDS.flatMap((stationId) => DECORATIONS[stationId].map((d) => ({ id: d.id, stationId, model: join(assetsDir, ...d.model.split('/')) })));
+  return ISLAND_GAME_IDS.flatMap((stationId) => DECORATIONS[stationId].map((d) => ({ id: d.id, stationId, model: join(assetsDir, ...d.model.split('/')) })));
 }
 
 /** One play-again icon (Story 2.4) as build_map.py imports it: `state.<id>` under `sprite.icon`. */

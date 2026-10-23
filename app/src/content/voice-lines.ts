@@ -340,6 +340,35 @@ export const VOICE_LINES = [
   { id: 'vo.race.parent.1', text: 'Chỉ cho bố xem | xe chạy nhé!', keywordPauseMs: 300 },
   { id: 'vo.fishing.parent.1', text: 'Hỏi bố xem | cá nào to nhất?', keywordPauseMs: 300 },
   { id: 'vo.touch-talk.parent.1', text: 'Hỏi mẹ xem | đây là gì nhé!', keywordPauseMs: 300 },
+  // Story 7.2 Ú òa chuồng thú (content/games/animal-pens.ts): the invitation as the game opens (`prompt`: its Speaker
+  // prompt), each animal's name after its call, one ask per animal (its call in Vietnamese onomatopoeia,
+  // never judged), and the parent invitation. Not yet approved.
+  { id: 'vo.animal-pens.prompt', text: 'Xoài ơi, ai trốn trong | chuồng nhỉ?', keywordPauseMs: 300 },
+  { id: 'vo.animal-pens.name.dog', text: 'Con chó!' },
+  { id: 'vo.animal-pens.name.cat', text: 'Con mèo!' },
+  { id: 'vo.animal-pens.name.rooster', text: 'Con gà trống!' },
+  { id: 'vo.animal-pens.name.cow', text: 'Con bò!' },
+  { id: 'vo.animal-pens.name.pig', text: 'Con heo!', review: 'heo/lợn: chọn từ quen của bé' },
+  { id: 'vo.animal-pens.name.sheep', text: 'Con cừu!' },
+  { id: 'vo.animal-pens.name.horse', text: 'Con ngựa!' },
+  { id: 'vo.animal-pens.ask.dog', text: 'Con gì kêu | gâu gâu nhỉ?', keywordPauseMs: 300 },
+  { id: 'vo.animal-pens.ask.cat', text: 'Con gì kêu | meo meo nhỉ?', keywordPauseMs: 300 },
+  { id: 'vo.animal-pens.ask.rooster', text: 'Con gì kêu | ò ó o nhỉ?', keywordPauseMs: 300, review: 'tiếng gà gáy "ò ó o": nghe lại cách đọc' },
+  { id: 'vo.animal-pens.ask.cow', text: 'Con gì kêu | ò ò nhỉ?', keywordPauseMs: 300, review: 'tiếng bò "ò ò": nghe lại cách đọc' },
+  { id: 'vo.animal-pens.ask.pig', text: 'Con gì kêu | ụt ịt nhỉ?', keywordPauseMs: 300 },
+  { id: 'vo.animal-pens.ask.sheep', text: 'Con gì kêu | be be nhỉ?', keywordPauseMs: 300 },
+  { id: 'vo.animal-pens.ask.horse', text: 'Con gì kêu | hí hí nhỉ?', keywordPauseMs: 300 },
+  { id: 'vo.animal-pens.parent.1', text: 'Hỏi mẹ xem | con gì đây nhỉ?', keywordPauseMs: 300 },
+  // Story 7.3 Ban nhạc (content/games/band.ts): the invitation as the game opens (`prompt`: its Speaker prompt), each
+  // instrument's short name for the parent label only (never spoken on a tap: taps play music), and the parent
+  // invitation (play together, FR59). Not yet approved.
+  { id: 'vo.band.prompt', text: 'Xoài ơi, mình chơi | nhạc nào!', keywordPauseMs: 300 },
+  { id: 'vo.band.name.drum', text: 'Cái trống!' },
+  { id: 'vo.band.name.horn', text: 'Cái kèn!' },
+  { id: 'vo.band.name.frog', text: 'Con ếch!' },
+  { id: 'vo.band.name.xylophone', text: 'Đàn gõ!' },
+  { id: 'vo.band.name.bell', text: 'Cái chuông!' },
+  { id: 'vo.band.parent.1', text: 'Mời bố mẹ | cùng chơi nhạc nhé!', keywordPauseMs: 300 },
 ] as const satisfies readonly VoiceLine[];
 
 export type VoiceLineId = (typeof VOICE_LINES)[number]['id'];

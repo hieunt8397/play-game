@@ -52,6 +52,10 @@ import {
   validateTouchTalk,
   homeLimits,
   validateHome,
+  animalPensLimits,
+  validateAnimalPens,
+  bandLimits,
+  validateBand,
   validateShadowMatch,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
@@ -59,7 +63,7 @@ import { FORBIDDEN_ITEM, ITEM_IDS, SHADOW_COUNTS, SHAPE_ITEMS, screen as shadowS
 import { screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
 import { screen as pizzaScreen } from '../../src/content/games/pizza.ts';
 import { BAY_ANCHORS, DROP_ORDER, PIECES, SPECIES, screen as dinoScreen } from '../../src/content/games/dino-puzzle.ts';
-import { GAME_IDS } from '../../src/content/types.ts';
+import { GAME_IDS, ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import { reviewLines, validateContent } from '../../src/content/validate.ts';
 import { VOICE_LINES } from '../../src/content/voice-lines.ts';
 import { lineHash } from '../tts/line-hash.ts';
@@ -67,6 +71,8 @@ import { hintContrastProblems } from './hint-contrast.ts';
 import { shadowDistinct } from './shadow-distinct.ts';
 import { fishLuma } from './fish-luma.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
+import { ANIMAL_IDS, ANIMAL_PENS_SCREEN, DOOR_FRAMES, DOOR_IDS, peekFrame } from '../../src/content/games/animal-pens.ts';
+import { BAND_SCREEN, INSTRUMENT_IDS } from '../../src/content/games/band.ts';
 import { sceneBubbleKeepOutRect } from '../layout/hud-keep-out.ts';
 import { ALL_FISH, FISHING_SCREEN, POND_HIT } from '../../src/content/games/fishing.ts';
 import { CONE_ANCHORS, FLAG_ANCHORS, RACE_SCREEN, ladder as raceLadder } from '../../src/content/games/race.ts';
@@ -91,6 +97,10 @@ export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
   'touch-talk': TOUCH_TALK_SCREEN.frames,
   // Story 7.1: the yard's corners.
   home: HOME_SCREEN_REQUIREMENTS.frames,
+  // Story 7.2: the pen doors and the animals.
+  'animal-pens': ANIMAL_PENS_SCREEN.frames,
+  // Story 7.3: the band's instruments.
+  band: BAND_SCREEN.frames,
 };
 
 function listFiles(dir: string): string[] {
@@ -132,10 +142,10 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[] 
     for (const k of missing) problems.push(`layout "${screen}": missing "${k}"`);
     if (missing.length > 0) continue;
     if (screen === 'map') {
-      for (const p of validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, shellStations: [HOME_STATION], limits: layoutLimits(), guide: MAP_GUIDE.id })) problems.push(`layout "${screen}": ${p}`);
+      for (const p of validateLayout(layout, { stations: STATIONS, gameIds: ISLAND_GAME_IDS, shellStations: [HOME_STATION], limits: layoutLimits(), guide: MAP_GUIDE.id })) problems.push(`layout "${screen}": ${p}`);
       // Story 5.6: the ambient dressing's anchors (whale, fountain, cloud-1..3, wave-1..5), like its frames.
       for (const id of MAP_AMBIENT_ANCHORS) if (!layout.anchors[id]) problems.push(`layout "${screen}": anchor "${id}": missing (the ambient dressing)`);
-      const decorations = validateDecorations(layout, decorationLimits(GAME_STATIONS, GAME_IDS, DECORATIONS, [HOME_STATION]), readAtlas(publicDir, screen));
+      const decorations = validateDecorations(layout, decorationLimits(GAME_STATIONS, ISLAND_GAME_IDS, DECORATIONS, [HOME_STATION]), readAtlas(publicDir, screen));
       for (const p of decorations) problems.push(`layout "${screen}": ${p}`);
       const atlas = readAtlas(publicDir, screen);
       // Story 2.4: the play-again icon frames (icon/<id>/00, ≥ ui.playAgainIconPx).
@@ -152,6 +162,10 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[] 
       for (const p of validateTouchTalk(layout, touchTalkLimits(TOUCH_TALK_SCREEN, TOUCH_TALK_SCENES.map((s) => ({ id: s.id, props: s.props.map((p) => p.id) })), sceneBubbleKeepOutRect()), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'fishing') {
       for (const p of validateFishing(layout, fishingLimits(FISHING_SCREEN, POND_HIT, ALL_FISH), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+    } else if (screen === 'animal-pens') {
+      for (const p of validateAnimalPens(layout, animalPensLimits(ANIMAL_PENS_SCREEN, DOOR_IDS, [DOOR_FRAMES.closed, DOOR_FRAMES.open], ANIMAL_IDS.map(peekFrame)), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+    } else if (screen === 'band') {
+      for (const p of validateBand(layout, bandLimits(BAND_SCREEN, INSTRUMENT_IDS), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'home') {
       for (const p of validateHome(layout, homeLimits(HOME_SCREEN_REQUIREMENTS, CORNER_IDS), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'race') {
@@ -310,7 +324,7 @@ export function run(publicDir: string, layoutDir: string = LAYOUT_DIR): string[]
       voiceIds: VOICE_LINES.map((l) => l.id),
       audioIds: Object.keys(AUDIO_CATALOG),
     },
-    decorations: { gameIds: GAME_IDS, catalogue: DECORATIONS, stations: GAME_STATIONS },
+    decorations: { gameIds: ISLAND_GAME_IDS, catalogue: DECORATIONS, stations: GAME_STATIONS },
     // Story 5.7: 1–2 parent invitation lines per game, all listed (their ≤ 4 s check is in voice).
     parentInvite: { gameIds: GAME_IDS, voiceIds: VOICE_LINES.map((l) => l.id), lines: PARENT_INVITE_LINES },
     voice: {

@@ -14,12 +14,17 @@
 //   release, `onEnd` wherever the finger is. A primary that self-heals, or whose router went
 //   inactive (paused scene) before the release, gets `onCancel` instead. `setPickable`/`setSnapScale`
 //   hold per-object drag state (WeakMap): the only way to change pickability or a snap radius.
+// - Story 7.3 (the band): the ONLY exception to first-finger-wins. A scene router created with `multiTouch`
+//   lets an extra finger press one of ITS targets (`extra-multi`: onPress only — no anyTap, no release, move or
+//   drag callbacks) while the live primary is a press of that same router (on a target or on its background)
+//   that does not drag. Every other router, and every press while another scene's or layer's press is the
+//   primary, keeps the rules above.
 import { locate, type Located } from './space';
 import type { PointerPointLike, ScaleLike } from './pointer-adapter';
 import type { Point } from './polygon';
 
 export type Layer = 'scene' | 'hud' | 'overlay';
-export type Verdict = 'dead' | 'primary' | 'extra-hud' | 'ignored';
+export type Verdict = 'dead' | 'primary' | 'extra-hud' | 'extra-multi' | 'ignored';
 
 /** Highest layer first. */
 export const LAYER_ORDER: readonly Layer[] = ['overlay', 'hud', 'scene'];
@@ -55,6 +60,11 @@ export interface GuardRouter {
   hit(p: Point): GuardTarget | undefined;
   /** Runs on every primary press, hit or miss. */
   anyTap(p: Point): void;
+  /**
+   * Story 7.3: this scene router opted out of first-finger-wins for its own targets (the band): while its own
+   * press is the primary, each extra finger on one of its targets presses it too. Default false.
+   */
+  readonly multiTouch?: boolean;
 }
 
 export type Locator = (pointer: GuardPointer, scale?: ScaleLike) => Located;
@@ -65,6 +75,8 @@ interface Primary {
   readonly downTime: number;
   readonly target: GuardTarget | undefined;
   readonly router: GuardRouter | undefined;
+  /** Story 7.3: the topmost active scene router when the press began (a press on its background belongs to it). */
+  readonly sceneTop: GuardRouter | undefined;
   dragging: boolean;
 }
 
@@ -182,6 +194,14 @@ export class InputGuard {
     return primary;
   }
 
+  /**
+   * Story 7.3: the live primary belongs to `router`: it pressed one of its targets, or it pressed no target at
+   * all while `router` was the topmost active scene router (the background of the multi-touch scene).
+   */
+  private ownsPrimary(primary: Primary, router: GuardRouter): boolean {
+    return primary.router ? primary.router === router : primary.sceneTop === router;
+  }
+
   private activeRouters(): GuardRouter[] {
     const active = this.routers.filter((r) => r.isActive());
     const out: GuardRouter[] = [];
@@ -207,14 +227,21 @@ export class InputGuard {
     const p = where.design;
     const routers = this.activeRouters();
     const hit = this.resolve(routers, p);
-    if (this.livePrimary()) {
+    const live = this.livePrimary();
+    if (live) {
       if (hit && hit.router.layer === 'hud' && !this.isDragging()) {
         hit.target.onPress(p);
         return 'extra-hud';
       }
+      // Story 7.3: a multi-touch scene router takes extra fingers on its own targets while its own press is primary.
+      if (hit && hit.router.multiTouch === true && hit.router.layer === 'scene' && !live.dragging && this.ownsPrimary(live, hit.router)) {
+        hit.target.onPress(p, pointer);
+        return 'extra-multi';
+      }
       return 'ignored';
     }
-    this.primary = { key, pointer, downTime: pointer.downTime, target: hit?.target, router: hit?.router, dragging: false };
+    const sceneTop = routers.find((r) => r.layer === 'scene');
+    this.primary = { key, pointer, downTime: pointer.downTime, target: hit?.target, router: hit?.router, sceneTop, dragging: false };
     for (const router of routers) router.anyTap(p);
     hit?.target.onPress(p, pointer);
     return 'primary';

@@ -1,0 +1,5 @@
+Quaternius "Frog" (animated: Idle, Jump, Attack, Death), licence CC0 1.0, downloaded 2026-10-23 as a glTF binary from
+Quaternius' own upload on Poly Pizza (licence shown on the page: "CC0 1.0"; creator: Quaternius, quaternius.com):
+  Frog.glb - poly.pizza/m/9Z2V8fpazF ("Frog" by Quaternius), static.poly.pizza/08416495-b056-4ed7-b23b-5a10e82277a0.glb
+Used by Story 7.3 (Ban nhạc) as the singer, in its Idle pose with its source colours.
+CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/

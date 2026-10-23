@@ -1,0 +1,231 @@
+{
+  "frames": {
+    "door/open/00": {
+      "frame": {
+        "x": 2,
+        "y": 2,
+        "w": 488,
+        "h": 428
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 90,
+        "y": 793,
+        "w": 488,
+        "h": 428
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "door/closed/00": {
+      "frame": {
+        "x": 2,
+        "y": 434,
+        "w": 302,
+        "h": 410
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 183,
+        "y": 790,
+        "w": 302,
+        "h": 410
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "animal-horse/peek/00": {
+      "frame": {
+        "x": 2,
+        "y": 848,
+        "w": 182,
+        "h": 381
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 303,
+        "y": 793,
+        "w": 182,
+        "h": 381
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "animal-cow/peek/00": {
+      "frame": {
+        "x": 2,
+        "y": 1233,
+        "w": 240,
+        "h": 370
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 245,
+        "y": 789,
+        "w": 240,
+        "h": 370
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "animal-dog/peek/00": {
+      "frame": {
+        "x": 188,
+        "y": 848,
+        "w": 215,
+        "h": 340
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 270,
+        "y": 839,
+        "w": 215,
+        "h": 340
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "animal-sheep/peek/00": {
+      "frame": {
+        "x": 308,
+        "y": 434,
+        "w": 200,
+        "h": 338
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 285,
+        "y": 839,
+        "w": 200,
+        "h": 338
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "animal-pig/peek/00": {
+      "frame": {
+        "x": 494,
+        "y": 2,
+        "w": 257,
+        "h": 332
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 228,
+        "y": 840,
+        "w": 257,
+        "h": 332
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "animal-cat/peek/00": {
+      "frame": {
+        "x": 2,
+        "y": 1607,
+        "w": 244,
+        "h": 307
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 230,
+        "y": 866,
+        "w": 244,
+        "h": 307
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "animal-rooster/peek/00": {
+      "frame": {
+        "x": 246,
+        "y": 1192,
+        "w": 169,
+        "h": 305
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 276,
+        "y": 875,
+        "w": 169,
+        "h": 305
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://github.com/odrick/free-tex-packer-core",
+    "version": "0.3.9",
+    "image": "animal-pens.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 753,
+      "h": 1916
+    },
+    "scale": 1
+  }
+}

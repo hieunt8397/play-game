@@ -17,7 +17,7 @@ import type { ScreenLayout } from '../../src/content/layout-types.ts';
 import { MAP_GUIDE, SCREEN_PLATES, type ScreenId } from '../../src/content/assets.ts';
 import { HOME_STATION, STATIONS } from '../../src/content/stations.ts';
 import { CORNER_IDS, HOME_SCREEN_REQUIREMENTS } from '../../src/content/home.ts';
-import { GAME_IDS } from '../../src/content/types.ts';
+import { ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
 import {
   dinoPuzzleLimits,
@@ -39,9 +39,15 @@ import {
   validateTouchTalk,
   homeLimits,
   validateHome,
+  animalPensLimits,
+  validateAnimalPens,
+  bandLimits,
+  validateBand,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
+import { ANIMAL_IDS, ANIMAL_PENS_SCREEN, DOOR_FRAMES, DOOR_IDS, peekFrame } from '../../src/content/games/animal-pens.ts';
+import { BAND_SCREEN, INSTRUMENT_IDS } from '../../src/content/games/band.ts';
 import { sceneBubbleKeepOutRect } from '../layout/hud-keep-out.ts';
 import { ALL_FISH, FISHING_SCREEN, POND_HIT } from '../../src/content/games/fishing.ts';
 import { CONE_ANCHORS, FLAG_ANCHORS, RACE_SCREEN, ladder as raceLadder } from '../../src/content/games/race.ts';
@@ -63,7 +69,7 @@ sharp.cache(false);
  * trim boxes in the atlas JSON shape for the screens listed in FRAME_RULE_SCREENS.
  */
 export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames?: AtlasJsonLike) => string[]>> = {
-  map: (layout) => validateLayout(layout, { stations: STATIONS, gameIds: GAME_IDS, shellStations: [HOME_STATION], limits: layoutLimits(), guide: MAP_GUIDE.id }),
+  map: (layout) => validateLayout(layout, { stations: STATIONS, gameIds: ISLAND_GAME_IDS, shellStations: [HOME_STATION], limits: layoutLimits(), guide: MAP_GUIDE.id }),
   // The atlas does not exist yet at render time: the frame rules run in `atlas` and `validate:content`.
   'ice-cream': (layout) => validateIceCream(layout, iceCreamLimits(iceCreamScreen)),
   pizza: (layout) => validatePizza(layout, pizzaLimits(pizzaScreen)),
@@ -79,10 +85,14 @@ export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames
   race: (layout, frames) => validateRace(layout, raceLimits(RACE_SCREEN, racePaths(raceLadder), CONE_ANCHORS, FLAG_ANCHORS), frames),
   // Story 7.1: the yard corners (hulls, Hud zones, gaps, sizes from the rendered frames' trims).
   home: (layout, frames) => validateHome(layout, homeLimits(HOME_SCREEN_REQUIREMENTS, CORNER_IDS), frames),
+  // Story 7.2: the pen doors (hulls, one row, Hud zones, gaps) and every frame at every door (from the rendered frames' trims).
+  'animal-pens': (layout, frames) => validateAnimalPens(layout, animalPensLimits(ANIMAL_PENS_SCREEN, DOOR_IDS, [DOOR_FRAMES.closed, DOOR_FRAMES.open], ANIMAL_IDS.map(peekFrame)), frames),
+  // Story 7.3: the band's instruments (hulls, Hud zones, gaps; sizes and the bouncing frame from the rendered frames' trims).
+  band: (layout, frames) => validateBand(layout, bandLimits(BAND_SCREEN, INSTRUMENT_IDS), frames),
 };
 
 /** Story 3.3: screens whose render-time rules get the rendered frames' trims. */
-export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home']);
+export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band']);
 
 /** Per-screen toLayout options: hit ids kept `stationGap` apart (map), unpadded drop areas (ice-cream, the dino lawn). */
 export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'separate' | 'unpadded'>>> = {

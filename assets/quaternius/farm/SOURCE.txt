@@ -1,0 +1,5 @@
+Quaternius "Farm Animal Pack" (quaternius.com/packs/farmanimal.html, licence CC0 1.0), downloaded 2026-10-22 as glTF
+binaries from Quaternius' own uploads on Poly Pizza (licence shown on each page: "CC0 1.0"):
+  Pig.glb   - poly.pizza/m/TNvG3QUFlp ("Pig" by Quaternius), static.poly.pizza/665ee586-6494-4fbd-be46-fcbe600f653e.glb
+  Sheep.glb - poly.pizza/m/C39AUXUUes ("Sheep" by Quaternius), static.poly.pizza/a4bd2c4e-fe71-4dbd-9881-cf3ac8a00bbf.glb
+CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/

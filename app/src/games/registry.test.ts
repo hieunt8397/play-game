@@ -48,6 +48,8 @@ const { Pizza } = await import('./pizza/Pizza');
 const { DinoPuzzle } = await import('./dino-puzzle/DinoPuzzle');
 const { ShadowMatch } = await import('./shadow-match/ShadowMatch');
 const { Race } = await import('./race/Race');
+const { AnimalPens } = await import('./animal-pens/AnimalPens');
+const { isIslandGameId } = await import('../content/types');
 const { Fishing } = await import('./fishing/Fishing');
 const { TouchTalk } = await import('./touch-talk/TouchTalk');
 const { MiniGameBase } = await import('./mini-game-base');
@@ -162,12 +164,14 @@ describe('games/registry', () => {
       expect((scene as unknown as { sys: { settings: { key: string } } }).sys.settings.key).toBe(id);
       expect(entry!.ladder).toBe(GAME_CONTENT[id as keyof typeof GAME_CONTENT]!.ladder);
     }
-    expect(GAME_SCENES).toEqual([IceCream, Pizza, Race, Fishing, TouchTalk, DinoPuzzle, ShadowMatch]);
+    expect(GAME_SCENES).toEqual([IceCream, Pizza, Race, Fishing, TouchTalk, DinoPuzzle, ShadowMatch, AnimalPens]);
   });
 
-  it('awake stations are exactly the registered games', () => {
-    // Story 7.1: the home station is awake too, but opens the yard (not a game).
-    expect(STATIONS.filter((s) => s.awake && s.id !== 'home').map((s) => s.id)).toEqual(Object.keys(GAMES));
+  it('awake stations are exactly the registered island games', () => {
+    // Story 7.1: the home station is awake too, but opens the yard (not a game). Story 7.2: yard games have no station.
+    expect(STATIONS.filter((s) => s.awake && s.id !== 'home').map((s) => s.id)).toEqual(Object.keys(GAMES).filter(isIslandGameId));
+    expect(isGameId('animal-pens')).toBe(true);
+    expect(isIslandGameId('animal-pens')).toBe(false);
     expect(STATIONS.find((s) => s.id === 'home')?.awake).toBe(true);
     expect(isGameId('home')).toBe(false);
     expect(isGameId('ice-cream')).toBe(true);

@@ -1726,3 +1726,188 @@ export function validateHome(layout: ScreenLayout, input: HomeRuleInput, atlas?:
   }
   return problems;
 }
+
+// --- Ú òa chuồng thú (Story 7.2) ------------------------------------------------------------------
+
+export interface AnimalPensRuleInput {
+  ids: ScreenIds;
+  /** The door ids, left to right: `hit.<id>` and `anchor.<id>`. */
+  doors: readonly string[];
+  /** The frames drawn at every door (rendered at the first door, shifted by the door anchors). */
+  doorFrames: readonly string[];
+  peekFrames: readonly string[];
+  limits: LayoutLimits;
+  /** spacing.targetMin: each padded hull is at least this wide. */
+  targetMin: number;
+  /** spacing.targetGap: two door hulls are at least this far apart. */
+  gap: number;
+  /** ui.animalPensDoorMinPx: the closed door frame's trimmed height ÷ renderScale. */
+  doorMin: number;
+  /** The doors share one row: their anchors' y differ by at most this (design px). */
+  rowTolerance: number;
+  /** The Home/Speaker zones. */
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  renderScale: number;
+}
+
+/** Story 7.2: the doors' anchors may differ in y by this much (an orthographic camera puts them on one row). */
+export const ANIMAL_PENS_ROW_TOLERANCE = 1;
+
+/** The pen rules from Tokens and content (Story 7.2). */
+export function animalPensLimits(ids: ScreenIds, doors: readonly string[], doorFrames: readonly string[], peekFrames: readonly string[]): AnimalPensRuleInput {
+  return {
+    ids,
+    doors,
+    doorFrames,
+    peekFrames,
+    limits: layoutLimits(),
+    targetMin: Tokens.spacing.targetMin,
+    gap: Tokens.spacing.targetGap,
+    doorMin: Tokens.ui.animalPensDoorMinPx,
+    rowTolerance: ANIMAL_PENS_ROW_TOLERANCE,
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    renderScale: RENDER_SCALE,
+  };
+}
+
+/**
+ * Ú òa chuồng thú screen rules (Story 7.2; run by `render`, `atlas` and `validate:content`). Each message names
+ * the id.
+ *   - required: every door's `hit.<id>` (≥ 3 points) and `anchor.<id>`; with the atlas, every frame;
+ *   - each door hull is at least targetMin wide, inside the interactive rect, clear of the Home/Speaker zones,
+ *     and ≥ `gap` from the others;
+ *   - the doors share one row (anchor y within rowTolerance) left to right — the door and peek frames are
+ *     rendered at the first door and drawn at door n shifted by `anchor.<n>` − `anchor.<first>`;
+ *   - sizes (atlas): the closed door frame is ≥ doorMin tall; every door and peek frame, shifted to every door,
+ *     lies inside the interactive rect and clear of the Home/Speaker zones.
+ */
+export function validateAnimalPens(layout: ScreenLayout, input: AnimalPensRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const hulls: { id: string; poly: readonly Point[] }[] = [];
+  for (const id of input.doors) {
+    const poly = layout.hits[id];
+    if (!poly || poly.length < MIN_HIT_POINTS) continue;
+    hulls.push({ id, poly });
+    const w = minWidth(poly);
+    if (w < input.targetMin) problems.push(`hit "${id}": ${round2(w)} px wide (min ${input.targetMin})`);
+    const out = poly.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${id}": ${fmt(out)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (polygonDistance(poly, rectPolygon4(k.rect)) === 0) problems.push(`hit "${id}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  }
+  for (let i = 0; i < hulls.length; i++) {
+    for (let j = i + 1; j < hulls.length; j++) {
+      const d = polygonDistance(hulls[i]!.poly, hulls[j]!.poly);
+      if (d < input.gap) problems.push(`hits "${hulls[i]!.id}" and "${hulls[j]!.id}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
+  const first = layout.anchors[input.doors[0] ?? ''];
+  const shifts: { id: string; dx: number; dy: number }[] = [];
+  let prevX = -Infinity;
+  for (const id of input.doors) {
+    const a = layout.anchors[id];
+    if (!a || !first) continue;
+    if (Math.abs(a.y - first.y) > input.rowTolerance) problems.push(`anchor "${id}": y ${round2(a.y)} is off the doors' row (y ${round2(first.y)} ± ${input.rowTolerance})`);
+    if (a.x <= prevX) problems.push(`anchor "${id}": not right of the previous door`);
+    prevX = a.x;
+    shifts.push({ id, dx: a.x - first.x, dy: a.y - first.y });
+  }
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "animal-pens": frame "${f}" is missing`);
+  const closed = input.doorFrames[0];
+  const t = closed ? trimmedSize(atlas, closed) : undefined;
+  if (closed && t && t.h / input.renderScale < input.doorMin) problems.push(`frame "${closed}": ${round2(t.h / input.renderScale)} px tall (min ${input.doorMin})`);
+  for (const f of [...input.doorFrames, ...input.peekFrames]) {
+    const rect = designRect(atlas, f, input.renderScale);
+    if (!rect) continue;
+    for (const s of shifts) {
+      const at: Rect = { x: rect.x + s.dx, y: rect.y + s.dy, w: rect.w, h: rect.h };
+      if (at.x < r.x0 || at.y < r.y0 || at.x + at.w > r.x1 || at.y + at.h > r.y1) problems.push(`frame "${f}" at ${s.id} ${fmtRect(at)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+      for (const k of input.keepOut) if (overlaps(at, k.rect)) problems.push(`frame "${f}" at ${s.id} ${fmtRect(at)}: reaches into the ${k.id} ${fmtRect(k.rect)}`);
+    }
+  }
+  return problems;
+}
+
+// --- Ban nhạc (Story 7.3) --------------------------------------------------------------------------------
+
+export interface BandRuleInput {
+  ids: ScreenIds;
+  /** The instrument ids: `hit.<id>`, `anchor.<id>` and frame `<id>/idle/00`. */
+  instruments: readonly string[];
+  limits: LayoutLimits;
+  /** spacing.targetMin: each padded hull is at least this wide. */
+  targetMin: number;
+  /** spacing.targetGap: two instrument hulls are at least this far apart (two fingers, two instruments). */
+  gap: number;
+  /** ui.bandInstrumentMinPx: each `idle/00` trimmed longest side ÷ renderScale. */
+  instrumentMin: number;
+  /** ui.bandBounceScale: a tapped instrument grows this much on its bottom-centre pivot; the grown frame must still fit. */
+  bounceScale: number;
+  /** The Home/Speaker zones. */
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  renderScale: number;
+}
+
+/** The band rules from Tokens and content (Story 7.3). */
+export function bandLimits(ids: ScreenIds, instruments: readonly string[]): BandRuleInput {
+  return {
+    ids,
+    instruments,
+    limits: layoutLimits(),
+    targetMin: Tokens.spacing.targetMin,
+    gap: Tokens.spacing.targetGap,
+    instrumentMin: Tokens.ui.bandInstrumentMinPx,
+    bounceScale: Tokens.ui.bandBounceScale,
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    renderScale: RENDER_SCALE,
+  };
+}
+
+/**
+ * Ban nhạc screen rules (Story 7.3; run by `render`, `atlas` and `validate:content`). Each message names the id.
+ *   - required: every instrument's `hit.<id>` (≥ 3 points) and `anchor.<id>`; with the atlas, `<id>/idle/00`;
+ *   - each hull is at least targetMin wide, inside the interactive rect, clear of the Home/Speaker zones, and ≥ `gap`
+ *     from every other hull;
+ *   - sizes (atlas): each `idle/00` trimmed longest side ÷ renderScale ≥ instrumentMin; the frame, grown by the tap
+ *     bounce on its bottom centre, lies inside the interactive rect and clear of the Home/Speaker zones.
+ */
+export function validateBand(layout: ScreenLayout, input: BandRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const hulls: { id: string; poly: readonly Point[] }[] = [];
+  for (const id of input.instruments) {
+    const poly = layout.hits[id];
+    if (!poly) continue;
+    if (poly.length < MIN_HIT_POINTS) {
+      problems.push(`hit "${id}": fewer than 3 points`);
+      continue;
+    }
+    hulls.push({ id, poly });
+    const w = minWidth(poly);
+    if (w < input.targetMin) problems.push(`hit "${id}": ${round2(w)} px wide (min ${input.targetMin})`);
+    const out = poly.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${id}": ${fmt(out)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (polygonDistance(poly, rectPolygon4(k.rect)) === 0) problems.push(`hit "${id}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  }
+  for (let i = 0; i < hulls.length; i++) {
+    for (let j = i + 1; j < hulls.length; j++) {
+      const d = polygonDistance(hulls[i]!.poly, hulls[j]!.poly);
+      if (d < input.gap) problems.push(`hits "${hulls[i]!.id}" and "${hulls[j]!.id}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "band": frame "${f}" is missing`);
+  for (const id of input.instruments) {
+    const f = `${id}/idle/00`;
+    const rect = designRect(atlas, f, input.renderScale);
+    if (!rect) continue;
+    const longest = Math.max(rect.w, rect.h);
+    if (longest < input.instrumentMin) problems.push(`frame "${f}": longest side ${round2(longest)} is under ${input.instrumentMin}`);
+    const k = input.bounceScale;
+    const grown: Rect = { x: rect.x + rect.w / 2 - (rect.w * k) / 2, y: rect.y + rect.h - rect.h * k, w: rect.w * k, h: rect.h * k };
+    if (grown.x < r.x0 || grown.y < r.y0 || grown.x + grown.w > r.x1 || grown.y + grown.h > r.y1) problems.push(`frame "${f}" bouncing ${fmtRect(grown)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const z of input.keepOut) if (overlaps(grown, z.rect)) problems.push(`frame "${f}" bouncing ${fmtRect(grown)}: reaches into the ${z.id} ${fmtRect(z.rect)}`);
+  }
+  return problems;
+}

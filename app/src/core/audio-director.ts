@@ -19,6 +19,11 @@
 // 20 dB over musicDuckDownMs and restored musicDuckRestoreDelayMs after the channel goes idle —
 // scheduled on the WebAudio gain param (audio clock), never with timers.
 //
+// Story 7.3 (the band): `note(id, cap)` plays an SFX as one voice of a capped pool. Past `cap` live notes the
+// oldest is cut (its gain ramps to 0 over Timing.bandNoteCutMs on the audio clock, then it runs out silently);
+// `stopNotes()` cuts them all (Home, hide). `musicId` names the current music loop (the band swaps the island
+// loop for its beat and restores it).
+//
 // No runtime Phaser import: it depends on the small `SoundLike`/`DocLike` slices so it runs in node
 // tests.
 import {
@@ -211,6 +216,8 @@ export class AudioDirector {
   private readonly fading = new Set<SoundInstanceLike>();
   /** Story 5.3: while a skip runs, `sfx()` is dropped (no SFX burst). */
   private sfxHeld = false;
+  /** Story 7.3: the live pooled notes, oldest first (`note`). */
+  private notes: SoundInstanceLike[] = [];
 
   constructor(deps: AudioDirectorDeps = {}) {
     this.bus = deps.bus ?? appBus;
@@ -282,6 +289,48 @@ export class AudioDirector {
     this.stopMusic();
     this.current = { id: audioId };
     if (this.sound && !this.sound.locked) this.startMusic();
+  }
+
+  /** Story 7.3: the current music loop's id (also while it waits for the unlock), else undefined. */
+  get musicId(): string | undefined {
+    return this.current?.id;
+  }
+
+  /**
+   * Story 7.3: plays the SFX `id` at once as one voice of a pool of at most `cap` (the band's notes). Past the cap the
+   * oldest live note is cut first. A note never waits: while locked or held (a skip) it is dropped.
+   */
+  note(id: string, cap: number): void {
+    const audioId = this.checkId(id, "sfx");
+    if (!audioId || !this.sound || this.sound.locked || this.sfxHeld) return;
+    while (this.notes.length >= Math.max(1, cap)) this.cutNote(this.notes.shift());
+    const { volume } = AUDIO_CATALOG[audioId];
+    let instance: SoundInstanceLike | undefined;
+    try {
+      instance = this.sound.add(audioId, volume === undefined ? {} : { volume });
+      const inst = instance;
+      inst.once(SOUND_COMPLETE, () => {
+        this.notes = this.notes.filter((n) => n !== inst);
+        this.release(inst, false);
+      });
+      inst.play();
+      this.notes.push(inst);
+    } catch (error) {
+      console.warn(`audio: cannot play "${audioId}"`, error);
+      this.release(instance, false);
+    }
+  }
+
+  /** Story 7.3: the number of pooled notes still sounding (tests, diagnostics). */
+  get liveNotes(): number {
+    return this.notes.length;
+  }
+
+  /** Story 7.3: cuts every pooled note (a short fade where the gain node allows it). */
+  stopNotes(): void {
+    const all = this.notes;
+    this.notes = [];
+    for (const n of all) this.cutNote(n);
   }
 
   stopMusic(): void {
@@ -527,6 +576,16 @@ export class AudioDirector {
     this.end(utt.token, false);
   }
 
+  /** Story 7.3: a cut note fades to silence and runs out (released on complete); without a gain node it stops now. */
+  private cutNote(instance: SoundInstanceLike | undefined): void {
+    if (!instance) return;
+    if (instance.volumeNode) {
+      this.ramp(instance, 0, Timing.bandNoteCutMs, 0);
+      return;
+    }
+    this.release(instance, true);
+  }
+
   private release(
     instance: SoundInstanceLike | undefined,
     stop: boolean,
@@ -648,6 +707,8 @@ export class AudioDirector {
   private onHidden(): void {
     const instance = this.current?.instance;
     if (instance?.isPlaying) instance.pause();
+    // Story 7.3: no band note rings on in the background.
+    this.stopNotes();
     // Voice never resumes after backgrounding: current and pending both end completed:false.
     this.dropPending();
     this.cutCurrent();

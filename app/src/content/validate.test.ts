@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GAME_IDS } from "./types";
+import { GAME_IDS, ISLAND_GAME_IDS } from "./types";
 import { validateContent, validateDecorationCatalogue, validateGames, validateParentInvite, validateStations } from "./validate";
 import { PARENT_INVITE_LINES } from "./parent-invite";
 import { DECORATIONS } from "./decorations";
@@ -383,7 +383,7 @@ describe("validateContent › games (Story 1.7)", () => {
 });
 
 describe("validateContent › decorations (Story 2.2)", () => {
-  const input = { gameIds: GAME_IDS, catalogue: DECORATIONS, stations: GAME_STATIONS };
+  const input = { gameIds: ISLAND_GAME_IDS, catalogue: DECORATIONS, stations: GAME_STATIONS };
 
   it("accepts the real catalogue and slots: 28 items, 1-2 slots per station (review loop 1b)", () => {
     expect(validateContent({ gameIds: GAME_IDS, decorations: input })).toEqual([]);

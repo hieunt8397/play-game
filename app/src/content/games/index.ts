@@ -1,6 +1,8 @@
 // Every playable game's content (Story 1.7). A station is awake exactly when its id is listed here
 // (content/validate.ts checks `stations[i].awake === id in GAME_CONTENT`).
 import type { GameId } from '../types.ts';
+import * as animalPens from './animal-pens.ts';
+import * as band from './band.ts';
 import * as dinoPuzzle from './dino-puzzle.ts';
 import * as fishing from './fishing.ts';
 import * as iceCream from './ice-cream.ts';
@@ -19,4 +21,8 @@ export const GAME_CONTENT: Readonly<Partial<Record<GameId, GameContent>>> = {
   'touch-talk': { assets: touchTalk.assets, screen: touchTalk.screen },
   'dino-puzzle': { ladder: dinoPuzzle.ladder, assets: dinoPuzzle.assets, screen: dinoPuzzle.screen },
   'shadow-match': { ladder: shadowMatch.ladder, assets: shadowMatch.assets, screen: shadowMatch.screen },
+  // Story 7.2: a yard game (no station, no ladder); registering it wakes the yard's pen corner.
+  'animal-pens': { assets: animalPens.assets, screen: animalPens.screen },
+  // Story 7.3: a yard game (no station, no ladder); registering it wakes the yard's stage corner.
+  band: { assets: band.assets, screen: band.screen },
 };

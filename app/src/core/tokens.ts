@@ -266,6 +266,33 @@ const ui = {
   /** Story 4.6: a scene bubble's thumbnail sits this far inside its rim (design px). */
   sceneBubbleInsetPx: 6,
   touchTalkPropMaxPx: 220,
+  /** Story 7.2 Ú òa chuồng thú: a gentle door wiggle turns ± this (degrees); the asked door ± animalPensAskWiggleDeg. */
+  animalPensWiggleDeg: 4,
+  animalPensAskWiggleDeg: 9,
+  /** Story 7.2: an ask every this many reveals. */
+  animalPensAskEvery: 3,
+  /** Story 7.2: a celebrating animal hops this high (design px; × reducedMotionAmplitude when reduced). */
+  animalPensHopPx: 26,
+  /** Story 7.2: a swinging door narrows to this share of its width before its frame changes. */
+  animalPensSwingSquash: 0.75,
+  /** Story 7.2: a revealed animal grows from this scale to 1 on its feet. */
+  animalPensPeekFromScale: 0.8,
+  /** Story 7.2: each door (its frame) is at least this tall (design px; tools/layout/rules.ts › validateAnimalPens). */
+  animalPensDoorMinPx: 150,
+  /** Story 7.3 Ban nhạc: at most this many notes sound at once (a new tap past it cuts the oldest note). */
+  bandVoiceCap: 5,
+  /** Story 7.3: the beat stops after this many beats without a tap (and starts again only after a tap and the idle time). */
+  bandQuietBeats: 16,
+  /** Story 7.3: one instrument bobs on every this-many beats (round robin): ≤ 1 visual pulse per second. */
+  bandBobEveryBeats: 2,
+  /** Story 7.3: a bob lifts an instrument this high (design px); none under reduced motion. */
+  bandBobPx: 7,
+  /** Story 7.3: a tapped instrument grows to this scale and springs back (× reducedMotionAmplitude when reduced). */
+  bandBounceScale: 1.12,
+  /** Story 7.3: the on-beat sparkle's stars rise this high (design px; no drift under reduced motion). */
+  bandSparkleRisePx: 40,
+  /** Story 7.3: each instrument (its idle frame's longest side) is at least this big (design px; tools/layout/rules.ts › validateBand). */
+  bandInstrumentMinPx: 150,
   /** Story 5.6: a new station landmark (the ice-cream cone, the pizza chimney) is at least this tall (design px; build_map.py). */
   mapLandmarkMinPx: 60,
   /** Story 5.6: the map clouds drift right at this speed (design px per ms; × reducedMotionAmplitude when reduced). */
@@ -427,6 +454,54 @@ const art = {
     wardrobeDoor: colour('#E2D3FF'),
     knob: colour('#FFE08A'),
     shirt: colour('#FF9A3C'),
+  },
+  /**
+   * Story 7.2: Ú òa chuồng thú (build_animal_pens.py): the barn front with its four pens, the doors, the pens'
+   * dark insides, the straw and the roof. The lawn, sky and haze reuse art.touchTalk.
+   */
+  animalPens: {
+    barn: colour('#E8735F'),
+    barnDark: colour('#C4574B'),
+    trim: colour('#FFF4E2'),
+    roof: colour('#8E5B43'),
+    door: colour('#F4B870'),
+    doorDark: colour('#D9914E'),
+    inside: colour('#5E3B2F'),
+    straw: colour('#F7D46B'),
+    hinge: colour('#6B4A3A'),
+  },
+  /**
+   * Story 7.3: Ban nhạc (build_band.py): the stage (boards, curtain, bunting), the drum, the xylophone's rainbow bars,
+   * the brass horn, the gold bell on its stand and the frog's stool. The lawn, sky and haze reuse art.touchTalk.
+   */
+  band: {
+    wood: colour('#E8B27A'),
+    woodDark: colour('#C98B55'),
+    curtain: colour('#8C7BFF'),
+    curtainDark: colour('#6F5CE0'),
+    valance: colour('#FFD23F'),
+    flagRed: colour('#FF6B6B'),
+    flagYellow: colour('#FFD23F'),
+    flagBlue: colour('#4D96FF'),
+    flagGreen: colour('#6BCB77'),
+    drum: colour('#FF6B6B'),
+    drumRim: colour('#FFFFFF'),
+    drumHead: colour('#FFF4E0'),
+    lug: colour('#FFD166'),
+    stick: colour('#F3D9B1'),
+    barRed: colour('#FF6B6B'),
+    barOrange: colour('#FF9A3C'),
+    barYellow: colour('#FFD23F'),
+    barGreen: colour('#6BCB77'),
+    barBlue: colour('#4D96FF'),
+    xyloFrame: colour('#B8794A'),
+    mallet: colour('#FF7FAE'),
+    brass: colour('#FFC94A'),
+    brassDark: colour('#E0A526'),
+    bell: colour('#FFD23F'),
+    bellDark: colour('#E8B21E'),
+    stand: colour('#4D96FF'),
+    stool: colour('#FF9A3C'),
   },
   fishing: {
     yellow: colour('#FFD23F'),

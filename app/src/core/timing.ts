@@ -252,6 +252,45 @@ export const Timing = {
   touchTalkIdleWiggleMs: 15000,
   /** Chạm là nói: scene-bubble slide between scenes. */
   touchTalkSceneSlideMs: 600,
+  /** Story 7.2 Ú òa chuồng thú: an animal's name follows its call this much later (every call ≤ 0.8 s). */
+  animalPensNameDelayMs: 800,
+  /** Story 7.2: a door swings open or shut. */
+  animalPensDoorMs: 260,
+  /** Story 7.2: the animal rises into the open doorway. */
+  animalPensRiseMs: 390,
+  /** Story 7.2: one gentle door wiggle (with the muffled call). */
+  animalPensWiggleMs: 900,
+  /** Story 7.2: the harder wiggle of the asked animal's door. */
+  animalPensAskWiggleMs: 1400,
+  /** Story 7.2: a closed door wiggles after this long without a tap or another wiggle. */
+  animalPensIdleWiggleMs: 5000,
+  /** Story 7.2: an ask comes after this long without a tap (besides every ui.animalPensAskEvery reveals). */
+  animalPensAskIdleMs: 15000,
+  /** Story 7.2: the last reveal's name plays this long before the celebration starts. */
+  animalPensCelebrateLeadMs: 1300,
+  /** Story 7.2: the round's celebration (all doors open, the animals bounce) before the round completes. */
+  animalPensCelebrateMs: 2600,
+  /** Story 7.2: one celebration hop (up; yoyo down), and the hop's delay from one door to the next. */
+  animalPensHopMs: 320,
+  animalPensHopStaggerMs: 120,
+  /** Story 7.2: one controller tick covers at most this long (a stalled frame never skips a name). */
+  animalPensMaxTickMs: 250,
+  /** Story 7.3 Ban nhạc: the soft idle beat starts after this long without a tap (an invitation to play). */
+  bandIdleBeatMs: 6000,
+  /** Story 7.3: one beat of the idle loop (80 BPM; music.band.beat holds content BEAT_LOOP_BEATS of them). */
+  bandBeatMs: 750,
+  /** Story 7.3: a tap this close to a beat (either side) shows a small sparkle (never a score). */
+  bandBeatWindowMs: 150,
+  /** Story 7.3: a tapped instrument bounces (squash up, spring back) — the one prominent motion while it runs. */
+  bandBounceMs: 260,
+  /** Story 7.3: one gentle bob of an instrument to the beat (up and back; one instrument per bob). */
+  bandBobMs: 600,
+  /** Story 7.3: the on-beat sparkle (a few stars rising and fading; no drift when reduced). */
+  bandSparkleMs: 650,
+  /** Story 7.3: one controller tick covers at most this long (a stalled frame never skips beats in a burst). */
+  bandMaxTickMs: 250,
+  /** Story 7.3: a band note cut by the voice cap (or Home) fades out this fast (audio clock; no click). */
+  bandNoteCutMs: 40,
 } as const;
 
 export type TimingTable = typeof Timing;
