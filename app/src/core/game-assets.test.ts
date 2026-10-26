@@ -49,7 +49,8 @@ describe('images (Story 1.8)', () => {
 
   it('Tiệm kem loads its atlas, plate, 52 voice lines (Story 1.10; 5.7 parent lines) and 3 SFX (6.1 sneeze)', () => {
     const plan = loadPlan(GAME_CONTENT['ice-cream']!.assets, () => false);
-    expect(plan.filter((c) => c.kind === 'atlas').map((c) => c.key)).toEqual(['atlas.ice-cream']);
+    // Story 8.2: the outfit overlays made it a multiatlas.
+    expect(plan.filter((c) => c.kind === 'multiatlas').map((c) => c.key)).toEqual(['atlas.ice-cream']);
     expect(plan.filter((c) => c.kind === 'image').map((c) => c.key)).toEqual(['bg.ice-cream']);
     const audio = plan.filter((c) => c.kind === 'audio').map((c) => c.key);
     expect(audio.filter((k) => k.startsWith('vo.ice-cream.'))).toHaveLength(52);

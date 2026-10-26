@@ -239,7 +239,7 @@ describe('validateAssets', () => {
 
 // --- Story 1.8: Tiệm kem screen rules ---------------------------------------------------------
 import { screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
-import { iceCreamLimits, requiredIdProblems, validateIceCream } from './rules.ts';
+import { atlasFrames, iceCreamLimits, requiredIdProblems, validateIceCream } from './rules.ts';
 
 function iceLayout(): MutableLayout {
   const row = 560;
@@ -337,7 +337,8 @@ describe('validateIceCream', () => {
     const { join } = await import('node:path');
     const app = join(import.meta.dirname, '..', '..');
     const layout = JSON.parse(readFileSync(join(app, 'src/content/generated/ice-cream.layout.json'), 'utf8'));
-    const atlas = JSON.parse(readFileSync(join(app, 'public/assets/atlases/ice-cream.json'), 'utf8'));
+    // Story 8.2: a multiatlas (the outfit overlays).
+    const atlas = atlasFrames(JSON.parse(readFileSync(join(app, 'public/assets/atlases/ice-cream.json'), 'utf8')));
     expect(validateIceCream(layout, iceCreamLimits(iceCreamScreen), atlas)).toEqual([]);
   });
 });

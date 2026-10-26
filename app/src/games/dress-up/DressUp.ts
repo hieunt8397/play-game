@@ -52,6 +52,11 @@ const HOLD_REACT = 'dress-up-react';
 const LAYERS = ['glow', 'icon', 'mirror', 'shiba'] as const;
 const depth = (layer: (typeof LAYERS)[number]): number => LAYERS.indexOf(layer) + 1;
 
+/** A saved partial with no change yet (Home before any tap). */
+function isUnchanged(partial: unknown): boolean {
+  return typeof partial === 'object' && partial !== null && (partial as { changes?: unknown }).changes === 0;
+}
+
 export class DressUp extends MiniGameBase<'dress-up'> {
   private layout: ScreenLayout = LAYOUTS['dress-up'];
   private round: DressUpRound | undefined;
@@ -90,7 +95,8 @@ export class DressUp extends MiniGameBase<'dress-up'> {
     this.masked = new WeakSet();
     const target = Tokens.ui.dressUpRoundChanges;
     const resume = resumeDressUp(this.resumeAt, target);
-    if (this.resumeAt && !resume) console.warn('dress-up: bad resume — a fresh wardrobe');
+    // Home before any change saves `{ changes: 0 }`: a fresh start, not a bad resume.
+    if (this.resumeAt && !resume && !isUnchanged(this.resumeAt.partial)) console.warn('dress-up: bad resume — a fresh wardrobe');
     if (resume) this.acceptResume();
     this.round = createDressUpRound({ outfit: ProgressStore.outfit, roundChanges: target, changes: resume?.changes ?? 0 });
 
@@ -257,6 +263,11 @@ export class DressUp extends MiniGameBase<'dress-up'> {
     g.closePath();
     g.fillPath();
     this.mirrorMask = g;
+    // Made off the display list: the scene never destroys it, so it goes with the scene.
+    this.events.once('shutdown', () => {
+      g.destroy();
+      if (this.mirrorMask === g) this.mirrorMask = undefined;
+    });
     this.applyMask();
   }
 

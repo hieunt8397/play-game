@@ -12,6 +12,7 @@ import animalPensLayout from './generated/animal-pens.layout.json';
 import bandLayout from './generated/band.layout.json';
 import bedtimeLayout from './generated/bedtime.layout.json';
 import petClinicLayout from './generated/pet-clinic.layout.json';
+import dressUpLayout from './generated/dress-up.layout.json';
 import type { ScreenId } from './assets.ts';
 import type { ScreenLayout } from './layout-types.ts';
 
@@ -29,4 +30,5 @@ export const LAYOUTS: Readonly<Record<ScreenId, ScreenLayout>> = {
   band: bandLayout as ScreenLayout,
   bedtime: bedtimeLayout as ScreenLayout,
   'pet-clinic': petClinicLayout as ScreenLayout,
+  'dress-up': dressUpLayout as ScreenLayout,
 };

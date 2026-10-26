@@ -28,7 +28,10 @@ from mathutils import Matrix, Vector
 from cute import blob, lathe, mat, mesh_obj, place, rod, torus
 
 HOLDOUT_BASE = 'shiba'
-ICON_SHIRT_STRETCH = 1.4  # a wardrobe shirt icon is this much taller than the worn shirt  # the Shiba's own sprite (its meshes cut every item)
+ICON_SHIRT_SCALE = (1.0, 0.6, 1.25)  # a wardrobe shirt icon: wider and flatter than the worn shirt
+ICON_SIDE = 0.9  # an icon shirt's sides: every ring at least this share of the widest one (straight, not a barrel)
+ICON_SLEEVE_SCALE = (0.17, 0.17, 0.2)
+ICON_SLEEVE_X, ICON_SLEEVE_Z, ICON_SLEEVE_DEG = 0.46, 0.7, 40.0  # an icon's sleeves: at the shoulders, the cuff (local -z) out and down
 
 
 def fail(msg):
@@ -491,7 +494,17 @@ def icon(item_id, colours, coll, name):
     spec = ITEMS[item_id]
     built = _build(item_id, colours, coll, holder, None)
     if spec['slot'] == 'shirt':
-        built.scale = (1.0, 1.0, ICON_SHIRT_STRETCH)  # a taller shirt reads as a shirt (not a bowl) on its hanger
+        # Seen flat from the front (wider than deep, shoulders out) a shirt reads as a shirt, not a barrel, on its hanger.
+        built.scale = ICON_SHIRT_SCALE
+        _straighten(built)
+        for side, sx in (('L', -1), ('R', 1)):
+            # Names are global (the worn copy took the plain name): find this icon's own sleeve by prefix.
+            sleeve = next((o for o in built.children if o.name.split('.')[0] == f'outfit-{item_id}-sleeve{side}'), None)
+            if sleeve is not None:
+                # At the shoulder, the cuff down and out (the worn sleeves sit on the front legs instead).
+                sleeve.location = (sx * ICON_SLEEVE_X, SHELL_C[1], ICON_SLEEVE_Z)
+                sleeve.rotation_euler = (0.0, math.radians(-sx * ICON_SLEEVE_DEG), 0.0)
+                sleeve.scale = ICON_SLEEVE_SCALE
         form = mat(colours['form'], 0.7)
         # The cream form fills the shirt up to its collar (it never shows above it).
         blob(f'{name}-form', form, coll, built, (SHELL_C[0], SHELL_C[1], 0.5), (SHELL_R[0] - 0.03, SHELL_R[1] - 0.03, SHELL_TOP - 0.5 - 0.02))
@@ -511,6 +524,33 @@ def icon(item_id, colours, coll, name):
     hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
     holder.location = -(lo + hi) / 2
     return root
+
+
+def _side_factor(z):
+    """An icon shirt's sides are straight: the factor that widens the shell's ring at body height z to ICON_SIDE of
+    its widest ring (never narrows it)."""
+    k = math.sqrt(max(1e-3, 1 - ((z - SHELL_C[2]) / SHELL_R[2]) ** 2))
+    return max(k, ICON_SIDE) / k
+
+
+def _straighten(root):
+    """Turns an icon shirt's barrel into a shirt: the shell's sides straight (each ring widened by _side_factor), its
+    rings (collar, hem) widened to match and every trim moved out with the surface. Sleeves are placed by the caller."""
+    for o in root.children:
+        base = o.name.split('.')[0]
+        if base.endswith('-shell') and o.type == 'MESH':
+            for v in o.data.vertices:
+                f = _side_factor(v.co.z)
+                v.co.x = SHELL_C[0] + (v.co.x - SHELL_C[0]) * f
+                v.co.y = SHELL_C[1] + (v.co.y - SHELL_C[1]) * f
+            continue
+        if '-sleeve' in base:
+            continue
+        f = _side_factor(o.location.z)
+        o.location.x = SHELL_C[0] + (o.location.x - SHELL_C[0]) * f
+        o.location.y = SHELL_C[1] + (o.location.y - SHELL_C[1]) * f
+        if base.endswith(('-collar', '-hem')):
+            o.scale = (o.scale[0] * f, o.scale[1] * f, o.scale[2])
 
 
 def _ancestors(o):

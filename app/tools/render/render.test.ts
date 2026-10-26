@@ -11,6 +11,7 @@ import { ASSETS_DIR, build, buildParams, cutsArg, decorationModels, iconModels, 
 import { FRAME_RULE_SCREENS, SCREEN_RULES, SCREEN_SEPARATE, addGhostFrames, layoutFromRaw, layoutPath, previewSvg, render, replaceDir } from './render.ts';
 import { atlasFrames } from '../layout/rules.ts';
 import type { RawProjection } from '../layout/to-layout.ts';
+import { Tokens } from '../../src/core/tokens.ts';
 
 const noBlender = (): string => resolveBlender({ BLENDER_BIN: 'C:/nope' }, () => false, () => '');
 const deps = (resolve: () => string, run = vi.fn()) => ({ env: {}, run, resolve, log: () => {} });
@@ -79,6 +80,8 @@ describe('art:build', () => {
       band: { wood: '#E8B27A', woodDark: '#C98B55', curtain: '#8C7BFF', curtainDark: '#6F5CE0', valance: '#FFD23F', flagRed: '#FF6B6B', flagYellow: '#FFD23F', flagBlue: '#4D96FF', flagGreen: '#6BCB77', drum: '#FF6B6B', drumRim: '#FFFFFF', drumHead: '#FFF4E0', lug: '#FFD166', stick: '#F3D9B1', barRed: '#FF6B6B', barOrange: '#FF9A3C', barYellow: '#FFD23F', barGreen: '#6BCB77', barBlue: '#4D96FF', xyloFrame: '#B8794A', mallet: '#FF7FAE', brass: '#FFC94A', brassDark: '#E0A526', bell: '#FFD23F', bellDark: '#E8B21E', stand: '#4D96FF', stool: '#FF9A3C' },
       bedtime: { wall: '#FFE3D3', wallDot: '#FFC9B5', floor: '#D9A273', floorDark: '#BF8558', skirting: '#FFF6EC', windowFrame: '#FFFFFF', daySkyTop: '#8FD3FF', daySkyLow: '#E6F7FF', cloud: '#FFFFFF', skyTop: '#2E3F8F', skyLow: '#7D7FD1', moon: '#FFF1B3', curtain: '#9FC7FF', curtainDark: '#7EAEF2', paintSun: '#FFD23F', paintSky: '#BDE6FF', paintHill: '#9EDC8A', paintHeart: '#FF8FB1', quilt: '#FFD86B', quiltPatch: '#FFFFFF', quiltTrim: '#FF9EC4', stool: '#B9E3C6', mouth: '#7A3B3B', tongue: '#FF8FA3', eyeLine: '#3A2A22', foam: '#FFFFFF', star: '#FFE066', z: '#C9B8FF', nightTint: '#6F7FD0', glow: '#FFE7A3' },
       petClinic: { wall: '#C6EBE2', wallDot: '#A8DCCF', floor: '#F2D3A8', floorDark: '#E0B987', skirting: '#FFFFFF', windowFrame: '#FFFFFF', sky: '#BFE6FF', mat: '#9FD8F7', matTrim: '#FFFFFF', cart: '#FFB7CE', cartDark: '#F294B3', cross: '#5CC8B4', shower: '#7FC8F8', showerDark: '#4FA8E0', chrome: '#E8EEF2', bottle: '#F4FBFF', milk: '#FFFFFF', teat: '#FFC26B', cap: '#8FD6A8', plaster: '#F7C9A0', plasterPad: '#FFF4EA', blanket: '#B9A6FF', blanketPatch: '#FFFFFF', mud: '#8B5E3C', mudDark: '#553823', scrape: '#F59A9A', scrapeDark: '#E98394', drop: '#8FD3FF', wave: '#7A6BB0', z: '#C9B8FF', sparkle: '#FFE066', heart: '#FF9EC4' },
+      // Story 8.2: checked on its own below.
+      dressUp: expect.any(Object),
       map: {
         road: '#EE9F68',
         roadEdge: '#FFFFFF',
@@ -95,6 +98,15 @@ describe('art:build', () => {
       },
     });
     expect(p).toMatchObject({ draggableMinSize: 90, rowGap: 180 });
+  });
+
+  it('Story 8.2: the wardrobe, map and ice-cream builders get art.dressUp, the eleven outfit items and the wardrobe sizes', () => {
+    const p = buildParams();
+    expect(Object.keys(p.art.dressUp)).toEqual(Object.keys(Tokens.art.dressUp));
+    expect(p.art.dressUp.crown).toBe(Tokens.art.dressUp.crown.css);
+    expect(p.outfit.map((i) => i.id)).toEqual(['party-hat', 'cowboy-hat', 'crown', 'beanie', 'round-glasses', 'heart-glasses', 'star-glasses', 'striped-tee', 'raincoat', 'heart-jumper', 'flower-shirt']);
+    expect(p.outfit.filter((i) => i.slot === 'hat')).toHaveLength(4);
+    expect(p.dressUp).toEqual({ iconPx: 100, itemHitPx: 110, gapPx: Tokens.spacing.targetGap, mirrorScale: Tokens.ui.dressUpMirrorScale });
   });
 
   it('Story 5.6: the map builder gets art.map (the race road keeps colors.road) and the landmark minimum', () => {

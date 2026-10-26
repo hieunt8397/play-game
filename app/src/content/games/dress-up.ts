@@ -117,5 +117,6 @@ export const screen = DRESS_UP_SCREEN;
 export const assets: GameAssets = {
   atlases: [ATLASES['dress-up']],
   images: [BACKGROUNDS['dress-up']],
-  audio: [PROMPT_LINE, PARENT_LINE, ...OUTFIT_ITEM_IDS.map(nameLine), ...Object.values(SFX)],
+  // SFX.hop (sfx.shell.happy) is a Boot sound, kept for the session: never loaded or released with the game.
+  audio: [PROMPT_LINE, PARENT_LINE, ...OUTFIT_ITEM_IDS.map(nameLine), SFX.pop, SFX.wear, SFX.giggle],
 };

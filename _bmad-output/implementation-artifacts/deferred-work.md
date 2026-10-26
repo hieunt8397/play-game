@@ -113,3 +113,10 @@
 - source_spec: `spec-8-1-bac-si-thu-cung.md`
   summary: Pet-clinic scene tests never build a tool, so drag, tap-then-tap and drop-off-patient wiring is unexercised.
   evidence: PetClinic.test.ts stub has textures.exists() → false, so addTool returns early; needs a scene harness serving atlas frames (shared with Band/Bedtime tests) or a parent play-through on iPad.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-8-2-thay-do-cho-shiba.md`
+  summary: Map and IceCream have no scene-level tests that the guide and the ice-cream Shiba get outfit layers, refresh after a wardrobe change (Map.update) and route every frame through setShibaFrame.
+  evidence: Story 8.2 review (verification-gap): deleting `attachOutfit(...)` in IceCream.addShiba or `this.guide?.outfit?.set(...)` in Map.update fails no test; the repo has no Map/IceCream Phaser harness, so only core/outfit-layers is unit-tested. Cheapest close: a small testable "refresh from store" helper beside outfit-layers, or a Map/IceCream harness.
+- source_spec: `_bmad-output/implementation-artifacts/spec-8-2-thay-do-cho-shiba.md`
+  summary: The wardrobe mirror reflection (scale 0.6 at anchor.mirror, WebGL mask by hit.mirror-glass) is not validated to fit inside the glass and has never been seen in a browser or on the iPad (unverified, medium if wrong).
+  evidence: Story 8.2 review (blind): validateDressUp checks neither that hit.mirror-glass lies inside hit.mirror nor that the scaled Shiba with its tallest hat stays inside the glass; settle by a browser/iPad look or a layout rule on the scaled hull.

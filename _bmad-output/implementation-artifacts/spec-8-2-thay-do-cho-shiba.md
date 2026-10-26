@@ -2,7 +2,7 @@
 title: 'Story 8.2: Thay đồ cho Shiba'
 type: 'feature'
 created: '2026-10-26'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'f41b47e397b7a8909f1d72db153f1072e4b70d45'
 baseline_tree: '6663094f38d2755a08070e90c2c98b506e4c3379' # working-tree snapshot before 8.2 (Epic 7 and 8.1 are uncommitted); review diffs against this tree
 route: 'dispatch'
@@ -90,11 +90,11 @@ All under `app/`.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] ProgressStore v4 + migration/sanitise/setOutfit tests.
-- [ ] `render_screen.py` holdout prop; `outfit.py`; builder edits in map and ice-cream; new `build_dress_up.py`. Then build, render and atlas the three screens, iterate on composites, and set the page limits.
-- [ ] `outfit-layers.ts` + tests; wire into Map and IceCream (scene tests: an overlay follows the frame and scale; a missing frame warns once).
-- [ ] Content, round model (wear, replace, take off, count, resume) + tests; DressUp scene, mirror, reactions; registry; layout rule.
-- [ ] Voice lines + `npm run tts`; sounds (pop, giggle reuse) under `audio:check`.
+- [x] ProgressStore v4 + migration/sanitise/setOutfit tests.
+- [x] `render_screen.py` holdout prop; `outfit.py`; builder edits in map and ice-cream; new `build_dress_up.py`. Then build, render and atlas the three screens, iterate on composites, and set the page limits.
+- [x] `outfit-layers.ts` + tests; wire into Map and IceCream (scene tests: an overlay follows the frame and scale; a missing frame warns once).
+- [x] Content, round model (wear, replace, take off, count, resume) + tests; DressUp scene, mirror, reactions; registry; layout rule.
+- [x] Voice lines + `npm run tts`; sounds (pop, giggle reuse) under `audio:check`.
 
 **Acceptance Criteria:**
 - Given `npm run art:build <screen> && npm run render <screen> && npm run atlas` for map, ice-cream and dress-up, then every `shiba/<state>/<nn>` has a `shiba-<item>/<state>/<nn>` for all 11 items, and the page limits hold.
@@ -104,9 +104,57 @@ All under `app/`.
 
 ## Implementation Notes
 
+2026-10-26 (dev). Backups before 8.2 are in `_backup/2026-10-26-truoc-8-2/`. The work was resumed from an interrupted dev run; its code (store, layers, content, round, scene, rules, builders) was kept and finished.
+
+**Store.** ProgressStore v4: `MIGRATIONS[3]` adds `outfit: {}`; the shape check requires an `outfit` object; `sanitiseOutfit` drops unknown ids and ids in the wrong slot (memory only, one warn); `setOutfit(slot, id | null)` writes synchronously; `outfit` is a copy. Tested (v3 → v4 written back, wear/replace/take off, bad ids).
+
+**Layers** (`core/outfit-layers.ts`). `attachOutfit` adds one image per worn slot at depth base + 0.001 × (shirt 1, glasses 2, hat 3) and copies frame, origin, position, scale (incl. negative scaleX), angle, alpha and visibility from the Shiba on every `postupdate`; `setFrame` sets the frame, restores the origin and syncs at once. A missing overlay frame hides that layer and warns once per frame name. Map routes the guide's wave through it and calls `set(ProgressStore.outfit)` in `update` (the island scene stays alive behind the yard); IceCream routes every Shiba frame change through `setShibaFrame`. The layer behaviour is unit-tested with a fake scene (no Phaser scene harness for Map/IceCream, as in 5.8/6.1).
+
+**Game.** Pure round model (`games/dress-up/round.ts`, tested: wear, replace, take off, rapid taps, the 5th change completes once, names silent after, resume `{ changes }` with bad partials → fresh). Scene `DressUp.ts`: icons drawn where rendered with a tap circle `max(longest/2, 55)`; a worn halo; Shiba and the mirror react on tap; wear → name line (before completion only), a random reaction of 3 (mirror-smile, hop-wag, giggle-wiggle; no immediate repeat); take off → shake + `sfx.dress-up.pop`; `finishRoundAndStay()` after 5 changes; the reflection is a clone of the Shiba and its layers with scaleX < 0 (×0.6) at `anchor.mirror`, masked by `hit.mirror-glass` through a WebGL mask filter where available. Registered: wakes the `wardrobe` corner (home.test updated). `SFX.hop` (`sfx.shell.happy`) is a Boot sound, so it is not in the game's load list.
+
+**Art.**
+- `render_screen.py`: `bhc_holdout_sprites` (JSON list) turns the listed sprites' objects into holdouts in that group's pass (backward compatible).
+- `outfit.py`: the 11 items, `dress()` (one `sprite.shiba-<id>` per item, base states, `movable` 1, the Shiba as holdout) and `icon()`. Wardrobe shirt icons are flattened, their sides straightened (no barrel) and the jumper/raincoat sleeves moved to the shoulders.
+- `build_dress_up.py`: room, mirror, open wardrobe (casts no shadow, so its inside is bright; icons cast none either), Shiba states idle[1], happy[2], turn[2]. Iteration: the first plate had a dark wardrobe inside and shirts hanging below the floor line; the ground pivot moved to y 683, the shelves/rail up 27 px and the plinth lowered.
+- Rebuilt, rendered and atlased map, ice-cream and dress-up. Every `shiba/<state>/<nn>` has all 11 overlays (`validateOutfitFrames`, run by atlas/validate:content, tested). Pages: map 1 (2048×1881, 113 frames), ice-cream 3, dress-up 2 (each ≤ 2048², ≤ 8 MiB). The old single `ice-cream.png` page was removed. The map and ice-cream plates are unchanged (PSNR vs the 8.2 backup 92.8 dB / 99.8 dB).
+- Scratch composites (session scratchpad): map guide idle/wave with 4 outfits, ice-cream idle/shiver/sneeze/happy/nose with outfits (the counter and cone cut the shirt), dress-up idle/happy/turn. Aligned, no gaps; a hat sits between the ears.
+
+**Layout rule.** `validateDressUp` (render, atlas, validate:content; `tools/layout/dress-up-rules.test.ts`): Shiba and mirror hulls ≥ targetMin, inside the rect, clear of the HUD; item circles ≥ 110 px, ≥ 24 px from each other and from the hulls; anchors on screen; every frame in the atlas.
+
+**Voice/sound.** 13 lines (`npm run tts`, ElevenLabs): prompt, 11 names, parent invite — not yet approved by the parent. `sfx.dress-up.pop` is our own ffmpeg recipe; the giggle and rustle reuse the bedtime sounds.
+
+**Checks.** `npm run check` exits 0 (1993 tests); `npm run audio:check` OK.
+
+**Not verified.** Not played in a browser or on the iPad: the mirror mask filter (WebGL), the reflection's placement in the glass, and the overlays during the live map wave and ice-cream reactions are verified only by composites and unit tests.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+Iteration 0 (2026-10-26). Layers: blind (B), edge-case (E), verification-gap (V).
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---------|---------|----------|-------|
+| V-o / B2 | Outfit layers sit at Shiba depth + 0.001…0.003 while IceCream draws everything at depth 0 in list order, so the shirt/glasses/hat draw over the scoops on the cone (cone slots lie inside Shiba's hull); setDepth also runs every frame (queues a display-list sort each call, Phaser 4.2.1 Depth.js:56) | high | IceCream.ts:75 "everything here is drawn at depth 0", scoops ordered by `children.bringToTop` (554–555); outfit-layers syncOne calls `setDepth(base.depth + step)` every postupdate | patch |
+| V1 | DressUp scene test never creates the layers (`textures.exists → false`), so `shibaLayers/mirrorLayers.set` is unverified | medium | gap filed pre-verified | patch |
+| E2 / B4a | Mirror mask Graphics (`make.graphics(…, false)`) is never destroyed: one leaks per wardrobe visit | low | no destroy on shutdown in DressUp.ts maskToGlass | patch |
+| E3 | Home before any change abandons with `{ changes: 0 }`; the next open logs a false "bad resume" warning | low | resumeDressUp rejects changes < 1; DressUp.build warns whenever resumeAt && !resume; common (Home right away) | patch |
+| V2, V3, E10, B10a | No Map / IceCream scene-level tests for the outfit wiring (spec task asked for them) | medium | gap filed pre-verified; repo has no Map/IceCream Phaser harness | defer |
+| B5 | The reflection's fit inside the glass is not validated and was never seen in a browser | maybe-false (medium if true) | needs a browser/iPad look or a rule checking the scaled hull inside `hit.mirror-glass` | defer |
+| B1 | Layers outlive a destroyed base while the scene lives | false | Map clears `guide` only in its shutdown handler (Map.ts:425–434), where the layers are destroyed too | reject |
+| B3 | Map.update polls the store every frame | low | an object copy and a no-op set per frame; fix needs an event or wake hook | reject |
+| B4b | Silent skip when make.graphics / enableFilters is missing | low | WebGL renderer always has them; Canvas fallback only | reject |
+| B6, E5, E6 | hit.shiba hull adds only the party hat (cowboy brim, crown tips outside) | low | a missed tap on a brim edge only skips a reaction; fix needs a rebuild | reject |
+| B7, E4 | Sleeves fall back silently / may bind to a `.001` leg | maybe-false (low) | composites show sleeves on the waving leg; no duplicate leg names found in the builds | reject |
+| B8 | validate-content dress-up branch skips validateOutfitFrames | false | `DRESS_UP_SCREEN.frames` lists every overlay frame, so the screen check already requires them | reject |
+| B9 | No GPU memory budget for the extra atlas pages | low | page limits set by the spec; dino-puzzle already ships 4 pages | reject |
+| B10b | DressUp tests miss Shiba/mirror taps, no-repeat rule, parent invite, bad resume | low | no-repeat and invite are core/reactions and base behaviour tested elsewhere | reject |
+| B11 | IceCream setShibaFrame updates size/origin only on the outfit path | false | every Shiba frame shares the full-frame source size; the origin is restored at once | reject |
+| B12 | Spec/tracking loose ends | false | status moves with the workflow; approval of voice lines is a parent step | reject |
+| B13 | Parent line asks only about hats; giggle reuses dressUpShakes; unused params | false / low | the parent line is the spec's wording; others cosmetic | reject |
+| E1 | Icon without spriteSourceSize vanishes silently | low | the packer always writes spriteSourceSize | reject |
+| E7, E8 | Raw JSON/ZeroDivision errors in Blender tools | low | build-time only, fails loudly | reject |
+| E9 | Only mirror-smile turns to the mirror | false | the spec lists "turn to the mirror and smile" as one of ≥ 3 random reactions | reject |
 
 ## Design Notes
 

@@ -57,9 +57,11 @@ function goodTree(): string {
   // Story 2.2: the map atlas JSON is the real one (decoration frame sizes are checked).
   put(root, ATLASES.map.json, readFileSync(join(APP, 'public', ATLASES.map.json)));
   put(root, BACKGROUNDS.map.path, pngHeader(2048, 1536));
-  // Story 1.8: the ice-cream atlas JSON is the real one (its frame sizes are checked).
-  put(root, ATLASES['ice-cream'].png, pngHeader(1024, 1024));
-  put(root, ATLASES['ice-cream'].json, readFileSync(join(APP, 'public', ATLASES['ice-cream'].json)));
+  // Story 1.8: the ice-cream atlas JSON is the real one (its frame sizes are checked). Story 8.2: a multiatlas (the
+  // outfit overlays), each page a PNG header.
+  const ic = JSON.parse(readFileSync(join(APP, 'public', ATLASES['ice-cream'].json), 'utf8')) as { textures: { image: string }[] };
+  for (const t of ic.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
+  put(root, ATLASES['ice-cream'].json, JSON.stringify(ic));
   put(root, BACKGROUNDS['ice-cream'].path, pngHeader(2048, 1536));
   // Story 3.1: the pizza atlas JSON is the real one (its frame sizes are checked).
   put(root, ATLASES.pizza.png, pngHeader(1024, 1024));
@@ -110,6 +112,11 @@ function goodTree(): string {
   for (const t of pc.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
   put(root, ATLASES['pet-clinic'].json, JSON.stringify(pc));
   put(root, BACKGROUNDS['pet-clinic'].path, pngHeader(2048, 1536));
+  // Story 8.2: the wardrobe multiatlas JSON is the real one (each page a PNG header; its frames and circles are checked).
+  const du = JSON.parse(readFileSync(join(APP, 'public', ATLASES['dress-up'].json), 'utf8')) as { textures: { image: string }[] };
+  for (const t of du.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
+  put(root, ATLASES['dress-up'].json, JSON.stringify(du));
+  put(root, BACKGROUNDS['dress-up'].path, pngHeader(2048, 1536));
   return root;
 }
 
@@ -132,6 +139,7 @@ function layoutDir(): string {
   put(dir, 'band.layout.json', JSON.stringify(realLayout('band')));
   put(dir, 'bedtime.layout.json', JSON.stringify(realLayout('bedtime')));
   put(dir, 'pet-clinic.layout.json', JSON.stringify(realLayout('pet-clinic')));
+  put(dir, 'dress-up.layout.json', JSON.stringify(realLayout('dress-up')));
   return dir;
 }
 
@@ -295,9 +303,10 @@ describe('validate-content run(publicDir)', () => {
 
   it('Tiệm kem: a missing or undersized frame fails naming it', () => {
     const root = goodTree();
-    const json = JSON.parse(readFileSync(join(APP, 'public', ATLASES['ice-cream'].json), 'utf8'));
-    delete json.frames['scoop-mint/idle/00'];
-    json.frames['shiba/idle/00'].spriteSourceSize.h = 100;
+    // Story 8.2: a multiatlas: the frames live in its pages.
+    const json = JSON.parse(readFileSync(join(APP, 'public', ATLASES['ice-cream'].json), 'utf8')) as { textures: { frames: { filename: string; spriteSourceSize: { h: number } }[] }[] };
+    for (const t of json.textures) t.frames = t.frames.filter((f) => f.filename !== 'scoop-mint/idle/00');
+    json.textures.flatMap((t) => t.frames).find((f) => f.filename === 'shiba/idle/00')!.spriteSourceSize.h = 100;
     put(root, ATLASES['ice-cream'].json, JSON.stringify(json));
     const problems = run(root);
     expect(problems).toContain('atlas "atlas.ice-cream": frame "scoop-mint/idle/00" is missing');

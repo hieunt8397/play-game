@@ -39,7 +39,7 @@ DESIGN = (1024, 768)  # set from params in main
 ORTHO_PX_PER_M = 100.0
 CAM_PITCH = 10.0
 CAM_DISTANCE = 40.0
-SHIBA_PX = (345.0, 655.0)  # design px: Shiba's ground pivot (the world origin)
+SHIBA_PX = (345.0, 683.0)  # design px: Shiba's ground pivot (the world origin)
 
 # --- Shiba ----------------------------------------------------------------------------------------------------------
 SHIBA_SCALE = 1.65  # the chibi is ~2.0 tall at scale 1: ~330 design px
@@ -66,13 +66,13 @@ REFLECTION_MARGIN_PX = 22.0  # the reflection's ground pivot sits this far above
 # --- the wardrobe (design px; the item rows are derived from the tokens in `grid`) ----------------------------------
 WARDROBE_X0 = 470.0  # its left side
 WARDROBE_TOP = 238.0
-WARDROBE_BOTTOM = 690.0
+WARDROBE_BOTTOM = 660.0  # the base's front top edge: a low plinth, under the hanging shirts
 WARDROBE_BACK_Y = 2.15
 WARDROBE_FRONT_Y = 0.85
 ICON_Y = 1.5  # the icons' depth on their shelves
-HATS_SHELF_PX = 380.0
-GLASSES_SHELF_PX = 510.0
-RAIL_PX = 575.0
+HATS_SHELF_PX = 353.0
+GLASSES_SHELF_PX = 483.0
+RAIL_PX = 548.0
 
 
 def fail(msg):
@@ -228,7 +228,11 @@ def build_wardrobe(c, plate):
     # The left door swung open toward the camera (behind Shiba's right side on screen).
     door = rbox('wardrobe-door', (0.1, 1.15, zt - 0.1), 0.04, pink, plate, None, (x0 - 0.1, yf - 0.6, zt / 2), (0.0, 0.0, -20.0))
     blob('wardrobe-knob', mat(c['knob'], 0.3), plate, None, (x0 - 0.26, yf - 1.05, zt / 2), (0.05, 0.05, 0.05))
-    door.visible_shadow = False
+    # The wardrobe casts no shadow: the low Sun otherwise darkens its whole inside (and the wall beside it); the items
+    # still drop their small soft shadows on the shelves.
+    for o in plate.objects:
+        if o.name.startswith('wardrobe-'):
+            o.visible_shadow = False
     return shelves, rail_z
 
 
@@ -305,6 +309,9 @@ def build_icons(params, sprites, shelves, rail_z):
         else:
             pts = place_icon(root, params, sx, top_z=rail_z + 0.03)
         rects[iid] = report(f'item-{iid}', pts)
+        # No shadow: with the wardrobe casting none, an item's shadow would land as a dark blot on the back wall.
+        for o in coll.all_objects:
+            o.visible_shadow = False
     return rects
 
 

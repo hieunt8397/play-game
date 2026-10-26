@@ -232,7 +232,7 @@ describe('PostRoundChain › taps, re-entry, failures', () => {
     const reloaded = new ProgressStoreService();
     await reloaded.init({ storage, persist: async () => true });
     expect(reloaded.getDifficulty('ice-cream', 4)).toBe(2);
-    expect(reloaded.state).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 2 } });
+    expect(reloaded.state).toEqual({ schemaVersion: 4, difficulty: { 'ice-cream': 2 }, outfit: {} });
   });
 });
 

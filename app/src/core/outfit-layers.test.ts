@@ -1,7 +1,8 @@
-// Story 8.2: the outfit layers follow the Shiba (frame, position, scale, angle, alpha, visibility, depth order) and a
-// missing overlay frame hides its layer with one warning.
+// Story 8.2: the outfit layers follow the Shiba (frame, position, scale, angle, alpha, visibility), sit at its depth
+// directly above it in the display list (shirt < glasses < hat), and a missing overlay frame hides its layer with one
+// warning.
 import { describe, expect, it, vi } from 'vitest';
-import { LAYER_DEPTH_STEP, attachOutfit, outfitFrame, type LayerImage, type LayerScene } from './outfit-layers';
+import { attachOutfit, outfitFrame, type LayerImage, type LayerScene } from './outfit-layers';
 
 class FakeImage {
   x: number;
@@ -12,6 +13,7 @@ class FakeImage {
   alpha = 1;
   visible = true;
   depth = 0;
+  depthCalls = 0;
   originX = 0.5;
   originY = 0.5;
   frame: { name: string };
@@ -57,6 +59,7 @@ class FakeImage {
   }
   setDepth(d: number) {
     this.depth = d;
+    this.depthCalls += 1;
     return this;
   }
   destroy() {
@@ -67,12 +70,23 @@ class FakeImage {
 function fakeScene(frames: string[]) {
   const handlers = new Map<string, Set<() => void>>();
   const created: FakeImage[] = [];
+  /** The display list, back to front (a base joins it with `list.push`). */
+  const list: FakeImage[] = [];
   const scene: LayerScene = {
     add: {
       image: (x, y, _key, frame) => {
         const img = new FakeImage(x, y, frame ?? '__BASE');
         created.push(img);
+        list.push(img);
         return img as unknown as LayerImage;
+      },
+    },
+    children: {
+      getIndex: (c) => list.indexOf(c as unknown as FakeImage),
+      moveTo: (c, i) => {
+        const img = c as unknown as FakeImage;
+        list.splice(list.indexOf(img), 1);
+        list.splice(i, 0, img);
       },
     },
     textures: { exists: () => true, get: () => ({ has: (f: string) => frames.includes(f) }) },
@@ -85,7 +99,7 @@ function fakeScene(frames: string[]) {
   const emit = (e: string): void => {
     for (const fn of [...(handlers.get(e) ?? [])]) fn();
   };
-  return { scene, created, emit, handlers };
+  return { scene, created, emit, handlers, list };
 }
 
 const ALL = ['shiba/idle/00', 'shiba/wave/00', ...['crown', 'round-glasses', 'raincoat', 'beanie'].flatMap((id) => [`shiba-${id}/idle/00`, `shiba-${id}/wave/00`])];
@@ -98,7 +112,7 @@ describe('outfitFrame', () => {
 });
 
 describe('attachOutfit', () => {
-  it('a bare outfit adds no layer; a full one adds shirt < glasses < hat just above the Shiba', () => {
+  it('a bare outfit adds no layer; a full one adds shirt < glasses < hat at the Shiba depth', () => {
     const { scene, created } = fakeScene(ALL);
     const base = new FakeImage(100, 200, 'shiba/idle/00').setDepth(5).setOrigin(0.3, 0.7);
     expect(attachOutfit(scene, base as unknown as LayerImage, 'atlas.map', {}).images).toHaveLength(0);
@@ -106,10 +120,43 @@ describe('attachOutfit', () => {
     expect(created).toHaveLength(3);
     const [shirt, glasses, hat] = layers.images as unknown as FakeImage[];
     expect([shirt!.frame.name, glasses!.frame.name, hat!.frame.name]).toEqual(['shiba-raincoat/idle/00', 'shiba-round-glasses/idle/00', 'shiba-crown/idle/00']);
-    expect(shirt!.depth).toBeCloseTo(5 + LAYER_DEPTH_STEP);
-    expect(glasses!.depth).toBeGreaterThan(shirt!.depth);
-    expect(hat!.depth).toBeGreaterThan(glasses!.depth);
+    expect([shirt!.depth, glasses!.depth, hat!.depth]).toEqual([5, 5, 5]);
     for (const l of [shirt!, glasses!, hat!]) expect([l.x, l.y, l.originX, l.originY]).toEqual([100, 200, 0.3, 0.7]);
+  });
+
+  it('each layer goes directly above the Shiba or the lower slot in the display list; an object brought to the top later stays above them', () => {
+    const { scene, list } = fakeScene(ALL);
+    const behind = new FakeImage(0, 0, 'plate');
+    const base = new FakeImage(0, 0, 'shiba/idle/00');
+    const cone = new FakeImage(0, 0, 'cone');
+    list.push(behind, base, cone);
+    const layers = attachOutfit(scene, base as unknown as LayerImage, 'atlas.ice-cream', { hat: 'crown' });
+    const hat = layers.images[0] as unknown as FakeImage;
+    expect(list).toEqual([behind, base, hat, cone]);
+    // A shirt goes under the worn hat; glasses between them.
+    layers.set({ hat: 'crown', shirt: 'raincoat' });
+    layers.set({ hat: 'crown', shirt: 'raincoat', glasses: 'round-glasses' });
+    const [shirt, glasses] = layers.images as unknown as FakeImage[];
+    expect(list).toEqual([behind, base, shirt, glasses, hat, cone]);
+    // A scoop brought to the top (children.bringToTop) draws over the whole outfit.
+    const scoop = new FakeImage(0, 0, 'scoop');
+    list.push(scoop);
+    expect(list.indexOf(scoop)).toBeGreaterThan(list.indexOf(hat!));
+  });
+
+  it('setDepth only runs when the Shiba depth changes (it queues a display-list sort)', () => {
+    const { scene, emit } = fakeScene(ALL);
+    const base = new FakeImage(0, 0, 'shiba/idle/00').setDepth(2);
+    const layers = attachOutfit(scene, base as unknown as LayerImage, 'atlas.map', { hat: 'crown' });
+    const hat = layers.images[0] as unknown as FakeImage;
+    const calls = hat.depthCalls;
+    for (let i = 0; i < 5; i++) emit('postupdate');
+    expect(hat.depthCalls).toBe(calls);
+    base.setDepth(7);
+    emit('postupdate');
+    emit('postupdate');
+    expect(hat.depth).toBe(7);
+    expect(hat.depthCalls).toBe(calls + 1);
   });
 
   it('follows the frame (setFrame keeps the Shiba origin) and, every POST_UPDATE, the position, scale, angle, alpha and visibility', () => {

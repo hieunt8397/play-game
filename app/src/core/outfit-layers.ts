@@ -2,9 +2,11 @@
 // screen, with the same camera and full frame (tools/render/blender/outfit.py): `shiba-<item>/<state>/<nn>` mirrors
 // `shiba/<state>/<nn>`. Phaser keeps the full-frame origin for trimmed frames, so the overlay drawn on the Shiba's own
 // position and origin lines up with it pixel for pixel.
-// `attachOutfit` adds one image per worn slot just above the Shiba (depth shirt < glasses < hat) and keeps each one
-// on the Shiba every frame (the scene's POST_UPDATE, after tweens and timers, before render): frame, position, scale
-// (breath, bounce, the shiver shake, a negative scaleX for a mirror), angle, alpha and visibility. A missing overlay
+// `attachOutfit` adds one image per worn slot at the Shiba's own depth, placed directly above it in the display list
+// (Shiba < shirt < glasses < hat), so whatever a scene later brings to the top (an ice-cream scoop on the cone) still
+// draws over the outfit. It keeps each layer on the Shiba every frame (the scene's POST_UPDATE, after tweens and
+// timers, before render): frame, position, scale (breath, bounce, the shiver shake, a negative scaleX for a mirror),
+// angle, alpha and visibility; the depth only when the Shiba's changes (setDepth queues a display-list sort). A missing overlay
 // frame hides that layer with one console.warn per frame; the bare Shiba still works.
 // `setFrame` is the one way a scene changes the Shiba's frame: it sets the frame, puts the origin back (setFrame
 // applies the atlas pivot) and syncs the layers at once.
@@ -16,9 +18,6 @@ export function outfitFrame(baseFrame: string, itemId: string): string {
   return overlayFrame(baseFrame, itemId);
 }
 
-/** The draw order step between the Shiba and its layers (shirt +1, glasses +2, hat +3 steps). */
-export const LAYER_DEPTH_STEP = 0.001;
-
 /** What the layers need from a Phaser image (the Shiba or its overlays). */
 export type LayerImage = Pick<
   GameObjects.Image,
@@ -28,6 +27,11 @@ export type LayerImage = Pick<
 /** What the layers need from a Phaser scene. */
 export interface LayerScene {
   readonly add: { image(x: number, y: number, key: string, frame?: string): LayerImage };
+  /**
+   * The display list: a new layer is moved to just after the object below it (the Shiba or a lower slot). Not
+   * `moveAbove`, which leaves an object already somewhere above (a new one is at the top) where it is.
+   */
+  readonly children: { getIndex(child: LayerImage): number; moveTo(child: LayerImage, index: number): unknown };
   readonly textures: { exists(key: string): boolean; get(key: string): { has(frame: string): boolean } };
   readonly events: {
     on(event: string, fn: () => void, ctx?: unknown): unknown;
@@ -59,7 +63,7 @@ export function attachOutfit(scene: Scene | LayerScene, base: LayerImage, atlasK
 
   const hasFrame = (frame: string): boolean => s.textures.exists(atlasKey) && s.textures.get(atlasKey).has(frame);
 
-  const syncOne = (slot: OutfitSlot, layer: { id: string; image: LayerImage }): void => {
+  const syncOne = (layer: { id: string; image: LayerImage }): void => {
     const img = layer.image;
     const frame = outfitFrame(base.frame.name, layer.id);
     if (!hasFrame(frame)) {
@@ -77,12 +81,12 @@ export function attachOutfit(scene: Scene | LayerScene, base: LayerImage, atlasK
     img.setAngle(base.angle);
     img.setAlpha(base.alpha);
     img.setVisible(base.visible);
-    img.setDepth(base.depth + LAYER_DEPTH_STEP * (SLOTS.indexOf(slot) + 1));
+    if (img.depth !== base.depth) img.setDepth(base.depth);
   };
 
   const sync = (): void => {
     if (!alive) return;
-    for (const [slot, layer] of layers) syncOne(slot, layer);
+    for (const layer of layers.values()) syncOne(layer);
   };
 
   const set = (next: Outfit): void => {
@@ -96,6 +100,14 @@ export function attachOutfit(scene: Scene | LayerScene, base: LayerImage, atlasK
       if (id === undefined) continue;
       const frame = outfitFrame(base.frame.name, id);
       const image = s.add.image(base.x, base.y, atlasKey, hasFrame(frame) ? frame : undefined);
+      // Directly above the nearest lower slot worn, else above the Shiba (slots are walked back to front).
+      const below = SLOTS.slice(0, SLOTS.indexOf(slot))
+        .map((lower) => layers.get(lower)?.image)
+        .filter((i): i is LayerImage => i !== undefined)
+        .pop();
+      const at = s.children.getIndex(below ?? base);
+      if (at >= 0 && s.children.getIndex(image) > at) s.children.moveTo(image, at + 1);
+      image.setDepth(base.depth);
       layers.set(slot, { id, image });
     }
     sync();
