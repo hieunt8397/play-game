@@ -19,6 +19,9 @@
 //   drag callbacks) while the live primary is a press of that same router (on a target or on its background)
 //   that does not drag. Every other router, and every press while another scene's or layer's press is the
 //   primary, keeps the rules above.
+//   Review (Story 7.3): a target marked `primaryOnly` (the catch-all tap reaction) never takes an extra finger, and
+//   a pointer slot above SHARED_POINTERS (Phaser tracks more only once the band asked for them) is ignored unless
+//   its press lands in a multi-touch scene (so a 4th or 5th finger never reaches the Hud anywhere else).
 import { locate, type Located } from './space';
 import type { PointerPointLike, ScaleLike } from './pointer-adapter';
 import type { Point } from './polygon';
@@ -28,6 +31,12 @@ export type Verdict = 'dead' | 'primary' | 'extra-hud' | 'extra-multi' | 'ignore
 
 /** Highest layer first. */
 export const LAYER_ORDER: readonly Layer[] = ['overlay', 'hud', 'scene'];
+
+/**
+ * Story 7.3 review: the touch pointer slots every scene shares (main.ts `input.activePointers`). Slots above it exist
+ * only after a multi-touch scene asked for more (tap-router › ensurePointers) and serve only such a scene.
+ */
+export const SHARED_POINTERS = 3;
 
 /** The slice of `Phaser.Input.Pointer` the guard needs. */
 export interface GuardPointer extends PointerPointLike {
@@ -44,6 +53,8 @@ export interface GuardTarget {
   onPress(p: Point, pointer?: GuardPointer): void;
   /** Fires on the release of the primary press that hit this target, if released over it. */
   onRelease?(p: Point): void;
+  /** Story 7.3 review: only a primary press reaches it (a multi-touch extra finger is ignored), e.g. the tap reaction. */
+  readonly primaryOnly?: boolean;
   /** Story 1.8: the primary that hit this target moved (design point). */
   onMove?(p: Point): void;
   /** Story 1.8: the primary that hit this target was released, wherever (design point). */
@@ -95,7 +106,10 @@ export class InputGuard {
   private readonly pickable = new WeakMap<object, boolean>();
   private readonly snapScales = new WeakMap<object, number>();
 
-  constructor(locator: Locator = (pointer, scale) => locate(pointer, scale)) {
+  private readonly sharedPointers: number;
+
+  constructor(locator: Locator = (pointer, scale) => locate(pointer, scale), sharedPointers: number = SHARED_POINTERS) {
+    this.sharedPointers = sharedPointers;
     this.locator = locator;
   }
 
@@ -227,6 +241,8 @@ export class InputGuard {
     const p = where.design;
     const routers = this.activeRouters();
     const hit = this.resolve(routers, p);
+    // Story 7.3 review: an extra pointer slot serves only a multi-touch scene (the one that asked for it).
+    if (pointer.id > this.sharedPointers && !(hit ? hit.router.multiTouch === true : routers.find((r) => r.layer === 'scene')?.multiTouch === true)) return 'ignored';
     const live = this.livePrimary();
     if (live) {
       if (hit && hit.router.layer === 'hud' && !this.isDragging()) {
@@ -234,7 +250,7 @@ export class InputGuard {
         return 'extra-hud';
       }
       // Story 7.3: a multi-touch scene router takes extra fingers on its own targets while its own press is primary.
-      if (hit && hit.router.multiTouch === true && hit.router.layer === 'scene' && !live.dragging && this.ownsPrimary(live, hit.router)) {
+      if (hit && hit.router.multiTouch === true && hit.router.layer === 'scene' && hit.target.primaryOnly !== true && !live.dragging && this.ownsPrimary(live, hit.router)) {
         hit.target.onPress(p, pointer);
         return 'extra-multi';
       }

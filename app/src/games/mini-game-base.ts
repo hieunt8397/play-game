@@ -53,6 +53,10 @@
 // Story 7.3: `startFreePlay()` is for a game with no round at all (the band): `round:complete` once with the empty
 // tally, then free play WITHOUT `onFreePlay` or the next-round timer (no `round:next`); Home then leaves with
 // `round:leave` (no resume snapshot).
+// Story 7.4: `finishRoundAndStay()` is the per-game opt-out of seamless play (the bedtime game: its ending is the
+// destination): `round:complete` once with the tallied outcome, then free play WITHOUT `onFreePlay` or the
+// next-round timer (no `round:next`, ever); Home then leaves with `round:leave`. It reuses the same path as Home
+// while finishing and `startFreePlay` (`enterFreePlay(…, stay = false)`); every other game is unchanged.
 // Games never navigate (`scene.start/stop/…`) or load (`this.load`): Map owns both (ESLint enforces it).
 import { Scene, type Tweens } from 'phaser';
 import { PARENT_INVITE_ENABLED, PARENT_INVITE_LINES } from '../content/parent-invite';
@@ -382,6 +386,15 @@ export abstract class MiniGameBase<G extends GameId = GameId> extends Scene {
    * no `onFreePlay`, no next round. Call it first in `build()` (it clears the Speaker prompt).
    */
   protected startFreePlay(): void {
+    this.finishRoundAndStay();
+  }
+
+  /**
+   * Story 7.4: the per-game opt-out of seamless play: ends the round (`round:complete`, once, the tallied outcome) and
+   * stays on screen in free play with no `onFreePlay` and no next-round timer (never `round:next`). Home then leaves
+   * (`round:leave`). For a game whose ending is the destination (the bedtime game).
+   */
+  protected finishRoundAndStay(): void {
     this.enterFreePlay(this.tally.outcome(this.gameId), false);
   }
 

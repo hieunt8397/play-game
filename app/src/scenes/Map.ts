@@ -113,6 +113,7 @@ import { session, takeStartData } from '../core/session-store';
 import type { Skip } from '../core/skip';
 import { createSceneSkip } from '../core/skip-scene';
 import { Tokens } from '../core/tokens';
+import { attachOutfit, type LayerImage, type OutfitLayers } from '../core/outfit-layers';
 import { drawResumeMark } from '../core/ui/resume-mark';
 import { bob, bounce, isMoving, stopMotion } from '../core/ui/scale-motion';
 import { addStationLabel } from '../core/ui/station-label';
@@ -140,6 +141,8 @@ interface GuideView {
   readonly plan: PlannedGuide;
   readonly image: GameObjects.Image | undefined;
   wave: Time.TimerEvent | undefined;
+  /** Story 8.2: the guide's outfit layers (ProgressStore outfit; they follow its frame, bounce and depth). */
+  readonly outfit: OutfitLayers | undefined;
 }
 
 /** Story 5.6: the drawn ambient dressing, its clock and the running whale spout (one timer). */
@@ -440,6 +443,8 @@ export class MapScene extends Scene {
   }
 
   override update(_time: number, delta: number): void {
+    // Story 8.2: the outfit may change in the wardrobe while the island waits behind the yard (set() only swaps what changed).
+    this.guide?.outfit?.set(ProgressStore.outfit);
     if (this.idle) this.handle(this.idle.tick(delta));
     this.tickAmbient(delta);
     if (!this.trip) return;
@@ -552,7 +557,9 @@ export class MapScene extends Scene {
       const blocked = (this.chain?.active ?? false) || this.trip?.state !== 'parked';
       this.applyGuide(this.guideModel?.tap({ blocked }) ?? []);
     });
-    return { plan, image, wave: undefined };
+    // Story 8.2: Shiba wears the outfit chosen in the wardrobe (overlay frames of atlas.map, drawn just above it).
+    const outfit = image ? attachOutfit(this, image as unknown as LayerImage, atlasKey, ProgressStore.outfit) : undefined;
+    return { plan, image, wave: undefined, outfit };
   }
 
   private applyGuide(cmds: readonly GuideCommand[]): void {
@@ -585,8 +592,12 @@ export class MapScene extends Scene {
     view.wave?.remove(false);
     const start = this.time.now;
     const { originX, originY } = view.plan.image ?? { originX: 0.5, originY: 0.5 };
-    // setFrame applies the atlas frame's pivot as the origin: the ground-pivot origin is put back.
-    const setFrame = (frame: string): void => void image.setFrame(frame).setOrigin(originX, originY);
+    // setFrame applies the atlas frame's pivot as the origin: the ground-pivot origin is put back. Story 8.2: through
+    // the outfit layers, so every worn item shows the same frame at once.
+    const setFrame = (frame: string): void => {
+      if (view.outfit) view.outfit.setFrame(frame);
+      else image.setFrame(frame).setOrigin(originX, originY);
+    };
     const show = (): void => {
       const frame = waveFrame(this.time.now - start, this.reduced, view.plan.wave);
       if (frame !== undefined) {

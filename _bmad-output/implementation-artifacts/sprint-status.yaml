@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-08-2026 12:41
-last_updated: 21-10-2026 08:00
+last_updated: 26-10-2026 14:00
 project: Bé Học Chơi
 project_key: NOKEY
 tracking_system: file-system
@@ -99,13 +99,13 @@ development_status:
   epic-7: in-progress
   7-1-trạm-nhà-xoài-trên-đảo-và-màn-sân-nhà: review
   7-2-ú-òa-chuồng-thú: review
-  7-3-ban-nhạc-trên-đảo: in-progress
-  7-4-giờ-đi-ngủ: backlog
+  7-3-ban-nhạc-trên-đảo: review
+  7-4-giờ-đi-ngủ: review
   epic-7-retrospective: optional
 
-  epic-8: backlog
-  8-1-bác-sĩ-thú-cưng: backlog
-  8-2-thay-đồ-cho-shiba: backlog
+  epic-8: in-progress
+  8-1-bác-sĩ-thú-cưng: review
+  8-2-thay-đồ-cho-shiba: in-progress
   epic-8-retrospective: optional
 
 action_items:

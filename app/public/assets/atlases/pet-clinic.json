@@ -1,0 +1,1430 @@
+{
+  "textures": [
+    {
+      "image": "pet-clinic-0.png",
+      "format": "RGBA8888",
+      "size": {
+        "w": 2048,
+        "h": 2048
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "filename": "drop/idle/00",
+          "frame": {
+            "x": 1780,
+            "y": 1711,
+            "w": 110,
+            "h": 153
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 445,
+            "y": 382,
+            "w": 110,
+            "h": 153
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "heart/idle/00",
+          "frame": {
+            "x": 389,
+            "y": 1921,
+            "w": 120,
+            "h": 108
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1480,
+            "y": 415,
+            "w": 120,
+            "h": 108
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cat/blanket/00",
+          "frame": {
+            "x": 1164,
+            "y": 1561,
+            "w": 322,
+            "h": 146
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 574,
+            "y": 894,
+            "w": 322,
+            "h": 146
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cat/bottle/00",
+          "frame": {
+            "x": 1850,
+            "y": 156,
+            "w": 182,
+            "h": 148
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 959,
+            "y": 885,
+            "w": 182,
+            "h": 148
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cat/mud/00",
+          "frame": {
+            "x": 1835,
+            "y": 830,
+            "w": 204,
+            "h": 140
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 588,
+            "y": 949,
+            "w": 204,
+            "h": 140
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cat/plaster/00",
+          "frame": {
+            "x": 1434,
+            "y": 1920,
+            "w": 118,
+            "h": 79
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 721,
+            "y": 1007,
+            "w": 118,
+            "h": 79
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cat/scrape/00",
+          "frame": {
+            "x": 171,
+            "y": 1663,
+            "w": 60,
+            "h": 53
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 749,
+            "y": 1022,
+            "w": 60,
+            "h": 53
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cow/base/00",
+          "frame": {
+            "x": 2,
+            "y": 620,
+            "w": 610,
+            "h": 470
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 455,
+            "y": 770,
+            "w": 610,
+            "h": 470
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cow/bottle/00",
+          "frame": {
+            "x": 2,
+            "y": 1921,
+            "w": 153,
+            "h": 124
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1013,
+            "y": 896,
+            "w": 153,
+            "h": 124
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cow/mud/00",
+          "frame": {
+            "x": 1795,
+            "y": 1335,
+            "w": 243,
+            "h": 176
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 494,
+            "y": 871,
+            "w": 243,
+            "h": 176
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cow/plaster/00",
+          "frame": {
+            "x": 752,
+            "y": 1921,
+            "w": 155,
+            "h": 100
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 694,
+            "y": 948,
+            "w": 155,
+            "h": 100
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cow/scrape/00",
+          "frame": {
+            "x": 1907,
+            "y": 1875,
+            "w": 86,
+            "h": 63
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 725,
+            "y": 966,
+            "w": 86,
+            "h": 63
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cow/tilt/00",
+          "frame": {
+            "x": 1241,
+            "y": 2,
+            "w": 605,
+            "h": 470
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 455,
+            "y": 770,
+            "w": 605,
+            "h": 470
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-dog/base/00",
+          "frame": {
+            "x": 1241,
+            "y": 476,
+            "w": 590,
+            "h": 565
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 465,
+            "y": 692,
+            "w": 590,
+            "h": 565
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-dog/blanket/00",
+          "frame": {
+            "x": 1574,
+            "y": 1869,
+            "w": 329,
+            "h": 171
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 546,
+            "y": 781,
+            "w": 329,
+            "h": 171
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-dog/bottle/00",
+          "frame": {
+            "x": 1835,
+            "y": 974,
+            "w": 202,
+            "h": 165
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1005,
+            "y": 715,
+            "w": 202,
+            "h": 165
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-dog/plaster/00",
+          "frame": {
+            "x": 1065,
+            "y": 1921,
+            "w": 135,
+            "h": 99
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 716,
+            "y": 942,
+            "w": 135,
+            "h": 99
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-dog/scrape/00",
+          "frame": {
+            "x": 513,
+            "y": 1726,
+            "w": 54,
+            "h": 64
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 752,
+            "y": 960,
+            "w": 54,
+            "h": 64
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-dog/tilt/00",
+          "frame": {
+            "x": 2,
+            "y": 1094,
+            "w": 583,
+            "h": 565
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 465,
+            "y": 692,
+            "w": 583,
+            "h": 565
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-horse/base/00",
+          "frame": {
+            "x": 625,
+            "y": 2,
+            "w": 612,
+            "h": 616
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 452,
+            "y": 630,
+            "w": 612,
+            "h": 616
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-horse/blanket/00",
+          "frame": {
+            "x": 2,
+            "y": 1726,
+            "w": 357,
+            "h": 184
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 500,
+            "y": 695,
+            "w": 357,
+            "h": 184
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-horse/bottle/00",
+          "frame": {
+            "x": 1795,
+            "y": 1515,
+            "w": 237,
+            "h": 192
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1014,
+            "y": 650,
+            "w": 237,
+            "h": 192
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-horse/plaster/00",
+          "frame": {
+            "x": 1850,
+            "y": 308,
+            "w": 170,
+            "h": 103
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 675,
+            "y": 853,
+            "w": 170,
+            "h": 103
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-horse/scrape/00",
+          "frame": {
+            "x": 1907,
+            "y": 1805,
+            "w": 87,
+            "h": 66
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 711,
+            "y": 875,
+            "w": 87,
+            "h": 66
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-horse/tilt/00",
+          "frame": {
+            "x": 2,
+            "y": 2,
+            "w": 619,
+            "h": 614
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 452,
+            "y": 632,
+            "w": 619,
+            "h": 614
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-pig/base/00",
+          "frame": {
+            "x": 589,
+            "y": 1141,
+            "w": 571,
+            "h": 386
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 474,
+            "y": 868,
+            "w": 571,
+            "h": 386
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-pig/bottle/00",
+          "frame": {
+            "x": 625,
+            "y": 1921,
+            "w": 123,
+            "h": 102
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1006,
+            "y": 1021,
+            "w": 123,
+            "h": 102
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-pig/mud/00",
+          "frame": {
+            "x": 1795,
+            "y": 1143,
+            "w": 251,
+            "h": 188
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 469,
+            "y": 929,
+            "w": 251,
+            "h": 188
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-pig/plaster/00",
+          "frame": {
+            "x": 1894,
+            "y": 1711,
+            "w": 147,
+            "h": 90
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 691,
+            "y": 1030,
+            "w": 147,
+            "h": 90
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-pig/scrape/00",
+          "frame": {
+            "x": 513,
+            "y": 1663,
+            "w": 70,
+            "h": 59
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 726,
+            "y": 1051,
+            "w": 70,
+            "h": 59
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-pig/tilt/00",
+          "frame": {
+            "x": 589,
+            "y": 1531,
+            "w": 571,
+            "h": 386
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 474,
+            "y": 868,
+            "w": 571,
+            "h": 386
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-rooster/blanket/00",
+          "frame": {
+            "x": 1850,
+            "y": 415,
+            "w": 155,
+            "h": 182
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 672,
+            "y": 844,
+            "w": 155,
+            "h": 182
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-rooster/bottle/00",
+          "frame": {
+            "x": 1574,
+            "y": 1701,
+            "w": 202,
+            "h": 164
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 923,
+            "y": 678,
+            "w": 202,
+            "h": 164
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-rooster/mud/00",
+          "frame": {
+            "x": 1490,
+            "y": 1561,
+            "w": 134,
+            "h": 136
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 685,
+            "y": 946,
+            "w": 134,
+            "h": 136
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-rooster/scrape/00",
+          "frame": {
+            "x": 85,
+            "y": 1663,
+            "w": 82,
+            "h": 55
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 735,
+            "y": 1015,
+            "w": 82,
+            "h": 55
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-sheep/base/00",
+          "frame": {
+            "x": 1210,
+            "y": 1045,
+            "w": 581,
+            "h": 512
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 469,
+            "y": 746,
+            "w": 581,
+            "h": 512
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-sheep/blanket/00",
+          "frame": {
+            "x": 1164,
+            "y": 1711,
+            "w": 406,
+            "h": 205
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 502,
+            "y": 731,
+            "w": 406,
+            "h": 205
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-sheep/bottle/00",
+          "frame": {
+            "x": 1850,
+            "y": 2,
+            "w": 184,
+            "h": 150
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1007,
+            "y": 794,
+            "w": 184,
+            "h": 150
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-sheep/scrape/00",
+          "frame": {
+            "x": 2,
+            "y": 1663,
+            "w": 79,
+            "h": 59
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 736,
+            "y": 958,
+            "w": 79,
+            "h": 59
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-sheep/tilt/00",
+          "frame": {
+            "x": 616,
+            "y": 622,
+            "w": 590,
+            "h": 515
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 469,
+            "y": 743,
+            "w": 590,
+            "h": 515
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "sparkle/idle/00",
+          "frame": {
+            "x": 1628,
+            "y": 1561,
+            "w": 130,
+            "h": 130
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1215,
+            "y": 395,
+            "w": 130,
+            "h": 130
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tool-blanket/idle/00",
+          "frame": {
+            "x": 1204,
+            "y": 1920,
+            "w": 226,
+            "h": 126
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1711,
+            "y": 1193,
+            "w": 226,
+            "h": 126
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tool-bottle/idle/00",
+          "frame": {
+            "x": 363,
+            "y": 1663,
+            "w": 146,
+            "h": 225
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1751,
+            "y": 801,
+            "w": 146,
+            "h": 225
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tool-plaster/idle/00",
+          "frame": {
+            "x": 159,
+            "y": 1921,
+            "w": 226,
+            "h": 122
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1371,
+            "y": 1188,
+            "w": 226,
+            "h": 122
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tool-shower/idle/00",
+          "frame": {
+            "x": 1835,
+            "y": 601,
+            "w": 206,
+            "h": 225
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1381,
+            "y": 787,
+            "w": 206,
+            "h": 225
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "wave/idle/00",
+          "frame": {
+            "x": 911,
+            "y": 1921,
+            "w": 150,
+            "h": 100
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 685,
+            "y": 410,
+            "w": 150,
+            "h": 100
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "z/idle/00",
+          "frame": {
+            "x": 513,
+            "y": 1921,
+            "w": 108,
+            "h": 107
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 966,
+            "y": 422,
+            "w": 108,
+            "h": 107
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "image": "pet-clinic-1.png",
+      "format": "RGBA8888",
+      "size": {
+        "w": 682,
+        "h": 1691
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "filename": "patient-cat/base/00",
+          "frame": {
+            "x": 2,
+            "y": 2,
+            "w": 456,
+            "h": 544
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 532,
+            "y": 691,
+            "w": 456,
+            "h": 544
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-cow/blanket/00",
+          "frame": {
+            "x": 2,
+            "y": 1495,
+            "w": 396,
+            "h": 194
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 509,
+            "y": 763,
+            "w": 396,
+            "h": 194
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-dog/mud/00",
+          "frame": {
+            "x": 262,
+            "y": 1089,
+            "w": 232,
+            "h": 162
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 520,
+            "y": 851,
+            "w": 232,
+            "h": 162
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-horse/mud/00",
+          "frame": {
+            "x": 2,
+            "y": 1089,
+            "w": 256,
+            "h": 200
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 479,
+            "y": 753,
+            "w": 256,
+            "h": 200
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-pig/blanket/00",
+          "frame": {
+            "x": 238,
+            "y": 1293,
+            "w": 442,
+            "h": 182
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 462,
+            "y": 858,
+            "w": 442,
+            "h": 182
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-rooster/base/00",
+          "frame": {
+            "x": 2,
+            "y": 550,
+            "w": 398,
+            "h": 535
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 561,
+            "y": 717,
+            "w": 398,
+            "h": 535
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-rooster/plaster/00",
+          "frame": {
+            "x": 498,
+            "y": 1184,
+            "w": 143,
+            "h": 88
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 707,
+            "y": 994,
+            "w": 143,
+            "h": 88
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-sheep/mud/00",
+          "frame": {
+            "x": 2,
+            "y": 1293,
+            "w": 232,
+            "h": 198
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 503,
+            "y": 831,
+            "w": 232,
+            "h": 198
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "patient-sheep/plaster/00",
+          "frame": {
+            "x": 498,
+            "y": 1089,
+            "w": 141,
+            "h": 91
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 714,
+            "y": 945,
+            "w": 141,
+            "h": 91
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "app": "be-hoc-choi tools/atlas",
+    "version": "1"
+  }
+}

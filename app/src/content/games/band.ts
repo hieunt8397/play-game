@@ -6,7 +6,7 @@
 //     ground pivot);
 //   - `hit.<id>`: its tap area (the convex hull of its meshes), `anchor.<id>`: its ground pivot.
 // Every note is synthesised by our own tools (tools/audio/make-band.ts: ≤ 800 ms, a 50 ms fade-in, nothing below
-// 150 Hz, peak ≤ −18 dBFS); the idle beat is a soft self-made drum loop (`music.band.beat`, ≤ −30 LUFS) on the
+// 150 Hz, peak ≤ −18 dBFS); the idle beat is a soft self-made drum loop (`music.band-beat`, ≤ −30 LUFS) on the
 // music channel, so it ducks under every voice line.
 import { ATLASES, BACKGROUNDS } from '../assets.ts';
 import type { GameAssets, ScreenRequirements } from './types.ts';
@@ -70,7 +70,7 @@ export const INSTRUMENT_IDS: readonly string[] = BAND_INSTRUMENTS.map((i) => i.i
 export const SINGER_ID = 'frog';
 
 /** The idle beat: a soft drum loop of BEAT_LOOP_BEATS beats, Timing.bandBeatMs apart (the first at the loop start). */
-export const BEAT_MUSIC = 'music.band.beat';
+export const BEAT_MUSIC = 'music.band-beat';
 export const BEAT_LOOP_BEATS = 4;
 
 /** The game's invitation as it opens (its Speaker prompt). */
@@ -91,5 +91,6 @@ export const screen = BAND_SCREEN;
 export const assets: GameAssets = {
   atlases: [ATLASES.band],
   images: [BACKGROUNDS.band],
-  audio: [INVITE_LINE, PARENT_LINE, BEAT_MUSIC, ...BAND_INSTRUMENTS.flatMap((i) => i.noteSfx)],
+  // The beat (a music.* id) is loaded by Boot with the other music for the session (core/boot-load).
+  audio: [INVITE_LINE, PARENT_LINE, ...BAND_INSTRUMENTS.flatMap((i) => i.noteSfx)],
 };

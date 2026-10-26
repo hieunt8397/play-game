@@ -56,6 +56,13 @@ import {
   validateAnimalPens,
   bandLimits,
   validateBand,
+  bedtimeLimits,
+  validateBedtime,
+  petClinicLimits,
+  validatePetClinic,
+  dressUpLimits,
+  validateDressUp,
+  validateOutfitFrames,
   validateShadowMatch,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
@@ -73,6 +80,9 @@ import { fishLuma } from './fish-luma.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
 import { ANIMAL_IDS, ANIMAL_PENS_SCREEN, DOOR_FRAMES, DOOR_IDS, peekFrame } from '../../src/content/games/animal-pens.ts';
 import { BAND_SCREEN, INSTRUMENT_IDS } from '../../src/content/games/band.ts';
+import { BEDTIME_SCREEN, TARGET_IDS as BEDTIME_TARGETS } from '../../src/content/games/bedtime.ts';
+import { PET_CLINIC_SCREEN } from '../../src/content/games/pet-clinic.ts';
+import { DRESS_UP_SCREEN } from '../../src/content/games/dress-up.ts';
 import { sceneBubbleKeepOutRect } from '../layout/hud-keep-out.ts';
 import { ALL_FISH, FISHING_SCREEN, POND_HIT } from '../../src/content/games/fishing.ts';
 import { CONE_ANCHORS, FLAG_ANCHORS, RACE_SCREEN, ladder as raceLadder } from '../../src/content/games/race.ts';
@@ -101,6 +111,12 @@ export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
   'animal-pens': ANIMAL_PENS_SCREEN.frames,
   // Story 7.3: the band's instruments.
   band: BAND_SCREEN.frames,
+  // Story 7.4: the bedroom (Shiba's poses, the blanket, the lamp, the brush, the particles).
+  bedtime: BEDTIME_SCREEN.frames,
+  // Story 8.1: the clinic (patients, overlays, tools, particles).
+  'pet-clinic': PET_CLINIC_SCREEN.frames,
+  // Story 8.2: the wardrobe (Shiba's states, every outfit overlay, the icons).
+  'dress-up': DRESS_UP_SCREEN.frames,
 };
 
 function listFiles(dir: string): string[] {
@@ -150,8 +166,13 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[] 
       const atlas = readAtlas(publicDir, screen);
       // Story 2.4: the play-again icon frames (icon/<id>/00, ≥ ui.playAgainIconPx).
       if (atlas) for (const p of validatePlayAgainIcons(Object.keys(GAME_ICONS), atlas, layout.renderScale, Tokens.ui.playAgainIconPx)) problems.push(`layout "${screen}": ${p}`);
+      // Story 8.2: the guide wears any outfit in every frame.
+      if (atlas) for (const p of validateOutfitFrames(screen, atlas)) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'ice-cream') {
       for (const p of validateIceCream(layout, iceCreamLimits(iceCreamScreen), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+      // Story 8.2: the ice-cream Shiba wears any outfit in every reaction frame.
+      const atlas = readAtlas(publicDir, screen);
+      if (atlas) for (const p of validateOutfitFrames(screen, atlas)) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'pizza') {
       for (const p of validatePizza(layout, pizzaLimits(pizzaScreen), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'dino-puzzle') {
@@ -166,6 +187,12 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[] 
       for (const p of validateAnimalPens(layout, animalPensLimits(ANIMAL_PENS_SCREEN, DOOR_IDS, [DOOR_FRAMES.closed, DOOR_FRAMES.open], ANIMAL_IDS.map(peekFrame)), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'band') {
       for (const p of validateBand(layout, bandLimits(BAND_SCREEN, INSTRUMENT_IDS), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+    } else if (screen === 'bedtime') {
+      for (const p of validateBedtime(layout, bedtimeLimits(BEDTIME_SCREEN, BEDTIME_TARGETS), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+    } else if (screen === 'dress-up') {
+      for (const p of validateDressUp(layout, dressUpLimits(), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+    } else if (screen === 'pet-clinic') {
+      for (const p of validatePetClinic(layout, petClinicLimits(), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'home') {
       for (const p of validateHome(layout, homeLimits(HOME_SCREEN_REQUIREMENTS, CORNER_IDS), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'race') {

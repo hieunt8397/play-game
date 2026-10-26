@@ -109,3 +109,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-tim-bong-hinh-that-them-vat.md`
   summary: Hang tìm bóng — parent 2026-10-22: shark (cá mập) dropped, the cutefish model reads as a generic grey fish; the fish group now has 3 items (goldfish, puffer, swordfish) and is no longer used at the 4-shadow level. A fourth, clearly recognisable fish would bring it back to that level.
   evidence: Parent review of the composites; excavator and banana kept.
+
+- source_spec: `spec-8-1-bac-si-thu-cung.md`
+  summary: Pet-clinic scene tests never build a tool, so drag, tap-then-tap and drop-off-patient wiring is unexercised.
+  evidence: PetClinic.test.ts stub has textures.exists() → false, so addTool returns early; needs a scene harness serving atlas frames (shared with Band/Bedtime tests) or a parent play-through on iPad.

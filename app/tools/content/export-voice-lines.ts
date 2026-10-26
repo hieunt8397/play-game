@@ -12,6 +12,8 @@ export interface ExportedVoiceLine {
   text: string;
   keywordPauseMs?: number;
   rate?: number;
+  /** Story 7.4: the line's own v3 audio tag (absent: VOICE_DEFAULTS.style). */
+  style?: string;
   approved?: { textHash: string };
   /** Relative to `public/`. */
   path: string;
@@ -25,6 +27,7 @@ export function exportRecords(lines: readonly VoiceLine[]): ExportedVoiceLine[] 
     const record: ExportedVoiceLine = { id: line.id, text: line.text.normalize('NFC'), path: voicePath(line.id), textHash: lineHash(line) };
     if (line.keywordPauseMs !== undefined) record.keywordPauseMs = line.keywordPauseMs;
     if (line.rate !== undefined) record.rate = line.rate;
+    if (line.style !== undefined) record.style = line.style;
     if (line.approved) record.approved = { textHash: line.approved.textHash };
     return record;
   });

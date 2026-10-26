@@ -74,6 +74,8 @@ export function addTapReactTarget(router: TapRouter, opts: TapReactTargetOptions
   const reactor = createTapReactor({ rippleMinGapMs: opts.rippleMinGapMs });
   return router.add({
     z: TAP_REACT_Z,
+    // Story 7.3 review: a multi-touch extra finger on the background never ripples (only the primary press reacts).
+    primaryOnly: true,
     contains: () => true,
     isEnabled: () => true,
     onPress: (p) => {

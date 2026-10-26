@@ -177,6 +177,26 @@ All under `app/`.
    Both parents are CC0 1.0.
 8. `tools/audio/make-placeholders.ts` is restored to CRLF with only the 2-line change. `tools/render/build.ts` is restored to CRLF as well.
 
+**Parent decisions (2026-10-26).**
+- **Pig wording:** the pig is now "lợn". `vo.animal-pens.name.pig` is "Con lợn!" (its `review` is dropped) and was re-rendered with `npm run tts`. No other voice line, in any game, uses "heo" for the pig. The ask "ụt ịt" is unchanged.
+- **Cat and rooster:** the parent wants them in the same style as the other animals. No CC0 model in that style was found:
+  - Poly Pizza, searched for cat, kitten, kitty, feline, rooster, hen, chicken and cockerel, plus Quaternius' whole Poly Pizza user page: the only CC0 cat and chicken are the Cube World ones already used and two masks.
+  - Kenney: only blocky Cube Pets.
+  - GitHub mirrors (trebeljahr/quaternius-showcase, tilakpatell/tilakverse-assets, NoLimitNexus/game-models, 0xrise/cc0-assets-nft and repository searches): no cat or chicken.
+  - Quaternius' CC0 "Animated Animales Low Poly" (Animal Pack Vol.2, with a cat) is only on opengameart.org, which the firewall blocks.
+
+  Matching low-poly models exist but are all CC-BY 3.0: Poly by Google "Rooster" poly.pizza/m/6NTegstc5Jy, "Cat" 6dM1J6f6pm9, "Kitten" dBJgGEu5bHW, "Hen" 8Unya0rw9tR, and others from jeremy, madtrollstudio and Maf'j Alvarez. As instructed, nothing was swapped. The candidate sheets are in the session scratchpad (`candidates-cat.png`, `candidates-roo.png`) for the parent to choose; a CC-BY model would need an attribution line in the README and the app.
+
+**Parent decision (2026-10-26, later): CC-BY cat and rooster.**
+- **Models:** the parent chose the Poly by Google "Rooster" (poly.pizza/m/6NTegstc5Jy, red and black) and the grey "Cat" (poly.pizza/m/6dM1J6f6pm9), both CC-BY 3.0 with attribution.
+  - Downloaded into `assets/_dl/polybygoogle-2026-10-26/`, with each Poly Pizza page archived (it shows the title, "Poly by Google" and "CC-BY 3.0").
+  - Vendored under `assets/polybygoogle/{rooster,cat}/`, with `SOURCE.txt`.
+  - Both are static meshes with no rig, so they have no Idle pose. They face −y like the others and get the same turn (−25°) and head-at-door placement. The rooster is 1.6 m and the cat 1.7 m (its raised tail included), so the cat reads at peek size.
+- **Attribution:** the exact lines ("<title> by Poly by Google, CC-BY 3.0, <url>, modified: posed and rendered") are in a new README section, "CC-BY models (attribution required)", and in the shipped `app/public/CREDITS.txt`. That file also lists the Baloo 2 font (OFL 1.1).
+  - CREDITS.txt is copied into every build and served. It is not precached, because `check-precache` treats `.txt` as metadata.
+  - CC-BY means this credit must ship with the app. No credits UI was built.
+- **Cleanup:** the Cube World cat and chicken were removed from `assets/quaternius/cubeworld/`; nothing else used them. Their downloads stay in `assets/_dl/`.
+
 Tests: round.test.ts has 26 tests, adding the last reveal, close-drops-name, hard wiggle after the ask line, no-overlap wiggles and a snapshot round trip with no warning.
 
 ## Spec Change Log

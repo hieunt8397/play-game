@@ -146,7 +146,19 @@ export const AUDIO_IDS = [
   'sfx.band.bell.c6',
   'sfx.band.bell.d6',
   'sfx.band.bell.e6',
-  'music.band.beat',
+  'music.band-beat',
+  'sfx.bedtime.giggle',
+  'sfx.bedtime.yawn',
+  'sfx.bedtime.snore',
+  'sfx.bedtime.sigh',
+  'sfx.bedtime.click',
+  'sfx.bedtime.blanket',
+  'music.bedtime-lullaby',
+  'sfx.pet-clinic.splash',
+  'sfx.pet-clinic.burp',
+  'sfx.pet-clinic.gurgle',
+  'sfx.pet-clinic.pat',
+  'sfx.dress-up.pop',
 ] as const;
 
 export type AudioId = (typeof AUDIO_IDS)[number];
@@ -380,7 +392,33 @@ export const AUDIO_CATALOG: Record<AudioId, AudioEntry> = {
   'sfx.band.bell.d6': { path: 'assets/audio/sfx/sfx.band.bell.d6.m4a', kind: 'sfx' },
   'sfx.band.bell.e6': { path: 'assets/audio/sfx/sfx.band.bell.e6.m4a', kind: 'sfx' },
   /** Ban nhạc (Story 7.3): the soft idle beat — a tom and shaker loop of 4 beats at 80 BPM (3 s), mastered to ≤ −30 LUFS, synthesised (tools/audio/make-band.ts). Music channel: ducked under every voice line. */
-  'music.band.beat': { path: 'assets/audio/music/music.band.beat.m4a', kind: 'music', loop: true },
+  'music.band-beat': { path: 'assets/audio/music/music.band-beat.m4a', kind: 'music', loop: true },
+  /** Giờ đi ngủ (Story 7.4): every sound synthesised by our own recipes (tools/audio/make-bedtime.ts): ≤ 0.8 s, a 50 ms fade-in, nothing below 150 Hz, quiet. Shiba's voice (giggle, yawn, snore, sigh) is a creature sound. Load with the game. */
+  /** Shiba giggles "hi hi hi": three soft voiced chirps stepping up (E5 G5 A5), 0.5 s. */
+  'sfx.bedtime.giggle': { path: 'assets/audio/sfx/sfx.bedtime.giggle.m4a', kind: 'sfx', creature: true },
+  /** Shiba yawns: a voiced glide 520 → 330 Hz with a breath, 0.8 s. */
+  'sfx.bedtime.yawn': { path: 'assets/audio/sfx/sfx.bedtime.yawn.m4a', kind: 'sfx', creature: true },
+  /** Shiba's soft "khò khò": two breathy syllables, 0.8 s. */
+  'sfx.bedtime.snore': { path: 'assets/audio/sfx/sfx.bedtime.snore.m4a', kind: 'sfx', creature: true },
+  /** Shiba's soft sigh as it rolls over in its sleep, 0.75 s. */
+  'sfx.bedtime.sigh': { path: 'assets/audio/sfx/sfx.bedtime.sigh.m4a', kind: 'sfx', creature: true },
+  /** The lamp's soft click, 0.2 s. */
+  'sfx.bedtime.click': { path: 'assets/audio/sfx/sfx.bedtime.click.m4a', kind: 'sfx' },
+  /** The blanket's soft rustle, 0.7 s. */
+  'sfx.bedtime.blanket': { path: 'assets/audio/sfx/sfx.bedtime.blanket.m4a', kind: 'sfx' },
+  /** Giờ đi ngủ (Story 7.4): the lullaby — an original 24 s music-box tune on C-major pentatonic at 60 BPM, looped, mastered to ≤ −30 LUFS (tools/audio/make-bedtime.ts). Music channel: ducked under every voice line. */
+  'music.bedtime-lullaby': { path: 'assets/audio/music/music.bedtime-lullaby.m4a', kind: 'music', loop: true },
+  /** Bác sĩ thú cưng (Story 8.1): our own ffmpeg recipes (tools/audio/make-pet-clinic.ts): ≤ 0.8 s, a 50 ms fade-in, nothing below 150 Hz, quiet. The patient's voice (burp, gurgle) is a creature sound. Load with the game. */
+  /** The shower's soft splash: band-passed noise with a little sparkle, 0.7 s. */
+  'sfx.pet-clinic.splash': { path: 'assets/audio/sfx/sfx.pet-clinic.splash.m4a', kind: 'sfx' },
+  /** The full patient's small burp: a short voiced "ợ" with a falling pitch, 0.4 s. */
+  'sfx.pet-clinic.burp': { path: 'assets/audio/sfx/sfx.pet-clinic.burp.m4a', kind: 'sfx', creature: true },
+  /** The hungry tummy rumbles: a soft fluttering gurgle (all above 150 Hz), 0.7 s. */
+  'sfx.pet-clinic.gurgle': { path: 'assets/audio/sfx/sfx.pet-clinic.gurgle.m4a', kind: 'sfx', creature: true },
+  /** Two soft pats on the plaster, 0.35 s. */
+  'sfx.pet-clinic.pat': { path: 'assets/audio/sfx/sfx.pet-clinic.pat.m4a', kind: 'sfx' },
+  /** Thay đồ cho Shiba (Story 8.2): the soft pop of an item coming off Shiba (our own ffmpeg recipe, tools/audio/make-dress-up.ts): 0.25 s, a 50 ms fade-in, nothing below 150 Hz, quiet. Load with the game. */
+  'sfx.dress-up.pop': { path: 'assets/audio/sfx/sfx.dress-up.pop.m4a', kind: 'sfx' },
   /** Island background loop, mastered to −30 LUFS (EXPERIENCE › Âm thanh: music ≤ −30 LUFS). */
   'music.island': { path: 'assets/audio/music/music.island.m4a', kind: 'music', loop: true },
 };

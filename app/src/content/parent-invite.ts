@@ -20,4 +20,7 @@ export const PARENT_INVITE_LINES: Readonly<Record<GameId, readonly VoiceLineId[]
   'touch-talk': ['vo.touch-talk.parent.1'],
   'animal-pens': ['vo.animal-pens.parent.1'],
   band: ['vo.band.parent.1'],
+  bedtime: ['vo.bedtime.parent.1'],
+  'pet-clinic': ['vo.pet-clinic.parent.1'],
+  'dress-up': ['vo.dress-up.parent.1'],
 };

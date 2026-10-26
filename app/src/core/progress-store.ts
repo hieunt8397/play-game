@@ -1,11 +1,13 @@
 // ProgressStore (AD-2, Story 2.1): the durable store and the ONLY module that touches persistent
 // storage (lint bans localStorage / sessionStorage / indexedDB / navigator.storage elsewhere).
-// - One localStorage key, `bhc.progress`, schema v3:
-//   `{ schemaVersion, difficulty: Partial<Record<GameId, number>> }`.
-// - Only named actions mutate the document (`setDifficulty`). Each action writes the whole document
+// - One localStorage key, `bhc.progress`, schema v4:
+//   `{ schemaVersion, difficulty: Partial<Record<GameId, number>>, outfit: { hat?, glasses?, shirt? } }`.
+// - Only named actions mutate the document (`setDifficulty`, Story 8.2 `setOutfit`). Each action writes the whole document
 //   synchronously with `setItem` inside the call — no debounce, timer or promise — even when the
 //   value is unchanged.
 // - `getDifficulty` is a pure clamped read (missing / bad / negative / touch-talk → 0).
+// - Story 8.2: Shiba's outfit (content/games/dress-up.ts): the v3 → v4 step adds `outfit: {}`; sanitise drops
+//   unknown item ids and ids in the wrong slot (memory only, like the difficulty strays).
 // - Island decorations were removed at runtime (parent decision 2026-10-21): the v2 → v3 step
 //   deletes the stored `decorations` and `seq`; difficulty is kept.
 // - `init()` runs on the first Start tap: idempotent, never rejects, the only caller of
@@ -20,18 +22,21 @@
 //     the session: storage is detached and never written again (a newer document is real progress).
 // - An action before `init()` works in memory only; `init()` then loads over it.
 import type { GameId } from '../content/types';
+import { SLOTS, itemSlot, type Outfit, type OutfitItemId, type OutfitSlot } from '../content/games/dress-up';
 
 export const PROGRESS_KEY = 'bhc.progress';
-export const PROGRESS_SCHEMA_VERSION = 3;
+export const PROGRESS_SCHEMA_VERSION = 4;
 
 export interface ProgressState {
   schemaVersion: typeof PROGRESS_SCHEMA_VERSION;
   /** Ladder level per game (`touch-talk` has none). Raw values are clamped on read. */
   difficulty: Partial<Record<GameId, number>>;
+  /** Story 8.2: what Shiba wears (one item per slot; an absent slot is bare). Sanitised on load. */
+  outfit: Outfit;
 }
 
 export function defaultProgress(): ProgressState {
-  return { schemaVersion: PROGRESS_SCHEMA_VERSION, difficulty: {} };
+  return { schemaVersion: PROGRESS_SCHEMA_VERSION, difficulty: {}, outfit: {} };
 }
 
 type RawDoc = Record<string, unknown>;
@@ -42,6 +47,7 @@ type RawDoc = Record<string, unknown>;
  * `seq` and `difficulty` are kept.
  * v2 → v3: island decorations were removed (parent decision 2026-10-21), so `decorations` and `seq`
  * are deleted from storage for good; `difficulty` is kept.
+ * v3 → v4 (Story 8.2): Shiba's outfit, `outfit: {}` (bare).
  */
 export const MIGRATIONS: Readonly<Record<number, (d: RawDoc) => RawDoc>> = {
   1: (d) => ({ ...d, schemaVersion: 2, decorations: [] }),
@@ -51,6 +57,7 @@ export const MIGRATIONS: Readonly<Record<number, (d: RawDoc) => RawDoc>> = {
     delete next.seq;
     return next;
   },
+  3: (d) => ({ ...d, schemaVersion: 4, outfit: {} }),
 };
 
 /** The stored document belongs to a newer app build: never overwrite it. */
@@ -93,17 +100,32 @@ export function migrate(raw: unknown): ProgressState {
   }
   if (
     doc.schemaVersion !== PROGRESS_SCHEMA_VERSION ||
-    !isPlainObject(doc.difficulty)
+    !isPlainObject(doc.difficulty) ||
+    !isPlainObject(doc.outfit)
   ) {
     throw new Error('progress: document has a bad shape');
   }
   return {
     schemaVersion: PROGRESS_SCHEMA_VERSION,
     difficulty: { ...doc.difficulty } as ProgressState['difficulty'],
+    outfit: { ...doc.outfit } as Outfit,
   };
 }
 
-/** Pure: drops `difficulty['touch-talk']`; other difficulty values are kept. */
+/** Story 8.2, pure: the outfit with only known item ids in their own slot (anything else is dropped). */
+export function sanitiseOutfit(raw: unknown): { outfit: Outfit; dropped: boolean } {
+  const outfit: { [S in OutfitSlot]?: OutfitItemId } = {};
+  if (!isPlainObject(raw)) return { outfit, dropped: raw !== undefined };
+  let dropped = false;
+  for (const [key, value] of Object.entries(raw)) {
+    const slot = (SLOTS as readonly string[]).includes(key) ? (key as OutfitSlot) : undefined;
+    if (slot && typeof value === 'string' && itemSlot(value) === slot) outfit[slot] = value as OutfitItemId;
+    else dropped = true;
+  }
+  return { outfit, dropped };
+}
+
+/** Pure: drops `difficulty['touch-talk']` and (Story 8.2) unknown or wrong-slot outfit ids; other values are kept. */
 export function sanitise(state: ProgressState): { state: ProgressState; dropped: boolean } {
   const difficulty = { ...state.difficulty };
   let dropped = false;
@@ -111,7 +133,8 @@ export function sanitise(state: ProgressState): { state: ProgressState; dropped:
     delete difficulty['touch-talk'];
     dropped = true;
   }
-  return { state: { ...state, difficulty }, dropped };
+  const clean = sanitiseOutfit(state.outfit);
+  return { state: { ...state, difficulty, outfit: clean.outfit }, dropped: dropped || clean.dropped };
 }
 
 export interface StorageLike {
@@ -185,6 +208,31 @@ export class ProgressStoreService {
       return;
     }
     this.current.difficulty[gameId] = level;
+    this.commit();
+  }
+
+  /** Story 8.2: Shiba's outfit (a copy; every id known and in its slot). */
+  get outfit(): Outfit {
+    return { ...this.current.outfit };
+  }
+
+  /**
+   * Story 8.2: puts `id` on in `slot` (replacing what was there) or, with `null`, takes the slot off; writes the
+   * document synchronously (like `setDifficulty`). An unknown id or one of another slot warns and is ignored.
+   */
+  setOutfit(slot: OutfitSlot, id: OutfitItemId | null): void {
+    if (!(SLOTS as readonly string[]).includes(slot)) {
+      console.warn(`progress: setOutfit("${String(slot)}", …) ignored — not a slot`);
+      return;
+    }
+    if (id !== null && itemSlot(id) !== slot) {
+      console.warn(`progress: setOutfit("${slot}", "${String(id)}") ignored — not an item of that slot`);
+      return;
+    }
+    const outfit: { [S in OutfitSlot]?: OutfitItemId } = { ...this.current.outfit };
+    if (id === null) delete outfit[slot];
+    else outfit[slot] = id;
+    this.current.outfit = outfit;
     this.commit();
   }
 

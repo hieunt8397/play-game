@@ -13,7 +13,7 @@ import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 /** Must equal GAME_IDS in src/content/types.ts (asserted by tools/lint/rules.test.ts). */
-export const LINT_GAME_IDS = ['ice-cream', 'pizza', 'race', 'fishing', 'touch-talk', 'dino-puzzle', 'shadow-match', 'animal-pens', 'band'];
+export const LINT_GAME_IDS = ['ice-cream', 'pizza', 'race', 'fishing', 'touch-talk', 'dino-puzzle', 'shadow-match', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up'];
 
 const GAME_ALT = LINT_GAME_IDS.join('|');
 const RULE = '@typescript-eslint/no-restricted-imports';

@@ -49,6 +49,10 @@ const { DinoPuzzle } = await import('./dino-puzzle/DinoPuzzle');
 const { ShadowMatch } = await import('./shadow-match/ShadowMatch');
 const { Race } = await import('./race/Race');
 const { AnimalPens } = await import('./animal-pens/AnimalPens');
+const { Band } = await import('./band/Band');
+const { Bedtime } = await import('./bedtime/Bedtime');
+const { PetClinic } = await import('./pet-clinic/PetClinic');
+const { DressUp } = await import('./dress-up/DressUp');
 const { isIslandGameId } = await import('../content/types');
 const { Fishing } = await import('./fishing/Fishing');
 const { TouchTalk } = await import('./touch-talk/TouchTalk');
@@ -113,6 +117,10 @@ class TestGame extends MiniGameBase<'ice-cream'> {
   end() {
     this.finishRound();
   }
+  /** Story 7.4: the per-game opt-out of seamless play. */
+  endAndStay() {
+    this.finishRoundAndStay();
+  }
   /** Story 5.8. */
   readonly freePlaySpy = vi.fn();
   protected override onFreePlay(): void {
@@ -164,7 +172,7 @@ describe('games/registry', () => {
       expect((scene as unknown as { sys: { settings: { key: string } } }).sys.settings.key).toBe(id);
       expect(entry!.ladder).toBe(GAME_CONTENT[id as keyof typeof GAME_CONTENT]!.ladder);
     }
-    expect(GAME_SCENES).toEqual([IceCream, Pizza, Race, Fishing, TouchTalk, DinoPuzzle, ShadowMatch, AnimalPens]);
+    expect(GAME_SCENES).toEqual([IceCream, Pizza, Race, Fishing, TouchTalk, DinoPuzzle, ShadowMatch, AnimalPens, Band, Bedtime, PetClinic, DressUp]);
   });
 
   it('awake stations are exactly the registered island games', () => {
@@ -172,6 +180,14 @@ describe('games/registry', () => {
     expect(STATIONS.filter((s) => s.awake && s.id !== 'home').map((s) => s.id)).toEqual(Object.keys(GAMES).filter(isIslandGameId));
     expect(isGameId('animal-pens')).toBe(true);
     expect(isIslandGameId('animal-pens')).toBe(false);
+    expect(isGameId('band')).toBe(true);
+    expect(isIslandGameId('band')).toBe(false);
+    expect(isGameId('bedtime')).toBe(true);
+    expect(isIslandGameId('bedtime')).toBe(false);
+    expect(isGameId('pet-clinic')).toBe(true);
+    expect(isIslandGameId('pet-clinic')).toBe(false);
+    expect(isGameId('dress-up')).toBe(true);
+    expect(isIslandGameId('dress-up')).toBe(false);
     expect(STATIONS.find((s) => s.id === 'home')?.awake).toBe(true);
     expect(isGameId('home')).toBe(false);
     expect(isGameId('ice-cream')).toBe(true);
@@ -381,6 +397,32 @@ describe('MiniGameBase', () => {
       bus.emit('hud:home');
       expect(game.time.delayedCall.mock.calls.length).toBe(before);
       game.shutdown();
+    });
+
+    it('Story 7.4 opt-out (finishRoundAndStay): one round:complete, no next-round timer, no onFreePlay, never round:next; Home → one round:leave', async () => {
+      const game = start() as Started;
+      const events: string[] = [];
+      const offs = [
+        bus.on('round:complete', () => events.push('complete')),
+        bus.on('round:next', () => events.push('next')),
+        bus.on('round:leave', () => events.push('leave')),
+        bus.on('round:abandon', () => events.push('abandon')),
+      ];
+      const before = game.time.delayedCall.mock.calls.length;
+      game.endAndStay();
+      game.endAndStay();
+      expect(events).toEqual(['complete']);
+      expect(game.time.delayedCall.mock.calls.length).toBe(before);
+      expect(game.freePlaySpy).not.toHaveBeenCalled();
+      expect(game.isFreePlay).toBe(true);
+      expect(game.input.enabled).toBe(true);
+      fadeDone(game);
+      await flush();
+      bus.emit('hud:home');
+      bus.emit('hud:home');
+      expect(events).toEqual(['complete', 'leave']);
+      game.shutdown();
+      offs.forEach((o) => o());
     });
   });
 

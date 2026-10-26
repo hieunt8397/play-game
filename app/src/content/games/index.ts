@@ -3,9 +3,12 @@
 import type { GameId } from '../types.ts';
 import * as animalPens from './animal-pens.ts';
 import * as band from './band.ts';
+import * as bedtime from './bedtime.ts';
 import * as dinoPuzzle from './dino-puzzle.ts';
+import * as dressUp from './dress-up.ts';
 import * as fishing from './fishing.ts';
 import * as iceCream from './ice-cream.ts';
+import * as petClinic from './pet-clinic.ts';
 import * as pizza from './pizza.ts';
 import * as race from './race.ts';
 import * as shadowMatch from './shadow-match.ts';
@@ -25,4 +28,10 @@ export const GAME_CONTENT: Readonly<Partial<Record<GameId, GameContent>>> = {
   'animal-pens': { assets: animalPens.assets, screen: animalPens.screen },
   // Story 7.3: a yard game (no station, no ladder); registering it wakes the yard's stage corner.
   band: { assets: band.assets, screen: band.screen },
+  // Story 7.4: a yard game (no station, no ladder); registering it wakes the yard's bed corner.
+  bedtime: { assets: bedtime.assets, screen: bedtime.screen },
+  // Story 8.1: a yard game (no station, no ladder); registering it wakes the yard's clinic corner.
+  'pet-clinic': { assets: petClinic.assets, screen: petClinic.screen },
+  // Story 8.2: a yard game (no station, no ladder); registering it wakes the yard's wardrobe corner.
+  'dress-up': { assets: dressUp.assets, screen: dressUp.screen },
 };

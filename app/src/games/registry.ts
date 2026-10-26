@@ -6,9 +6,12 @@ import type { GameAssets, GameContent } from '../content/games/types';
 import type { GameId } from '../content/types';
 import { AnimalPens } from './animal-pens/AnimalPens';
 import { Band } from './band/Band';
+import { Bedtime } from './bedtime/Bedtime';
 import { DinoPuzzle } from './dino-puzzle/DinoPuzzle';
+import { DressUp } from './dress-up/DressUp';
 import { Fishing } from './fishing/Fishing';
 import { IceCream } from './ice-cream/IceCream';
+import { PetClinic } from './pet-clinic/PetClinic';
 import { Pizza } from './pizza/Pizza';
 import { Race } from './race/Race';
 import { ShadowMatch } from './shadow-match/ShadowMatch';
@@ -36,6 +39,12 @@ export const SCENE_CLASSES: Readonly<Partial<Record<GameId, GameSceneClass>>> = 
   'animal-pens': AnimalPens,
   // Story 7.3: a yard game; registering it wakes the yard's stage corner.
   band: Band,
+  // Story 7.4: a yard game; registering it wakes the yard's bed corner.
+  bedtime: Bedtime,
+  // Story 8.1: a yard game; registering it wakes the yard's clinic corner.
+  'pet-clinic': PetClinic,
+  // Story 8.2: a yard game; registering it wakes the yard's wardrobe corner.
+  'dress-up': DressUp,
 };
 
 function buildGames(): Partial<Record<GameId, GameEntry>> {

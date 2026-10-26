@@ -43,11 +43,18 @@ import {
   validateAnimalPens,
   bandLimits,
   validateBand,
+  bedtimeLimits,
+  validateBedtime,
+  petClinicLimits,
+  validatePetClinic,
+  dressUpLimits,
+  validateDressUp,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
 import { ANIMAL_IDS, ANIMAL_PENS_SCREEN, DOOR_FRAMES, DOOR_IDS, peekFrame } from '../../src/content/games/animal-pens.ts';
 import { BAND_SCREEN, INSTRUMENT_IDS } from '../../src/content/games/band.ts';
+import { BEDTIME_SCREEN, TARGET_IDS as BEDTIME_TARGETS } from '../../src/content/games/bedtime.ts';
 import { sceneBubbleKeepOutRect } from '../layout/hud-keep-out.ts';
 import { ALL_FISH, FISHING_SCREEN, POND_HIT } from '../../src/content/games/fishing.ts';
 import { CONE_ANCHORS, FLAG_ANCHORS, RACE_SCREEN, ladder as raceLadder } from '../../src/content/games/race.ts';
@@ -57,6 +64,7 @@ import { frameTrimRect } from '../atlas/pack.ts';
 import { ghostFrame, silhouetteFrame } from './ghost.ts';
 import { screen as pizzaScreen } from '../../src/content/games/pizza.ts';
 import { HITS, screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
+import { HITS as DRESS_UP_HITS } from '../../src/content/games/dress-up.ts';
 import { LayoutError, formatLayout, toLayout, type RawProjection, type ToLayoutOptions } from '../layout/to-layout.ts';
 import { resolveBlender, type Env } from '../shared/binaries.ts';
 import { BLENDER_SCRIPTS, LAYOUT_DIR, RENDER_DIR, blendPath, blenderArgs, runBlender, runProcess, screenSpec, type Runner } from './blender.ts';
@@ -89,10 +97,16 @@ export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames
   'animal-pens': (layout, frames) => validateAnimalPens(layout, animalPensLimits(ANIMAL_PENS_SCREEN, DOOR_IDS, [DOOR_FRAMES.closed, DOOR_FRAMES.open], ANIMAL_IDS.map(peekFrame)), frames),
   // Story 7.3: the band's instruments (hulls, Hud zones, gaps; sizes and the bouncing frame from the rendered frames' trims).
   band: (layout, frames) => validateBand(layout, bandLimits(BAND_SCREEN, INSTRUMENT_IDS), frames),
+  // Story 7.4: the bedroom's tap targets (≥ 150 px, rect, Hud zones, gaps), the anchors on screen, the frames.
+  bedtime: (layout, frames) => validateBedtime(layout, bedtimeLimits(BEDTIME_SCREEN, BEDTIME_TARGETS), frames),
+  // Story 8.1: the clinic's exam area, the walk row, every patient frame and the tool circles (from the rendered frames' trims).
+  'pet-clinic': (layout, frames) => validatePetClinic(layout, petClinicLimits(), frames),
+  // Story 8.2: the wardrobe (Shiba and mirror hulls, the item tap circles from the rendered frames' trims).
+  'dress-up': (layout, frames) => validateDressUp(layout, dressUpLimits(), frames),
 };
 
 /** Story 3.3: screens whose render-time rules get the rendered frames' trims. */
-export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band']);
+export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up']);
 
 /** Per-screen toLayout options: hit ids kept `stationGap` apart (map), unpadded drop areas (ice-cream, the dino lawn). */
 export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'separate' | 'unpadded'>>> = {
@@ -103,6 +117,8 @@ export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'sep
   'shadow-match': { unpadded: [CAVE_HIT] },
   // Story 4.3: `hit.pond-swim` is the swim region every fish body stays in, not a tap area.
   fishing: { unpadded: [POND_HIT] },
+  // Story 8.2: the wardrobe's tap areas are the raw hulls (Shiba, the mirror; the glass is the reflection's mask): the item circles keep ≥ targetGap from them.
+  'dress-up': { unpadded: [DRESS_UP_HITS.shiba, DRESS_UP_HITS.mirror, DRESS_UP_HITS.mirrorGlass] },
 };
 
 export const layoutPath = (screen: string): string => join(LAYOUT_DIR, `${screen}.layout.json`);

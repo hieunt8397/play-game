@@ -1,4 +1,4 @@
-// I/O matrix (Story 1.2 init/persist rows; Story 2.1 schema v2→v3, actions, migrations, failure policy).
+// I/O matrix (Story 1.2 init/persist rows; Story 2.1 schema v2→v3, actions, migrations, failure policy; Story 8.2 v4 outfit).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MIGRATIONS,
@@ -8,6 +8,7 @@ import {
   ProgressStoreService,
   defaultProgress,
   migrate,
+  sanitiseOutfit,
   type StorageLike,
 } from './progress-store';
 
@@ -75,7 +76,7 @@ describe('ProgressStore.init', () => {
 
   it('first run: defaults in memory and written; getDifficulty is 0', async () => {
     const { store, storage } = await storeWith();
-    expect(stored(storage)).toEqual({ schemaVersion: 3, difficulty: {} });
+    expect(stored(storage)).toEqual({ schemaVersion: 4, difficulty: {}, outfit: {} });
     expect(store.state).toEqual(defaultProgress());
     expect(store.getDifficulty('ice-cream', 4)).toBe(0);
     expect(warn).not.toHaveBeenCalled();
@@ -99,7 +100,7 @@ describe('ProgressStore.setDifficulty', () => {
     store.setDifficulty('ice-cream', 2);
     // Synchronous: the write has happened before the call returned.
     expect(storage.setItem).toHaveBeenCalledTimes(1);
-    expect(stored(storage)).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 2 } });
+    expect(stored(storage)).toEqual({ schemaVersion: 4, difficulty: { 'ice-cream': 2 }, outfit: {} });
 
     const reloaded = new ProgressStoreService();
     await reloaded.init({ storage, persist: async () => true });
@@ -111,7 +112,7 @@ describe('ProgressStore.setDifficulty', () => {
     store.setDifficulty('ice-cream', 1);
     store.setDifficulty('ice-cream', 1);
     expect(storage.setItem).toHaveBeenCalledTimes(2);
-    expect(stored(storage)).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 1 } });
+    expect(stored(storage)).toEqual({ schemaVersion: 4, difficulty: { 'ice-cream': 1 }, outfit: {} });
   });
 
   it('touch-talk: silent no-op, no write, key absent', async () => {
@@ -168,14 +169,14 @@ describe('ProgressStore — migrations', () => {
 
   it('migrate v2 → v3: decorations and seq deleted, difficulty kept', () => {
     expect(MIGRATIONS[2]?.(V2_FIXTURE)).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 1, pizza: 2 } });
-    expect(migrate(V2_FIXTURE)).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 1, pizza: 2 } });
-    expect(migrate(V1_FIXTURE)).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 2 } });
+    expect(migrate(V2_FIXTURE)).toEqual({ schemaVersion: 4, difficulty: { 'ice-cream': 1, pizza: 2 }, outfit: {} });
+    expect(migrate(V1_FIXTURE)).toEqual({ schemaVersion: 4, difficulty: { 'ice-cream': 2 }, outfit: {} });
   });
 
-  it('a v2 document with decorations is migrated to v3 and written back during init()', async () => {
+  it('a v2 document with decorations is migrated to v4 and written back during init()', async () => {
     const { store, storage } = await storeWith(V2_FIXTURE);
-    expect(stored(storage)).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 1, pizza: 2 } });
-    expect(store.state).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 1, pizza: 2 } });
+    expect(stored(storage)).toEqual({ schemaVersion: 4, difficulty: { 'ice-cream': 1, pizza: 2 }, outfit: {} });
+    expect(store.state).toEqual({ schemaVersion: 4, difficulty: { 'ice-cream': 1, pizza: 2 }, outfit: {} });
     expect(store.getDifficulty('pizza', 4)).toBe(2);
     expect(warn).not.toHaveBeenCalled();
   });
@@ -194,8 +195,8 @@ describe('ProgressStore — migrations', () => {
   });
 
   it('migrate throws NewerSchemaError for a newer version and a plain Error for corrupt input', () => {
-    expect(() => migrate({ ...defaultProgress(), schemaVersion: 4 })).toThrow(NewerSchemaError);
-    for (const bad of [null, [], 'x', { schemaVersion: 0 }, { schemaVersion: 1.5 }, { schemaVersion: '2' }, {}, { schemaVersion: 3 }]) {
+    expect(() => migrate({ ...defaultProgress(), schemaVersion: 5 })).toThrow(NewerSchemaError);
+    for (const bad of [null, [], 'x', { schemaVersion: 0 }, { schemaVersion: 1.5 }, { schemaVersion: '2' }, {}, { schemaVersion: 3 }, { schemaVersion: 4, difficulty: {} }, { schemaVersion: 4, difficulty: {}, outfit: [] }]) {
       expect(() => migrate(bad)).toThrow();
       try {
         migrate(bad);
@@ -210,7 +211,7 @@ describe('ProgressStore — migrations', () => {
     const store = new ProgressStoreService();
     const pending = store.init({ storage, persist: async () => true });
     // Written synchronously inside init(), before persist settles.
-    expect(stored(storage)).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 2 } });
+    expect(stored(storage)).toEqual({ schemaVersion: 4, difficulty: { 'ice-cream': 2 }, outfit: {} });
     await pending;
     expect(store.getDifficulty('ice-cream', 4)).toBe(2);
     expect(warn).not.toHaveBeenCalled();
@@ -222,7 +223,7 @@ describe('ProgressStore — migrations', () => {
   });
 
   it('newer schema: defaults, one warn, key never overwritten by later actions', async () => {
-    const newer = { schemaVersion: 4, difficulty: { 'ice-cream': 3 }, extra: true };
+    const newer = { schemaVersion: 5, difficulty: { 'ice-cream': 3 }, extra: true };
     const { store, storage } = await storeWith(newer);
     expect(store.state).toEqual(defaultProgress());
     expect(warn).toHaveBeenCalledTimes(1);
@@ -239,6 +240,8 @@ describe('ProgressStore — corrupt store', () => {
     ['"{bad"', '{bad'],
     ['null', 'null'],
     ['no difficulty', JSON.stringify({ schemaVersion: 3 })],
+    ['v4 with no outfit', JSON.stringify({ schemaVersion: 4, difficulty: {} })],
+    ['v4 with an outfit string', JSON.stringify({ schemaVersion: 4, difficulty: {}, outfit: 'crown' })],
     ['difficulty is an array', JSON.stringify({ schemaVersion: 3, difficulty: [] })],
     ['missing schemaVersion', JSON.stringify({ difficulty: {} })],
     ['v2 with a bad difficulty', JSON.stringify({ schemaVersion: 2, seq: 0, difficulty: 'x', decorations: [] })],
@@ -249,14 +252,14 @@ describe('ProgressStore — corrupt store', () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(storage.setItem).not.toHaveBeenCalled();
     store.setDifficulty('ice-cream', 1);
-    expect(stored(storage)).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 1 } });
+    expect(stored(storage)).toEqual({ schemaVersion: 4, difficulty: { 'ice-cream': 1 }, outfit: {} });
     expect(warn).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('ProgressStore — sanitise', () => {
   it('stray entries: touch-talk difficulty dropped in memory, rest kept, one warn', async () => {
-    const doc = { schemaVersion: 3, difficulty: { 'ice-cream': 2, 'touch-talk': 1, pizza: '1' } };
+    const doc = { schemaVersion: 4, difficulty: { 'ice-cream': 2, 'touch-talk': 1, pizza: '1' }, outfit: {} };
     const { store, storage } = await storeWith(doc);
     expect(store.state.difficulty).toEqual({ 'ice-cream': 2, pizza: '1' });
     expect(warn).toHaveBeenCalledTimes(1);
@@ -264,7 +267,64 @@ describe('ProgressStore — sanitise', () => {
     expect(storage.setItem).not.toHaveBeenCalled();
     expect(stored(storage)).toEqual(doc);
     store.setDifficulty('ice-cream', 3);
-    expect(stored(storage)).toEqual({ schemaVersion: 3, difficulty: { 'ice-cream': 3, pizza: '1' } });
+    expect(stored(storage)).toEqual({ schemaVersion: 4, difficulty: { 'ice-cream': 3, pizza: '1' }, outfit: {} });
+  });
+
+  it('Story 8.2: unknown ids and ids in the wrong slot are dropped in memory (one warn); good slots kept', async () => {
+    const doc = { schemaVersion: 4, difficulty: {}, outfit: { hat: 'crown', glasses: 'raincoat', shirt: 'tutu', cape: 'crown' } };
+    const { store, storage } = await storeWith(doc);
+    expect(store.outfit).toEqual({ hat: 'crown' });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(storage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('Story 8.2: sanitiseOutfit is pure and keeps a full, valid outfit', () => {
+    expect(sanitiseOutfit({ hat: 'beanie', glasses: 'star-glasses', shirt: 'raincoat' })).toEqual({ outfit: { hat: 'beanie', glasses: 'star-glasses', shirt: 'raincoat' }, dropped: false });
+    expect(sanitiseOutfit({ hat: 3 })).toEqual({ outfit: {}, dropped: true });
+    expect(sanitiseOutfit(null)).toEqual({ outfit: {}, dropped: true });
+  });
+});
+
+describe('ProgressStore.setOutfit (Story 8.2)', () => {
+  it('a v3 document migrates to v4 with outfit {} and is written back', async () => {
+    const { store, storage } = await storeWith({ schemaVersion: 3, difficulty: { pizza: 1 } });
+    expect(MIGRATIONS[3]?.({ schemaVersion: 3, difficulty: { pizza: 1 } })).toEqual({ schemaVersion: 4, difficulty: { pizza: 1 }, outfit: {} });
+    expect(stored(storage)).toEqual({ schemaVersion: 4, difficulty: { pizza: 1 }, outfit: {} });
+    expect(store.outfit).toEqual({});
+  });
+
+  it('wear, replace and take off: each writes synchronously; a new store reads the outfit back', async () => {
+    const { store, storage } = await storeWith();
+    storage.setItem.mockClear();
+    store.setOutfit('hat', 'party-hat');
+    expect(storage.setItem).toHaveBeenCalledTimes(1);
+    store.setOutfit('hat', 'crown');
+    expect(storage.setItem).toHaveBeenCalledTimes(2);
+    store.setOutfit('shirt', 'heart-jumper');
+    expect(stored(storage)).toEqual({ schemaVersion: 4, difficulty: {}, outfit: { hat: 'crown', shirt: 'heart-jumper' } });
+    store.setOutfit('hat', null);
+    expect(stored(storage)).toEqual({ schemaVersion: 4, difficulty: {}, outfit: { shirt: 'heart-jumper' } });
+    const reloaded = new ProgressStoreService();
+    await reloaded.init({ storage, persist: async () => true });
+    expect(reloaded.outfit).toEqual({ shirt: 'heart-jumper' });
+  });
+
+  it('an unknown id or an id of another slot warns and is ignored (no write)', async () => {
+    const { store, storage } = await storeWith();
+    storage.setItem.mockClear();
+    store.setOutfit('hat', 'raincoat' as never);
+    store.setOutfit('glasses', 'monocle' as never);
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(store.outfit).toEqual({});
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('the outfit getter is a copy (mutating it changes nothing)', async () => {
+    const { store } = await storeWith();
+    store.setOutfit('glasses', 'round-glasses');
+    const o = store.outfit as Record<string, string>;
+    o.glasses = 'x';
+    expect(store.outfit).toEqual({ glasses: 'round-glasses' });
   });
 });
 

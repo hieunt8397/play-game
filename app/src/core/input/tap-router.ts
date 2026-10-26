@@ -136,6 +136,7 @@ export function createTapRouter(scene: RouterSceneLike, opts: TapRouterOptions =
       const { onRelease, onMove, onEnd, onCancel } = target;
       const wrapped: RouterTarget = {
         ...(target.z !== undefined ? { z: target.z } : {}),
+        ...(target.primaryOnly === true ? { primaryOnly: true } : {}),
         contains: (p) => target.contains(toWorld(p)),
         isEnabled: () => live && target.isEnabled(),
         onPress: (p, pointer) => target.onPress(toWorld(p), pointer),

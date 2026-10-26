@@ -120,8 +120,8 @@ describe('AudioDirector.musicId and the beat (Story 7.3)', () => {
     const { director, instances } = setup();
     director.music('music.island');
     expect(director.musicId).toBe('music.island');
-    director.music('music.band.beat');
-    expect(director.musicId).toBe('music.band.beat');
+    director.music('music.band-beat');
+    expect(director.musicId).toBe('music.band-beat');
     expect(instances[0]!.stop).toHaveBeenCalled();
     director.stopMusic();
     expect(director.musicId).toBeUndefined();
@@ -131,11 +131,60 @@ describe('AudioDirector.musicId and the beat (Story 7.3)', () => {
 
   it('the beat ducks under a voice line (the existing music ducking)', () => {
     const { director, instances, ramp } = setup({ withGain: true });
-    director.music('music.band.beat');
+    director.music('music.band-beat');
     const beat = instances[0]!;
     director.say('vo.band.prompt');
     expect(ramp).toHaveBeenCalledWith(beat, expect.any(Number), Timing.musicDuckDownMs, 0);
     const [, gain] = ramp.mock.calls[0]!;
     expect(gain).toBeLessThan(0.2);
+  });
+});
+
+describe('Story 7.3 review: music release, fades and position', () => {
+  function withSchedule() {
+    const s = setup({ withGain: true });
+    const scheduled: Array<{ fn: () => void; ms: number }> = [];
+    const director = new AudioDirector({ bus: new Bus(), now: () => 0, rampVolume: s.ramp, schedule: (fn, ms) => scheduled.push({ fn, ms }) });
+    director.attach(s.sound, { visibilityState: 'visible', addEventListener: () => undefined });
+    return { ...s, director, scheduled };
+  }
+
+  it('stopMusic stops and destroys the loop (no stopped instance piles up); a new music() does too', () => {
+    const { director, instances } = setup();
+    director.music('music.band-beat');
+    director.stopMusic();
+    expect(instances[0]!.stop).toHaveBeenCalledTimes(1);
+    expect(instances[0]!.destroy).toHaveBeenCalledTimes(1);
+    director.music('music.band-beat');
+    director.music('music.island');
+    expect(instances[1]!.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('fadeOutMusic ramps the loop to 0, frees the channel at once and releases the instance when the fade ends', () => {
+    const { director, instances, ramp, scheduled } = withSchedule();
+    director.music('music.island');
+    director.fadeOutMusic(500);
+    expect(director.musicId).toBeUndefined();
+    expect(ramp).toHaveBeenLastCalledWith(instances[0], 0, 500, 0);
+    expect(instances[0]!.stop).not.toHaveBeenCalled();
+    expect(scheduled.map((s) => s.ms)).toEqual([500]);
+    scheduled[0]!.fn();
+    expect(instances[0]!.stop).toHaveBeenCalledTimes(1);
+    expect(instances[0]!.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('music(id, fadeInMs) starts silent and ramps up to its level', () => {
+    const { director, sound, instances, ramp } = withSchedule();
+    director.music('music.island', 400);
+    expect(sound.add).toHaveBeenLastCalledWith('music.island', expect.objectContaining({ volume: 0 }));
+    expect(ramp).toHaveBeenLastCalledWith(instances[0], 1, 400, 0);
+  });
+
+  it('musicPositionMs reads the playing loop’s seek (undefined when nothing plays)', () => {
+    const { director, instances } = setup();
+    expect(director.musicPositionMs).toBeUndefined();
+    director.music('music.band-beat');
+    instances[0]!.seek = 1.25;
+    expect(director.musicPositionMs).toBe(1250);
   });
 });

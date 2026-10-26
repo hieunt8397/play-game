@@ -104,10 +104,11 @@ describe('multi-page atlases (Story 3.3)', () => {
       { name: `dino-puzzle-${i}.json`, buffer: page({ [`p${i}/idle/00`]: frame(i) }) },
     ]).flat();
 
-  it('only dino-puzzle (4), touch-talk (3, Story 4.6) and shadow-match (3, 2026-10-22) may use several pages; every other screen stays at 1', () => {
-    expect(SCREEN_MAX_PAGES).toEqual({ 'dino-puzzle': 4, 'shadow-match': 3, 'touch-talk': 3 });
+  it('only dino-puzzle (4), touch-talk (3, Story 4.6) and shadow-match (3, 2026-10-22) and pet-clinic (3, Story 8.1) may use several pages; every other screen stays at 1', () => {
+    expect(SCREEN_MAX_PAGES).toEqual({ 'dino-puzzle': 4, 'shadow-match': 3, 'touch-talk': 3, 'pet-clinic': 3 });
     expect(maxPages('shadow-match')).toBe(3);
     expect(maxPages('touch-talk')).toBe(3);
+    expect(maxPages('pet-clinic')).toBe(3);
     expect(maxPages('dino-puzzle')).toBe(4);
     expect(maxPages('map')).toBe(1);
     expect(maxPages('pizza')).toBe(1);

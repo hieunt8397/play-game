@@ -9,6 +9,8 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
+import { VOICE_DEFAULTS } from "../../src/content/voice-lines.ts";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -437,5 +439,36 @@ describe("runTts — a line too short for loudnorm (Story 3.1)", () => {
     expect(nonFiniteInputI(PASS1_STDERR.replace('"-21.37"', '"-inf"'))).toBe(true);
     expect(nonFiniteInputI(PASS1_STDERR.replace('"-4.12"', '"-inf"'))).toBe(false);
     expect(nonFiniteInputI("no json")).toBe(false);
+  });
+});
+
+describe("per-line style (Story 7.4 review)", () => {
+  it("a line without `style` keeps its old hash (the recipe-v2 payload with VOICE_DEFAULTS.style)", () => {
+    const line = { text: "Xoài ơi, mình cùng | chơi nào!", keywordPauseMs: 300 };
+    const old = createHash("sha256")
+      .update(
+        JSON.stringify({
+          v: 2,
+          model: VOICE_DEFAULTS.model,
+          style: VOICE_DEFAULTS.style,
+          voice: VOICE_DEFAULTS.voice,
+          text: line.text.normalize("NFC"),
+          keywordPauseMs: 300,
+          rate: VOICE_DEFAULTS.rate,
+        }),
+        "utf8",
+      )
+      .digest("hex");
+    expect(lineHash(line)).toBe(old);
+    expect(lineHash({ ...line, style: "[softly]" })).not.toBe(old);
+  });
+
+  it("spokenText and planLine use the line's own style; the export carries it", () => {
+    expect(spokenText(["Chúc bạn ngủ ngon!"], "[softly]")).toBe("[softly] Chúc bạn ngủ ngon!");
+    expect(spokenText(["Chúc bạn ngủ ngon!"])).toBe(`${VOICE_DEFAULTS.style} Chúc bạn ngủ ngon!`);
+    const [rec] = exportRecords([{ id: "vo.bedtime.goodnight", text: "Chúc bạn ngủ ngon!", style: "[softly]" }]);
+    expect(rec!.style).toBe("[softly]");
+    const plan = planLine(rec!, { audioExists: false, existingHash: undefined }, false);
+    expect(plan).toMatchObject({ action: "generate", text: "[softly] Chúc bạn ngủ ngon!" });
   });
 });

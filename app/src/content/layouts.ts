@@ -9,6 +9,9 @@ import shadowMatchLayout from './generated/shadow-match.layout.json';
 import touchTalkLayout from './generated/touch-talk.layout.json';
 import homeLayout from './generated/home.layout.json';
 import animalPensLayout from './generated/animal-pens.layout.json';
+import bandLayout from './generated/band.layout.json';
+import bedtimeLayout from './generated/bedtime.layout.json';
+import petClinicLayout from './generated/pet-clinic.layout.json';
 import type { ScreenId } from './assets.ts';
 import type { ScreenLayout } from './layout-types.ts';
 
@@ -23,4 +26,7 @@ export const LAYOUTS: Readonly<Record<ScreenId, ScreenLayout>> = {
   'touch-talk': touchTalkLayout as ScreenLayout,
   home: homeLayout as ScreenLayout,
   'animal-pens': animalPensLayout as ScreenLayout,
+  band: bandLayout as ScreenLayout,
+  bedtime: bedtimeLayout as ScreenLayout,
+  'pet-clinic': petClinicLayout as ScreenLayout,
 };

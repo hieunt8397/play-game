@@ -153,10 +153,14 @@ describe('SnapshotPartials (compile-time)', () => {
       fishing: {},
       'touch-talk': { sceneId: 'sea', touchedIds: [] },
       'animal-pens': { behind: ['dog', 'cat', 'cow', 'pig'], reveals: 3 },
+      band: {},
+      bedtime: { done: ['brush', 'lamp'] },
+      'pet-clinic': { patient: 'pig', left: ['mud'], seen: ['dog'] },
+      'dress-up': { changes: 3 },
     };
     expect(isJsonOnly(touch)).toBe(true);
     expect(isJsonOnly(all)).toBe(true);
-    expect(Object.keys(all)).toHaveLength(8);
+    expect(Object.keys(all)).toHaveLength(12);
     expect(wrong.partial).toEqual({ placed: [] });
     expect(flavour.placed).toEqual(['banana']);
   });

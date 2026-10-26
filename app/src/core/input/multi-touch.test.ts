@@ -221,3 +221,55 @@ describe('ensurePointers (Story 7.3: Phaser input.addPointer)', () => {
     expect(mi.addPointer).toHaveBeenCalledWith(2);
   });
 });
+
+describe('Story 7.3 review: the tap reaction and the extra pointer slots', () => {
+  it('with the catch-all tap reaction attached (as in the band), an extra finger on the background does not ripple', async () => {
+    const { addTapReactTarget } = await import('../tap-react');
+    const { guard, make, targets } = world();
+    const band = make('scene', true);
+    const t = targets(band.router);
+    const reaction = vi.fn();
+    addTapReactTarget(band.router, { rippleMinGapMs: 0, now: () => 0, entries: () => [], onReaction: reaction });
+    // The primary on the background ripples (the scene's normal reaction).
+    expect(guard.press(press(500, 650, 1))).toBe('primary');
+    expect(reaction).toHaveBeenCalledTimes(1);
+    // An extra finger on the background: ignored, no ripple; an extra finger on an instrument still plays.
+    expect(guard.press(press(300, 680, 2))).toBe('ignored');
+    expect(reaction).toHaveBeenCalledTimes(1);
+    expect(guard.press(press(DRUM.x, DRUM.y, 3))).toBe('extra-multi');
+    expect(t.drum.onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('a pointer slot above SHARED_POINTERS serves only a multi-touch scene: never the Hud elsewhere', async () => {
+    const { SHARED_POINTERS } = await import('./guard');
+    const { guard, make, targets } = world();
+    const game = make('scene');
+    targets(game.router);
+    const hud = make('hud');
+    const speaker = vi.fn();
+    createTapTarget(hud.router, { circle: SPEAKER, onPress: speaker });
+    guard.press(press(DRUM.x, DRUM.y, 1));
+    // A 4th-slot finger on the Hud in an ordinary game: ignored (slot 2 still reaches it as before).
+    expect(guard.press(press(SPEAKER.x, SPEAKER.y, SHARED_POINTERS + 1))).toBe('ignored');
+    expect(speaker).not.toHaveBeenCalled();
+    expect(guard.press(press(SPEAKER.x, SPEAKER.y, 2))).toBe('extra-hud');
+    // Even as the first finger, an extra slot does nothing outside a multi-touch scene.
+    const { guard: g2, make: make2, targets: targets2 } = world();
+    const other = make2('scene');
+    const t2 = targets2(other.router);
+    expect(g2.press(press(DRUM.x, DRUM.y, SHARED_POINTERS + 2))).toBe('ignored');
+    expect(t2.drum.onPress).not.toHaveBeenCalled();
+  });
+
+  it('in the band, the 4th and 5th fingers play', async () => {
+    const { SHARED_POINTERS } = await import('./guard');
+    const { guard, make, targets } = world();
+    const band = make('scene', true);
+    const t = targets(band.router);
+    guard.press(press(DRUM.x, DRUM.y, 1));
+    expect(guard.press(press(BELL.x, BELL.y, SHARED_POINTERS + 1))).toBe('extra-multi');
+    expect(guard.press(press(FROG.x, FROG.y, SHARED_POINTERS + 2))).toBe('extra-multi');
+    expect(t.bell.onPress).toHaveBeenCalledTimes(1);
+    expect(t.frog.onPress).toHaveBeenCalledTimes(1);
+  });
+});

@@ -76,7 +76,8 @@ NEAR_HAZE = (0.08, 0.92)
 SKY_GRADIENT_Z = (0.0, 26.0)
 SKY_EMISSION = 1.1
 CLOUDS = [(-30.0, 120.0, 22.0, 5.0), (-2.0, 130.0, 27.0, 4.2), (28.0, 120.0, 23.0, 5.5)]
-LANTERN_SCALE = 1.5
+LANTERN_SCALE = 0.55
+CORNER_PROPS_PX = [(70, 600), (955, 600)]  # design px of the front-corner lanterns and bushes (on the stage floor)
 
 # --- the instruments: design-px boxes (x0, y0, x1, y1), y1 = the ground line on the stage; each fills its box ---------
 # Back row: horn, frog, bell; front row: drum, xylophone. Padded by hitPad (24) each hull stays inside the interactive
@@ -89,6 +90,7 @@ BOXES = {
     'bell': (690, 210, 868, 392),
 }
 PLACE_PASSES = 6
+FRONT_ROW_PX = 500  # a box whose ground line is below this (design px) is in the front row
 # Yaw (degrees) of each instrument's root (0 = its front toward the camera).
 YAW = {'drum': 0.0, 'horn': 0.0, 'frog': 15.0, 'xylophone': 0.0, 'bell': 0.0}
 FROG = os.path.join('quaternius', 'frog', 'Frog.glb')
@@ -279,7 +281,7 @@ def stage_extent(scene):
             p = unproject(scene, px, y1, STAGE_H)
             xs.append(p.x)
         p = unproject(scene, (x0 + x1) / 2, y1, STAGE_H)
-        (ys_front if y1 > DESIGN[1] / 2 else ys_back).append(p.y)
+        (ys_front if y1 > FRONT_ROW_PX else ys_back).append(p.y)
     return (min(xs) - STAGE_MARGIN_X, max(xs) + STAGE_MARGIN_X, min(ys_front) - STAGE_FRONT, max(ys_back) + STAGE_BACK)
 
 
@@ -325,6 +327,10 @@ def build_stage(scene, c, plate):
         tip = (fx(t), yb - 0.01, fz(t) - 0.55)
         o = flat_poly(f'bunting-flag-{k}', [(xa, yb - 0.01, za), tip, (xb, yb - 0.01, zb)], flags[k % len(flags)], plate)
         o.visible_shadow = False
+    # The backdrop casts no shadow across the stage floor (only the instruments' own shadows stay readable).
+    for o in plate.objects:
+        if o.name.startswith(('curtain-', 'valance-', 'bunting-')):
+            o.visible_shadow = False
     return (x0, x1, y0, y1)
 
 
@@ -335,8 +341,12 @@ def build_plate(scene, params, plate):
     flat_poly('band-grass', [(-GROUND_HALF, -GROUND_HALF, 0.0), (GROUND_HALF, -GROUND_HALF, 0.0), (GROUND_HALF, GROUND_HALF, 0.0), (-GROUND_HALF, GROUND_HALF, 0.0)], grass, plate)
     x0, x1, y0, y1 = build_stage(scene, c, plate)
     kit = Kit(plate)
-    for side, x in enumerate((x0 - 0.5, x1 + 0.5)):
-        kit.put('street_lantern', 'Pretty-Park', f'band-lantern-{side}', (x, y0 + 0.6, 0.0), LANTERN_SCALE)
+    # Pretty Park lanterns and bushes at the stage's front corners (on screen, clear of the instruments).
+    for side, (px, py) in enumerate(CORNER_PROPS_PX):
+        at = unproject(scene, px, py, STAGE_H)
+        lantern = kit.put('street_lantern', 'Pretty-Park', f'band-lantern-{side}', (at.x, at.y + 0.5, STAGE_H), LANTERN_SCALE)
+        kit.put('bush', 'Pretty-Park', f'band-bush-front-{side}', (at.x + (0.35 if side else -0.35), at.y - 0.3, STAGE_H), 0.8)
+        lantern.visible_shadow = False  # its long pole shadow would streak across the stage
     far = []
     for side, (a, b) in enumerate(FENCE_X):
         n = int((b - a) / FENCE_STEP)
@@ -412,7 +422,8 @@ def build_drum(root, coll, c):
 
 
 def build_horn(root, coll, c):
-    """A golden toy trumpet on a little blue stand, angled up, its flared bell toward the camera."""
+    """A golden toy trumpet on a little blue stand, seen from the side (its bell to the right, turned a little toward the
+    camera, angled up), so it reads as a trumpet and not a disc."""
     brass, dark = mat(c['brass'], 0.25), mat(c['brassDark'], 0.3)
     stand = mat(c['stand'], 0.5)
     # The stand: a round foot, a post and a cradle.
@@ -421,7 +432,7 @@ def build_horn(root, coll, c):
     # The trumpet: a pivot at the cradle, pointing toward the camera (−y) and a little up and to the right.
     pivot = add_empty('horn-pivot', (0.0, 0.0, 0.95), coll)
     pivot.parent = root
-    pivot.rotation_euler = (math.radians(-18.0), 0.0, math.radians(28.0))
+    pivot.rotation_euler = (math.radians(-14.0), 0.0, math.radians(68.0))
     # Built along −y from the mouthpiece (y +0.75) to the bell (y −0.75).
     rod('horn-tube', (0.0, 0.75, 0.0), (0.0, -0.45, 0.0), 0.055, brass, coll, pivot)
     bell = [(0.06, 0.0), (0.075, 0.12), (0.11, 0.24), (0.18, 0.33), (0.3, 0.4), (0.38, 0.42), (0.36, 0.44), (0.0, 0.42)]
@@ -481,9 +492,9 @@ def pose_idle(arm, actions):
     bpy.context.scene.frame_set(IDLE_FRAME)
 
 
-FROG_LENGTH = 1.25  # the frog's longest horizontal side (m), on a stool of STOOL_R
-STOOL_R = 0.55
-STOOL_H = 0.55
+FROG_LENGTH = 1.45  # the frog's longest horizontal side (m), on a stool of STOOL_R
+STOOL_R = 0.42
+STOOL_H = 0.6
 
 
 def build_frog(root, coll, c):

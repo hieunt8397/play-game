@@ -1,0 +1,14 @@
+Bé Học Chơi - credits for third-party assets that are not CC0
+(shipped with the app: CC-BY requires this attribution to travel with every build)
+
+3D models (Creative Commons Attribution 3.0, https://creativecommons.org/licenses/by/3.0/)
+- "Rooster" by Poly by Google, CC-BY 3.0, https://poly.pizza/m/6NTegstc5Jy, modified: posed and rendered
+  (the rooster in Ú òa chuồng thú, atlas animal-pens; Bác sĩ thú cưng, atlas pet-clinic)
+- "Cat" by Poly by Google, CC-BY 3.0, https://poly.pizza/m/6dM1J6f6pm9, modified: posed and rendered
+  (the cat in Ú òa chuồng thú, atlas animal-pens; Bác sĩ thú cưng, atlas pet-clinic)
+
+Font (SIL Open Font License 1.1)
+- Baloo 2, (c) The Baloo 2 Project Authors, SIL OFL 1.1 - see assets/fonts/OFL.txt
+
+All other models, textures and sounds are CC0 1.0 (Kenney, Quaternius, Tiny Treats, KayKit, Poly Haven,
+Freesound) or the project's own; see app/README.md, "Assets and provenance".

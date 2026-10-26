@@ -165,6 +165,8 @@ export interface AudioDirectorDeps {
   now?: () => number;
   /** Music ducking ramp (default `rampVolume`). */
   rampVolume?: RampVolume;
+  /** Story 7.3 review: runs `fn` after `ms` (default setTimeout): releases a music loop once its fade-out ends. */
+  schedule?: (fn: () => void, ms: number) => void;
 }
 
 interface PendingSfx {
@@ -175,6 +177,8 @@ interface PendingSfx {
 interface MusicState {
   id: AudioId;
   instance?: SoundInstanceLike;
+  /** Story 7.3 review: the loop fades in over this long when it starts. */
+  fadeInMs?: number;
 }
 
 /** One `say`/`sayChain`/`replayPrompt` request: one token, one or more lines back to back. */
@@ -191,6 +195,7 @@ export class AudioDirector {
   private readonly bus: Bus;
   private readonly now: () => number;
   private readonly ramp: RampVolume;
+  private readonly schedule: (fn: () => void, ms: number) => void;
   private sound: SoundLike | undefined;
   /** True once `unlock()` completed (the first Start tap) — gates `audio:suspended`. */
   private sessionUnlocked = false;
@@ -223,6 +228,7 @@ export class AudioDirector {
     this.bus = deps.bus ?? appBus;
     this.now = deps.now ?? (() => performance.now());
     this.ramp = deps.rampVolume ?? rampVolume;
+    this.schedule = deps.schedule ?? ((fn, ms) => void setTimeout(fn, ms));
   }
 
   /**
@@ -282,13 +288,38 @@ export class AudioDirector {
   }
 
   /** Starts a music loop (no-op when the same id is already current). Starts on `'unlocked'` if locked. */
-  music(id: string): void {
+  music(id: string, fadeInMs?: number): void {
     const audioId = this.checkId(id, "music");
     if (!audioId) return;
     if (this.current?.id === audioId) return;
     this.stopMusic();
-    this.current = { id: audioId };
+    this.current = fadeInMs !== undefined && fadeInMs > 0 ? { id: audioId, fadeInMs } : { id: audioId };
     if (this.sound && !this.sound.locked) this.startMusic();
+  }
+
+  /**
+   * Story 7.3 review: the current loop fades out over `ms` (audio clock) and is then stopped and destroyed; the
+   * channel is free at once (`musicId` is undefined). Without a gain node it stops at once.
+   */
+  fadeOutMusic(ms: number): void {
+    const current = this.current;
+    this.current = undefined;
+    const instance = current?.instance;
+    if (!instance) return;
+    if (!instance.volumeNode || ms <= 0) {
+      this.releaseMusic(instance);
+      return;
+    }
+    this.ramp(instance, 0, ms, 0);
+    this.schedule(() => this.releaseMusic(instance), ms);
+  }
+
+  /** Story 7.3 review: the current loop's playback position (ms into the loop) while it plays, else undefined. */
+  get musicPositionMs(): number | undefined {
+    const instance = this.current?.instance;
+    if (!instance?.isPlaying) return undefined;
+    const s = instance.seek;
+    return Number.isFinite(s) ? s * MS_PER_S : undefined;
   }
 
   /** Story 7.3: the current music loop's id (also while it waits for the unlock), else undefined. */
@@ -334,12 +365,20 @@ export class AudioDirector {
   }
 
   stopMusic(): void {
+    const instance = this.current?.instance;
+    this.current = undefined;
+    this.releaseMusic(instance);
+  }
+
+  /** Stops and destroys a music instance (Story 7.3 review: no stopped loop piles up in the sound manager). */
+  private releaseMusic(instance: SoundInstanceLike | undefined): void {
+    if (!instance) return;
     try {
-      this.current?.instance?.stop();
+      instance.stop();
+      instance.destroy?.();
     } catch (error) {
       console.warn("audio: music stop failed", error);
     }
-    this.current = undefined;
   }
 
   /** Story 5.7: true while an utterance plays or waits on the voice channel (a new `say` could cut it). */
@@ -689,9 +728,13 @@ export class AudioDirector {
     // Started while a voice line plays → starts already ducked.
     if (this.ducked) config.volume = (volume ?? 1) * DUCK_FACTOR;
     else if (volume !== undefined) config.volume = volume;
+    const target = config.volume ?? 1;
+    // Story 7.3 review: a fade-in starts silent and ramps to its level on the audio clock.
+    if (current.fadeInMs !== undefined) config.volume = 0;
     try {
       current.instance = this.sound.add(current.id, config);
       current.instance.play();
+      if (current.fadeInMs !== undefined) this.ramp(current.instance, target, current.fadeInMs, 0);
     } catch (error) {
       // Forget it so a later music(id) retries instead of being a no-op.
       this.current = undefined;

@@ -277,7 +277,7 @@ export const Timing = {
   animalPensMaxTickMs: 250,
   /** Story 7.3 Ban nhạc: the soft idle beat starts after this long without a tap (an invitation to play). */
   bandIdleBeatMs: 6000,
-  /** Story 7.3: one beat of the idle loop (80 BPM; music.band.beat holds content BEAT_LOOP_BEATS of them). */
+  /** Story 7.3: one beat of the idle loop (80 BPM; music.band-beat holds content BEAT_LOOP_BEATS of them). */
   bandBeatMs: 750,
   /** Story 7.3: a tap this close to a beat (either side) shows a small sparkle (never a score). */
   bandBeatWindowMs: 150,
@@ -291,6 +291,97 @@ export const Timing = {
   bandMaxTickMs: 250,
   /** Story 7.3: a band note cut by the voice cap (or Home) fades out this fast (audio clock; no click). */
   bandNoteCutMs: 40,
+  /** Story 7.3 review: the island loop fades out as the band opens and back in when it closes. */
+  bandMusicFadeMs: 600,
+  /** Story 7.3 review: the beat fades out this fast when it stops (quiet beats, Home). */
+  bandBeatFadeMs: 150,
+  /** Story 7.4 Giờ đi ngủ (calm pace: every tween ≥ 600 ms): the brush travels from its cup to Shiba's mouth (and back). */
+  bedtimeBrushMoveMs: 800,
+  /** Story 7.4: the brush scrubs at the mouth (foam bubbles, Shiba giggles). */
+  bedtimeScrubMs: 1400,
+  /** Story 7.4: Shiba changes pose (a crossfade between its frames). */
+  bedtimePoseFadeMs: 700,
+  /** Story 7.4: the lamp clicks off (its frames crossfade). */
+  bedtimeLampMs: 600,
+  /** Story 7.4: the room fades to the soft blue night (never a flash; reduced motion: the same crossfade). */
+  bedtimeNightFadeMs: 2000,
+  /** Story 7.4: the blanket spreads over Shiba (its frames crossfade). */
+  bedtimeBlanketMs: 900,
+  /** Story 7.4: Shiba's yawn is held this long. */
+  bedtimeYawnMs: 1500,
+  /** Story 7.4: a quiet pause after a step before the next suggestion (its glow and line). */
+  bedtimeStepGapMs: 700,
+  /** Story 7.4: a repeat tap's small reaction (foam puff, lamp wiggle, blanket tuck): two halves of ≥ 600 ms (review). */
+  bedtimeRepeatMs: 1200,
+  /** Story 7.4: the suggested step's glow breathes once per this long (≤ 1 Hz). */
+  bedtimeGlowPulseMs: 2000,
+  /** Story 7.4: the stars at the window fade in, then twinkle softly once per this long. */
+  bedtimeStarsMs: 2400,
+  bedtimeTwinkleMs: 3000,
+  /** Story 7.4: while asleep, a soft "khò khò" and a floating "z" come this often (the first one at once). */
+  bedtimeSnoreEveryMs: 5000,
+  /** Story 7.4: one "z" floats up and fades. */
+  bedtimeZMs: 2600,
+  /** Story 7.4: the sleeping Shiba rolls over (its frames crossfade). */
+  bedtimeRollMs: 900,
+  /** Story 7.4: the island loop fades out as the bedroom opens and back in when it closes; the lullaby fades in and out. */
+  bedtimeMusicFadeMs: 1200,
+  bedtimeLullabyFadeMs: 2000,
+  /** Story 7.4: one controller tick covers at most this long (a stalled frame never skips a step's end). */
+  bedtimeMaxTickMs: 250,
+  /** Story 7.4: a foam bubble fades in, then floats up as it fades out. */
+  bedtimeBubbleInMs: 600,
+  bedtimeBubbleOutMs: 900,
+  /** Story 7.4: each star fades in this long after the one before; their twinkles are this far apart. */
+  bedtimeStarStaggerMs: 300,
+  bedtimeTwinkleStaggerMs: 500,
+  /** Story 8.1 Bác sĩ thú cưng: a patient walks in from the door (> skipThresholdMs: a tap skips it), and out again. */
+  petClinicWalkMs: 1800,
+  petClinicWalkOutMs: 1800,
+  /** Story 8.1: a used tool flies to its spot on the patient. */
+  petClinicToolFlyMs: 600,
+  /** Story 8.1: a fix's own reaction (the shower and giggle, the milk and burp, the plaster pat); the blanket's short nap is longer. */
+  petClinicActMs: 1500,
+  petClinicNapMs: 2600,
+  /** Story 8.1: the used tool goes back to its tray place. */
+  petClinicToolReturnMs: 600,
+  /** Story 8.1: an overlay (mud, plaster, blanket, bottle) fades in or out. */
+  petClinicFadeMs: 500,
+  /** Story 8.1: the correct flourish after a fix (hop, wiggle, sparkle), then the next need line. */
+  petClinicFlourishMs: 900,
+  /** Story 8.1: the chose-other head tilt (held, then back); the need line follows it; the tool floats back meanwhile. */
+  petClinicTiltMs: 1300,
+  /** Story 8.1: a tapped patient's small reaction (its call and a squash). */
+  petClinicTapMs: 700,
+  /** Story 8.1: the well patient thanks Xoài and hops before it walks out; a short pause before the next one walks in. */
+  petClinicThanksMs: 1600,
+  petClinicGapMs: 500,
+  /** Story 8.1: a waiting tummy rumbles / a sleepy patient yawns this often (one cue at a time, alternating). */
+  petClinicCueEveryMs: 6000,
+  /** Story 8.1: the need line is said again after this long without a tap (at most ui.petClinicRemindMax times per patient). */
+  petClinicRemindIdleMs: 15000,
+  /** Story 8.1: after the round's last patient has walked out, the round completes after this (then the next round). */
+  petClinicFinishMs: 800,
+  /** Story 8.1: particles: a water drop falls, a sparkle twinkles, a "z" or heart floats up, the wavy lines bob. */
+  petClinicDropMs: 700,
+  petClinicDropInMs: 230,
+  petClinicSparkleMs: 900,
+  petClinicFloatMs: 1800,
+  petClinicWaveMs: 1200,
+  /** Story 8.1: one controller tick covers at most this long (a stalled frame never skips a step's end). */
+  petClinicMaxTickMs: 250,
+  /** Story 8.2: the wear reactions: turn to the mirror and smile (the turn frames, held), the happy hop with a wag, the giggle and wiggle. */
+  dressUpTurnMs: 1400,
+  dressUpHopMs: 800,
+  dressUpGiggleMs: 900,
+  /** Story 8.2: a reaction's frames swap this often (the happy wag, the turn). */
+  dressUpFrameMs: 220,
+  /** Story 8.2: the take-off: a small shake and a soft pop. */
+  dressUpShakeMs: 420,
+  /** Story 8.2: an item fades on or off Shiba, and its icon's halo fades. */
+  dressUpFadeMs: 220,
+  /** Story 8.2: a tapped icon's bounce. */
+  dressUpIconBounceMs: 260,
 } as const;
 
 export type TimingTable = typeof Timing;

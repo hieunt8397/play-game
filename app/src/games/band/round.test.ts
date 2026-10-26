@@ -1,12 +1,12 @@
 // Story 7.3: the band controller (I/O matrix rows: tap, rapid taps, idle beat, tap near the beat, Home, reduced motion).
 import { describe, expect, it } from 'vitest';
-import { BAND_INSTRUMENTS, BAND_SCALE, INVITE_LINE, NOTE_PATTERN } from '../../content/games/band';
+import { BAND_INSTRUMENTS, BAND_SCALE, BEAT_LOOP_BEATS, INVITE_LINE, NOTE_PATTERN } from '../../content/games/band';
 import { Tokens } from '../../core/tokens';
 import { createBandController, defaultBandTimings, noteAt, type BandTimings } from './round';
 
-const T: BandTimings = { idleBeatMs: 1000, beatMs: 500, beatWindowMs: 100, quietBeats: 6, bobEveryBeats: 2, bounceMs: 200, maxDtMs: 250 };
+const T: BandTimings = { idleBeatMs: 1000, beatMs: 500, beatWindowMs: 100, quietBeats: 6, bobEveryBeats: 2, bounceMs: 200, maxDtMs: 250, loopBeats: 4 };
 
-function make(opts: { reduced?: boolean; timings?: Partial<BandTimings> } = {}) {
+function make(opts: { reduced?: boolean; timings?: Partial<BandTimings>; position?: () => number | undefined } = {}) {
   const log: string[] = [];
   const band = createBandController({
     instruments: BAND_INSTRUMENTS,
@@ -18,6 +18,7 @@ function make(opts: { reduced?: boolean; timings?: Partial<BandTimings> } = {}) 
       note: (id) => log.push(`note ${id}`),
       startBeat: () => log.push('beat:start'),
       stopBeat: () => log.push('beat:stop'),
+      ...(opts.position ? { beatPositionMs: opts.position } : {}),
       say: (id) => (log.push(`say ${id}`), 1),
       setPrompt: (id) => log.push(`prompt ${id}`),
     },
@@ -68,6 +69,7 @@ describe('band content', () => {
       bobEveryBeats: Tokens.ui.bandBobEveryBeats,
       bounceMs: Tokens.Timing.bandBounceMs,
       maxDtMs: Tokens.Timing.bandMaxTickMs,
+      loopBeats: BEAT_LOOP_BEATS,
     });
     // ≤ 1 visual pulse per second: a bob every bobEveryBeats beats.
     expect(Tokens.Timing.bandBeatMs * Tokens.ui.bandBobEveryBeats).toBeGreaterThanOrEqual(1000);
@@ -224,5 +226,39 @@ describe('createBandController', () => {
     take();
     band.tick(100000); // one 250 ms step at most: never more than one beat
     expect(take().length).toBeLessThanOrEqual(1);
+  });
+
+  it('review: hitches (capped or dropped frames) never drift the sparkle window: the beat follows the loop position', () => {
+    // The loop's own clock: real time since the beat started, wrapping every loopBeats · beatMs (2000 ms here).
+    const loop: { started?: number } = {};
+    const now = { t: 0 };
+    const { band, take } = make({ timings: { quietBeats: 1000 }, position: () => (loop.started === undefined ? undefined : (now.t - loop.started) % 2000) });
+    const step = (ms: number, frame = ms): void => {
+      now.t += ms;
+      band.tick(frame);
+    };
+    for (let k = 0; k < 20; k++) step(50);
+    expect(band.beating).toBe(true);
+    loop.started = now.t; // the loop began at the tick that started the beat
+    take();
+    // Hitches: 700 ms pass each time but the scene clock delivers 250 (capped), and a dropped frame (0 ms).
+    for (let k = 0; k < 3; k++) step(700, 250);
+    step(400, 0);
+    const real = now.t - loop.started;
+    expect(real % 500).toBe(0); // 2500 ms of loop, on a real beat; the scene clock alone says 750 (a quarter beat off)
+    // Tap on the next real beat after two normal frames: sparkle; half a beat later: none.
+    step(250);
+    step(250);
+    band.tap(1);
+    expect(take()).toContain('sparkle 1');
+    step(250);
+    band.tap(1);
+    expect(take().some((l) => l.startsWith('sparkle'))).toBe(false);
+  });
+
+  it('review: without a loop position (audio locked) the scene clock still drives the beat', () => {
+    const { band, run } = make({ timings: { quietBeats: 1000 }, position: () => undefined });
+    run(1000);
+    expect(band.beating).toBe(true);
   });
 });

@@ -13,7 +13,7 @@
 # the soft procedural cone (plate) and four soft flavour scoops (2026-10-21; sprites, all posed at
 # `slot.scoop-2`); the layout
 # objects (`hit.*`, `anchor.*`, `slot.*`; hit.counter-top = the white top face) in a hidden `layout`
-# collection; render size; save.
+# collection; render size; save. Story 8.2: the outfit overlays (outfit.py › dress: sprite.shiba-<item> per item).
 # Every constant is in Blender world units (metres) unless its name says otherwise.
 import json
 import math
@@ -27,6 +27,7 @@ from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cute import chibi, chibi_materials, key_chibi, soften_scene  # noqa: E402
+from outfit import dress  # noqa: E402
 from common import (  # noqa: E402
     add_empty, descendants, eval_world_verts, flat_material, hex_to_linear, hull_object, move_to, parse_args,
 )
@@ -766,6 +767,9 @@ def main():
         print(f'build_ice_cream: {name} → {tuple(round(v, 1) for v in screen.project(o.location))}')
     sp = [screen.project(p) for p in seen]
     print(f'build_ice_cream: Shiba visible y {min(p[1] for p in sp):.1f}..{max(p[1] for p in sp):.1f}, scoop scale {scoop_scale:.3f}, gap {gap:.3f} m')
+
+    # Story 8.2: the outfit overlays (one sprite.shiba-<item> per item over every Shiba state; the counter and the cone cut them too).
+    dress(shiba_rig, shiba_coll, art['dressUp'], params['outfit'])
 
     scene.frame_set(IDLE_FRAME)
     soften_scene(bpy.context.scene)  # the soft toy look (cute.py), last so every builder-made mesh gets it

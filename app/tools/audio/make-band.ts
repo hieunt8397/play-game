@@ -14,7 +14,7 @@
 //   - frog: the singer's croak "ộp ộp" — two buzzy syllables (four harmonics, a 28 Hz flutter) on the note;
 //   - xylophone: a wooden bar — the note with its 3rd and 4th harmonics dying fast;
 //   - bell: a small bell — the note, its octave and 12th, ringing out.
-// Beat (`music.band.beat`, a loop of BEAT_LOOP_BEATS beats Timing.bandBeatMs apart): a soft tom on C4 (beat 1)
+// Beat (`music.band-beat`, a loop of BEAT_LOOP_BEATS beats Timing.bandBeatMs apart): a soft tom on C4 (beat 1)
 // and G4 (beat 3) and a high shaker tick (noise above 3 kHz) on beats 2 and 4, with a soft 30 ms (tom) / 20 ms (tick) attack, every
 // event over before the loop wraps; mastered to BEAT_LUFS (music ≤ −30 LUFS) on the music channel (ducked
 // under every voice line by core/audio-director).

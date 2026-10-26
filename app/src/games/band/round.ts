@@ -9,8 +9,11 @@
 //   bounce still runs: one prominent motion at a time). Taps keep the beat going (play along); after `quietBeats`
 //   beats without a tap it stops, and starts again only after a new tap and another idle time (it never nags).
 // - stop(): Home — the beat stops; no more notes, bobs or sparkles.
+// - Review: the beat's phase follows the loop itself. While the loop plays, every tick and tap re-anchors the beat
+//   clock to its playback position (`beatPositionMs`, modulo the loop), so a dropped or capped frame never leaves
+//   the sparkle window drifting; the scene clock only fills in while no position is known (locked audio).
 // The band never ends a round: the scene starts it in free play (MiniGameBase.startFreePlay); nothing is resumed.
-import type { BandInstrument } from '../../content/games/band.ts';
+import { BEAT_LOOP_BEATS, type BandInstrument } from '../../content/games/band.ts';
 import { Tokens } from '../../core/tokens.ts';
 
 export interface BandAudio {
@@ -19,6 +22,8 @@ export interface BandAudio {
   /** The beat loop starts (its first beat now). */
   startBeat(): void;
   stopBeat(): void;
+  /** The beat loop's playback position (ms into the loop) while it plays, else undefined. */
+  beatPositionMs?(): number | undefined;
   /** Returns the utterance token. */
   say(id: string): number;
   setPrompt(id: string): void;
@@ -42,6 +47,8 @@ export interface BandTimings {
   /** A bob waits while a tap bounce still runs (one prominent motion). */
   readonly bounceMs: number;
   readonly maxDtMs: number;
+  /** Beats per loop of the beat music (its position wraps every loopBeats · beatMs). */
+  readonly loopBeats: number;
 }
 
 export function defaultBandTimings(): BandTimings {
@@ -54,6 +61,7 @@ export function defaultBandTimings(): BandTimings {
     bobEveryBeats: Tokens.ui.bandBobEveryBeats,
     bounceMs: t.bandBounceMs,
     maxDtMs: t.bandMaxTickMs,
+    loopBeats: BEAT_LOOP_BEATS,
   };
 }
 
@@ -112,6 +120,16 @@ export function createBandController(opts: BandOptions): BandController {
     bobTurn = (bobTurn + 1) % instruments.length;
   };
 
+  /** Re-anchors the beat clock to the loop's playback position (the nearest loop to the scene clock's estimate). */
+  const sync = (): void => {
+    if (!beating) return;
+    const pos = audio.beatPositionMs?.();
+    if (pos === undefined || !Number.isFinite(pos)) return;
+    const loop = t.beatMs * Math.max(1, t.loopBeats);
+    const p = ((pos % loop) + loop) % loop;
+    beatClock = Math.max(0, Math.round((beatClock - p) / loop) * loop + p);
+  };
+
   const stopBeat = (): void => {
     if (!beating) return;
     beating = false;
@@ -139,6 +157,7 @@ export function createBandController(opts: BandOptions): BandController {
       armed = true;
       if (!beating) return;
       quiet = 0;
+      sync();
       const phase = beatClock % t.beatMs;
       if (Math.min(phase, t.beatMs - phase) <= t.beatWindowMs) view.sparkle(i);
     },
@@ -159,17 +178,21 @@ export function createBandController(opts: BandOptions): BandController {
         return;
       }
       beatClock += dt;
-      while (beating && beatClock >= (beatIndex + 1) * t.beatMs) {
+      sync();
+      // Every beat crossed counts; only the last one may bob (a jump never starts two motions at once).
+      let crossed = false;
+      while (beatClock >= (beatIndex + 1) * t.beatMs) {
         beatIndex += 1;
         quiet += 1;
+        crossed = true;
         if (quiet >= t.quietBeats) {
           stopBeat();
           armed = false;
           idleMs = 0;
           return;
         }
-        onBeat(beatIndex);
       }
+      if (crossed) onBeat(beatIndex);
     },
     stop() {
       if (stopped) return;

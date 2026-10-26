@@ -37,9 +37,9 @@ describe('content/home (Story 7.1)', () => {
     expect(isVoiceLineId(inviteLine(HOME_STATION))).toBe(true);
   });
 
-  it('awake is derived from the registry: a registered game wakes its corner (Story 7.2: the pen), the others sleep', () => {
+  it('awake is derived from the registry: a registered game wakes its corner (Story 7.2: the pen; Story 7.3: the stage; Story 7.4: the bed; Story 8.1: the clinic; Story 8.2: the wardrobe), the others sleep', () => {
     const playable = (id: string): boolean => Object.prototype.hasOwnProperty.call(GAME_CONTENT, id);
-    expect(yardCorners(playable).filter((c) => c.awake).map((c) => c.id)).toEqual(['pen']);
+    expect(yardCorners(playable).filter((c) => c.awake).map((c) => c.id)).toEqual(['pen', 'stage', 'bed', 'clinic', 'wardrobe']);
     expect(yardCorners((id) => id === 'bedtime').filter((c) => c.awake).map((c) => c.id)).toEqual(['bed']);
   });
 

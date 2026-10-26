@@ -1,0 +1,9 @@
+Poly by Google models (Google Poly archive, re-hosted on Poly Pizza), licence CC-BY 3.0
+(https://creativecommons.org/licenses/by/3.0/) — ATTRIBUTION REQUIRED: the credit ships with the app in
+app/public/CREDITS.txt and is listed in app/README.md. Downloaded 2026-10-26 as glTF binaries; the model pages
+(showing title, author and licence) are archived in assets/_dl/polybygoogle-2026-10-26/.
+  rooster/Rooster.glb - "Rooster" by Poly by Google, CC-BY 3.0, https://poly.pizza/m/6NTegstc5Jy
+                        (static.poly.pizza/f7a2debe-4c82-4f39-a5b2-3b3a3d521f2d.glb)
+  cat/Cat.glb         - "Cat" by Poly by Google, CC-BY 3.0, https://poly.pizza/m/6dM1J6f6pm9
+                        (static.poly.pizza/5d32eb38-9546-4ce4-aa77-bcef9328ee61.glb)
+Used by Ú òa chuồng thú (Story 7.2, tools/render/blender/build_animal_pens.py): posed (turned, scaled) and rendered.

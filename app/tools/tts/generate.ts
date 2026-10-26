@@ -98,9 +98,9 @@ export type LinePlan =
       hash: string;
     };
 
-/** The text sent to the TTS: the style tag, then the segments joined by one space. */
-export function spokenText(segments: readonly string[]): string {
-  return [VOICE_DEFAULTS.style, ...segments].join(" ");
+/** The text sent to the TTS: the style tag (Story 7.4: the line's own, else VOICE_DEFAULTS.style), then the segments joined by one space. */
+export function spokenText(segments: readonly string[], style: string = VOICE_DEFAULTS.style): string {
+  return [style, ...segments].join(" ");
 }
 
 /** Decides whether a line is rendered (pure). */
@@ -116,7 +116,7 @@ export function planLine(
     return { action: "skip", reason: "current" };
   return {
     action: "generate",
-    text: spokenText(splitSegments(line.text)),
+    text: spokenText(splitSegments(line.text), line.style),
     rate: line.rate ?? VOICE_DEFAULTS.rate,
     hash,
   };

@@ -1,0 +1,135 @@
+{
+  "frames": {
+    "xylophone/idle/00": {
+      "frame": {
+        "x": 2,
+        "y": 2,
+        "w": 582,
+        "h": 261
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 1079,
+        "y": 1068,
+        "w": 582,
+        "h": 261
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "drum/idle/00": {
+      "frame": {
+        "x": 588,
+        "y": 2,
+        "w": 402,
+        "h": 390
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 429,
+        "y": 939,
+        "w": 402,
+        "h": 390
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "frog/idle/00": {
+      "frame": {
+        "x": 2,
+        "y": 267,
+        "w": 402,
+        "h": 319
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 819,
+        "y": 466,
+        "w": 402,
+        "h": 319
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "horn/idle/00": {
+      "frame": {
+        "x": 994,
+        "y": 2,
+        "w": 348,
+        "h": 356
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 286,
+        "y": 429,
+        "w": 348,
+        "h": 356
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "bell/idle/00": {
+      "frame": {
+        "x": 1346,
+        "y": 2,
+        "w": 322,
+        "h": 366
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 1397,
+        "y": 419,
+        "w": 322,
+        "h": 366
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "http://github.com/odrick/free-tex-packer-core",
+    "version": "0.3.9",
+    "image": "band.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1670,
+      "h": 588
+    },
+    "scale": 1
+  }
+}

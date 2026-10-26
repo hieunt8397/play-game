@@ -21,7 +21,11 @@
 #                                     decorations, placed anywhere at runtime.
 #                                   Story 2.2: a group with `state.<state>` child collections renders
 #                                   one pass per child (other states hidden) as <object>/<state>/00,
-#                                   at timeline frame 1, instead of the `states` prop.
+#                                   at timeline frame 1, instead of the `states` prop (Story 7.4: a child's
+#                                   `bhc_state` prop, when set, is the state name: collection names are global).
+#                                   Story 8.2: `bhc_holdout_sprites` = JSON list of sprite names: in this
+#                                   group's pass their objects become holdouts instead of being hidden (the
+#                                   Shiba cuts its outfit items: its head hides the back of a hat).
 #                                   Story 3.3: `ghost` = 1 lists the object in raw.json `ghosts`;
 #                                   render.ts then draws <object>/ghost/00 (tools/render/ghost.ts).
 #                                   Story 3.5: `silhouette` = 1 lists the object in raw.json
@@ -86,6 +90,17 @@ def ghost_of(c):
 def silhouette_of(c):
     """Story 3.5: `silhouette` = 1: render.ts derives <object>/shadow/00 from <object>/color/00."""
     return bool(c.get('silhouette', 0))
+
+
+def holdout_sprites_of(c):
+    """Story 8.2: `bhc_holdout_sprites` = JSON list of sprite names whose objects are holdouts (not hidden) in this group's pass."""
+    raw = c.get('bhc_holdout_sprites')
+    if raw is None:
+        return []
+    names = json.loads(raw) if isinstance(raw, str) else list(raw)
+    if not isinstance(names, list) or any(not isinstance(n, str) for n in names):
+        fail(f'collection "{c.name}": prop "bhc_holdout_sprites" must be a JSON list of sprite names')
+    return names
 
 
 def detached_of(c):
@@ -229,8 +244,17 @@ def main():
         name = c.name[len('sprite.'):]
         holdout = holdout_of(c)
         saved = [(o, o.hide_render, o.is_holdout) for o in scene.objects]
+        # Story 8.2: the objects of the listed sprites cut this one (holdouts) instead of being hidden.
+        cutters = set()
+        for other in holdout_sprites_of(c):
+            key = f'sprite.{other}'
+            if key not in sprite_objs:
+                fail(f'collection "{c.name}": bhc_holdout_sprites names "{other}", which is not a sprite of this scene')
+            cutters.update(sprite_objs[key])
         for o in in_sprite:
-            if o not in sprite_objs[c.name]:
+            if o in cutters and o not in sprite_objs[c.name]:
+                o.is_holdout = True
+            elif o not in sprite_objs[c.name]:
                 o.hide_render = True
         for o in plate_objs:
             if holdout:
@@ -243,7 +267,8 @@ def main():
             members = {k.name: list(k.all_objects) for k in children}
             scene.frame_set(PLATE_FRAME)
             for k in children:
-                state = k.name[len(STATE_PREFIX):]
+                # Story 7.4: a `bhc_state` prop names the state when two groups share a state name (collection names are global).
+                state = k.get('bhc_state', k.name[len(STATE_PREFIX):])
                 hidden = [(o, o.hide_render) for other, objs in members.items() if other != k.name for o in objs]
                 for o, _hide in hidden:
                     o.hide_render = True

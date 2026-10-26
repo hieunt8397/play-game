@@ -1,5 +1,0 @@
-Quaternius "Cube World Kit" animals (quaternius.com/packs/cubeworldkit.html, licence CC0 1.0), downloaded 2026-10-22
-as glTF binaries from Quaternius' own uploads on Poly Pizza (licence shown on each page: "CC0 1.0"):
-  Chicken.glb - poly.pizza/m/Z3RCoCYss4 ("Chicken" by Quaternius), static.poly.pizza/9ba093a4-6525-4f3b-927d-98dca72e1e40.glb
-  Cat.glb     - poly.pizza/m/qKICY6xla2 ("Cat" by Quaternius), static.poly.pizza/67f5e3fe-37ee-4c86-95c8-d269d8c9f8ba.glb
-CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/

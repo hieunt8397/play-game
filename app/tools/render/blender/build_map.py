@@ -39,6 +39,7 @@ from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cute import _keyframes, _part, import_joined, key_chibi, soften_scene, tt_model  # noqa: E402
+from outfit import dress  # noqa: E402
 from common import add_empty, descendants, eval_world_verts, flat_material, force_opaque, hex_to_linear, hull_object, key_constant, move_to, principled, recolor_creature, sphere  # noqa: E402
 from common import parse_args as common_args  # noqa: E402
 
@@ -1330,6 +1331,9 @@ def build(args):
     report += icon_report(screen, params, built_icons) if built_icons else []
 
     key_guide_wave(scene, bpy.data.collections[f'sprite.{GUIDE["id"]}'])
+    # Story 8.2: the guide's outfit overlays (one sprite.shiba-<item> per item over its idle and wave frames), after
+    # its hull and anchor (they never grow them) and after the wave pivot (sleeves follow the waving leg).
+    dress({'head': guide_part('head'), 'body': guide_part('body')}, bpy.data.collections[f'sprite.{GUIDE["id"]}'], params['art']['dressUp'], params['outfit'])
 
     landmark_report(screen, params, landmarks)
     polys = dict(station_polys)

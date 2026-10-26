@@ -293,6 +293,118 @@ const ui = {
   bandSparkleRisePx: 40,
   /** Story 7.3: each instrument (its idle frame's longest side) is at least this big (design px; tools/layout/rules.ts › validateBand). */
   bandInstrumentMinPx: 150,
+  /** Story 7.4 Giờ đi ngủ: each tap target (brush, lamp, blanket, Shiba: its padded hull's narrowest width) is at least this wide (design px; tools/layout/rules.ts › validateBedtime). */
+  bedtimeTargetMinPx: 150,
+  /** Story 7.4: the night is a MULTIPLY tint (art.bedtime.nightTint) over the whole room at this alpha (it fades in from 0): the composite's average luma is ~0.55 of the day (≥ 0.35 required; measured with ffmpeg, README). */
+  bedtimeNightAlpha: 1,
+  /** Story 7.4: the suggested step's soft glow (a warm halo behind its target): its strongest alpha and its radius past the target (design px). */
+  bedtimeGlowAlpha: 0.45,
+  bedtimeGlowPadPx: 26,
+  /** Story 7.4: the lamp's warm halo while it is on (alpha). */
+  bedtimeLampGlowAlpha: 0.38,
+  /** Story 7.4: white foam bubbles that pop up at Shiba's mouth while the brush scrubs (a repeat tap: a smaller puff). */
+  bedtimeBubbles: 7,
+  bedtimeRepeatBubbles: 3,
+  /** Story 7.4: the bubbles spread this far around the mouth and rise this high (design px; no drift when reduced). */
+  bedtimeBubbleSpreadPx: 34,
+  bedtimeBubbleRisePx: 36,
+  /** Story 7.4: the brush scrubs ± this (design px) at Shiba's mouth (× reducedMotionAmplitude when reduced). */
+  bedtimeScrubPx: 10,
+  /** Story 7.4: a "z" floats this high above the sleeping head (design px; it only fades when reduced). */
+  bedtimeZRisePx: 60,
+  /** Story 7.4: a tapped target's small reaction (repeat, awake Shiba): a squash to this scale and back (× reducedMotionAmplitude when reduced). */
+  bedtimeNudgeScale: 1.05,
+  /** Story 7.4: the lamp's repeat wiggle (degrees, × reducedMotionAmplitude when reduced). */
+  bedtimeWiggleDeg: 4,
+  /** Story 7.4: the night tint reaches this far past the design rect (the stage may show a little more at some aspects). */
+  bedtimeNightBleedPx: 200,
+  /** Story 7.4: a soft glow is this many concentric ellipses (faint at the rim, strongest in the middle). */
+  bedtimeGlowRings: 8,
+  /** Story 7.4: the lamp's warm halo radii (design px). */
+  bedtimeLampGlowRxPx: 70,
+  bedtimeLampGlowRyPx: 60,
+  /** Story 7.4: the suggestion glow breathes down to this alpha, the stars twinkle down to it. */
+  bedtimeBreatheAlpha: 0.55,
+  /** Story 7.4: the brush at Shiba's mouth: a little left of it, tilted (sitting / lying), at this scale of its rest size. */
+  bedtimeBrushOffsetPx: 6,
+  bedtimeBrushTiltSitDeg: 20,
+  bedtimeBrushTiltLieDeg: -25,
+  bedtimeBrushTravelScale: 0.8,
+  /** Story 7.4: a foam bubble is drawn at this scale of its rendered size, plus up to this much more. */
+  bedtimeBubbleScale: 0.25,
+  bedtimeBubbleScaleJitter: 0.2,
+  /** Story 7.4: the stars at the window are drawn at these scales of their rendered size (one after the other). */
+  bedtimeStarScales: [0.32, 0.4, 0.48],
+  /** Story 7.4: a "z" starts at this scale of its rendered size and grows to the second as it floats. */
+  bedtimeZScale: 0.45,
+  bedtimeZScaleEnd: 0.6,
+  /** Story 7.4 review: a "z" starts this far right of and above the sleeping head's top (design px). */
+  bedtimeZOffsetPx: 6,
+  /** Story 8.1 Bác sĩ thú cưng: a round is this many patients (each a different animal; then the next round). */
+  petClinicPatientsPerRound: 3,
+  /** Story 8.1: a patient shows 1 to this many distinct problems. */
+  petClinicMaxProblems: 2,
+  /** Story 8.1: each tool is drawn at least this big (its frame's longest side, design px; tools/layout/rules.ts › validatePetClinic). */
+  petClinicToolMinPx: 90,
+  /** Story 8.1: each tool's tap circle is at least this wide (design px; content/games/pet-clinic.ts › toolHitRadius). */
+  petClinicToolHitMinPx: 80,
+  /** Story 8.1: the idle reminder (the need line again) comes at most this many times per patient. */
+  petClinicRemindMax: 2,
+  /** Story 8.1: the head tilt of the static cat and rooster (their whole body turns on its feet, degrees); the double take turns ± this. */
+  petClinicTiltDeg: 12,
+  /** Story 8.1: a hop (a correct flourish, the thank-you) lifts the patient this high (design px; × reducedMotionAmplitude when reduced). */
+  petClinicHopPx: 34,
+  /** Story 8.1: the wiggle flourish turns ± this on the patient's feet (degrees; × reducedMotionAmplitude when reduced). */
+  petClinicWiggleDeg: 6,
+  /** Story 8.1: the sleepy patient's slow sway (degrees; none under reduced motion). */
+  petClinicSwayDeg: 3,
+  /** Story 8.1: a tapped patient's small squash (scale; × reducedMotionAmplitude when reduced). */
+  petClinicTapSquash: 1.06,
+  /** Story 8.1: the shower's water drops: how many, how wide they spread and how far they fall (design px). */
+  petClinicDrops: 9,
+  petClinicDropSpreadPx: 56,
+  petClinicDropFallPx: 90,
+  petClinicDropScale: 0.5,
+  /** Story 8.1: the sparkle flourish: this many sparkles around the patient's back, this far (design px). */
+  petClinicSparkles: 5,
+  petClinicSparkleSpreadPx: 90,
+  petClinicSparkleScale: 0.5,
+  /** Story 8.1: a "z" (the yawn's cue, the blanket nap) and a heart (the thank-you) float this high (design px; they only fade when reduced). */
+  petClinicFloatRisePx: 60,
+  petClinicZScale: 0.5,
+  petClinicHeartScale: 0.6,
+  /** Story 8.1: the tummy's wavy lines are drawn at this scale and bob ± this (design px) when the tummy rumbles. */
+  petClinicWaveScale: 0.6,
+  petClinicWaveBobPx: 4,
+  /** Story 8.1: the shower rocks ± this (degrees) this many times while it sprays. */
+  petClinicShowerShakeDeg: 6,
+  petClinicShowerShakes: 3,
+  /** Story 8.1: the sparkles sit on an ellipse this much flatter than it is wide. */
+  petClinicSparkleSquash: 0.6,
+  /** Story 8.1: in a rigged patient's double take its head turns (the tilt frame) and its body sways only this share of ui.petClinicTiltDeg. */
+  petClinicDoubleTakeBodyShare: 0.4,
+  /** Story 8.2: the wardrobe round completes after this many wears or take-offs (then free play, the voice silent). */
+  dressUpRoundChanges: 5,
+  /** Story 8.2: a wardrobe icon's longest side (design px; build_dress_up.py scales each item to it). */
+  dressUpIconPx: 100,
+  /** Story 8.2: an item's tap circle is at least this wide (design px; spec: icons ≥ 110 with gaps ≥ spacing.targetGap). */
+  dressUpItemHitPx: 110,
+  /** Story 8.2: the reflection in the mirror is Shiba (and its outfit) at this scale, mirrored (negative scaleX). */
+  dressUpMirrorScale: 0.6,
+  /** Story 8.2: the reflection's alpha (the glass tints it a little). */
+  dressUpMirrorAlpha: 0.9,
+  /** Story 8.2: the happy hop's height and the giggle wiggle's angle (× reducedMotionAmplitude when reduced). */
+  dressUpHopPx: 28,
+  dressUpWiggleDeg: 5,
+  /** Story 8.2: the take-off shake: ± this many design px, this many times (× reducedMotionAmplitude when reduced). */
+  dressUpShakePx: 7,
+  dressUpShakes: 3,
+  /** Story 8.2: a tapped icon bounces to this scale and back. */
+  dressUpIconBounce: 1.12,
+  /** Story 8.2: the soft halo behind a worn item's icon (rings, peak alpha, padding over its tap circle). */
+  dressUpGlowRings: 8,
+  dressUpGlowAlpha: 0.6,
+  dressUpGlowPadPx: 6,
   /** Story 5.6: a new station landmark (the ice-cream cone, the pizza chimney) is at least this tall (design px; build_map.py). */
   mapLandmarkMinPx: 60,
   /** Story 5.6: the map clouds drift right at this speed (design px per ms; × reducedMotionAmplitude when reduced). */
@@ -502,6 +614,140 @@ const art = {
     bellDark: colour('#E8B21E'),
     stand: colour('#4D96FF'),
     stool: colour('#FF9A3C'),
+  },
+  /**
+   * Story 7.4: Giờ đi ngủ (build_bedtime.py): the bedroom's wall, wallpaper dots, floor boards, skirting, the window
+   * (frame, the night sky, the moon, the curtains), the paintings, the quilt and its pattern, the toothpaste foam,
+   * the stars and the "z". `nightTint` and `glow` are runtime colours: the night tint over the plate (alpha
+   * ui.bedtimeNightAlpha, multiply blend) and the warm glow of the lamp and of the suggested step.
+   */
+  bedtime: {
+    wall: colour('#FFE3D3'),
+    wallDot: colour('#FFC9B5'),
+    floor: colour('#D9A273'),
+    floorDark: colour('#BF8558'),
+    skirting: colour('#FFF6EC'),
+    windowFrame: colour('#FFFFFF'),
+    daySkyTop: colour('#8FD3FF'),
+    daySkyLow: colour('#E6F7FF'),
+    cloud: colour('#FFFFFF'),
+    skyTop: colour('#2E3F8F'),
+    skyLow: colour('#7D7FD1'),
+    moon: colour('#FFF1B3'),
+    curtain: colour('#9FC7FF'),
+    curtainDark: colour('#7EAEF2'),
+    paintSun: colour('#FFD23F'),
+    paintSky: colour('#BDE6FF'),
+    paintHill: colour('#9EDC8A'),
+    paintHeart: colour('#FF8FB1'),
+    quilt: colour('#FFD86B'),
+    quiltPatch: colour('#FFFFFF'),
+    quiltTrim: colour('#FF9EC4'),
+    stool: colour('#B9E3C6'),
+    mouth: colour('#7A3B3B'),
+    tongue: colour('#FF8FA3'),
+    eyeLine: colour('#3A2A22'),
+    foam: colour('#FFFFFF'),
+    star: colour('#FFE066'),
+    z: colour('#C9B8FF'),
+    nightTint: colour('#6F7FD0'),
+    glow: colour('#FFE7A3'),
+  },
+  /**
+   * Story 8.1: Bác sĩ thú cưng (build_pet_clinic.py): the clinic room (wall, wallpaper dots, floor, skirting, the
+   * window), the exam mat, the tool cart, the four tools (shower head, milk bottle, plaster, blanket), the overlays
+   * (mud splats, the scrape) and the particles (water drop, wavy tummy lines, "z", sparkle, heart). Never red.
+   */
+  petClinic: {
+    wall: colour('#C6EBE2'),
+    wallDot: colour('#A8DCCF'),
+    floor: colour('#F2D3A8'),
+    floorDark: colour('#E0B987'),
+    skirting: colour('#FFFFFF'),
+    windowFrame: colour('#FFFFFF'),
+    sky: colour('#BFE6FF'),
+    mat: colour('#9FD8F7'),
+    matTrim: colour('#FFFFFF'),
+    cart: colour('#FFB7CE'),
+    cartDark: colour('#F294B3'),
+    cross: colour('#5CC8B4'),
+    shower: colour('#7FC8F8'),
+    showerDark: colour('#4FA8E0'),
+    chrome: colour('#E8EEF2'),
+    bottle: colour('#F4FBFF'),
+    milk: colour('#FFFFFF'),
+    teat: colour('#FFC26B'),
+    cap: colour('#8FD6A8'),
+    plaster: colour('#F7C9A0'),
+    plasterPad: colour('#FFF4EA'),
+    blanket: colour('#B9A6FF'),
+    blanketPatch: colour('#FFFFFF'),
+    mud: colour('#8B5E3C'),
+    mudDark: colour('#553823'),
+    scrape: colour('#F59A9A'),
+    scrapeDark: colour('#E98394'),
+    drop: colour('#8FD3FF'),
+    wave: colour('#7A6BB0'),
+    z: colour('#C9B8FF'),
+    sparkle: colour('#FFE066'),
+    heart: colour('#FF9EC4'),
+  },
+  /**
+   * Story 8.2: Thay đồ cho Shiba (build_dress_up.py, outfit.py; also read by build_map.py and build_ice_cream.py for the
+   * outfit items). The wardrobe room (wall, wallpaper dots, floor, skirting, rug), the open wardrobe and its shelves,
+   * the standing mirror, and the eleven items: party cone, cowboy hat, gold crown, knitted beanie; round red glasses,
+   * pink heart sunglasses (tinted lenses), yellow star glasses; striped T-shirt, yellow raincoat, red jumper with a
+   * heart, Hawaiian flower shirt; the shirts' hanger. `glow` is a runtime colour: the soft halo behind a worn item.
+   */
+  dressUp: {
+    wall: colour('#C9E3FF'),
+    wallDot: colour('#ADD2FA'),
+    floor: colour('#E8C39E'),
+    floorDark: colour('#D4A87E'),
+    skirting: colour('#FFFFFF'),
+    rug: colour('#FFD0E1'),
+    wardrobe: colour('#FFB7CE'),
+    wardrobeDark: colour('#F294B3'),
+    wardrobeInside: colour('#FFF1F6'),
+    shelf: colour('#FFFFFF'),
+    knob: colour('#FFD23F'),
+    rail: colour('#C9CED6'),
+    mirrorFrame: colour('#FFD23F'),
+    mirrorFrameDark: colour('#E8B21E'),
+    mirrorGlass: colour('#CDEBFF'),
+    mirrorShine: colour('#FFFFFF'),
+    partyHat: colour('#FF7EB6'),
+    partyDot: colour('#FFE066'),
+    partyTrim: colour('#4D96FF'),
+    pompom: colour('#FFFFFF'),
+    cowboy: colour('#C98B4F'),
+    cowboyBand: colour('#7A4A2A'),
+    crown: colour('#FFCA28'),
+    gemPink: colour('#FF5C8A'),
+    gemBlue: colour('#4D96FF'),
+    beanie: colour('#6BCB77'),
+    beanieStripe: colour('#B8F0BE'),
+    beanieCuff: colour('#4FAE5C'),
+    glassesRed: colour('#F23D3D'),
+    heartRim: colour('#FF5FA8'),
+    heartLens: colour('#FF9EC4'),
+    starRim: colour('#FFC21A'),
+    starLens: colour('#FFF1A8'),
+    stripeA: colour('#4D96FF'),
+    stripeB: colour('#FFFFFF'),
+    raincoat: colour('#FFD23F'),
+    raincoatTrim: colour('#E8B21E'),
+    raincoatButton: colour('#3A6EA5'),
+    jumper: colour('#E8373C'),
+    jumperRib: colour('#C42B30'),
+    jumperHeart: colour('#FFFFFF'),
+    flowerShirt: colour('#3EC8C8'),
+    flowerPink: colour('#FF8FB1'),
+    flowerWhite: colour('#FFFFFF'),
+    flowerYellow: colour('#FFE066'),
+    hanger: colour('#C98B4F'),
+    form: colour('#FFF6EC'),
+    glow: colour('#FFE7A3'),
   },
   fishing: {
     yellow: colour('#FFD23F'),

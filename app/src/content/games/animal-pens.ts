@@ -6,7 +6,8 @@
 //   - `door/closed/00`, `door/open/00`: the door leaf shut / swung open (full-frame, at door 1);
 //   - `animal-<id>/peek/00`: the animal in door 1's opening (cut by the pen wall in front of it);
 //   - `hit.door-<n>`: the tap area of door n (its frame and opening), `anchor.door-<n>`: its ground pivot.
-// Every animal is a real model (Quaternius; README provenance) with a real CC0 call (Freesound; ≤ 800 ms,
+// Every animal is a real model (Quaternius; the cat and rooster are Poly by Google, CC-BY 3.0: credited in
+// public/CREDITS.txt; README provenance) with a real CC0 call (Freesound; ≤ 800 ms,
 // creature sounds measured by `npm run audio:check`) and a muffled copy for the wiggle behind the door.
 import { ATLASES, BACKGROUNDS } from '../assets.ts';
 import type { GameAssets, ScreenRequirements } from './types.ts';

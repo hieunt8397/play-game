@@ -50,11 +50,19 @@ import {
   validateAnimalPens,
   bandLimits,
   validateBand,
+  bedtimeLimits,
+  validateBedtime,
+  petClinicLimits,
+  validatePetClinic,
+  dressUpLimits,
+  validateDressUp,
+  validateOutfitFrames,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
 import { ANIMAL_IDS, ANIMAL_PENS_SCREEN, DOOR_FRAMES, DOOR_IDS, peekFrame } from '../../src/content/games/animal-pens.ts';
 import { BAND_SCREEN, INSTRUMENT_IDS } from '../../src/content/games/band.ts';
+import { BEDTIME_SCREEN, TARGET_IDS as BEDTIME_TARGETS } from '../../src/content/games/bedtime.ts';
 import { sceneBubbleKeepOutRect } from '../layout/hud-keep-out.ts';
 import { ALL_FISH, FISHING_SCREEN, POND_HIT } from '../../src/content/games/fishing.ts';
 import { CONE_ANCHORS, FLAG_ANCHORS, RACE_SCREEN, ladder as raceLadder } from '../../src/content/games/race.ts';
@@ -78,8 +86,10 @@ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayou
   map: (layout, atlas) => [
     ...validateDecorations(layout, decorationLimits(GAME_STATIONS, ISLAND_GAME_IDS, DECORATIONS, [HOME_STATION]), atlas),
     ...validatePlayAgainIcons(Object.keys(GAME_ICONS), atlas, layout.renderScale, Tokens.ui.playAgainIconPx),
+    // Story 8.2: every guide frame has its overlay for every outfit item.
+    ...validateOutfitFrames('map', atlas),
   ],
-  'ice-cream': (layout, atlas) => validateIceCream(layout, iceCreamLimits(iceCreamScreen), atlas),
+  'ice-cream': (layout, atlas) => [...validateIceCream(layout, iceCreamLimits(iceCreamScreen), atlas), ...validateOutfitFrames('ice-cream', atlas)],
   pizza: (layout, atlas) => validatePizza(layout, pizzaLimits(pizzaScreen), atlas),
   'dino-puzzle': (layout, atlas) => validateDinoPuzzle(layout, dinoPuzzleLimits(dinoScreen, SPECIES, PIECES, BAY_ANCHORS, DROP_ORDER), atlas),
   'shadow-match': (layout, atlas) => validateShadowMatch(layout, shadowMatchLimits(shadowScreen, ITEM_IDS, SHADOW_COUNTS), atlas),
@@ -92,6 +102,12 @@ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayou
   'animal-pens': (layout, atlas) => validateAnimalPens(layout, animalPensLimits(ANIMAL_PENS_SCREEN, DOOR_IDS, [DOOR_FRAMES.closed, DOOR_FRAMES.open], ANIMAL_IDS.map(peekFrame)), atlas),
   // Story 7.3: the band's instruments (frames, sizes, the bouncing frame, hulls).
   band: (layout, atlas) => validateBand(layout, bandLimits(BAND_SCREEN, INSTRUMENT_IDS), atlas),
+  // Story 7.4: the bedroom's tap targets, anchors and frames.
+  bedtime: (layout, atlas) => validateBedtime(layout, bedtimeLimits(BEDTIME_SCREEN, BEDTIME_TARGETS), atlas),
+  // Story 8.1: the clinic's exam area, patient frames and tool circles.
+  'pet-clinic': (layout, atlas) => validatePetClinic(layout, petClinicLimits(), atlas),
+  // Story 8.2: the wardrobe's tap circles and hulls, every frame, every overlay.
+  'dress-up': (layout, atlas) => [...validateDressUp(layout, dressUpLimits(), atlas), ...validateOutfitFrames('dress-up', atlas)],
 };
 
 /** PNG zlib level of the shipped background. */

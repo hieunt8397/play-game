@@ -89,8 +89,8 @@ CLOUDS = [(-3.6, 60.0, 7.6, 0.9), (0.6, 60.0, 8.2, 0.75), (3.9, 60.0, 7.4, 0.85)
 # the door centre for the head, how far the nose pokes out of the doorway) -------------------------------------------------------
 ANIMALS = {
     'dog': ('quaternius/animals/ShibaInu.fbx', 1.65, -25.0, 0.0, 0.25),
-    'cat': ('quaternius/cubeworld/Cat.glb', 1.4, -25.0, 0.0, 0.25),
-    'rooster': ('quaternius/cubeworld/Chicken.glb', 1.5, -25.0, 0.0, 0.2),
+    'cat': ('polybygoogle/cat/Cat.glb', 1.7, -25.0, 0.0, 0.25),  # CC-BY 3.0 (app/public/CREDITS.txt)
+    'rooster': ('polybygoogle/rooster/Rooster.glb', 1.6, -25.0, 0.0, 0.2),  # CC-BY 3.0 (app/public/CREDITS.txt)
     'cow': ('quaternius/animals/Cow.fbx', 1.92, -25.0, 0.05, 0.3),
     'pig': ('quaternius/farm/Pig.glb', 1.45, -25.0, 0.0, 0.3),
     'sheep': ('quaternius/farm/Sheep.glb', 1.65, -25.0, 0.0, 0.3),
@@ -562,4 +562,5 @@ def main():
     print(f'build_animal_pens: saved {args["out"]}')
 
 
-main()
+if __name__ == '__main__':
+    main()

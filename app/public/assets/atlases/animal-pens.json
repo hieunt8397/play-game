@@ -48,10 +48,34 @@
         "y": 0.5
       }
     },
-    "animal-horse/peek/00": {
+    "animal-cat/peek/00": {
       "frame": {
         "x": 2,
         "y": 848,
+        "w": 197,
+        "h": 381
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 284,
+        "y": 796,
+        "w": 197,
+        "h": 381
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "animal-horse/peek/00": {
+      "frame": {
+        "x": 2,
+        "y": 1233,
         "w": 182,
         "h": 381
       },
@@ -75,7 +99,7 @@
     "animal-cow/peek/00": {
       "frame": {
         "x": 2,
-        "y": 1233,
+        "y": 1618,
         "w": 240,
         "h": 370
       },
@@ -99,7 +123,7 @@
     "animal-dog/peek/00": {
       "frame": {
         "x": 188,
-        "y": 848,
+        "y": 1233,
         "w": 215,
         "h": 340
       },
@@ -122,8 +146,8 @@
     },
     "animal-sheep/peek/00": {
       "frame": {
-        "x": 308,
-        "y": 434,
+        "x": 203,
+        "y": 848,
         "w": 200,
         "h": 338
       },
@@ -146,8 +170,8 @@
     },
     "animal-pig/peek/00": {
       "frame": {
-        "x": 494,
-        "y": 2,
+        "x": 308,
+        "y": 434,
         "w": 257,
         "h": 332
       },
@@ -168,44 +192,20 @@
         "y": 0.5
       }
     },
-    "animal-cat/peek/00": {
-      "frame": {
-        "x": 2,
-        "y": 1607,
-        "w": 244,
-        "h": 307
-      },
-      "rotated": false,
-      "trimmed": true,
-      "spriteSourceSize": {
-        "x": 230,
-        "y": 866,
-        "w": 244,
-        "h": 307
-      },
-      "sourceSize": {
-        "w": 2048,
-        "h": 1536
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
     "animal-rooster/peek/00": {
       "frame": {
-        "x": 246,
-        "y": 1192,
-        "w": 169,
-        "h": 305
+        "x": 494,
+        "y": 2,
+        "w": 147,
+        "h": 316
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 276,
-        "y": 875,
-        "w": 169,
-        "h": 305
+        "x": 278,
+        "y": 872,
+        "w": 147,
+        "h": 316
       },
       "sourceSize": {
         "w": 2048,
@@ -223,8 +223,8 @@
     "image": "animal-pens.png",
     "format": "RGBA8888",
     "size": {
-      "w": 753,
-      "h": 1916
+      "w": 643,
+      "h": 1990
     },
     "scale": 1
   }

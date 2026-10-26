@@ -59,10 +59,10 @@ export class Band extends MiniGameBase<'band'> {
     this.reduced = prefersReducedMotion(window);
     this.layout = LAYOUTS.band;
     this.views = [];
-    // The stage is quiet but for the band: the island loop makes way (the beat uses the music channel, ducked
-    // under every voice line) and comes back when the band closes.
+    // The stage is quiet but for the band: the island loop fades out (the beat uses the music channel, ducked
+    // under every voice line) and fades back in when the band closes.
     this.outerMusic = audio.musicId;
-    audio.stopMusic();
+    audio.fadeOutMusic(Tokens.Timing.bandMusicFadeMs);
 
     const rs = this.layout.renderScale;
     const bg = BACKGROUNDS.band;
@@ -80,8 +80,10 @@ export class Band extends MiniGameBase<'band'> {
         note: (id) => audio.note(id, Tokens.ui.bandVoiceCap),
         startBeat: () => audio.music(BEAT_MUSIC),
         stopBeat: () => {
-          if (audio.musicId === BEAT_MUSIC) audio.stopMusic();
+          if (audio.musicId === BEAT_MUSIC) audio.fadeOutMusic(Tokens.Timing.bandBeatFadeMs);
         },
+        // The sparkle window follows the loop itself (review: never the scene clock alone).
+        beatPositionMs: () => (audio.musicId === BEAT_MUSIC ? audio.musicPositionMs : undefined),
         say: (id) => audio.say(id),
         setPrompt: (id) => audio.setPrompt(id),
       },
@@ -134,10 +136,10 @@ export class Band extends MiniGameBase<'band'> {
   private silence(closing: boolean): void {
     this.band?.stop();
     audio.stopNotes();
-    if (audio.musicId === BEAT_MUSIC) audio.stopMusic();
+    if (audio.musicId === BEAT_MUSIC) audio.fadeOutMusic(Tokens.Timing.bandBeatFadeMs);
     if (!closing) return;
     audio.clearPrompt(INVITE_LINE);
-    if (this.outerMusic !== undefined) audio.music(this.outerMusic);
+    if (this.outerMusic !== undefined) audio.music(this.outerMusic, Tokens.Timing.bandMusicFadeMs);
     this.outerMusic = undefined;
   }
 

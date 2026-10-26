@@ -16,6 +16,7 @@ import { DECORATIONS } from '../../src/content/decorations.ts';
 import { PIECES, SPECIES } from '../../src/content/games/dino-puzzle.ts';
 import { ITEM_IDS, SHADOW_COUNTS } from '../../src/content/games/shadow-match.ts';
 import { GAME_ICONS } from '../../src/content/game-icons.ts';
+import { OUTFIT_ITEMS } from '../../src/content/games/dress-up.ts';
 import { GAME_IDS, ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
 import { RENDER_SCALE, layoutLimits } from '../layout/rules.ts';
@@ -45,6 +46,12 @@ export interface BuildParams {
     animalPens: Record<string, string>;
     /** Story 7.3: art.band (the stage and the instruments). */
     band: Record<string, string>;
+    /** Story 7.4: art.bedtime (the bedroom, the quilt, the particles). */
+    bedtime: Record<string, string>;
+    /** Story 8.1: art.petClinic (the clinic room, the cart, the tools, the overlays, the particles). */
+    petClinic: Record<string, string>;
+    /** Story 8.2: art.dressUp (the wardrobe room, the mirror, the eleven outfit items; also the map and ice-cream outfit overlays). */
+    dressUp: Record<string, string>;
     /** Story 5.6: art.map (the map road, water, foam, cone and chimney). */
     map: Record<string, string>;
   };
@@ -74,6 +81,10 @@ export interface BuildParams {
   iconMin: number;
   /** Story 5.6: ui.mapLandmarkMinPx (a new station landmark's projected height, design px; the builder fails under it). */
   landmarkMin: number;
+  /** Story 8.2: the outfit items (content/games/dress-up.ts › OUTFIT_ITEMS) every Shiba screen dresses (map, ice-cream, dress-up); an id the builder has no mesh for fails the build. */
+  outfit: { id: string; slot: string }[];
+  /** Story 8.2: the wardrobe's sizes (design px): an icon's longest side, an item's tap circle, the gap between tap targets, the reflection's scale. */
+  dressUp: { iconPx: number; itemHitPx: number; gapPx: number; mirrorScale: number };
   renderScale: number;
   design: { width: number; height: number };
   rect: { x0: number; y0: number; x1: number; y1: number };
@@ -97,6 +108,9 @@ export function buildParams(): BuildParams {
       home: Object.fromEntries(Object.entries(art.home).map(([id, c]) => [id, c.css])),
       animalPens: Object.fromEntries(Object.entries(art.animalPens).map(([id, c]) => [id, c.css])),
       band: Object.fromEntries(Object.entries(art.band).map(([id, c]) => [id, c.css])),
+      bedtime: Object.fromEntries(Object.entries(art.bedtime).map(([id, c]) => [id, c.css])),
+      petClinic: Object.fromEntries(Object.entries(art.petClinic).map(([id, c]) => [id, c.css])),
+      dressUp: Object.fromEntries(Object.entries(art.dressUp).map(([id, c]) => [id, c.css])),
       map: Object.fromEntries(Object.entries(art.map).map(([id, c]) => [id, c.css])),
     },
     dino: {
@@ -116,6 +130,8 @@ export function buildParams(): BuildParams {
     decorationMin: Tokens.components.decorationItem.minSize,
     iconMin: Tokens.ui.playAgainIconPx,
     landmarkMin: Tokens.ui.mapLandmarkMinPx,
+    outfit: OUTFIT_ITEMS.map((i) => ({ id: i.id, slot: i.slot })),
+    dressUp: { iconPx: Tokens.ui.dressUpIconPx, itemHitPx: Tokens.ui.dressUpItemHitPx, gapPx: Tokens.spacing.targetGap, mirrorScale: Tokens.ui.dressUpMirrorScale },
     renderScale: RENDER_SCALE,
     design: { width: Tokens.design.width, height: Tokens.design.height },
     rect: layoutLimits().rect,

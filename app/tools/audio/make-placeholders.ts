@@ -9,6 +9,9 @@ import { fileURLToPath } from 'node:url';
 import { AUDIO_CATALOG, type AudioId } from '../../src/content/audio-catalog.ts';
 import { FFMPEG, probeBinary, resolveBinary, type Env, type Probe } from '../shared/binaries.ts';
 import { bandArgs } from './make-band.ts';
+import { bedtimeArgs } from './make-bedtime.ts';
+import { petClinicArgs } from './make-pet-clinic.ts';
+import { dressUpArgs } from './make-dress-up.ts';
 
 /** Encoder settings shared by every file (Technical Decisions › Asset pipeline). */
 const ENCODE = ['-ac', '1', '-ar', '44100', '-c:a', 'aac', '-b:a', '64k'];
@@ -250,6 +253,15 @@ export function buildArgs(id: AudioId, outFile: string): string[] {
   // Ban nhạc (Story 7.3): the band's notes and its beat have their own recipes (tools/audio/make-band.ts).
   const band = bandArgs(id, outFile);
   if (band) return band;
+  // Giờ đi ngủ (Story 7.4): its soft sounds and its lullaby have their own recipes (tools/audio/make-bedtime.ts).
+  const bedtime = bedtimeArgs(id, outFile);
+  if (bedtime) return bedtime;
+  // Bác sĩ thú cưng (Story 8.1): the splash, burp, gurgle and pat have their own recipes (tools/audio/make-pet-clinic.ts).
+  const clinic = petClinicArgs(id, outFile);
+  if (clinic) return clinic;
+  // Thay đồ cho Shiba (Story 8.2): the pop has its own recipe (tools/audio/make-dress-up.ts).
+  const dressUp = dressUpArgs(id, outFile);
+  if (dressUp) return dressUp;
   switch (id) {
     case 'sfx.shell.pop':
       return ['-hide_banner', '-y', ...source(POP_EXPR, POP_SECONDS), '-af', POP_FILTER, ...ENCODE, outFile];

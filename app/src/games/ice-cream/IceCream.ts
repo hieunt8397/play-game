@@ -19,6 +19,8 @@
 // 2026-10-21: every resting scoop lies on the table row (round.ts `row()`, from hit.counter-top and the
 // home slots' y, from the leftmost to the rightmost home); a rest dropped above it falls onto it with a
 // small bounce, one dropped below it (the pink front) slides up onto it (restOnRow).
+// Story 8.2: Shiba wears the outfit chosen in the wardrobe (core/outfit-layers: the overlay frames of atlas.ice-cream follow
+// every Shiba frame, its breath, bounce and shiver shake); every Shiba frame change goes through setShibaFrame.
 // Missing frames or the nose hit warn once and fall back to the happy / idle frames with no nose cream.
 import type { GameObjects, Time, Tweens } from 'phaser';
 import { ATLASES, BACKGROUNDS } from '../../content/assets';
@@ -52,6 +54,8 @@ import { amplitude, prefersReducedMotion } from '../../core/reduced-motion';
 import type { ReactionSet } from '../../core/reactions';
 import { Tokens } from '../../core/tokens';
 import { originFor, trimmedCentre, trimmedSize, type TrimmedRect } from '../../core/ui/sprite-pivot';
+import { attachOutfit, type LayerImage, type OutfitLayers } from '../../core/outfit-layers';
+import { ProgressStore } from '../../core/progress-store';
 import { MiniGameBase } from '../mini-game-base';
 import { deferredHintWrong, isChoseOtherReaction, isCorrectReaction, noseCreamAfter, pairHintWrong, stepKey, type Taste } from './reactions';
 import {
@@ -105,6 +109,8 @@ export class IceCream extends MiniGameBase<'ice-cream'> {
   private scoops = new Map<string, ScoopView>();
   private coneScoops: ScoopView[] = [];
   private shiba: GameObjects.Image | undefined;
+  /** Story 8.2: Shiba's outfit layers (ProgressStore outfit). */
+  private outfit: OutfitLayers | undefined;
   private breath: Tweens.Tween | undefined;
   private cone: DropTarget | undefined;
   /** Story 5.1: the ring around the tap-selected scoop. */
@@ -233,6 +239,7 @@ export class IceCream extends MiniGameBase<'ice-cream'> {
   // --- Shiba ----------------------------------------------------------------------------------------
 
   private addShiba(): void {
+    this.outfit = undefined;
     const key = ATLASES['ice-cream'].key;
     const anchor = this.layout.anchors[SHIBA_ANCHOR];
     if (!anchor || !this.frameRect(SHIBA_FRAMES.idle)) {
@@ -242,7 +249,14 @@ export class IceCream extends MiniGameBase<'ice-cream'> {
     const o = originFor(anchor, this.layout.design);
     this.shibaX = anchor.x;
     this.shiba = this.add.image(anchor.x, anchor.y, key, SHIBA_FRAMES.idle).setOrigin(o.x, o.y).setScale(1 / this.layout.renderScale);
+    this.outfit = attachOutfit(this, this.shiba as unknown as LayerImage, key, ProgressStore.outfit);
     this.breathe();
+  }
+
+  /** Story 8.2: Shiba's frame (its origin kept) and, at once, every worn item's overlay frame. */
+  private setShibaFrame(frame: string): void {
+    if (this.outfit) this.outfit.setFrame(frame);
+    else this.shiba?.setFrame(frame, false, false);
   }
 
   /** Breathing: scaleY 1 ↔ shibaBreathScale around the ground pivot, yoyo. */
@@ -366,7 +380,7 @@ export class IceCream extends MiniGameBase<'ice-cream'> {
       onComplete: () => {
         if (this.shibaAnim === anim) this.shibaAnim = undefined;
         onDone?.();
-        img.setFrame(this.idleFrame(), false, false);
+        this.setShibaFrame(this.idleFrame());
         img.setPosition(this.shibaX, img.y).setScale(base);
         this.holdAmbient(HOLD_CELEBRATE, false);
         this.breathe();
@@ -390,7 +404,7 @@ export class IceCream extends MiniGameBase<'ice-cream'> {
       const local = cycle * steps - k;
       const s = scales[k]! + (scales[k + 1]! - scales[k]!) * Math.sin((local * Math.PI) / 2);
       img.setScale(base * s);
-      if (frames.length > 0) img.setFrame(frames[Math.floor(v * frames.length * spec.repeat) % frames.length]!, false, false);
+      if (frames.length > 0) this.setShibaFrame(frames[Math.floor(v * frames.length * spec.repeat) % frames.length]!);
     });
   }
 
@@ -407,7 +421,7 @@ export class IceCream extends MiniGameBase<'ice-cream'> {
     const dx = this.reduced ? 0 : Tokens.ui.iceCreamShiverPx;
     this.animateShiba(ms, (v, img) => {
       const k = Math.floor((v * ms) / frameMs);
-      img.setFrame(frames[k % frames.length]!, false, false);
+      this.setShibaFrame(frames[k % frames.length]!);
       img.setPosition(this.shibaX + (k % 2 === 0 ? dx : -dx), img.y);
     });
   }
@@ -426,9 +440,9 @@ export class IceCream extends MiniGameBase<'ice-cream'> {
     let said = false;
     this.animateShiba(
       Tokens.Timing.iceCreamSneezeFrameMs * slots,
-      (v, img) => {
+      (v) => {
         const k = Math.min(frames.length - 1, Math.floor(v * slots));
-        img.setFrame(frames[k]!, false, false);
+        this.setShibaFrame(frames[k]!);
         if (k === frames.length - 1 && !said) {
           said = true;
           // A creature SFX (its own channel): it never cuts a prompt or retry line.
@@ -447,7 +461,7 @@ export class IceCream extends MiniGameBase<'ice-cream'> {
     if (!this.shiba || !this.framesOk([lick, SHIBA_FRAMES.grimace])) return 0;
     const tasteMs = Tokens.Timing.iceCreamTasteMs;
     const ms = tasteMs + Tokens.Timing.iceCreamGrimaceMs;
-    this.animateShiba(ms, (v, img) => img.setFrame(v * ms < tasteMs ? lick : SHIBA_FRAMES.grimace, false, false));
+    this.animateShiba(ms, (v) => this.setShibaFrame(v * ms < tasteMs ? lick : SHIBA_FRAMES.grimace));
     return ms;
   }
 

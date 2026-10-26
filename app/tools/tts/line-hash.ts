@@ -4,11 +4,12 @@ import { createHash } from 'node:crypto';
 import { VOICE_DEFAULTS, type VoiceLine } from '../../src/content/voice-lines.ts';
 
 /** Everything that changes the rendered audio: bump `v` when the render recipe changes. */
-export function lineHash(line: Pick<VoiceLine, 'text' | 'keywordPauseMs' | 'rate'>): string {
+export function lineHash(line: Pick<VoiceLine, 'text' | 'keywordPauseMs' | 'rate' | 'style'>): string {
   const payload = JSON.stringify({
     v: 2,
     model: VOICE_DEFAULTS.model,
-    style: VOICE_DEFAULTS.style,
+    // Story 7.4: a per-line style (the default keeps every older hash unchanged).
+    style: line.style ?? VOICE_DEFAULTS.style,
     voice: VOICE_DEFAULTS.voice,
     text: line.text.normalize('NFC'),
     keywordPauseMs: line.keywordPauseMs ?? null,

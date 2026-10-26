@@ -22,6 +22,11 @@ export interface VoiceLine {
   /** Spoken text (NFC). `|` marks the keyword (not spoken; recipe v2 inserts no silence there). */
   readonly text: string;
   readonly keywordPauseMs?: number;
+  /**
+   * Story 7.4: this line's v3 audio tag instead of VOICE_DEFAULTS.style (e.g. `[softly]` for the bedtime lines). It
+   * is part of the line hash (tools/tts/line-hash.ts), so a changed style re-renders the line.
+   */
+  readonly style?: string;
   /** Speaking rate factor (default VOICE_DEFAULTS.rate). */
   readonly rate?: number;
   /**
@@ -348,7 +353,7 @@ export const VOICE_LINES = [
   { id: 'vo.animal-pens.name.cat', text: 'Con mèo!' },
   { id: 'vo.animal-pens.name.rooster', text: 'Con gà trống!' },
   { id: 'vo.animal-pens.name.cow', text: 'Con bò!' },
-  { id: 'vo.animal-pens.name.pig', text: 'Con heo!', review: 'heo/lợn: chọn từ quen của bé' },
+  { id: 'vo.animal-pens.name.pig', text: 'Con lợn!' },
   { id: 'vo.animal-pens.name.sheep', text: 'Con cừu!' },
   { id: 'vo.animal-pens.name.horse', text: 'Con ngựa!' },
   { id: 'vo.animal-pens.ask.dog', text: 'Con gì kêu | gâu gâu nhỉ?', keywordPauseMs: 300 },
@@ -369,6 +374,42 @@ export const VOICE_LINES = [
   { id: 'vo.band.name.xylophone', text: 'Đàn gõ!' },
   { id: 'vo.band.name.bell', text: 'Cái chuông!' },
   { id: 'vo.band.parent.1', text: 'Mời bố mẹ | cùng chơi nhạc nhé!', keywordPauseMs: 300 },
+  // Giờ đi ngủ (Story 7.4): soft bedtime lines (their own `[softly]` style, not the default `[cheerfully]`): the
+  // invitation as a fresh bedtime opens (chained before the first suggestion; every game names Xoài in one prompt), the
+  // suggestion of each step (said when the glow moves to it; the Speaker replays it), the goodnight once all three are
+  // done, and the parent invitation. Not yet approved.
+  { id: 'vo.bedtime.prompt', text: 'Xoài ơi, mình đi ngủ nào.', style: '[softly]' },
+  { id: 'vo.bedtime.prompt.brush', text: 'Mình đánh răng cho bạn nào!', style: '[softly]' },
+  { id: 'vo.bedtime.prompt.lamp', text: 'Tắt đèn đi ngủ thôi.', style: '[softly]' },
+  { id: 'vo.bedtime.prompt.blanket', text: 'Đắp chăn cho bạn nhé.', style: '[softly]' },
+  { id: 'vo.bedtime.goodnight', text: 'Chúc bạn ngủ ngon!', style: '[softly]' },
+  { id: 'vo.bedtime.parent.1', text: 'Mời bố mẹ | cùng ru bạn ngủ nhé!', keywordPauseMs: 300, style: '[softly]' },
+  // Bác sĩ thú cưng (Story 8.1): the invitation as a fresh clinic opens (chained before the first patient's name;
+  // it names Xoài), what each problem needs (said as a patient arrives, after a fix while another problem is left, after
+  // a tool that fits nothing, and as the idle reminder; the Speaker replays it), the well patient's thank-you (no praise)
+  // and the parent invitation. The patient's name reuses vo.animal-pens.name.<id> (the pig is "lợn"). Not yet approved.
+  { id: 'vo.pet-clinic.prompt', text: 'Xoài ơi, | có bạn đến khám này!', keywordPauseMs: 300 },
+  { id: 'vo.pet-clinic.need.mud', text: 'Bạn bẩn quá, | tắm cho bạn nhé!', keywordPauseMs: 300 },
+  { id: 'vo.pet-clinic.need.tummy', text: 'Bạn đói bụng, | cho bạn bú sữa nhé!', keywordPauseMs: 300 },
+  { id: 'vo.pet-clinic.need.scrape', text: 'Bạn bị trầy, | dán băng cho bạn nhé!', keywordPauseMs: 300 },
+  { id: 'vo.pet-clinic.need.yawn', text: 'Bạn buồn ngủ, | đắp chăn cho bạn nhé.', keywordPauseMs: 300, style: '[softly]' },
+  { id: 'vo.pet-clinic.thanks', text: 'Khỏe rồi! | Cảm ơn nhé!', keywordPauseMs: 300 },
+  { id: 'vo.pet-clinic.parent.1', text: 'Mời bố mẹ | cùng chữa cho bạn nhé!', keywordPauseMs: 300 },
+  // Thay đồ cho Shiba (Story 8.2): the invitation as a fresh wardrobe opens (it names Xoài), one short name line per
+  // item said when Shiba puts it on (before the round completes; never praise) and the parent invitation. Not yet approved.
+  { id: 'vo.dress-up.prompt', text: 'Xoài ơi, mình thay đồ cho Shiba nào!' },
+  { id: 'vo.dress-up.name.party-hat', text: 'Mũ sinh nhật!' },
+  { id: 'vo.dress-up.name.cowboy-hat', text: 'Mũ cao bồi!' },
+  { id: 'vo.dress-up.name.crown', text: 'Vương miện!' },
+  { id: 'vo.dress-up.name.beanie', text: 'Mũ len!' },
+  { id: 'vo.dress-up.name.round-glasses', text: 'Kính tròn!' },
+  { id: 'vo.dress-up.name.heart-glasses', text: 'Kính trái tim!' },
+  { id: 'vo.dress-up.name.star-glasses', text: 'Kính ngôi sao!' },
+  { id: 'vo.dress-up.name.striped-tee', text: 'Áo kẻ sọc!' },
+  { id: 'vo.dress-up.name.raincoat', text: 'Áo mưa!' },
+  { id: 'vo.dress-up.name.heart-jumper', text: 'Áo len trái tim!' },
+  { id: 'vo.dress-up.name.flower-shirt', text: 'Áo hoa!' },
+  { id: 'vo.dress-up.parent.1', text: 'Hỏi mẹ xem | mẹ thích mũ nào nhé!', keywordPauseMs: 300 },
 ] as const satisfies readonly VoiceLine[];
 
 export type VoiceLineId = (typeof VOICE_LINES)[number]['id'];

@@ -34,6 +34,12 @@ export const SCREENS: Readonly<Record<string, ScreenSpec>> = {
   'animal-pens': { source: 'art/src/map-v3.blend', builder: 'build_animal_pens.py' },
   // Story 7.3: the yard's stage game (Ban nhạc).
   band: { source: 'art/src/map-v3.blend', builder: 'build_band.py' },
+  // Story 7.4: the yard's bedtime game (Giờ đi ngủ).
+  bedtime: { source: 'art/src/map-v3.blend', builder: 'build_bedtime.py' },
+  // Story 8.1: the yard's clinic game (Bác sĩ thú cưng).
+  'pet-clinic': { source: 'art/src/map-v3.blend', builder: 'build_pet_clinic.py' },
+  // Story 8.2: the yard's wardrobe game (Thay đồ cho Shiba).
+  'dress-up': { source: 'art/src/map-v3.blend', builder: 'build_dress_up.py' },
 };
 
 /** Throws listing the known screens when `screen` is not one. */

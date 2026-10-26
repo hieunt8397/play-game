@@ -17,7 +17,7 @@ export type IslandGameId = (typeof ISLAND_GAME_IDS)[number];
  * Story 7.2: the yard games (content/home.ts corners). They have no island station: the yard opens them
  * (scene key === GameId still holds).
  */
-export const YARD_GAME_IDS = ['animal-pens', 'band'] as const;
+export const YARD_GAME_IDS = ['animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up'] as const;
 export type YardGameId = (typeof YARD_GAME_IDS)[number];
 
 /** Every mini-game id: the island games, then the yard games. */
@@ -54,6 +54,12 @@ export type SnapshotPartials = {
   'animal-pens': { behind: string[]; reveals: number };
   /** Story 7.3: the band has no round, no score and nothing to resume (it starts in free play). */
   band: Record<string, never>;
+  /** Story 7.4: the steps done so far (brush, lamp, blanket; in the order done). A finished bedtime is never resumed. */
+  bedtime: { done: string[] };
+  /** Story 8.1: the patient in the clinic, its problems still left, and the patients already seen this round. */
+  'pet-clinic': { patient: string; left: string[]; seen: string[] };
+  /** Story 8.2: the wears and take-offs so far this round (the outfit itself lives in ProgressStore). */
+  'dress-up': { changes: number };
 };
 
 /** The closed questions of a round so far (Story 2.5): a resumed round judges `nextLevel` on all of them. */

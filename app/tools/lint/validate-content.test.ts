@@ -97,6 +97,19 @@ function goodTree(): string {
   put(root, ATLASES['animal-pens'].png, pngHeader(2048, 2048));
   put(root, ATLASES['animal-pens'].json, readFileSync(join(APP, 'public', ATLASES['animal-pens'].json)));
   put(root, BACKGROUNDS['animal-pens'].path, pngHeader(2048, 1536));
+  // Story 7.3: the band atlas JSON is the real one (the instrument sizes and the bouncing frames are checked).
+  put(root, ATLASES.band.png, pngHeader(2048, 2048));
+  put(root, ATLASES.band.json, readFileSync(join(APP, 'public', ATLASES.band.json)));
+  put(root, BACKGROUNDS.band.path, pngHeader(2048, 1536));
+  // Story 7.4: the bedtime atlas JSON is the real one (its frames are checked).
+  put(root, ATLASES.bedtime.png, pngHeader(2048, 2048));
+  put(root, ATLASES.bedtime.json, readFileSync(join(APP, 'public', ATLASES.bedtime.json)));
+  put(root, BACKGROUNDS.bedtime.path, pngHeader(2048, 1536));
+  // Story 8.1: the clinic multiatlas JSON is the real one (each page a PNG header; its frames are checked).
+  const pc = JSON.parse(readFileSync(join(APP, 'public', ATLASES['pet-clinic'].json), 'utf8')) as { textures: { image: string }[] };
+  for (const t of pc.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
+  put(root, ATLASES['pet-clinic'].json, JSON.stringify(pc));
+  put(root, BACKGROUNDS['pet-clinic'].path, pngHeader(2048, 1536));
   return root;
 }
 
@@ -116,6 +129,9 @@ function layoutDir(): string {
   put(dir, 'touch-talk.layout.json', JSON.stringify(realLayout('touch-talk')));
   put(dir, 'home.layout.json', JSON.stringify(realLayout('home')));
   put(dir, 'animal-pens.layout.json', JSON.stringify(realLayout('animal-pens')));
+  put(dir, 'band.layout.json', JSON.stringify(realLayout('band')));
+  put(dir, 'bedtime.layout.json', JSON.stringify(realLayout('bedtime')));
+  put(dir, 'pet-clinic.layout.json', JSON.stringify(realLayout('pet-clinic')));
   return dir;
 }
 

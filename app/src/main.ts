@@ -4,6 +4,7 @@ import { Tokens } from './core/tokens';
 import { installPageGuards, installRotationSafeScaleManager } from './core/stage';
 import { audio, type SoundLike } from './core/audio-director';
 import { registerServiceWorker } from './core/sw';
+import { SHARED_POINTERS } from './core/input/guard';
 import { GAME_SCENES } from './games/registry';
 import { AudioUnlockOverlay } from './scenes/AudioUnlockOverlay';
 import { Boot } from './scenes/Boot';
@@ -17,7 +18,7 @@ import { Start } from './scenes/Start';
  * a parent pointing) is seen and can be *ignored* by InputGuard (first finger wins, AD-4)
  * instead of being silently dropped, and so Hud can accept a second pointer when allowed.
  */
-const ACTIVE_POINTERS = 3;
+const ACTIVE_POINTERS = SHARED_POINTERS;
 
 const config: Types.Core.GameConfig = {
   type: AUTO,

@@ -15,6 +15,8 @@ import { assign, clearOfSlots, displayedRect, hitRadius, pairsClear, rectGap, ty
 import { heldRadius, shadowRadius } from '../../src/games/shadow-match/geometry.ts';
 import { GATE_ANCHOR, GATE_YAWS, gateCrossAnchor, gateFrame, gatePostAnchor } from '../../src/content/games/race.ts';
 import { gateViews, roadGate } from '../../src/games/race/gate.ts';
+import { DRESS_UP_SCREEN, HITS as DRESS_UP_HITS, OUTFIT_ITEM_IDS, iconFrame, itemHitRadius, overlayFrame } from '../../src/content/games/dress-up.ts';
+import { DOOR_ANCHOR, PATIENT_ANCHOR, PATIENT_HIT, PATIENT_IDS, PET_CLINIC_SCREEN, TOOL_IDS, patientFrames, toolFrame, toolHitRadius } from '../../src/content/games/pet-clinic.ts';
 
 export interface LayoutLimits {
   /** Interactive rect: x∈[x0,x1], y∈[y0,y1] (design px). */
@@ -1909,5 +1911,309 @@ export function validateBand(layout: ScreenLayout, input: BandRuleInput, atlas?:
     if (grown.x < r.x0 || grown.y < r.y0 || grown.x + grown.w > r.x1 || grown.y + grown.h > r.y1) problems.push(`frame "${f}" bouncing ${fmtRect(grown)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
     for (const z of input.keepOut) if (overlaps(grown, z.rect)) problems.push(`frame "${f}" bouncing ${fmtRect(grown)}: reaches into the ${z.id} ${fmtRect(z.rect)}`);
   }
+  return problems;
+}
+
+// --- Giờ đi ngủ (Story 7.4) --------------------------------------------------------------------------------
+
+export interface BedtimeRuleInput {
+  ids: ScreenIds;
+  /** The tap targets (brush, lamp, blanket, shiba): `hit.<id>`. */
+  targets: readonly string[];
+  limits: LayoutLimits;
+  /** ui.bedtimeTargetMinPx: each (padded) hull is at least this wide (spec: every tap target ≥ 150 px). */
+  targetMin: number;
+  /** spacing.targetGap: two target hulls are at least this far apart. */
+  gap: number;
+  /** The Home/Speaker zones. */
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  /** The anchors that must lie inside the design rect (the mouths, the brush head, the sleeping head, the lamp, the stars). */
+  anchors: readonly string[];
+  design: { width: number; height: number };
+}
+
+/** The bedtime rules from Tokens and content (Story 7.4). */
+export function bedtimeLimits(ids: ScreenIds, targets: readonly string[]): BedtimeRuleInput {
+  return {
+    ids,
+    targets,
+    limits: layoutLimits(),
+    targetMin: Tokens.ui.bedtimeTargetMinPx,
+    gap: Tokens.spacing.targetGap,
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    anchors: ids.anchors,
+    design: { width: Tokens.design.width, height: Tokens.design.height },
+  };
+}
+
+/**
+ * Giờ đi ngủ screen rules (Story 7.4; run by `render`, `atlas` and `validate:content`). Each message names the id.
+ *   - required: every target's `hit.<id>` (≥ 3 points), every anchor; with the atlas, every frame;
+ *   - each target hull is at least targetMin (150) wide, inside the interactive rect, clear of the Home/Speaker zones
+ *     and ≥ `gap` from every other target hull;
+ *   - every anchor lies on the design rect (the runtime draws there).
+ */
+export function validateBedtime(layout: ScreenLayout, input: BedtimeRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const hulls: { id: string; poly: readonly Point[] }[] = [];
+  for (const id of input.targets) {
+    const poly = layout.hits[id];
+    if (!poly) continue;
+    if (poly.length < MIN_HIT_POINTS) {
+      problems.push(`hit "${id}": fewer than 3 points`);
+      continue;
+    }
+    hulls.push({ id, poly });
+    const w = minWidth(poly);
+    if (w < input.targetMin) problems.push(`hit "${id}": ${round2(w)} px wide (min ${input.targetMin})`);
+    const out = poly.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${id}": ${fmt(out)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (polygonDistance(poly, rectPolygon4(k.rect)) === 0) problems.push(`hit "${id}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  }
+  for (let i = 0; i < hulls.length; i++) {
+    for (let j = i + 1; j < hulls.length; j++) {
+      const d = polygonDistance(hulls[i]!.poly, hulls[j]!.poly);
+      if (d < input.gap) problems.push(`hits "${hulls[i]!.id}" and "${hulls[j]!.id}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
+  for (const id of input.anchors) {
+    const a = layout.anchors[id];
+    if (a && (a.x < 0 || a.y < 0 || a.x > input.design.width || a.y > input.design.height)) problems.push(`anchor "${id}": ${fmt(a)} is off the screen`);
+  }
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "bedtime": frame "${f}" is missing`);
+  return problems;
+}
+
+// --- Bác sĩ thú cưng (Story 8.1) ---------------------------------------------------------------------------------
+
+export interface PetClinicRuleInput {
+  ids: ScreenIds;
+  /** Each patient's frames (base, tilt, overlays), all rendered at the exam spot. */
+  patientFrames: readonly string[];
+  /** The tool frames (`tool-<id>/idle/00`): each drawn where it rests in the tray. */
+  toolFrames: readonly string[];
+  /** The exam area: `hit.<patientHit>` (the drop target and the patient's tap area). */
+  patientHit: string;
+  /** `anchor.<door>` and `anchor.<patient>`: one row (ortho camera), the door left of the patient. */
+  door: string;
+  patient: string;
+  limits: LayoutLimits;
+  /** spacing.targetMin: the patient hull is at least this wide. */
+  targetMin: number;
+  /** spacing.targetGap: the tool circles are this far from each other and from the patient hull. */
+  gap: number;
+  /** ui.petClinicToolMinPx: each tool frame's longest side ÷ renderScale. */
+  toolMin: number;
+  /** content/games/pet-clinic.ts › toolHitRadius: a tool's tap circle radius from its drawn half size. */
+  toolHitRadius: (half: number) => number;
+  /** The anchors' y may differ by this much (design px). */
+  rowTolerance: number;
+  /** The Home/Speaker zones. */
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  renderScale: number;
+  design: { width: number; height: number };
+}
+
+/** The clinic rules from Tokens and content (Story 8.1). */
+export function petClinicLimits(ids: ScreenIds = PET_CLINIC_SCREEN): PetClinicRuleInput {
+  return {
+    ids,
+    patientFrames: PATIENT_IDS.flatMap(patientFrames),
+    toolFrames: TOOL_IDS.map(toolFrame),
+    patientHit: PATIENT_HIT,
+    door: DOOR_ANCHOR,
+    patient: PATIENT_ANCHOR,
+    limits: layoutLimits(),
+    targetMin: Tokens.spacing.targetMin,
+    gap: Tokens.spacing.targetGap,
+    toolMin: Tokens.ui.petClinicToolMinPx,
+    toolHitRadius: (half) => toolHitRadius(half, Tokens.ui.petClinicToolHitMinPx),
+    rowTolerance: ANIMAL_PENS_ROW_TOLERANCE,
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    renderScale: RENDER_SCALE,
+    design: { width: Tokens.design.width, height: Tokens.design.height },
+  };
+}
+
+/**
+ * Bác sĩ thú cưng screen rules (Story 8.1; run by `render`, `atlas` and `validate:content`). Each message names the id.
+ *   - required: `hit.<patientHit>` (≥ 3 points) and every anchor; with the atlas, every frame;
+ *   - the patient hull is at least targetMin wide, inside the interactive rect and clear of the Home/Speaker zones;
+ *   - `anchor.<door>` and `anchor.<patient>` share one row, the door left of the patient (the walk is an x shift);
+ *     every anchor lies on the design rect;
+ *   - sizes (atlas): every patient frame (at the exam spot) lies inside the interactive rect and clear of the
+ *     Home/Speaker zones; each tool frame's longest side is ≥ toolMin; each tool's tap circle (its trimmed centre,
+ *     `toolHitRadius(longest / 2)`) is inside the interactive rect, clear of the Home/Speaker zones, ≥ `gap` from
+ *     every other tool circle and from the patient hull.
+ */
+export function validatePetClinic(layout: ScreenLayout, input: PetClinicRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const hull = layout.hits[input.patientHit];
+  const hullOk = hull !== undefined && hull.length >= MIN_HIT_POINTS;
+  if (hullOk) {
+    const w = minWidth(hull);
+    if (w < input.targetMin) problems.push(`hit "${input.patientHit}": ${round2(w)} px wide (min ${input.targetMin})`);
+    const out = hull.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${input.patientHit}": ${fmt(out)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (polygonDistance(hull, rectPolygon4(k.rect)) === 0) problems.push(`hit "${input.patientHit}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  }
+  const door = layout.anchors[input.door];
+  const spot = layout.anchors[input.patient];
+  if (door && spot) {
+    if (Math.abs(door.y - spot.y) > input.rowTolerance) problems.push(`anchor "${input.door}": y ${round2(door.y)} is off the patient's row (y ${round2(spot.y)} ± ${input.rowTolerance})`);
+    if (door.x >= spot.x) problems.push(`anchor "${input.door}": not left of anchor "${input.patient}"`);
+  }
+  for (const id of input.ids.anchors) {
+    const a = layout.anchors[id];
+    if (a && (a.x < 0 || a.y < 0 || a.x > input.design.width || a.y > input.design.height)) problems.push(`anchor "${id}": ${fmt(a)} is off the screen`);
+  }
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "pet-clinic": frame "${f}" is missing`);
+  for (const f of input.patientFrames) {
+    const at = designRect(atlas, f, input.renderScale);
+    if (!at) continue;
+    if (at.x < r.x0 || at.y < r.y0 || at.x + at.w > r.x1 || at.y + at.h > r.y1) problems.push(`frame "${f}" ${fmtRect(at)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (overlaps(at, k.rect)) problems.push(`frame "${f}" ${fmtRect(at)}: reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  }
+  const circles: { id: string; c: Point; r: number }[] = [];
+  for (const f of input.toolFrames) {
+    const rect = designRect(atlas, f, input.renderScale);
+    if (!rect) continue;
+    const longest = Math.max(rect.w, rect.h);
+    if (longest < input.toolMin) problems.push(`frame "${f}": longest side ${round2(longest)} is under ${input.toolMin}`);
+    const c = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    const cr = input.toolHitRadius(longest / 2);
+    circles.push({ id: f, c, r: cr });
+    if (c.x - cr < r.x0 || c.y - cr < r.y0 || c.x + cr > r.x1 || c.y + cr > r.y1) problems.push(`tool "${f}": its tap circle ${fmt({ x: round2(c.x), y: round2(c.y) })} r ${round2(cr)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (circleHitsRect(c, cr, k.rect)) problems.push(`tool "${f}": its tap circle reaches into the ${k.id} ${fmtRect(k.rect)}`);
+    if (hullOk) {
+      const d = circleToPolygon(c, cr, hull);
+      if (d < input.gap) problems.push(`tool "${f}" and hit "${input.patientHit}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
+  for (let i = 0; i < circles.length; i++) {
+    for (let j = i + 1; j < circles.length; j++) {
+      const a = circles[i]!;
+      const b = circles[j]!;
+      const d = Math.hypot(a.c.x - b.c.x, a.c.y - b.c.y) - a.r - b.r;
+      if (d < input.gap) problems.push(`tools "${a.id}" and "${b.id}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
+  return problems;
+}
+
+// --- Thay đồ cho Shiba (Story 8.2) ---------------------------------------------------------------------------------
+
+export interface DressUpRuleInput {
+  ids: ScreenIds;
+  /** The wardrobe icons (`item-<id>/idle/00`): each drawn where it rests; its tap circle comes from its trimmed frame. */
+  iconFrames: readonly string[];
+  /** The tappable hulls besides the items (Shiba, the mirror): unpadded, each ≥ targetMin wide. */
+  targets: readonly string[];
+  limits: LayoutLimits;
+  targetMin: number;
+  /** spacing.targetGap: every tap circle and hull keeps this far from every other one. */
+  gap: number;
+  /** ui.dressUpItemHitPx: an item's tap circle is at least this wide. */
+  itemHitPx: number;
+  /** content/games/dress-up.ts › itemHitRadius. */
+  itemHitRadius: (half: number, min: number) => number;
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  renderScale: number;
+  design: { width: number; height: number };
+}
+
+/** The wardrobe rules from Tokens and content (Story 8.2). */
+export function dressUpLimits(ids: ScreenIds = DRESS_UP_SCREEN): DressUpRuleInput {
+  return {
+    ids,
+    iconFrames: OUTFIT_ITEM_IDS.map(iconFrame),
+    targets: [DRESS_UP_HITS.shiba, DRESS_UP_HITS.mirror],
+    limits: layoutLimits(),
+    targetMin: Tokens.spacing.targetMin,
+    gap: Tokens.spacing.targetGap,
+    itemHitPx: Tokens.ui.dressUpItemHitPx,
+    itemHitRadius,
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    renderScale: RENDER_SCALE,
+    design: { width: Tokens.design.width, height: Tokens.design.height },
+  };
+}
+
+/**
+ * Thay đồ cho Shiba screen rules (Story 8.2; run by `render`, `atlas` and `validate:content`). Each message names the id.
+ *   - required: every hit (≥ 3 points) and anchor; with the atlas, every frame (Shiba's, every overlay, every icon);
+ *   - Shiba's and the mirror's hulls are at least targetMin wide, inside the interactive rect and clear of the Home/Speaker
+ *     zones; every anchor lies on the design rect;
+ *   - (atlas) each icon's tap circle (its trimmed centre, `itemHitRadius(longest / 2, itemHitPx / 2)`) is at least
+ *     itemHitPx wide, inside the interactive rect, clear of the Home/Speaker zones, and ≥ `gap` from every other circle
+ *     and from Shiba's and the mirror's hulls; those two hulls are ≥ `gap` apart.
+ */
+export function validateDressUp(layout: ScreenLayout, input: DressUpRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const hulls: { id: string; poly: readonly Point[] }[] = [];
+  for (const id of input.targets) {
+    const poly = layout.hits[id];
+    if (!poly || poly.length < MIN_HIT_POINTS) continue;
+    hulls.push({ id, poly });
+    const w = minWidth(poly);
+    if (w < input.targetMin) problems.push(`hit "${id}": ${round2(w)} px wide (min ${input.targetMin})`);
+    const out = poly.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${id}": ${fmt(out)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (polygonDistance(poly, rectPolygon4(k.rect)) === 0) problems.push(`hit "${id}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  }
+  for (let i = 0; i < hulls.length; i++) {
+    for (let j = i + 1; j < hulls.length; j++) {
+      const d = polygonDistance(hulls[i]!.poly, hulls[j]!.poly);
+      if (d < input.gap) problems.push(`hits "${hulls[i]!.id}" and "${hulls[j]!.id}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
+  for (const id of input.ids.anchors) {
+    const a = layout.anchors[id];
+    if (a && (a.x < 0 || a.y < 0 || a.x > input.design.width || a.y > input.design.height)) problems.push(`anchor "${id}": ${fmt(a)} is off the screen`);
+  }
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "dress-up": frame "${f}" is missing`);
+  const circles: { id: string; c: Point; r: number }[] = [];
+  for (const f of input.iconFrames) {
+    const rect = designRect(atlas, f, input.renderScale);
+    if (!rect) continue;
+    const c = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+    const cr = input.itemHitRadius(Math.max(rect.w, rect.h) / 2, input.itemHitPx / 2);
+    circles.push({ id: f, c, r: cr });
+    if (2 * cr < input.itemHitPx) problems.push(`icon "${f}": its tap circle is ${round2(2 * cr)} px wide (min ${input.itemHitPx})`);
+    if (c.x - cr < r.x0 || c.y - cr < r.y0 || c.x + cr > r.x1 || c.y + cr > r.y1) problems.push(`icon "${f}": its tap circle ${fmt({ x: round2(c.x), y: round2(c.y) })} r ${round2(cr)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (circleHitsRect(c, cr, k.rect)) problems.push(`icon "${f}": its tap circle reaches into the ${k.id} ${fmtRect(k.rect)}`);
+    for (const h of hulls) {
+      const d = circleToPolygon(c, cr, h.poly);
+      if (d < input.gap) problems.push(`icon "${f}" and hit "${h.id}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
+  for (let i = 0; i < circles.length; i++) {
+    for (let j = i + 1; j < circles.length; j++) {
+      const a = circles[i]!;
+      const b = circles[j]!;
+      const d = Math.hypot(a.c.x - b.c.x, a.c.y - b.c.y) - a.r - b.r;
+      if (d < input.gap) problems.push(`icons "${a.id}" and "${b.id}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Story 8.2: every Shiba frame of a screen's atlas (`shiba/<state>/<nn>`) has its overlay for every outfit item
+ * (`shiba-<item>/<state>/<nn>`), so the map guide and the ice-cream Shiba can wear any outfit in every frame.
+ */
+export function validateOutfitFrames(screen: string, atlas: AtlasJsonLike, base = 'shiba'): string[] {
+  const frames = Object.keys(atlas.frames ?? {});
+  const shiba = frames.filter((f) => f.startsWith(`${base}/`));
+  if (shiba.length === 0) return [`atlas "${screen}": no "${base}/<state>/<nn>" frame`];
+  const have = new Set(frames);
+  const problems: string[] = [];
+  for (const f of shiba) for (const id of OUTFIT_ITEM_IDS) if (!have.has(overlayFrame(f, id))) problems.push(`atlas "${screen}": overlay "${overlayFrame(f, id)}" is missing`);
   return problems;
 }
