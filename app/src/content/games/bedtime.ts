@@ -1,5 +1,5 @@
 // Giờ đi ngủ content (Story 7.4): a yard game (content/home.ts corner `bed`). A cosy bedroom (`bg.bedtime`,
-// tools/render/blender/build_bedtime.py) with the Shiba friend (the real Quaternius ShibaInu, posed from its rig) on
+// tools/render/blender/build_bedtime.py) with the Shiba friend (the chibi toy Shiba of the map and Tiệm kem, posed per frame) on
 // its bed. Xoài does three things, in any order: the toothbrush (foam, Shiba giggles), the lamp (it clicks off and
 // the room fades to a soft blue night, never dark) and the blanket (it covers Shiba, who yawns). A soft glow suggests
 // the next step (brush → lamp → blanket) but never enforces it. With all three done Shiba sleeps ("khò khò", floating

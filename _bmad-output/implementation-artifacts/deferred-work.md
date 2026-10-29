@@ -120,3 +120,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-8-2-thay-do-cho-shiba.md`
   summary: The wardrobe mirror reflection (scale 0.6 at anchor.mirror, WebGL mask by hit.mirror-glass) is not validated to fit inside the glass and has never been seen in a browser or on the iPad (unverified, medium if wrong).
   evidence: Story 8.2 review (blind): validateDressUp checks neither that hit.mirror-glass lies inside hit.mirror nor that the scaled Shiba with its tallest hat stays inside the glass; settle by a browser/iPad look or a layout rule on the scaled hull.
+- source_spec: `_bmad-output/implementation-artifacts/spec-bedtime-shiba-chibi.md`
+  summary: Tìm bóng still uses the Quaternius Shiba (parent 2026-10-29: later).
+  evidence: Giờ đi ngủ now uses the chibi Shiba; build_shadow_match.py still imports `quaternius/animals/ShibaInu.fbx` (also the map's ice-cream icon, so the FBX stays in the repo).

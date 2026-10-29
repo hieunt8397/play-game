@@ -12,11 +12,13 @@
 # wall shelf with books; KayKit Furniture: the bed (bed_single_A, side on, its headboard to the right), the
 # nightstand (cabinet_small), an oval rug, the stool by the bed's foot (table_small); Tiny Treats Bubbly Bathroom:
 # the toothbrush cup with a pink brush in it. Sprites (`sprite.<id>`; none casts a shadow into the plate):
-#   - shiba: the friend — the real Quaternius Shiba Inu (ShibaInu.fbx, source colours), posed from its armature
-#     (Idle frame 1 or Death's last frame as the base, then bones turned by script; the paws follow their foot
-#     bones). One `state.<pose>` child per pose: sit, brush (sitting, giggling: eyes shut happy, mouth open), lie
-#     (lying like a sphinx, head up, awake), lie-brush (lying, giggling), yawn (lying, head up, mouth wide, eyes
-#     shut), sleep (lying, chin down on its paws, eyes shut) and roll (asleep on its side, the Death pose);
+#   - shiba: the friend — the chibi toy Shiba (cute.chibi('dog'), the same dog as on the map, in Tiệm kem and in
+#     Tủ đồ; 2026-10-29, replacing the Quaternius ShibaInu.fbx). One independent rig `shiba-<pose>` per
+#     `state.<pose>` child, posed in this builder only (key_chibi for the head, tail, tongue and eyes; the parts moved
+#     for lying; a `<rig>-mouth` part for an open mouth): sit, brush (sitting, giggling: eyes shut, mouth open), lie
+#     (lying like a sphinx, head up, turned to the camera), lie-brush (lying, giggling), yawn (lying, head up, mouth
+#     wide, eyes shut), sleep (lying, chin down toward the pillow, eyes shut) and roll (asleep, turned onto its side
+#     about its long axis, its head on its cheek facing the camera). No outfit here (spec-bedtime-shiba-chibi);
 #   - blanket: `off` (a folded quilt at the bed's foot) and `on` (spread over the bed and over Shiba's body up to
 #     its shoulders, so its head peeks out on the pillow);
 #   - lamp: KayKit lamp_table on the nightstand, `on` (its shade glows) and `off`;
@@ -38,10 +40,9 @@ from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cute import blob, import_joined, mat, mesh_obj, rbox, rod, soften_scene, tt_model  # noqa: E402
-from common import add_empty, eval_world_verts, force_opaque, hex_to_linear, hull_object, key_constant, move_to, parse_args, principled  # noqa: E402
+from cute import blob, chibi, chibi_materials, import_joined, key_chibi, mat, mesh_obj, rbox, rod, soften_scene, tt_model  # noqa: E402
+from common import add_empty, eval_world_verts, hex_to_linear, hull_object, move_to, parse_args, principled  # noqa: E402
 
-ASSETS = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', 'assets'))
 RENDER_SIZE = (2048, 1536)
 DESIGN = (1024, 768)  # set from params in main
 IDLE_FRAME = 1
@@ -88,18 +89,45 @@ FRAMES = [('pictureframe_medium', (-2.55, 3.05), 1.05, 'sun'), ('pictureframe_sm
 SHELF = ('shelf_A_small', (3.3, 3.35), 1.1)
 
 # --- Shiba ------------------------------------------------------------------------------------------------------
-SHIBA = os.path.join('quaternius', 'animals', 'ShibaInu.fbx')
-SHIBA_K = 0.46  # the model is ~4.2 long at scale 1: ~1.9 m here (a toddler-sized friend on a big bed)
+SHIBA = 'shiba'  # the chibi rigs are `shiba-<pose>` (cute.chibi('dog'), as in Tiệm kem and Tủ đồ)
+SHIBA_K = 0.95  # the chibi sits ~2.0 tall at scale 1
 SIT_X = 0.85  # where it sits on the bed (its body's centre)
 SIT_YAW = -18.0  # facing the camera, turned a little toward the brush
-HEADBOARD_GAP = 0.75  # lying along the bed, its nose (or paws) this far from the bed's right end (the pillow)
-FACE_TURN = 30.0  # degrees: a lying Shiba's head turns this much toward the camera
-ROLL_DEG = 75.0  # the sleeping Shiba rolls onto its side (its belly and paws toward the camera)
-ROLL_HEAD = -30.0  # … its head resting on its cheek
+HEADBOARD_GAP = 0.75  # lying along the bed, its nose (or ears) this far from the bed's right end (the pillow)
+FACE_TURN = -70.0  # degrees (head yaw): a lying Shiba's face turns this much from along the bed toward the camera
+ROLL_DEG = 70.0  # the rolled Shiba turns this much about its long axis (onto its side, belly and paws toward the camera)
+ROLL_SLIDE = 0.35  # … and lies this much nearer the pillow (rolled, it is longer: its hull keeps clear of the folded quilt's)
 POSES = ('sit', 'brush', 'lie', 'lie-brush', 'yawn', 'sleep', 'roll')
-EYES_SHUT = {'brush', 'lie-brush', 'yawn', 'sleep', 'roll'}
-MOUTH = {'brush': 'smile', 'lie-brush': 'smile', 'yawn': 'yawn'}
-FEET = [('IKBackLeg.L', 'BackLowerLeg.L'), ('IKBackLeg.R', 'BackLowerLeg.R'), ('IKFrontLeg.L', 'FrontLowerLeg.L'), ('IKFrontLeg.R', 'FrontLowerLeg.R')]
+LYING = ('lie', 'lie-brush', 'yawn', 'sleep', 'roll')
+# Per pose: key_chibi's head pitch / roll / yaw (degrees; + pitch = chin down), tail swing, tongue and eyes, and
+# the open mouth part (`<rig>-mouth`: a small giggle or a wide yawn) or None.
+POSE_KEYS = {
+    'sit': dict(head_pitch=4.0, head_roll=0.0, head_yaw=0.0, tail=0.0, tongue=False, eyes='open', mouth=None),
+    'brush': dict(head_pitch=-8.0, head_roll=8.0, head_yaw=0.0, tail=15.0, tongue=True, eyes='shut', mouth='smile'),
+    'lie': dict(head_pitch=-2.0, head_roll=0.0, head_yaw=FACE_TURN, tail=0.0, tongue=False, eyes='open', mouth=None),
+    'lie-brush': dict(head_pitch=-8.0, head_roll=8.0, head_yaw=FACE_TURN, tail=15.0, tongue=True, eyes='shut', mouth='smile'),
+    'yawn': dict(head_pitch=-24.0, head_roll=0.0, head_yaw=FACE_TURN + 10.0, tail=0.0, tongue=True, eyes='shut', mouth='yawn'),
+    'sleep': dict(head_pitch=14.0, head_roll=-14.0, head_yaw=FACE_TURN - 10.0, tail=0.0, tongue=False, eyes='shut', mouth=None),
+    'roll': dict(head_pitch=70.0, head_roll=0.0, head_yaw=-35.0, tail=0.0, tongue=False, eyes='shut', mouth=None),
+}
+# The open mouth (head space of cute.chibi: the snout is at y −0.55, z 0.24 over the head pivot): centre, radii.
+MOUTH_PART = {'smile': ((0.0, -0.6, 0.1), (0.1, 0.06, 0.06)), 'yawn': ((0.0, -0.6, 0.06), (0.14, 0.07, 0.12))}
+# Lying down (body space of cute.chibi, which sits facing −y): each part's new centre (and euler, degrees); the root
+# then turns +90° about z so the nose points along the bed (+x), the dog's left side (−x) toward the camera.
+LIE_PARTS = {
+    'torso': ((0.0, 0.2, 0.4), None),
+    'belly': ((0.0, -0.08, 0.36), None),
+    'legL': ((-0.2, -0.36, 0.12), (90.0, 0.0, 0.0)),
+    'legR': ((0.2, -0.36, 0.12), (90.0, 0.0, 0.0)),
+    'pawL': ((-0.2, -0.55, 0.07), None),
+    'pawR': ((0.2, -0.55, 0.07), None),
+    'hindL': ((-0.33, 0.44, 0.14), None),
+    'hindR': ((0.33, 0.44, 0.14), None),
+}
+LIE_HEAD = (0.0, -0.22, 0.48)  # the head pivot (was (0, −0.02, 0.95) sitting): the chin rests on the front paws
+LIE_TAIL = (0.0, 0.55, 0.3)  # the tail pivot (was (0, 0.42, 0.62)): the curl lies low on the back, under the quilt
+HEAD_PARTS = ('skull', 'face', 'snout', 'nose', 'earL', 'earR', 'ear-inL', 'ear-inR', 'eyeL', 'eyeR')
+BODY_PARTS = ('torso', 'belly', 'hindL', 'hindR', 'curl')  # the quilt covers these (lying)
 STAR_ANCHORS = 5
 # The spread quilt (review): it lies DRAPE_LIFT over the mattress and rises to DRAPE_RISE × Shiba's back height over its
 # body, sloping over DRAPE_SLOPE_X toward the foot and rounding down over DRAPE_EDGE at the shoulders.
@@ -108,6 +136,7 @@ DRAPE_RISE = 0.6
 DRAPE_SLOPE_X = 0.9
 DRAPE_EDGE = 0.12
 DRAPE_SHOULDER = 0.45  # the quilt's height at the shoulders, as a share of its top
+DRAPE_NECK = -0.3  # the quilt reaches this far (m) past the body parts' front (BODY_PARTS) toward the head
 LIE_SINK = 0.14  # lying Shibas sink this much into the soft bed (the quilt over them stays low)
 # The detached particles stand here (any visible spot; the runtime places them by their frame's centre).
 PARTICLE_AT = {'bubble': (-1.2, -4.0, 1.4), 'star': (0.0, -4.0, 1.4), 'z': (1.2, -4.0, 1.4)}
@@ -427,280 +456,91 @@ def put_brush(o, cup_pts, tilt):
     o.rotation_euler = (0.0, math.radians(tilt), 0.0)
 
 
-# --- Shiba: posing the armature -------------------------------------------------------------------------------
+# --- Shiba: the chibi toy, posed by moving its parts ---------------------------------------------------------------
 
-def import_shiba(coll):
-    full = os.path.join(ASSETS, SHIBA)
-    if not os.path.isfile(full):
-        fail(f'{full} is missing')
-    before = set(bpy.data.objects)
-    before_actions = set(bpy.data.actions)
-    bpy.ops.import_scene.fbx(filepath=full)
-    new = [o for o in bpy.data.objects if o not in before]
-    force_opaque(new)
-    for o in new:
-        move_to(o, coll)
-    actions = [a for a in bpy.data.actions if a not in before_actions]
-    arm = next((o for o in new if o.type == 'ARMATURE'), None)
-    meshes = [o for o in new if o.type == 'MESH']
-    if arm is None or not meshes:
-        fail(f'{SHIBA}: no armature or mesh')
-    return arm, meshes[0], new, actions
+def part(name, suffix):
+    o = bpy.data.objects.get(f'{name}-{suffix}')
+    if o is None:
+        fail(f'chibi part "{name}-{suffix}" is missing (cute.chibi names changed?)')
+    return o
 
 
-def hold_action(arm, actions, name, frame):
-    """The armature takes the pose of `…|<name>` at `frame`; the action is then dropped (the pose stays)."""
-    action = next((a for a in actions if a.name.rsplit('|', 1)[-1].split('.')[0] == name), None)
-    if action is None:
-        fail(f'{SHIBA}: no "{name}" action')
-    ad = arm.animation_data or arm.animation_data_create()
-    ad.action = action
-    if hasattr(ad, 'action_slot') and ad.action_slot is None and len(action.slots) > 0:
-        ad.action_slot = action.slots[0]
-    bpy.context.scene.frame_set(frame)
-    pose = {pb.name: pb.matrix_basis.copy() for pb in arm.pose.bones}
-    ad.action = None
-    for pb in arm.pose.bones:
-        pb.matrix_basis = pose[pb.name]
-    bpy.context.view_layer.update()
-    return {pb.name: pb.matrix.copy() for pb in arm.pose.bones}
+def lie_down(name):
+    """Lying like a sphinx (the chibi has no skeleton): the torso lowered and moved back, the hind spheres tucked
+    beside it, the front legs and paws slid forward on the bed, the head lowered onto the paws, the tail on the back."""
+    for suffix, (loc, rot) in LIE_PARTS.items():
+        o = part(name, suffix)
+        o.location = loc
+        if rot is not None:
+            o.rotation_euler = tuple(math.radians(a) for a in rot)
+    part(name, 'head').location = LIE_HEAD
+    part(name, 'tail').location = LIE_TAIL
 
 
-def turn(arm, bone, axis, deg, pivot=None):
-    """Turns pose bone `bone` (with its children) by `deg` about the armature-space `axis` through `pivot` (its head)."""
-    pb = arm.pose.bones[bone]
-    m = pb.matrix.copy()
-    p = Vector(pivot) if pivot is not None else m.translation.copy()
-    r = Matrix.Rotation(math.radians(deg), 4, axis)
-    pb.matrix = Matrix.Translation(p) @ r @ Matrix.Translation(-p) @ m
-    bpy.context.view_layer.update()
+def open_mouth(rig, name, kind, c):
+    """A small open mouth (a giggle) or a wide one (a yawn) under the snout (head space; the tongue shows in it)."""
+    at, size = MOUTH_PART[kind]
+    o = blob(f'{name}-mouth', mat(c['mouth'], 0.6), rig['head'].users_collection[0], rig['head'], at, size, seg=(24, 12))
+    o['cute'] = 1
+    return o
 
 
-def aim(arm, bone, d):
-    """Turns pose bone `bone` about its head so it points along `d` (armature space)."""
-    pb = arm.pose.bones[bone]
-    q = (pb.tail - pb.head).rotation_difference(Vector(d).normalized())
-    m = pb.matrix.copy()
-    p = m.translation.copy()
-    pb.matrix = Matrix.Translation(p) @ q.to_matrix().to_4x4() @ Matrix.Translation(-p) @ m
-    bpy.context.view_layer.update()
+def build_pose(pose, coll, mats, c):
+    """One posed chibi Shiba `shiba-<pose>` in `coll` (unit size, at the origin); returns (rig, name)."""
+    name = f'{SHIBA}-{pose}'
+    rig = chibi('dog', name, coll, mats)
+    k = dict(POSE_KEYS[pose])
+    mouth = k.pop('mouth')
+    if pose in LYING:
+        lie_down(name)
+    if mouth:
+        open_mouth(rig, name, mouth, c)
+    key_chibi(rig, IDLE_FRAME, **k)
+    rig['root'].scale = (SHIBA_K,) * 3
+    return rig, name
 
 
-def follow_feet(arm, rest):
-    """The paws are weighted to the (unconstrained) IK foot bones: each follows its lower leg's change."""
-    for ik, leg in FEET:
-        d = arm.pose.bones[leg].matrix @ rest[leg].inverted()
-        arm.pose.bones[ik].matrix = d @ rest[ik]
-        bpy.context.view_layer.update()
+def rig_pts(name, suffixes=None):
+    objs = [o for o in bpy.data.objects if o.type == 'MESH' and o.name.startswith(f'{name}-')]
+    if suffixes is not None:
+        objs = [o for o in objs if o.name[len(name) + 1:] in suffixes]
+    return world_pts(objs)
 
 
-def ground(arm, mesh):
-    """Every root bone moves so the lowest point of the posed mesh is at z 0 (armature space)."""
-    pts = world_pts([mesh])
-    z = min(p.z for p in pts)
-    for pb in arm.pose.bones:
-        if pb.parent is None:
-            pb.matrix = Matrix.Translation((0.0, 0.0, -z)) @ pb.matrix
-    bpy.context.view_layer.update()
-
-
-def pose_sit(arm, happy=False):
-    """Sitting: the body pitched up about the hips, the front legs straight down, the hind legs folded on the ground."""
-    turn(arm, 'Body', 'X', -47.0, arm.pose.bones['Back'].head.copy())
-    for s in ('L', 'R'):
-        aim(arm, f'FrontUpperLeg.{s}', (0.0, -0.05, -1.0))
-        aim(arm, f'FrontLowerLeg.{s}', (0.0, -0.1, -1.0))
-        aim(arm, f'BackLeg.{s}', (0.0, -0.87, -0.5))
-        aim(arm, f'BackUpperLeg.{s}', (0.0, 0.98, -0.2))
-        aim(arm, f'BackLowerLeg.{s}', (0.0, -1.0, -0.05))
-    turn(arm, 'Neck1', 'X', 30.0)
-    turn(arm, 'Head', 'X', 4.0 if happy else 12.0)
-    if happy:  # giggling: the head tips up and to the side
-        turn(arm, 'Neck3', 'Y', -14.0)
-        for s in ('L', 'R'):
-            turn(arm, f'Ear1.{s}', 'X', 18.0)
-
-
-def pose_lie(arm, head='up'):
-    """Lying like a sphinx: the legs folded under (front paws forward), the head turned a little toward the camera
-    (the armature's −x side faces it once the dog lies along the bed); `head` up (awake), happy (giggling), high (a
-    yawn) or down (asleep, its chin on its paws)."""
-    for s in ('L', 'R'):
-        aim(arm, f'FrontUpperLeg.{s}', (0.0, -1.0, -0.3))
-        aim(arm, f'FrontLowerLeg.{s}', (0.0, -1.0, -0.04))
-        aim(arm, f'BackLeg.{s}', (0.0, -0.9, -0.42))
-        aim(arm, f'BackUpperLeg.{s}', (0.0, 0.98, -0.15))
-        aim(arm, f'BackLowerLeg.{s}', (0.0, -1.0, -0.05))
-    if head == 'high':
-        turn(arm, 'Neck1', 'Z', -FACE_TURN)
-        turn(arm, 'Neck1', 'X', -12.0)
-        turn(arm, 'Head', 'X', -28.0)
-    elif head == 'down':
-        turn(arm, 'Neck1', 'Z', -FACE_TURN * 2.0)
-        turn(arm, 'Neck1', 'X', 12.0)
-        turn(arm, 'Head', 'X', -6.0)
-        turn(arm, 'Head', 'Y', -20.0)
-        for s in ('L', 'R'):
-            turn(arm, f'Ear1.{s}', 'X', 25.0)
-    elif head == 'happy':
-        turn(arm, 'Neck1', 'Z', -FACE_TURN)
-        turn(arm, 'Head', 'X', -8.0)
-        turn(arm, 'Neck3', 'Y', -14.0)
-    else:
-        turn(arm, 'Neck1', 'Z', -FACE_TURN)
-    # The tail curls down on the bed.
-    turn(arm, 'Tail1', 'X', 55.0)
-
-
-def pose_roll(arm):
-    """Asleep, rolled onto its side: the sphinx pose turned about its long axis (the legs stretch out under the quilt),
-    the head resting on its cheek."""
-    for s in ('L', 'R'):
-        aim(arm, f'FrontUpperLeg.{s}', (0.0, -1.0, -0.3))
-        aim(arm, f'FrontLowerLeg.{s}', (0.0, -1.0, -0.04))
-        aim(arm, f'BackLeg.{s}', (0.0, -0.9, -0.42))
-        aim(arm, f'BackUpperLeg.{s}', (0.0, 0.98, -0.15))
-        aim(arm, f'BackLowerLeg.{s}', (0.0, -1.0, -0.05))
-    turn(arm, 'Tail1', 'X', 55.0)
-    turn(arm, 'Body', 'Y', ROLL_DEG, arm.pose.bones['Torso'].head.copy())
-    turn(arm, 'Neck1', 'X', 20.0)
-    turn(arm, 'Neck1', 'Y', ROLL_HEAD)
-
-
-def eye_spots(mesh):
-    """The two eyes' inner and outer corners (armature space, current pose): the Eyes_* material vertices per side."""
-    me = mesh.data
-    idx = {i for i, m in enumerate(me.materials) if m and m.name.split('.')[0].startswith('Eyes_')}
-    pts = world_pts([mesh])
-    spots = {}
-    for side in (1, -1):
-        vs = {v for p in me.polygons if p.material_index in idx for v in p.vertices}
-        sel = [v for v in vs if me.vertices[v].co.x * side > 0]
-        if not sel:
-            fail('Shiba: no eye vertices')
-        # Inner and outer corners from the rest shape (the posed head may be turned), placed where they are now.
-        inner = min(sel, key=lambda v: abs(me.vertices[v].co.x))
-        outer = max(sel, key=lambda v: abs(me.vertices[v].co.x))
-        spots[side] = (pts[inner], pts[outer])
-    return spots
-
-
-def snout(mesh):
-    """The snout's front-bottom point (where a mouth opens), armature space, current pose."""
-    pts = world_pts([mesh])
-    y0 = min(p.y for p in pts)
-    tip = [p for p in pts if p.y < y0 + 0.28 and p.z > 1.6]
-    z0 = min(p.z for p in tip)
-    return Vector((0.0, y0 + 0.13, z0 + 0.02))
-
-
-def bone_child(o, arm, bone):
-    mw = o.matrix_world.copy()
-    o.parent = arm
-    o.parent_type = 'BONE'
-    o.parent_bone = bone
-    o.matrix_world = mw
-
-
-def shut_eyes(arm, mesh, coll, c):
-    """Closed eyes: the eye materials take the fur colour and a dark line crosses each eye (they follow the head)."""
-    fur = next((m for m in mesh.data.materials if m and m.name.split('.')[0] == 'Main'), None)
-    if fur is None:
-        fail('Shiba: no Main (fur) material')
-    for i, m in enumerate(mesh.data.materials):
-        if m and m.name.split('.')[0].startswith('Eyes_'):
-            mesh.data.materials[i] = fur
-    line = mat(c['eyeLine'], 0.5)
-    for side, (inner, outer) in eye_spots_cache[mesh.name].items():
-        out = Vector((side * 0.02, -0.03, 0.0))
-        o = rod(f'{mesh.name}-lid-{side}', inner + out, outer + out, 0.032, line, coll, None, seg=8)
-        bpy.context.view_layer.update()
-        bone_child(o, arm, 'Head')
-
-
-def open_mouth(arm, kind, coll, c, at, prefix):
-    """A small open mouth (a giggle) or a wide one (a yawn) under the snout, with a pink tongue; it follows the head."""
-    w, d, h = (0.15, 0.09, 0.08) if kind == 'smile' else (0.17, 0.12, 0.16)
-    m = blob(f'{prefix}-mouth', mat(c['mouth'], 0.6), coll, None, at, (w, d, h), seg=(20, 10))
-    t = blob(f'{prefix}-tongue', mat(c['tongue'], 0.5), coll, None, at + Vector((0.0, -0.025, -h * 0.35)), (w * 0.7, d * 0.8, h * 0.45), seg=(20, 10))
-    bpy.context.view_layer.update()
-    for o in (m, t):
-        bone_child(o, arm, 'Head')
-
-
-eye_spots_cache = {}
-
-
-def key_pose(arm):
-    for pb in arm.pose.bones:
-        pb.keyframe_insert('location', frame=IDLE_FRAME)
-        pb.keyframe_insert('rotation_quaternion' if pb.rotation_mode == 'QUATERNION' else 'rotation_euler', frame=IDLE_FRAME)
-        pb.keyframe_insert('scale', frame=IDLE_FRAME)
-    key_constant(arm)
-
-
-def build_pose(pose, coll, c):
-    """One posed Shiba in `coll` (armature space = world before its root moves); returns (root, meshes)."""
-    arm, mesh, new, actions = import_shiba(coll)
-    rest = hold_action(arm, actions, 'Idle', 1)
-    eye_spots_cache[mesh.name] = eye_spots(mesh)
-    if pose in EYES_SHUT:
-        shut_eyes(arm, mesh, coll, c)
-    if pose in MOUTH:
-        open_mouth(arm, MOUTH[pose], coll, c, snout(mesh), mesh.name)
-    if pose == 'sit':
-        pose_sit(arm)
-    elif pose == 'brush':
-        pose_sit(arm, happy=True)
-    elif pose == 'lie':
-        pose_lie(arm, 'up')
-    elif pose == 'lie-brush':
-        pose_lie(arm, 'happy')
-    elif pose == 'yawn':
-        pose_lie(arm, 'high')
-    elif pose == 'sleep':
-        pose_lie(arm, 'down')
-    elif pose == 'roll':
-        pose_roll(arm)
-    follow_feet(arm, rest)
-    ground(arm, mesh)
-    key_pose(arm)
-    root = add_empty(f'shiba-{pose}-root', (0.0, 0.0, 0.0), coll)
-    for o in new:
-        if o.parent is None:
-            o.parent = root
-    root.scale = (SHIBA_K,) * 3
-    return root, mesh, arm
-
-
-def mouth_point(arm, mesh_name):
-    """The current world position of the open mouth (its blob), or the snout's front-bottom point."""
-    o = bpy.data.objects.get(f'{mesh_name}-mouth')
+def mouth_point(name):
+    """The current world position of the open mouth part `<rig>-mouth`."""
+    o = bpy.data.objects.get(f'{name}-mouth')
     return o.matrix_world.translation.copy() if o else None
 
 
-def build_shiba(c, sprites, room):
+def build_shiba(c, params, sprites, room):
     coll = bpy.data.collections.new('sprite.shiba')
     sprites.children.link(coll)
+    colours = {**params['colours'], 'creatureLight': params['art']['creatureLight']}
+    mats = chibi_materials(colours, colours['creatureOrange'], colours['creatureLight'])
     _x0, x1, y0, y1, _zt = room['bed']
     bed_y = (y0 + y1) / 2 - 0.1
     z = room['mattress']
     out = {}
+    bpy.context.scene.frame_set(IDLE_FRAME)
     for pose in POSES:
         sc = state_coll(coll, 'shiba', pose)
-        root, mesh, arm = build_pose(pose, sc, c)
+        rig, name = build_pose(pose, sc, mats, c)
+        root = rig['root']
         if pose in ('sit', 'brush'):
             root.rotation_euler = (0.0, 0.0, math.radians(SIT_YAW))
             bpy.context.view_layer.update()
-            pts = world_pts([mesh])
+            pts = rig_pts(name)
             root.location = (SIT_X - (min(p.x for p in pts) + max(p.x for p in pts)) / 2, bed_y - (min(p.y for p in pts) + max(p.y for p in pts)) / 2, z - 0.04)
         else:
-            root.rotation_euler = (0.0, 0.0, math.radians(90.0))
+            # Along the bed, the nose to the pillow (+x); the roll first turns it about its long axis onto its side.
+            root.rotation_euler = (0.0, math.radians(ROLL_DEG if pose == 'roll' else 0.0), math.radians(90.0))
             bpy.context.view_layer.update()
-            pts = world_pts([mesh])
-            root.location = (x1 - HEADBOARD_GAP - max(p.x for p in pts), bed_y - (min(p.y for p in pts) + max(p.y for p in pts)) / 2, z - 0.06 - LIE_SINK)
+            pts = rig_pts(name)
+            gap = HEADBOARD_GAP - (ROLL_SLIDE if pose == 'roll' else 0.0)
+            root.location = (x1 - gap - max(p.x for p in pts), bed_y - (min(p.y for p in pts) + max(p.y for p in pts)) / 2, z - 0.06 - LIE_SINK - min(p.z for p in pts))
         bpy.context.view_layer.update()
-        out[pose] = {'pts': world_pts([mesh]), 'arm': arm, 'mesh': mesh, 'all': world_pts([o for o in sc.all_objects])}
+        out[pose] = {'pts': rig_pts(name), 'name': name, 'head': rig_pts(name, HEAD_PARTS), 'body': rig_pts(name, BODY_PARTS), 'all': world_pts(list(sc.all_objects))}
     return coll, out
 
 
@@ -784,17 +624,13 @@ def build_blanket(c, sprites, room, shiba):
     rod('quilt-fold-trim', (fx0 + 0.05, y0 + 0.12, z + 0.33), (fx1 - 0.05, y0 + 0.12, z + 0.33), 0.035, trim, off, None)
     quilt_dots('quilt-fold', c, off, fx0 + 0.05, fx1 - 0.05, y0 + 0.25, y1 - 0.2, z + 0.37)
     # On: spread from the foot to Shiba's shoulders (every lying pose), over a hump for its body, hanging down the front.
-    body = []
-    for pose in ('lie', 'lie-brush', 'sleep'):
-        pts = shiba[pose]['pts']
-        nose = max(p.x for p in pts)
-        tail = min(p.x for p in pts)
-        body += [p for p in pts if p.x < tail + 0.6 * (nose - tail)]
+    # The chibi's body parts (torso, belly, hind legs, tail; not the head or the front paws under it).
+    body = [p for pose in ('lie', 'lie-brush', 'sleep') for p in shiba[pose]['body']]
     bx0, bx1 = min(p.x for p in body), max(p.x for p in body)
     by0, by1 = min(p.y for p in body), max(p.y for p in body)
-    bz1 = max(p.z for p in body if p.x < bx0 + 0.75 * (bx1 - bx0))
+    bz1 = max(p.z for p in body)
     on = state_coll(coll, 'blanket', 'on')
-    sx0, sx1 = x0 + 0.12, bx1 + 0.05
+    sx0, sx1 = x0 + 0.12, bx1 + DRAPE_NECK
     quilt_slab('quilt-front', (sx1 - sx0, 0.1, 0.3), ((sx0 + sx1) / 2, y0 - 0.06, z - 0.1), c, on)
     # Review: a gently draped quilt (no dome): a heightfield over the mattress, flat at the foot, rising softly over
     # Shiba's body, with a rolled white hem across its shoulders; Shiba lies a little sunk into the soft bed.
@@ -928,13 +764,12 @@ def build_layout(screen, room, shiba, blanket, lamp, brush, layout):
     report(screen, 'hit.shiba', pts)
     # Anchors.
     for pose, aid in (('brush', 'mouth-sit'), ('lie-brush', 'mouth-lie')):
-        at = mouth_point(shiba[pose]['arm'], shiba[pose]['mesh'].name)
+        at = mouth_point(shiba[pose]['name'])
         add_empty(f'anchor.{aid}', tuple(at), layout)
         print(f'build_bedtime: anchor.{aid} {screen.project(at)}')
     add_empty('anchor.brush-head', tuple(tip), layout)
-    head = shiba['sleep']['pts']
-    nose = max(p.x for p in head)
-    hp = [p for p in head if p.x > nose - 0.55]
+    # The sleeping head (skull, face, ears): the "z" rise from the middle of its top.
+    hp = shiba['sleep']['head']
     add_empty('anchor.head-sleep', ((min(p.x for p in hp) + max(p.x for p in hp)) / 2, (min(p.y for p in hp) + max(p.y for p in hp)) / 2, max(p.z for p in hp)), layout)
     add_empty('anchor.lamp', shade, layout)
     cx, cz, w, h = WINDOW
@@ -965,7 +800,7 @@ def main():
     scene.collection.children.link(layout)
     layout.hide_render = True
     room = build_plate(scene, screen, params, plate)
-    _sc, shiba = build_shiba(c, sprites, room)
+    _sc, shiba = build_shiba(c, params, sprites, room)
     for pose in POSES:
         report(screen, f'shiba/{pose}', shiba[pose]['all'])
     blanket = build_blanket(c, sprites, room, shiba)
