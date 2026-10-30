@@ -444,6 +444,45 @@ const ui = {
   gardenButterflyScale: 0.8,
   /** Trồng cây: a picked fruit shrinks to this scale in Shiba's mouth. */
   gardenBiteScale: 0.45,
+  /** Rửa xe (2026-10-30): the hose is drawn at least this big (longest side, design px); its tap circle at least this wide. */
+  carWashHoseMinPx: 90,
+  carWashHitMinPx: 80,
+  /** Rửa xe: every car's hull is at least this wide (design px). */
+  carWashCarMinPx: 300,
+  /** Rửa xe: the car counts as foamed once this share of its dirt spots is under foam. */
+  carWashFoamShare: 0.66,
+  /** Rửa xe: a foam puff covers a dirt spot whose anchor is this close (design px). */
+  carWashFoamCoverPx: 48,
+  /** Rửa xe: while rubbing, a new puff needs the finger this far from the last one (design px). */
+  carWashFoamStepPx: 26,
+  /** Rửa xe: the foam pool (at most this many puffs on the car; the oldest is reused). */
+  carWashFoamMax: 40,
+  /** Rửa xe: a puff's drawn scale (it varies ± this jitter). */
+  carWashFoamScale: 0.9,
+  carWashFoamJitter: 0.2,
+  /** Rửa xe: a puff is turned up to ± this (degrees) so the foam never looks stamped. */
+  carWashFoamTiltDeg: 10,
+  /** Rửa xe: the rub area reaches this far around the car's hull (a rub that starts just off the car still counts on it). */
+  carWashRubPadPx: 40,
+  /** Rửa xe: the idle hint at most this many times per step; its bounce (scale). */
+  carWashHintMax: 3,
+  carWashHintBounce: 1.1,
+  /** Rửa xe: the tickled wiggle (degrees), the arrival hop and the clean bounce (design px), the sneeze squash (scale). */
+  carWashWiggleDeg: 2.5,
+  carWashHopPx: 18,
+  carWashSneezeSquash: 0.94,
+  /** Rửa xe: the car drives in from (and out to) this far off its rest spot (design px). */
+  carWashDrivePx: 760,
+  /** Rửa xe: the rinse: the hose tilts (degrees, × reducedMotionAmplitude when reduced); drops per wave; their scale. */
+  carWashHoseTiltDeg: 16,
+  carWashSprayDrops: 6,
+  carWashDropScale: 0.8,
+  /** Rửa xe: the shine: sparkles over the car, their scale. */
+  carWashSparkles: 6,
+  carWashSparkleScale: 0.8,
+  /** Rửa xe: the duck rises this far out of the foam; the sneezed bubble floats this far up (design px). */
+  carWashDuckRisePx: 34,
+  carWashBubbleRisePx: 150,
   /** Story 5.6: a new station landmark (the ice-cream cone, the pizza chimney) is at least this tall (design px; build_map.py). */
   mapLandmarkMinPx: 60,
   /** Story 5.6: the map clouds drift right at this speed (design px per ms; × reducedMotionAmplitude when reduced). */
@@ -738,6 +777,55 @@ const art = {
     butterflyBody: colour('#5B4636'),
     worm: colour('#FF9EB5'),
     wormLight: colour('#FFC4D2'),
+    rainbow1: colour('#FF8FA3'),
+    rainbow2: colour('#FFC26B'),
+    rainbow3: colour('#FFE680'),
+    rainbow4: colour('#9ED97A'),
+    rainbow5: colour('#8FD3FF'),
+    rainbow6: colour('#B9A6FF'),
+  },
+  /**
+   * Rửa xe (2026-10-30, build_car_wash.py): the car-wash bay (sky, the back wall and its stripe, the tiled floor and
+   * its grout, the drain, the puddle, the arch and its roller brushes, the bubble sign), the hose (its reel, the hose
+   * itself, the spray gun), the dirt kinds (mud, leaves, ice-cream drips, dust), the foam, the particles (water drop,
+   * sparkle, soap bubble) and the rainbow. The cars keep the Kenney colours. Never red feedback.
+   */
+  carWash: {
+    sky: colour('#BDE6FF'),
+    wall: colour('#FFF1DC'),
+    wallStripe: colour('#9FD8F7'),
+    wallTile: colour('#FFE6C4'),
+    floor: colour('#E6F4FA'),
+    floorGrout: colour('#C9E4EF'),
+    drain: colour('#9AB3BF'),
+    puddle: colour('#A8DDF7'),
+    arch: colour('#FFB7CE'),
+    archDark: colour('#F294B3'),
+    brush: colour('#7FC8F8'),
+    brushDark: colour('#4FA8E0'),
+    sign: colour('#FFFFFF'),
+    reel: colour('#FFC26B'),
+    reelDark: colour('#E8A24A'),
+    hose: colour('#5DBB63'),
+    hoseDark: colour('#3F9A4B'),
+    nozzle: colour('#FFE066'),
+    nozzleDark: colour('#F2B33D'),
+    mud: colour('#8B5E3C'),
+    mudDark: colour('#6B4329'),
+    leaf: colour('#8FC85A'),
+    leafAutumn: colour('#F2A65A'),
+    leafRed: colour('#E98A5B'),
+    cream: colour('#FFB7CE'),
+    creamMint: colour('#B5EAD7'),
+    creamCone: colour('#F2C98B'),
+    dust: colour('#C9B9A6'),
+    dustDark: colour('#A8977F'),
+    foam: colour('#FFFFFF'),
+    foamShade: colour('#E3F1FB'),
+    bubble: colour('#DDF2FF'),
+    drop: colour('#8FD3FF'),
+    sparkle: colour('#FFE680'),
+    headlight: colour('#FFF6C2'),
     rainbow1: colour('#FF8FA3'),
     rainbow2: colour('#FFC26B'),
     rainbow3: colour('#FFE680'),

@@ -163,6 +163,11 @@ export const AUDIO_IDS = [
   'sfx.garden.pop',
   'sfx.garden.crunch',
   'sfx.garden.slurp',
+  'sfx.car-wash.squish',
+  'sfx.car-wash.chime',
+  'sfx.car-wash.fire-siren',
+  'sfx.car-wash.ambulance-siren',
+  'sfx.car-wash.honk-low',
 ] as const;
 
 export type AudioId = (typeof AUDIO_IDS)[number];
@@ -428,6 +433,12 @@ export const AUDIO_CATALOG: Record<AudioId, AudioEntry> = {
   'sfx.garden.pop': { path: 'assets/audio/sfx/sfx.garden.pop.m4a', kind: 'sfx' },
   'sfx.garden.crunch': { path: 'assets/audio/sfx/sfx.garden.crunch.m4a', kind: 'sfx', creature: true },
   'sfx.garden.slurp': { path: 'assets/audio/sfx/sfx.garden.slurp.m4a', kind: 'sfx', creature: true },
+  /** Rửa xe (2026-10-30): our own ffmpeg recipes (tools/audio/make-car-wash.ts): ≤ 0.8 s, a 50 ms fade-in, nothing below 150 Hz, quiet. A mud spot squished under the foam; the soft chime of the clean car's sparkles; the fire truck's and the ambulance's own sirens (two-tone, short); the garbage truck's low honk. Load with the game. */
+  'sfx.car-wash.squish': { path: 'assets/audio/sfx/sfx.car-wash.squish.m4a', kind: 'sfx' },
+  'sfx.car-wash.chime': { path: 'assets/audio/sfx/sfx.car-wash.chime.m4a', kind: 'sfx' },
+  'sfx.car-wash.fire-siren': { path: 'assets/audio/sfx/sfx.car-wash.fire-siren.m4a', kind: 'sfx' },
+  'sfx.car-wash.ambulance-siren': { path: 'assets/audio/sfx/sfx.car-wash.ambulance-siren.m4a', kind: 'sfx' },
+  'sfx.car-wash.honk-low': { path: 'assets/audio/sfx/sfx.car-wash.honk-low.m4a', kind: 'sfx' },
   /** Island background loop, mastered to −30 LUFS (EXPERIENCE › Âm thanh: music ≤ −30 LUFS). */
   'music.island': { path: 'assets/audio/music/music.island.m4a', kind: 'music', loop: true },
 };

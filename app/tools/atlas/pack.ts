@@ -59,6 +59,8 @@ import {
   validateOutfitFrames,
   gardenLimits,
   validateGarden,
+  carWashLimits,
+  validateCarWash,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
@@ -112,6 +114,8 @@ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayou
   'dress-up': (layout, atlas) => [...validateDressUp(layout, dressUpLimits(), atlas), ...validateOutfitFrames('dress-up', atlas)],
   // Trồng cây (2026-10-30): the tap circles, Shiba's hull, every frame, every outfit overlay.
   garden: (layout, atlas) => [...validateGarden(layout, gardenLimits(), atlas), ...validateOutfitFrames('garden', atlas)],
+  // Rửa xe (2026-10-30): the car hulls, the dirt spots, the hose's tap circle, every frame.
+  'car-wash': (layout, atlas) => validateCarWash(layout, carWashLimits(), atlas),
 };
 
 /** PNG zlib level of the shipped background. */

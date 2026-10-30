@@ -20,7 +20,9 @@
 #   - wardrobe (back row, right): a lilac wardrobe with two doors, knobs, a crown top and a shirt on its side hook (script-built);
 #   - garden (Trồng cây, 2026-10-30; front row, between clinic and bed): a wooden raised bed of dark soil with a strawberry
 #     plant, a staked tomato plant and a seedling, a sign stake with a strawberry, and a light-blue watering can beside it
-#     (script-built; colours from art.garden).
+#     (script-built; colours from art.garden);
+#   - car-wash (Rửa xe, 2026-10-30; front row, far right): a pink arch with a bubble sign and a blue roller brush over the
+#     Kenney Car Kit taxi (CC0), foam on its roof and side (colours from art.carWash).
 # Each prop is fitted into its CORNER_BOXES box (design px; bottom edge = its ground line) by unprojecting
 # through the camera, so the layout is exactly what tools/layout/rules.ts › validateHome checks (hulls inside
 # the interactive rect, clear of the Home/Speaker zones, ≥ targetGap apart, each frame ≥ 150 px).
@@ -72,19 +74,23 @@ SKY_EMISSION = 1.1
 CLOUDS = [(-30.0, 120.0, 20.0, 5.0), (-4.0, 130.0, 25.0, 4.2), (28.0, 120.0, 21.0, 5.5)]
 
 # --- the corners: design-px boxes (x0, y0, x1, y1), y1 = the ground line; the prop fills the box ---------------
-# Back row: pen, stage, wardrobe (tall and narrow, left of the Speaker zone); front row: clinic, garden, bed. Padded by hitPad (24) each hull stays inside the
+# Back row: pen, stage, wardrobe (tall and narrow, left of the Speaker zone); front row (2026-10-30: four corners, each a
+# little smaller): clinic, garden, bed, car-wash. Padded by hitPad (24) each hull stays inside the
 # interactive rect (x 24…1000, y 66…694), off the Home/Speaker zones (top corners) and ≥ targetGap (24) apart.
 CORNER_BOXES = {
     'pen': (60, 225, 320, 395),
     'stage': (388, 190, 640, 395),
     'wardrobe': (712, 180, 870, 395),  # its hull stays left of the Speaker zone (x ≥ 900)
-    'clinic': (50, 480, 260, 664),
-    'garden': (344, 480, 612, 664),
-    'bed': (650, 470, 900, 664),  # height-limited: the bed itself spans ~x 695…856
+    'clinic': (50, 496, 222, 664),
+    'garden': (296, 490, 500, 664),
+    'bed': (574, 476, 740, 664),
+    'car-wash': (814, 480, 972, 664),
 }
 PLACE_PASSES = 6
 # Yaw (degrees) of each prop's root (0 = its front toward the camera).
-CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0, 'garden': 8.0}
+CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0, 'garden': 8.0, 'car-wash': -10.0}
+# Rửa xe corner: the Kenney Car Kit taxi (CC0) under the arch.
+CAR_WASH_CAR = os.path.join('kenney', 'kenney_car-kit', 'Models', 'GLB format', 'taxi.glb')
 
 # The pen: a fence rectangle (modules) and the cow inside, its head over the front rail.
 PEN_W = 3.0  # x extent (m)
@@ -585,7 +591,51 @@ def build_garden(root, coll, c):
     blob('can-rose', can_dark, coll, can_root, (-cr - 0.36, 0.0, ch + 0.23), (0.07, 0.09, 0.09))
 
 
-BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe, 'garden': build_garden}
+def build_car_wash(root, coll, c):
+    """A pink car-wash arch (two posts, a beam, a white sign with blue bubbles) with a blue roller brush at the back, over
+    the Kenney taxi (turned to show its side), foam blobs on its roof and side and a few on the ground."""
+    w = c['carWash']
+    car = import_joined(os.path.join(ASSETS, CAR_WASH_CAR), 'car-wash-taxi')
+    move_to(car, coll)
+    car.parent = root
+    car.rotation_mode = 'XYZ'  # the glTF import leaves a quaternion mode
+    car.rotation_euler = (0.0, 0.0, math.radians(90.0))  # its front (−y) to +x
+    del car['cute']  # Kenney's flat facets get the soft shading like the script-built props
+    bevel = car.modifiers.new('soft-edge', 'BEVEL')
+    bevel.width = 0.025
+    bevel.segments = 3
+    bevel.limit_method = 'ANGLE'
+    bevel.angle_limit = math.radians(40.0)
+    for m in car.data.materials:
+        if m is not None and m.use_nodes:
+            principled(m).inputs['Roughness'].default_value = 0.55
+    vs = [v.co for v in car.data.vertices]
+    length = max(v.y for v in vs) - min(v.y for v in vs)  # along x once turned
+    height = max(v.z for v in vs)
+    arch, arch_dark = mat(w['arch'], 0.45), mat(w['archDark'], 0.45)
+    brush, brush_dark = mat(w['brush'], 0.7), mat(w['brushDark'], 0.7)
+    post_x = length / 2 + 0.3
+    top = height + 0.75
+    for sx in (-1, 1):
+        rbox(f'cw-post-{sx}', (0.32, 0.32, top), 0.1, arch, coll, root, (sx * post_x, 0.25, top / 2))
+        rbox(f'cw-foot-{sx}', (0.46, 0.46, 0.14), 0.06, arch_dark, coll, root, (sx * post_x, 0.25, 0.07))
+    rbox('cw-beam', (2 * post_x + 0.4, 0.38, 0.36), 0.12, arch, coll, root, (0.0, 0.25, top + 0.1))
+    rbox('cw-sign', (1.5, 0.1, 0.56), 0.2, mat(w['sign'], 0.8), coll, root, (0.0, 0.02, top + 0.5))
+    for j, (dx, dz, r) in enumerate([(-0.42, -0.02, 0.15), (-0.12, 0.06, 0.19), (0.2, -0.01, 0.16), (0.47, 0.07, 0.11)]):
+        blob(f'cw-sign-bubble-{j}', mat(w['wallStripe'], 0.25), coll, root, (dx, -0.04, top + 0.5 + dz), (r, 0.04, r), seg=(24, 10))
+    # The roller brush behind the car, hanging from the beam.
+    lathe('cw-brush', rounded_profile(0.3, 0.3, top - 0.1, 0.4), brush, coll, root, (post_x - 0.6, 0.75, 0.0))
+    for j in range(5):
+        torus(f'cw-brush-ring-{j}', 0.31, 0.03, brush_dark, coll, root, (post_x - 0.6, 0.75, 0.5 + 0.38 * j))
+    # Foam on the car (roof and side) and a little on the ground.
+    foam, shade = mat(w['foam'], 0.55), mat(w['foamShade'], 0.55)
+    for j, (x, y, z, r) in enumerate([(-0.5, 0.0, height + 0.05, 0.26), (-0.15, 0.1, height + 0.12, 0.3), (0.25, -0.05, height + 0.04, 0.24),
+                                       (-0.9, -0.78, 0.75, 0.2), (-0.6, -0.8, 0.95, 0.17), (0.35, -0.8, 0.7, 0.18), (0.65, -0.78, 0.9, 0.14),
+                                       (-1.3, -0.9, 0.12, 0.16), (1.35, -0.8, 0.1, 0.13)]):
+        blob(f'cw-foam-{j}', foam if j % 3 else shade, coll, root, (x, y, z), (r, r * 0.9, r * 0.85), seg=(24, 12))
+
+
+BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe, 'garden': build_garden, 'car-wash': build_car_wash}
 
 
 def place_in_box(scene, screen, root, meshes, box):
@@ -607,7 +657,7 @@ def place_in_box(scene, screen, root, meshes, box):
 
 
 def build_corner(scene, screen, cid, params, sprites, layout):
-    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden']}
+    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden'], 'carWash': params['art']['carWash']}
     coll = bpy.data.collections.new(f'sprite.{cid}')
     sprites.children.link(coll)
     root = add_empty(f'{cid}-root', (0.0, 0.0, 0.0), coll)

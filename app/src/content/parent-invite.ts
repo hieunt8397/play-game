@@ -24,4 +24,5 @@ export const PARENT_INVITE_LINES: Readonly<Record<GameId, readonly VoiceLineId[]
   'pet-clinic': ['vo.pet-clinic.parent.1'],
   'dress-up': ['vo.dress-up.parent.1'],
   garden: ['vo.garden.parent.1'],
+  'car-wash': ['vo.car-wash.parent.1'],
 };

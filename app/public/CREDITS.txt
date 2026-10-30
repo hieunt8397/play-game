@@ -10,5 +10,9 @@ Bé Học Chơi - credits for third-party assets that are not CC0
 Font (SIL Open Font License 1.1)
 - Baloo 2, (c) The Baloo 2 Project Authors, SIL OFL 1.1 - see assets/fonts/OFL.txt
 
+Kenney (www.kenney.nl) - Car Kit, CC0 1.0 (no attribution required; credited with thanks): the fire truck, police
+  car, ambulance, taxi, garbage truck and tractor in Rửa xe (atlas car-wash) and the taxi of its yard corner (atlas home),
+  modified: bevelled, softened and rendered.
+
 All other models, textures and sounds are CC0 1.0 (Kenney, Quaternius, Tiny Treats, KayKit, Poly Haven,
 Freesound) or the project's own; see app/README.md, "Assets and provenance".

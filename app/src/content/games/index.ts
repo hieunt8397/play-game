@@ -4,6 +4,7 @@ import type { GameId } from '../types.ts';
 import * as animalPens from './animal-pens.ts';
 import * as band from './band.ts';
 import * as bedtime from './bedtime.ts';
+import * as carWash from './car-wash.ts';
 import * as dinoPuzzle from './dino-puzzle.ts';
 import * as dressUp from './dress-up.ts';
 import * as fishing from './fishing.ts';
@@ -37,4 +38,6 @@ export const GAME_CONTENT: Readonly<Partial<Record<GameId, GameContent>>> = {
   'dress-up': { assets: dressUp.assets, screen: dressUp.screen },
   // Trồng cây (2026-10-30): a yard game (no station, no ladder); registering it wakes the yard's garden corner.
   garden: { assets: garden.assets, screen: garden.screen },
+  // Rửa xe (2026-10-30): a yard game (no station, no ladder); registering it wakes the yard's car-wash corner.
+  'car-wash': { assets: carWash.assets, screen: carWash.screen },
 };

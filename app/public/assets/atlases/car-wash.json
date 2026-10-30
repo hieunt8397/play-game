@@ -1,0 +1,4191 @@
+{
+  "textures": [
+    {
+      "image": "car-wash-0.png",
+      "format": "RGBA8888",
+      "size": {
+        "w": 2048,
+        "h": 2048
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "filename": "bubble/idle/00",
+          "frame": {
+            "x": 2,
+            "y": 1912,
+            "w": 130,
+            "h": 130
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1115,
+            "y": 155,
+            "w": 130,
+            "h": 130
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-ambulance/clean/00",
+          "frame": {
+            "x": 2,
+            "y": 1297,
+            "w": 882,
+            "h": 611
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 599,
+            "y": 703,
+            "w": 882,
+            "h": 611
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-ambulance/lights/00",
+          "frame": {
+            "x": 907,
+            "y": 1147,
+            "w": 885,
+            "h": 611
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 599,
+            "y": 703,
+            "w": 885,
+            "h": 611
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-firetruck/clean/00",
+          "frame": {
+            "x": 2,
+            "y": 152,
+            "w": 902,
+            "h": 597
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 589,
+            "y": 721,
+            "w": 902,
+            "h": 597
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-firetruck/lights/00",
+          "frame": {
+            "x": 946,
+            "y": 2,
+            "w": 915,
+            "h": 597
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 589,
+            "y": 721,
+            "w": 915,
+            "h": 597
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-garbage-truck/clean/00",
+          "frame": {
+            "x": 908,
+            "y": 603,
+            "w": 901,
+            "h": 540
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 589,
+            "y": 773,
+            "w": 901,
+            "h": 540
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-garbage-truck/lights/00",
+          "frame": {
+            "x": 2,
+            "y": 753,
+            "w": 901,
+            "h": 540
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 589,
+            "y": 773,
+            "w": 901,
+            "h": 540
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/cream-1/00",
+          "frame": {
+            "x": 1459,
+            "y": 1762,
+            "w": 79,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 999,
+            "y": 918,
+            "w": 79,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/cream-2/00",
+          "frame": {
+            "x": 1984,
+            "y": 1659,
+            "w": 62,
+            "h": 113
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1279,
+            "y": 915,
+            "w": 62,
+            "h": 113
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/cream-3/00",
+          "frame": {
+            "x": 1880,
+            "y": 1597,
+            "w": 79,
+            "h": 114
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 735,
+            "y": 1102,
+            "w": 79,
+            "h": 114
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/cream-4/00",
+          "frame": {
+            "x": 1542,
+            "y": 1762,
+            "w": 79,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 999,
+            "y": 1101,
+            "w": 79,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/dust-5/00",
+          "frame": {
+            "x": 1690,
+            "y": 2000,
+            "w": 107,
+            "h": 44
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1255,
+            "y": 1118,
+            "w": 107,
+            "h": 44
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/leaves-5/00",
+          "frame": {
+            "x": 1934,
+            "y": 1881,
+            "w": 112,
+            "h": 55
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1251,
+            "y": 1112,
+            "w": 112,
+            "h": 55
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/mud-0/00",
+          "frame": {
+            "x": 1865,
+            "y": 502,
+            "w": 148,
+            "h": 80
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 699,
+            "y": 943,
+            "w": 148,
+            "h": 80
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/mud-1/00",
+          "frame": {
+            "x": 1864,
+            "y": 692,
+            "w": 145,
+            "h": 120
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 966,
+            "y": 900,
+            "w": 145,
+            "h": 120
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/mud-4/00",
+          "frame": {
+            "x": 1012,
+            "y": 1762,
+            "w": 140,
+            "h": 120
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 968,
+            "y": 1083,
+            "w": 140,
+            "h": 120
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/cream-0/00",
+          "frame": {
+            "x": 1796,
+            "y": 1597,
+            "w": 80,
+            "h": 114
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 731,
+            "y": 933,
+            "w": 80,
+            "h": 114
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/cream-1/00",
+          "frame": {
+            "x": 1583,
+            "y": 1881,
+            "w": 79,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 999,
+            "y": 930,
+            "w": 79,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/cream-3/00",
+          "frame": {
+            "x": 1796,
+            "y": 1313,
+            "w": 69,
+            "h": 104
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 739,
+            "y": 1120,
+            "w": 69,
+            "h": 104
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/cream-4/00",
+          "frame": {
+            "x": 1625,
+            "y": 1762,
+            "w": 79,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 999,
+            "y": 1109,
+            "w": 79,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/cream-5/00",
+          "frame": {
+            "x": 1813,
+            "y": 603,
+            "w": 47,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1290,
+            "y": 1106,
+            "w": 47,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/dust-0/00",
+          "frame": {
+            "x": 1239,
+            "y": 1762,
+            "w": 72,
+            "h": 84
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 716,
+            "y": 933,
+            "w": 72,
+            "h": 84
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/dust-3/00",
+          "frame": {
+            "x": 1796,
+            "y": 1151,
+            "w": 74,
+            "h": 77
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 744,
+            "y": 1120,
+            "w": 74,
+            "h": 77
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/leaves-3/00",
+          "frame": {
+            "x": 1796,
+            "y": 1232,
+            "w": 73,
+            "h": 77
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 747,
+            "y": 1121,
+            "w": 73,
+            "h": 77
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/leaves-5/00",
+          "frame": {
+            "x": 1796,
+            "y": 1510,
+            "w": 63,
+            "h": 83
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1284,
+            "y": 1108,
+            "w": 63,
+            "h": 83
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/mud-0/00",
+          "frame": {
+            "x": 1865,
+            "y": 586,
+            "w": 146,
+            "h": 102
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 694,
+            "y": 935,
+            "w": 146,
+            "h": 102
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/mud-1/00",
+          "frame": {
+            "x": 1860,
+            "y": 816,
+            "w": 145,
+            "h": 120
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 966,
+            "y": 912,
+            "w": 145,
+            "h": 120
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/mud-4/00",
+          "frame": {
+            "x": 1214,
+            "y": 1886,
+            "w": 140,
+            "h": 119
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 968,
+            "y": 1091,
+            "w": 140,
+            "h": 119
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/mud-5/00",
+          "frame": {
+            "x": 856,
+            "y": 1912,
+            "w": 72,
+            "h": 121
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1279,
+            "y": 1096,
+            "w": 72,
+            "h": 121
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/cream-1/00",
+          "frame": {
+            "x": 1984,
+            "y": 1776,
+            "w": 61,
+            "h": 93
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1002,
+            "y": 980,
+            "w": 61,
+            "h": 93
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/cream-2/00",
+          "frame": {
+            "x": 1984,
+            "y": 1541,
+            "w": 62,
+            "h": 114
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1285,
+            "y": 955,
+            "w": 62,
+            "h": 114
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/cream-3/00",
+          "frame": {
+            "x": 1666,
+            "y": 1881,
+            "w": 79,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 729,
+            "y": 1120,
+            "w": 79,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/cream-4/00",
+          "frame": {
+            "x": 1708,
+            "y": 1762,
+            "w": 79,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 999,
+            "y": 1120,
+            "w": 79,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/leaves-1/00",
+          "frame": {
+            "x": 1874,
+            "y": 1814,
+            "w": 104,
+            "h": 60
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 985,
+            "y": 988,
+            "w": 104,
+            "h": 60
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/leaves-3/00",
+          "frame": {
+            "x": 1874,
+            "y": 1715,
+            "w": 106,
+            "h": 95
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 714,
+            "y": 1114,
+            "w": 106,
+            "h": 95
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/mud-0/00",
+          "frame": {
+            "x": 1865,
+            "y": 409,
+            "w": 148,
+            "h": 89
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 693,
+            "y": 949,
+            "w": 148,
+            "h": 89
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/mud-3/00",
+          "frame": {
+            "x": 570,
+            "y": 1912,
+            "w": 141,
+            "h": 121
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 704,
+            "y": 1102,
+            "w": 141,
+            "h": 121
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/mud-4/00",
+          "frame": {
+            "x": 1315,
+            "y": 1762,
+            "w": 140,
+            "h": 119
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 968,
+            "y": 1102,
+            "w": 140,
+            "h": 119
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/mud-5/00",
+          "frame": {
+            "x": 282,
+            "y": 1912,
+            "w": 137,
+            "h": 126
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1248,
+            "y": 1099,
+            "w": 137,
+            "h": 126
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/cream-1/00",
+          "frame": {
+            "x": 1156,
+            "y": 1762,
+            "w": 79,
+            "h": 120
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1001,
+            "y": 1007,
+            "w": 79,
+            "h": 120
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/cream-3/00",
+          "frame": {
+            "x": 1813,
+            "y": 722,
+            "w": 43,
+            "h": 112
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 766,
+            "y": 1145,
+            "w": 43,
+            "h": 112
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/dust-2/00",
+          "frame": {
+            "x": 1874,
+            "y": 1541,
+            "w": 106,
+            "h": 52
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1246,
+            "y": 1021,
+            "w": 106,
+            "h": 52
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/dust-3/00",
+          "frame": {
+            "x": 1645,
+            "y": 2000,
+            "w": 41,
+            "h": 46
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 768,
+            "y": 1145,
+            "w": 41,
+            "h": 46
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/leaves-2/00",
+          "frame": {
+            "x": 1934,
+            "y": 1940,
+            "w": 112,
+            "h": 54
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1239,
+            "y": 1021,
+            "w": 112,
+            "h": 54
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/leaves-3/00",
+          "frame": {
+            "x": 1796,
+            "y": 1421,
+            "w": 69,
+            "h": 85
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 768,
+            "y": 1145,
+            "w": 69,
+            "h": 85
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/mud-0/00",
+          "frame": {
+            "x": 1865,
+            "y": 294,
+            "w": 148,
+            "h": 111
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 711,
+            "y": 994,
+            "w": 148,
+            "h": 111
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/mud-1/00",
+          "frame": {
+            "x": 136,
+            "y": 1912,
+            "w": 142,
+            "h": 126
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 969,
+            "y": 988,
+            "w": 142,
+            "h": 126
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/mud-2/00",
+          "frame": {
+            "x": 1874,
+            "y": 1483,
+            "w": 129,
+            "h": 54
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1231,
+            "y": 1022,
+            "w": 129,
+            "h": 54
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/mud-3/00",
+          "frame": {
+            "x": 1813,
+            "y": 1048,
+            "w": 41,
+            "h": 99
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 768,
+            "y": 1145,
+            "w": 41,
+            "h": 99
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/mud-5/00",
+          "frame": {
+            "x": 1874,
+            "y": 1160,
+            "w": 135,
+            "h": 107
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1232,
+            "y": 1121,
+            "w": 135,
+            "h": 107
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/cream-1/00",
+          "frame": {
+            "x": 1358,
+            "y": 1885,
+            "w": 80,
+            "h": 119
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1000,
+            "y": 975,
+            "w": 80,
+            "h": 119
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/cream-3/00",
+          "frame": {
+            "x": 1813,
+            "y": 838,
+            "w": 43,
+            "h": 49
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 762,
+            "y": 1143,
+            "w": 43,
+            "h": 49
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/dust-2/00",
+          "frame": {
+            "x": 1546,
+            "y": 2004,
+            "w": 95,
+            "h": 42
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1240,
+            "y": 996,
+            "w": 95,
+            "h": 42
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/dust-3/00",
+          "frame": {
+            "x": 1813,
+            "y": 944,
+            "w": 43,
+            "h": 48
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 762,
+            "y": 1143,
+            "w": 43,
+            "h": 48
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/leaves-2/00",
+          "frame": {
+            "x": 1077,
+            "y": 2010,
+            "w": 109,
+            "h": 35
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1237,
+            "y": 997,
+            "w": 109,
+            "h": 35
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/leaves-3/00",
+          "frame": {
+            "x": 1813,
+            "y": 996,
+            "w": 43,
+            "h": 48
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 762,
+            "y": 1143,
+            "w": 43,
+            "h": 48
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/mud-0/00",
+          "frame": {
+            "x": 1865,
+            "y": 178,
+            "w": 148,
+            "h": 112
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 717,
+            "y": 958,
+            "w": 148,
+            "h": 112
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/mud-1/00",
+          "frame": {
+            "x": 1860,
+            "y": 940,
+            "w": 143,
+            "h": 125
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 968,
+            "y": 956,
+            "w": 143,
+            "h": 125
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/mud-2/00",
+          "frame": {
+            "x": 1801,
+            "y": 2000,
+            "w": 129,
+            "h": 43
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1234,
+            "y": 998,
+            "w": 129,
+            "h": 43
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/mud-3/00",
+          "frame": {
+            "x": 1813,
+            "y": 891,
+            "w": 43,
+            "h": 49
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 762,
+            "y": 1143,
+            "w": 43,
+            "h": 49
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/mud-4/00",
+          "frame": {
+            "x": 1874,
+            "y": 1069,
+            "w": 139,
+            "h": 87
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 969,
+            "y": 1120,
+            "w": 139,
+            "h": 87
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/mud-5/00",
+          "frame": {
+            "x": 715,
+            "y": 1912,
+            "w": 137,
+            "h": 121
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1224,
+            "y": 1107,
+            "w": 137,
+            "h": 121
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/cream-0/00",
+          "frame": {
+            "x": 1791,
+            "y": 1762,
+            "w": 79,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 783,
+            "y": 916,
+            "w": 79,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/cream-2/00",
+          "frame": {
+            "x": 1934,
+            "y": 1998,
+            "w": 86,
+            "h": 48
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1212,
+            "y": 972,
+            "w": 86,
+            "h": 48
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/cream-3/00",
+          "frame": {
+            "x": 1749,
+            "y": 1881,
+            "w": 79,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 783,
+            "y": 1098,
+            "w": 79,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/cream-4/00",
+          "frame": {
+            "x": 1832,
+            "y": 1881,
+            "w": 79,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 999,
+            "y": 1098,
+            "w": 79,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/dust-2/00",
+          "frame": {
+            "x": 1442,
+            "y": 2004,
+            "w": 100,
+            "h": 42
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1202,
+            "y": 972,
+            "w": 100,
+            "h": 42
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/leaves-2/00",
+          "frame": {
+            "x": 1190,
+            "y": 2010,
+            "w": 121,
+            "h": 34
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1195,
+            "y": 973,
+            "w": 121,
+            "h": 34
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/mud-0/00",
+          "frame": {
+            "x": 1865,
+            "y": 53,
+            "w": 148,
+            "h": 121
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 747,
+            "y": 900,
+            "w": 148,
+            "h": 121
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/mud-1/00",
+          "frame": {
+            "x": 423,
+            "y": 1912,
+            "w": 143,
+            "h": 123
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 968,
+            "y": 896,
+            "w": 143,
+            "h": 123
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/mud-2/00",
+          "frame": {
+            "x": 1865,
+            "y": 2,
+            "w": 160,
+            "h": 47
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1173,
+            "y": 968,
+            "w": 160,
+            "h": 47
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/mud-3/00",
+          "frame": {
+            "x": 932,
+            "y": 1906,
+            "w": 141,
+            "h": 120
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 758,
+            "y": 1080,
+            "w": 141,
+            "h": 120
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/mud-4/00",
+          "frame": {
+            "x": 1442,
+            "y": 1885,
+            "w": 137,
+            "h": 115
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 971,
+            "y": 1080,
+            "w": 137,
+            "h": 115
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "drop/idle/00",
+          "frame": {
+            "x": 908,
+            "y": 152,
+            "w": 32,
+            "h": 44
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 824,
+            "y": 198,
+            "w": 32,
+            "h": 44
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "duck/idle/00",
+          "frame": {
+            "x": 888,
+            "y": 1762,
+            "w": 120,
+            "h": 140
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1320,
+            "y": 150,
+            "w": 120,
+            "h": 140
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "foam/a/00",
+          "frame": {
+            "x": 1874,
+            "y": 1383,
+            "w": 133,
+            "h": 96
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 173,
+            "y": 172,
+            "w": 133,
+            "h": 96
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "foam/b/00",
+          "frame": {
+            "x": 1874,
+            "y": 1271,
+            "w": 133,
+            "h": 108
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 353,
+            "y": 166,
+            "w": 133,
+            "h": 108
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "foam/c/00",
+          "frame": {
+            "x": 1077,
+            "y": 1886,
+            "w": 133,
+            "h": 120
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 533,
+            "y": 160,
+            "w": 133,
+            "h": 120
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "shadow/idle/00",
+          "frame": {
+            "x": 2,
+            "y": 2,
+            "w": 940,
+            "h": 146
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 570,
+            "y": 1159,
+            "w": 940,
+            "h": 146
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "image": "car-wash-1.png",
+      "format": "RGBA8888",
+      "size": {
+        "w": 2047,
+        "h": 1723
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "filename": "car-police/clean/00",
+          "frame": {
+            "x": 2,
+            "y": 2,
+            "w": 842,
+            "h": 441
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 619,
+            "y": 866,
+            "w": 842,
+            "h": 441
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-police/lights/00",
+          "frame": {
+            "x": 848,
+            "y": 2,
+            "w": 842,
+            "h": 441
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 619,
+            "y": 866,
+            "w": 842,
+            "h": 441
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-taxi/clean/00",
+          "frame": {
+            "x": 728,
+            "y": 1217,
+            "w": 822,
+            "h": 504
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 629,
+            "y": 807,
+            "w": 822,
+            "h": 504
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-tractor/clean/00",
+          "frame": {
+            "x": 2,
+            "y": 737,
+            "w": 722,
+            "h": 606
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 679,
+            "y": 703,
+            "w": 722,
+            "h": 606
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-tractor/lights/00",
+          "frame": {
+            "x": 898,
+            "y": 552,
+            "w": 722,
+            "h": 606
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 679,
+            "y": 703,
+            "w": 722,
+            "h": 606
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/cream-0/00",
+          "frame": {
+            "x": 1718,
+            "y": 1339,
+            "w": 76,
+            "h": 91
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 737,
+            "y": 940,
+            "w": 76,
+            "h": 91
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/cream-5/00",
+          "frame": {
+            "x": 1816,
+            "y": 510,
+            "w": 115,
+            "h": 59
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1260,
+            "y": 1115,
+            "w": 115,
+            "h": 59
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/dust-0/00",
+          "frame": {
+            "x": 1637,
+            "y": 1339,
+            "w": 77,
+            "h": 55
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 724,
+            "y": 949,
+            "w": 77,
+            "h": 55
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/dust-1/00",
+          "frame": {
+            "x": 745,
+            "y": 573,
+            "w": 93,
+            "h": 101
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 985,
+            "y": 909,
+            "w": 93,
+            "h": 101
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/dust-2/00",
+          "frame": {
+            "x": 1976,
+            "y": 2,
+            "w": 60,
+            "h": 108
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1278,
+            "y": 903,
+            "w": 60,
+            "h": 108
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/dust-3/00",
+          "frame": {
+            "x": 1807,
+            "y": 1138,
+            "w": 87,
+            "h": 89
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 731,
+            "y": 1101,
+            "w": 87,
+            "h": 89
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/dust-4/00",
+          "frame": {
+            "x": 1807,
+            "y": 1231,
+            "w": 85,
+            "h": 97
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 994,
+            "y": 1099,
+            "w": 85,
+            "h": 97
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/leaves-0/00",
+          "frame": {
+            "x": 1163,
+            "y": 494,
+            "w": 109,
+            "h": 54
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 723,
+            "y": 948,
+            "w": 109,
+            "h": 54
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/leaves-1/00",
+          "frame": {
+            "x": 1624,
+            "y": 868,
+            "w": 104,
+            "h": 95
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 985,
+            "y": 913,
+            "w": 104,
+            "h": 95
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/leaves-2/00",
+          "frame": {
+            "x": 1637,
+            "y": 1398,
+            "w": 76,
+            "h": 88
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1273,
+            "y": 912,
+            "w": 76,
+            "h": 88
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/leaves-3/00",
+          "frame": {
+            "x": 1737,
+            "y": 764,
+            "w": 106,
+            "h": 89
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 720,
+            "y": 1101,
+            "w": 106,
+            "h": 89
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/leaves-4/00",
+          "frame": {
+            "x": 1662,
+            "y": 494,
+            "w": 110,
+            "h": 89
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 986,
+            "y": 1096,
+            "w": 110,
+            "h": 89
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/mud-2/00",
+          "frame": {
+            "x": 995,
+            "y": 447,
+            "w": 80,
+            "h": 101
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1264,
+            "y": 909,
+            "w": 80,
+            "h": 101
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/mud-3/00",
+          "frame": {
+            "x": 1821,
+            "y": 348,
+            "w": 118,
+            "h": 103
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 711,
+            "y": 1101,
+            "w": 118,
+            "h": 103
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-ambulance/mud-5/00",
+          "frame": {
+            "x": 1694,
+            "y": 348,
+            "w": 123,
+            "h": 67
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1240,
+            "y": 1106,
+            "w": 123,
+            "h": 67
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/cream-2/00",
+          "frame": {
+            "x": 1932,
+            "y": 819,
+            "w": 94,
+            "h": 95
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1274,
+            "y": 933,
+            "w": 94,
+            "h": 95
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/dust-1/00",
+          "frame": {
+            "x": 898,
+            "y": 447,
+            "w": 93,
+            "h": 101
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 985,
+            "y": 921,
+            "w": 93,
+            "h": 101
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/dust-2/00",
+          "frame": {
+            "x": 1804,
+            "y": 1332,
+            "w": 85,
+            "h": 88
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1274,
+            "y": 923,
+            "w": 85,
+            "h": 88
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/dust-4/00",
+          "frame": {
+            "x": 1715,
+            "y": 1238,
+            "w": 85,
+            "h": 97
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 994,
+            "y": 1107,
+            "w": 85,
+            "h": 97
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/dust-5/00",
+          "frame": {
+            "x": 1976,
+            "y": 284,
+            "w": 49,
+            "h": 92
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1285,
+            "y": 1108,
+            "w": 49,
+            "h": 92
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/leaves-0/00",
+          "frame": {
+            "x": 728,
+            "y": 851,
+            "w": 109,
+            "h": 83
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 713,
+            "y": 932,
+            "w": 109,
+            "h": 83
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/leaves-1/00",
+          "frame": {
+            "x": 1624,
+            "y": 967,
+            "w": 104,
+            "h": 95
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 985,
+            "y": 925,
+            "w": 104,
+            "h": 95
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/leaves-2/00",
+          "frame": {
+            "x": 1934,
+            "y": 737,
+            "w": 97,
+            "h": 78
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1267,
+            "y": 928,
+            "w": 97,
+            "h": 78
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/leaves-4/00",
+          "frame": {
+            "x": 1935,
+            "y": 549,
+            "w": 110,
+            "h": 90
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 986,
+            "y": 1103,
+            "w": 110,
+            "h": 90
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/mud-2/00",
+          "frame": {
+            "x": 1737,
+            "y": 857,
+            "w": 106,
+            "h": 82
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1261,
+            "y": 928,
+            "w": 106,
+            "h": 82
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-firetruck/mud-3/00",
+          "frame": {
+            "x": 1943,
+            "y": 380,
+            "w": 98,
+            "h": 92
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 747,
+            "y": 1120,
+            "w": 98,
+            "h": 92
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/cream-0/00",
+          "frame": {
+            "x": 1893,
+            "y": 1484,
+            "w": 79,
+            "h": 81
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 729,
+            "y": 958,
+            "w": 79,
+            "h": 81
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/cream-5/00",
+          "frame": {
+            "x": 388,
+            "y": 573,
+            "w": 79,
+            "h": 113
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1269,
+            "y": 1122,
+            "w": 79,
+            "h": 113
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/dust-0/00",
+          "frame": {
+            "x": 1893,
+            "y": 1394,
+            "w": 79,
+            "h": 86
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 718,
+            "y": 950,
+            "w": 79,
+            "h": 86
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/dust-1/00",
+          "frame": {
+            "x": 816,
+            "y": 494,
+            "w": 78,
+            "h": 59
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 985,
+            "y": 989,
+            "w": 78,
+            "h": 59
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/dust-2/00",
+          "frame": {
+            "x": 1976,
+            "y": 114,
+            "w": 60,
+            "h": 108
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1284,
+            "y": 943,
+            "w": 60,
+            "h": 108
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/dust-3/00",
+          "frame": {
+            "x": 1928,
+            "y": 998,
+            "w": 93,
+            "h": 89
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 725,
+            "y": 1120,
+            "w": 93,
+            "h": 89
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/dust-4/00",
+          "frame": {
+            "x": 1898,
+            "y": 1193,
+            "w": 85,
+            "h": 97
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 994,
+            "y": 1118,
+            "w": 85,
+            "h": 97
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/dust-5/00",
+          "frame": {
+            "x": 1624,
+            "y": 1158,
+            "w": 87,
+            "h": 90
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1257,
+            "y": 1127,
+            "w": 87,
+            "h": 90
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/leaves-0/00",
+          "frame": {
+            "x": 1624,
+            "y": 778,
+            "w": 109,
+            "h": 86
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 717,
+            "y": 953,
+            "w": 109,
+            "h": 86
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/leaves-2/00",
+          "frame": {
+            "x": 1554,
+            "y": 1415,
+            "w": 76,
+            "h": 88
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1279,
+            "y": 952,
+            "w": 76,
+            "h": 88
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/leaves-4/00",
+          "frame": {
+            "x": 1776,
+            "y": 573,
+            "w": 110,
+            "h": 89
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 986,
+            "y": 1115,
+            "w": 110,
+            "h": 89
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/leaves-5/00",
+          "frame": {
+            "x": 728,
+            "y": 938,
+            "w": 109,
+            "h": 83
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1253,
+            "y": 1123,
+            "w": 109,
+            "h": 83
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/mud-1/00",
+          "frame": {
+            "x": 1694,
+            "y": 419,
+            "w": 118,
+            "h": 71
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 989,
+            "y": 989,
+            "w": 118,
+            "h": 71
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-garbage-truck/mud-2/00",
+          "frame": {
+            "x": 1079,
+            "y": 447,
+            "w": 80,
+            "h": 101
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1270,
+            "y": 949,
+            "w": 80,
+            "h": 101
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/cream-0/00",
+          "frame": {
+            "x": 388,
+            "y": 494,
+            "w": 79,
+            "h": 75
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 747,
+            "y": 1010,
+            "w": 79,
+            "h": 75
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/cream-2/00",
+          "frame": {
+            "x": 1816,
+            "y": 455,
+            "w": 117,
+            "h": 51
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1247,
+            "y": 1025,
+            "w": 117,
+            "h": 51
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/cream-4/00",
+          "frame": {
+            "x": 733,
+            "y": 494,
+            "w": 79,
+            "h": 65
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 998,
+            "y": 1148,
+            "w": 79,
+            "h": 65
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/cream-5/00",
+          "frame": {
+            "x": 1845,
+            "y": 1044,
+            "w": 79,
+            "h": 90
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1251,
+            "y": 1142,
+            "w": 79,
+            "h": 90
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/dust-0/00",
+          "frame": {
+            "x": 1554,
+            "y": 1252,
+            "w": 79,
+            "h": 79
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 736,
+            "y": 1001,
+            "w": 79,
+            "h": 79
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/dust-1/00",
+          "frame": {
+            "x": 471,
+            "y": 573,
+            "w": 92,
+            "h": 105
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 984,
+            "y": 998,
+            "w": 92,
+            "h": 105
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/dust-4/00",
+          "frame": {
+            "x": 553,
+            "y": 494,
+            "w": 81,
+            "h": 65
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 994,
+            "y": 1147,
+            "w": 81,
+            "h": 65
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/dust-5/00",
+          "frame": {
+            "x": 1928,
+            "y": 1091,
+            "w": 87,
+            "h": 98
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1239,
+            "y": 1140,
+            "w": 87,
+            "h": 98
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/leaves-0/00",
+          "frame": {
+            "x": 728,
+            "y": 761,
+            "w": 109,
+            "h": 86
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 735,
+            "y": 1004,
+            "w": 109,
+            "h": 86
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/leaves-1/00",
+          "frame": {
+            "x": 1446,
+            "y": 447,
+            "w": 104,
+            "h": 98
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 983,
+            "y": 1002,
+            "w": 104,
+            "h": 98
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/leaves-4/00",
+          "frame": {
+            "x": 1943,
+            "y": 476,
+            "w": 98,
+            "h": 69
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 986,
+            "y": 1144,
+            "w": 98,
+            "h": 69
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/leaves-5/00",
+          "frame": {
+            "x": 728,
+            "y": 1121,
+            "w": 107,
+            "h": 92
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1237,
+            "y": 1136,
+            "w": 107,
+            "h": 92
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-police/mud-4/00",
+          "frame": {
+            "x": 760,
+            "y": 678,
+            "w": 114,
+            "h": 79
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 969,
+            "y": 1134,
+            "w": 114,
+            "h": 79
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/cream-0/00",
+          "frame": {
+            "x": 1362,
+            "y": 447,
+            "w": 80,
+            "h": 99
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 754,
+            "y": 975,
+            "w": 80,
+            "h": 99
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/cream-2/00",
+          "frame": {
+            "x": 1276,
+            "y": 494,
+            "w": 82,
+            "h": 53
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1248,
+            "y": 996,
+            "w": 82,
+            "h": 53
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/cream-4/00",
+          "frame": {
+            "x": 1554,
+            "y": 1335,
+            "w": 79,
+            "h": 76
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 998,
+            "y": 1134,
+            "w": 79,
+            "h": 76
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/cream-5/00",
+          "frame": {
+            "x": 662,
+            "y": 573,
+            "w": 79,
+            "h": 103
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1245,
+            "y": 1128,
+            "w": 79,
+            "h": 103
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/dust-0/00",
+          "frame": {
+            "x": 1847,
+            "y": 666,
+            "w": 83,
+            "h": 98
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 741,
+            "y": 966,
+            "w": 83,
+            "h": 98
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/dust-1/00",
+          "frame": {
+            "x": 638,
+            "y": 447,
+            "w": 91,
+            "h": 105
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 985,
+            "y": 965,
+            "w": 91,
+            "h": 105
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/dust-4/00",
+          "frame": {
+            "x": 1847,
+            "y": 768,
+            "w": 81,
+            "h": 77
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 994,
+            "y": 1134,
+            "w": 81,
+            "h": 77
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/dust-5/00",
+          "frame": {
+            "x": 1716,
+            "y": 1136,
+            "w": 87,
+            "h": 98
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1233,
+            "y": 1126,
+            "w": 87,
+            "h": 98
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/leaves-0/00",
+          "frame": {
+            "x": 1624,
+            "y": 587,
+            "w": 109,
+            "h": 94
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 739,
+            "y": 969,
+            "w": 109,
+            "h": 94
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/leaves-1/00",
+          "frame": {
+            "x": 1554,
+            "y": 447,
+            "w": 104,
+            "h": 98
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 983,
+            "y": 969,
+            "w": 104,
+            "h": 98
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/leaves-4/00",
+          "frame": {
+            "x": 1930,
+            "y": 918,
+            "w": 94,
+            "h": 76
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 986,
+            "y": 1130,
+            "w": 94,
+            "h": 76
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-taxi/leaves-5/00",
+          "frame": {
+            "x": 728,
+            "y": 1025,
+            "w": 108,
+            "h": 92
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1230,
+            "y": 1122,
+            "w": 108,
+            "h": 92
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/cream-1/00",
+          "frame": {
+            "x": 1845,
+            "y": 947,
+            "w": 79,
+            "h": 93
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1000,
+            "y": 914,
+            "w": 79,
+            "h": 93
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/cream-5/00",
+          "frame": {
+            "x": 1976,
+            "y": 226,
+            "w": 58,
+            "h": 54
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1235,
+            "y": 1107,
+            "w": 58,
+            "h": 54
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/dust-0/00",
+          "frame": {
+            "x": 1847,
+            "y": 849,
+            "w": 79,
+            "h": 94
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 772,
+            "y": 908,
+            "w": 79,
+            "h": 94
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/dust-1/00",
+          "frame": {
+            "x": 567,
+            "y": 573,
+            "w": 91,
+            "h": 104
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 985,
+            "y": 905,
+            "w": 91,
+            "h": 104
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/dust-3/00",
+          "frame": {
+            "x": 1732,
+            "y": 1044,
+            "w": 93,
+            "h": 88
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 779,
+            "y": 1098,
+            "w": 93,
+            "h": 88
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/dust-4/00",
+          "frame": {
+            "x": 1898,
+            "y": 1294,
+            "w": 85,
+            "h": 96
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 994,
+            "y": 1096,
+            "w": 85,
+            "h": 96
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/dust-5/00",
+          "frame": {
+            "x": 471,
+            "y": 682,
+            "w": 49,
+            "h": 47
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1235,
+            "y": 1111,
+            "w": 49,
+            "h": 47
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/leaves-0/00",
+          "frame": {
+            "x": 1624,
+            "y": 685,
+            "w": 109,
+            "h": 89
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 771,
+            "y": 911,
+            "w": 109,
+            "h": 89
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/leaves-1/00",
+          "frame": {
+            "x": 1737,
+            "y": 943,
+            "w": 104,
+            "h": 97
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 983,
+            "y": 909,
+            "w": 104,
+            "h": 97
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/leaves-3/00",
+          "frame": {
+            "x": 1737,
+            "y": 666,
+            "w": 106,
+            "h": 94
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 768,
+            "y": 1092,
+            "w": 106,
+            "h": 94
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/leaves-4/00",
+          "frame": {
+            "x": 1935,
+            "y": 643,
+            "w": 110,
+            "h": 90
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 986,
+            "y": 1092,
+            "w": 110,
+            "h": 90
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/leaves-5/00",
+          "frame": {
+            "x": 471,
+            "y": 494,
+            "w": 78,
+            "h": 73
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1235,
+            "y": 1108,
+            "w": 78,
+            "h": 73
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dirt-tractor/mud-5/00",
+          "frame": {
+            "x": 662,
+            "y": 680,
+            "w": 94,
+            "h": 53
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1235,
+            "y": 1108,
+            "w": 94,
+            "h": 53
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "hose/idle/00",
+          "frame": {
+            "x": 1694,
+            "y": 2,
+            "w": 278,
+            "h": 342
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 97,
+            "y": 689,
+            "w": 278,
+            "h": 342
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "rainbow/idle/00",
+          "frame": {
+            "x": 2,
+            "y": 494,
+            "w": 382,
+            "h": 210
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1569,
+            "y": 1081,
+            "w": 382,
+            "h": 210
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "sparkle/idle/00",
+          "frame": {
+            "x": 1624,
+            "y": 1066,
+            "w": 88,
+            "h": 88
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 956,
+            "y": 176,
+            "w": 88,
+            "h": 88
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "image": "car-wash-2.png",
+      "format": "RGBA8888",
+      "size": {
+        "w": 826,
+        "h": 508
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "filename": "car-taxi/lights/00",
+          "frame": {
+            "x": 2,
+            "y": 2,
+            "w": 822,
+            "h": 504
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 629,
+            "y": 807,
+            "w": 822,
+            "h": 504
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "app": "be-hoc-choi tools/atlas",
+    "version": "1"
+  }
+}

@@ -90,6 +90,7 @@ export const VOICE_LINES = [
   { id: 'vo.shell.corner-name.clinic', text: 'Phòng khám' },
   { id: 'vo.shell.corner-name.wardrobe', text: 'Tủ đồ' },
   { id: 'vo.shell.corner-name.garden', text: 'Vườn' },
+  { id: 'vo.shell.corner-name.car-wash', text: 'Rửa xe' },
   // Tiệm kem (Story 1.8; 5.2): the single-flavour ask names Xoài — "Xoài ơi, kem … nào!" (+ its colour word: hồng, trắng, xanh); the
   // retry after a wrong scoop. "sô-cô-la" counts as 3 words, so its lines carry no colour word.
   // Played only through core/hint-director. Not yet approved.
@@ -423,6 +424,19 @@ export const VOICE_LINES = [
   { id: 'vo.garden.name.tomato', text: 'Quả cà chua!' },
   { id: 'vo.garden.name.lemon', text: 'Quả chanh!' },
   { id: 'vo.garden.parent.1', text: 'Mời bố mẹ | cùng trồng cây nhé!', keywordPauseMs: 300 },
+  // Rửa xe (2026-10-30): the invitation as the first car arrives (it names Xoài), "rub" (also the idle hint and the
+  // Speaker prompt while the car is dirty), "rinse" (once it is foamed), each vehicle's name (as it arrives) and the
+  // parent invitation. No praise. Not yet approved.
+  { id: 'vo.car-wash.prompt', text: 'Xoài ơi, | mình rửa xe nào!', keywordPauseMs: 300 },
+  { id: 'vo.car-wash.rub', text: 'Xoa xà phòng cho xe nhé!' },
+  { id: 'vo.car-wash.rinse', text: 'Xịt nước cho xe nhé!' },
+  { id: 'vo.car-wash.name.firetruck', text: 'Xe cứu hỏa!' },
+  { id: 'vo.car-wash.name.police', text: 'Xe cảnh sát!' },
+  { id: 'vo.car-wash.name.ambulance', text: 'Xe cứu thương!' },
+  { id: 'vo.car-wash.name.taxi', text: 'Xe taxi!' },
+  { id: 'vo.car-wash.name.garbage-truck', text: 'Xe rác!' },
+  { id: 'vo.car-wash.name.tractor', text: 'Máy cày!' },
+  { id: 'vo.car-wash.parent.1', text: 'Mời bố mẹ | cùng rửa xe nhé!', keywordPauseMs: 300 },
 ] as const satisfies readonly VoiceLine[];
 
 export type VoiceLineId = (typeof VOICE_LINES)[number]['id'];

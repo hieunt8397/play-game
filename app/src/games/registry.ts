@@ -7,6 +7,7 @@ import type { GameId } from '../content/types';
 import { AnimalPens } from './animal-pens/AnimalPens';
 import { Band } from './band/Band';
 import { Bedtime } from './bedtime/Bedtime';
+import { CarWash } from './car-wash/CarWash';
 import { DinoPuzzle } from './dino-puzzle/DinoPuzzle';
 import { DressUp } from './dress-up/DressUp';
 import { Fishing } from './fishing/Fishing';
@@ -48,6 +49,8 @@ export const SCENE_CLASSES: Readonly<Partial<Record<GameId, GameSceneClass>>> = 
   'dress-up': DressUp,
   // Trồng cây (2026-10-30): a yard game; registering it wakes the yard's garden corner.
   garden: Garden,
+  // Rửa xe (2026-10-30): a yard game; registering it wakes the yard's car-wash corner.
+  'car-wash': CarWash,
 };
 
 function buildGames(): Partial<Record<GameId, GameEntry>> {

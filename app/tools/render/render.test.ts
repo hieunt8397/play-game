@@ -84,6 +84,8 @@ describe('art:build', () => {
       dressUp: expect.any(Object),
       // Trồng cây (2026-10-30): checked on its own below.
       garden: expect.any(Object),
+      // Rửa xe (2026-10-30): checked on its own below.
+      carWash: expect.any(Object),
       map: {
         road: '#EE9F68',
         roadEdge: '#FFFFFF',
@@ -123,6 +125,21 @@ describe('art:build', () => {
       giantFruit: 1,
       giantScale: Tokens.ui.gardenGiantScale,
       targetPx: 90,
+      hitMinPx: 80,
+      gapPx: Tokens.spacing.targetGap,
+    });
+  });
+
+  it('Rửa xe (2026-10-30): the car-wash builder gets art.carWash, the vehicles, dirt kinds, spots and the sizes', () => {
+    const p = buildParams();
+    expect(Object.keys(p.art.carWash)).toEqual(Object.keys(Tokens.art.carWash));
+    expect(p.art.carWash.foam).toBe(Tokens.art.carWash.foam.css);
+    expect(p.carWash).toEqual({
+      vehicles: ['firetruck', 'police', 'ambulance', 'taxi', 'garbage-truck', 'tractor'],
+      dirts: ['mud', 'leaves', 'cream', 'dust'],
+      spots: 6,
+      carMinPx: 300,
+      hoseMinPx: 90,
       hitMinPx: 80,
       gapPx: Tokens.spacing.targetGap,
     });

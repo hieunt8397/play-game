@@ -65,6 +65,8 @@ import {
   validateOutfitFrames,
   gardenLimits,
   validateGarden,
+  carWashLimits,
+  validateCarWash,
   validateShadowMatch,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
@@ -86,6 +88,7 @@ import { BEDTIME_SCREEN, TARGET_IDS as BEDTIME_TARGETS } from '../../src/content
 import { PET_CLINIC_SCREEN } from '../../src/content/games/pet-clinic.ts';
 import { DRESS_UP_SCREEN } from '../../src/content/games/dress-up.ts';
 import { GARDEN_SCREEN } from '../../src/content/games/garden.ts';
+import { CAR_WASH_SCREEN } from '../../src/content/games/car-wash.ts';
 import { sceneBubbleKeepOutRect } from '../layout/hud-keep-out.ts';
 import { ALL_FISH, FISHING_SCREEN, POND_HIT } from '../../src/content/games/fishing.ts';
 import { CONE_ANCHORS, FLAG_ANCHORS, RACE_SCREEN, ladder as raceLadder } from '../../src/content/games/race.ts';
@@ -122,6 +125,8 @@ export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
   'dress-up': DRESS_UP_SCREEN.frames,
   // Trồng cây (2026-10-30): the plants, fruits, packets, the can, Shiba and its outfit overlays, the particles.
   garden: GARDEN_SCREEN.frames,
+  // Rửa xe (2026-10-30): the cars (clean, lights), every dirt spot of every kind, the hose, the foam, the particles.
+  'car-wash': CAR_WASH_SCREEN.frames,
 };
 
 function listFiles(dir: string): string[] {
@@ -198,6 +203,8 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[] 
       for (const p of validateDressUp(layout, dressUpLimits(), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'garden') {
       for (const p of validateGarden(layout, gardenLimits(), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+    } else if (screen === 'car-wash') {
+      for (const p of validateCarWash(layout, carWashLimits(), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'pet-clinic') {
       for (const p of validatePetClinic(layout, petClinicLimits(), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'home') {

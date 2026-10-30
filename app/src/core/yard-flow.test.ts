@@ -195,6 +195,22 @@ describe('Story 7.1: a yard game mid-round, continuous play', () => {
     expect(session.resumeIds()).toEqual([]);
   });
 
+  it('2026-10-30 (the car wash): Home with a half-washed car (round:leave + snapshot) keeps it; reopening resumes it; a clean bay keeps nothing', () => {
+    const session = new SessionStore();
+    const run: RunningGame = { id: 'car-wash', level: 0, origin: 'yard' };
+    const partial = { vehicle: 'taxi', dirt: 'mud', covered: [0, 3], surprise: 'duck' };
+    const snapshot: Snapshot = { v: 1, level: 0, seed: 9, questionIndex: 0, partial };
+    expect(onRoundLeave(run, { gameId: 'car-wash', snapshot }, false, session)).toEqual({ action: 'fade', gameId: 'car-wash' });
+    expect(session.resumeIds()).toEqual(['car-wash']);
+    const data = startData(session)('car-wash');
+    expect(data).toEqual({ level: 0, seed: 9, resume: snapshot });
+    // (games/car-wash/cycle.test.ts checks that resumeCarWash accepts this kept partial: core may not import games/.)
+    expect(data.resume?.partial).toEqual(partial);
+    expect(session.resumeIds()).toEqual([]);
+    expect(onRoundLeave(run, { gameId: 'car-wash' }, false, session)).toEqual({ action: 'fade', gameId: 'car-wash' });
+    expect(session.resumeIds()).toEqual([]);
+  });
+
   it('round complete → round:next: the restarted record keeps origin yard, so a later leave or abandon still wakes the yard', () => {
     const session = new SessionStore();
     const saved: Array<[GameId, number]> = [];

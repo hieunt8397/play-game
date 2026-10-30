@@ -16,7 +16,7 @@ import { HOME_STATION, STATIONS } from './stations';
 import { inviteLine, isVoiceLineId, stationNameLine, VOICE_LINES } from './voice-lines';
 
 describe('content/home (Story 7.1)', () => {
-  it('has the 6 corners of the specs (2026-10-30: the garden), each with its game id and a parent label', () => {
+  it('has the 7 corners of the specs (2026-10-30: the garden, the car wash), each with its game id and a parent label', () => {
     expect(YARD_CORNERS.map((c) => [c.id, c.gameId])).toEqual([
       ['pen', 'animal-pens'],
       ['stage', 'band'],
@@ -24,6 +24,7 @@ describe('content/home (Story 7.1)', () => {
       ['clinic', 'pet-clinic'],
       ['wardrobe', 'dress-up'],
       ['garden', 'garden'],
+      ['car-wash', 'car-wash'],
     ]);
     expect(YARD_CORNERS.map((c) => c.id)).toEqual([...CORNER_IDS]);
   });
@@ -38,9 +39,9 @@ describe('content/home (Story 7.1)', () => {
     expect(isVoiceLineId(inviteLine(HOME_STATION))).toBe(true);
   });
 
-  it('awake is derived from the registry: a registered game wakes its corner (Story 7.2: the pen; Story 7.3: the stage; Story 7.4: the bed; Story 8.1: the clinic; Story 8.2: the wardrobe; 2026-10-30: the garden), the others sleep', () => {
+  it('awake is derived from the registry: a registered game wakes its corner (Story 7.2: the pen; Story 7.3: the stage; Story 7.4: the bed; Story 8.1: the clinic; Story 8.2: the wardrobe; 2026-10-30: the garden, the car wash), the others sleep', () => {
     const playable = (id: string): boolean => Object.prototype.hasOwnProperty.call(GAME_CONTENT, id);
-    expect(yardCorners(playable).filter((c) => c.awake).map((c) => c.id)).toEqual(['pen', 'stage', 'bed', 'clinic', 'wardrobe', 'garden']);
+    expect(yardCorners(playable).filter((c) => c.awake).map((c) => c.id)).toEqual(['pen', 'stage', 'bed', 'clinic', 'wardrobe', 'garden', 'car-wash']);
     expect(yardCorners((id) => id === 'bedtime').filter((c) => c.awake).map((c) => c.id)).toEqual(['bed']);
   });
 

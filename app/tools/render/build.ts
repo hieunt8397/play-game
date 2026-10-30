@@ -18,6 +18,7 @@ import { ITEM_IDS, SHADOW_COUNTS } from '../../src/content/games/shadow-match.ts
 import { GAME_ICONS } from '../../src/content/game-icons.ts';
 import { OUTFIT_ITEMS } from '../../src/content/games/dress-up.ts';
 import { FRUIT_IDS, FRUITS_PER_PLANT, GIANT_FRUIT, PACKET_SLOTS, STAGES } from '../../src/content/games/garden.ts';
+import { DIRT_IDS, DIRT_SPOTS, VEHICLE_IDS } from '../../src/content/games/car-wash.ts';
 import { GAME_IDS, ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
 import { RENDER_SCALE, layoutLimits } from '../layout/rules.ts';
@@ -55,6 +56,8 @@ export interface BuildParams {
     dressUp: Record<string, string>;
     /** Trồng cây (2026-10-30): art.garden (the yard bed, the plants, the fruits and packets, the can, the particles and surprises). */
     garden: Record<string, string>;
+    /** Rửa xe (2026-10-30): art.carWash (the bay, the hose, the dirt kinds, the foam, the particles, the rainbow). */
+    carWash: Record<string, string>;
     /** Story 5.6: art.map (the map road, water, foam, cone and chimney). */
     map: Record<string, string>;
   };
@@ -94,6 +97,8 @@ export interface BuildParams {
    * circle ≥ hitMinPx wide, every circle ≥ gapPx from the others and from Shiba.
    */
   garden: { fruits: string[]; stages: string[]; packets: number; fruitsPerPlant: number; giantFruit: number; giantScale: number; targetPx: number; hitMinPx: number; gapPx: number };
+  /** Rửa xe (2026-10-30): the vehicles, the dirt kinds and spots per car (content/games/car-wash.ts), the sizes (design px): every car's hull ≥ carMinPx wide, the hose drawn ≥ hoseMinPx with a tap circle ≥ hitMinPx, ≥ gapPx from every car. */
+  carWash: { vehicles: string[]; dirts: string[]; spots: number; carMinPx: number; hoseMinPx: number; hitMinPx: number; gapPx: number };
   renderScale: number;
   design: { width: number; height: number };
   rect: { x0: number; y0: number; x1: number; y1: number };
@@ -121,6 +126,7 @@ export function buildParams(): BuildParams {
       petClinic: Object.fromEntries(Object.entries(art.petClinic).map(([id, c]) => [id, c.css])),
       dressUp: Object.fromEntries(Object.entries(art.dressUp).map(([id, c]) => [id, c.css])),
       garden: Object.fromEntries(Object.entries(art.garden).map(([id, c]) => [id, c.css])),
+      carWash: Object.fromEntries(Object.entries(art.carWash).map(([id, c]) => [id, c.css])),
       map: Object.fromEntries(Object.entries(art.map).map(([id, c]) => [id, c.css])),
     },
     dino: {
@@ -151,6 +157,15 @@ export function buildParams(): BuildParams {
       giantScale: Tokens.ui.gardenGiantScale,
       targetPx: Tokens.ui.gardenTargetMinPx,
       hitMinPx: Tokens.ui.gardenHitMinPx,
+      gapPx: Tokens.spacing.targetGap,
+    },
+    carWash: {
+      vehicles: [...VEHICLE_IDS],
+      dirts: [...DIRT_IDS],
+      spots: DIRT_SPOTS,
+      carMinPx: Tokens.ui.carWashCarMinPx,
+      hoseMinPx: Tokens.ui.carWashHoseMinPx,
+      hitMinPx: Tokens.ui.carWashHitMinPx,
       gapPx: Tokens.spacing.targetGap,
     },
     renderScale: RENDER_SCALE,

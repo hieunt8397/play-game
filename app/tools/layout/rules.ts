@@ -32,6 +32,19 @@ import {
   packetAnchor,
   packetFrame,
 } from '../../src/content/games/garden.ts';
+import {
+  CAR_STATES as CAR_WASH_STATES,
+  CAR_WASH_SCREEN,
+  DIRT_IDS as CAR_WASH_DIRTS,
+  DIRT_SPOTS as CAR_WASH_SPOTS,
+  HOSE_FRAME as CAR_WASH_HOSE_FRAME,
+  VEHICLE_IDS as CAR_WASH_VEHICLES,
+  carFrame as carWashCarFrame,
+  carHit as carWashHit,
+  dirtAnchor as carWashDirtAnchor,
+  dirtFrame as carWashDirtFrame,
+  hitRadius as carWashHitRadius,
+} from '../../src/content/games/car-wash.ts';
 import { DOOR_ANCHOR, PATIENT_ANCHOR, PATIENT_HIT, PATIENT_IDS, PET_CLINIC_SCREEN, TOOL_IDS, patientFrames, toolFrame, toolHitRadius } from '../../src/content/games/pet-clinic.ts';
 
 export interface LayoutLimits {
@@ -2377,5 +2390,115 @@ export function validateGarden(layout: ScreenLayout, input: GardenRuleInput, atl
   });
   apart([...can, ...packets]);
   apart([...can, ...fruits]);
+  return problems;
+}
+
+// --- Rửa xe (2026-10-30) ---------------------------------------------------------------------------------------------
+
+export interface CarWashRuleInput {
+  ids: ScreenIds;
+  /** Per car: its hull id (`hit.car-<vehicle>`), its dirt anchors, and its frames drawn where rendered (car, dirt). */
+  cars: readonly { readonly hit: string; readonly spots: readonly string[]; readonly frames: readonly string[] }[];
+  /** `hose/idle/00`: drawn where it hangs; its tap circle is around its trimmed centre. */
+  hoseFrame: string;
+  limits: LayoutLimits;
+  targetMin: number;
+  /** ui.carWashCarMinPx: every car hull is at least this wide (its x extent). */
+  carMinPx: number;
+  /** ui.carWashHoseMinPx: the hose frame's longest side (design px). */
+  hoseMinPx: number;
+  /** ui.carWashHitMinPx: the hose's tap circle is at least this wide. */
+  hitMinPx: number;
+  /** spacing.targetGap: the hose circle stays this far from every car hull. */
+  gap: number;
+  /** content/games/car-wash.ts › hitRadius (with ui.carWashHitMinPx). */
+  hitRadius: (half: number) => number;
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  renderScale: number;
+  design: { width: number; height: number };
+}
+
+/** The car-wash rules from Tokens and content (spec-rua-xe). */
+export function carWashLimits(ids: ScreenIds = CAR_WASH_SCREEN): CarWashRuleInput {
+  return {
+    ids,
+    cars: CAR_WASH_VEHICLES.map((v) => ({
+      hit: carWashHit(v),
+      spots: Array.from({ length: CAR_WASH_SPOTS }, (_, n) => carWashDirtAnchor(v, n)),
+      frames: [...CAR_WASH_STATES.map((s) => carWashCarFrame(v, s)), ...CAR_WASH_DIRTS.flatMap((d) => Array.from({ length: CAR_WASH_SPOTS }, (_, n) => carWashDirtFrame(v, d, n)))],
+    })),
+    hoseFrame: CAR_WASH_HOSE_FRAME,
+    limits: layoutLimits(),
+    targetMin: Tokens.spacing.targetMin,
+    carMinPx: Tokens.ui.carWashCarMinPx,
+    hoseMinPx: Tokens.ui.carWashHoseMinPx,
+    hitMinPx: Tokens.ui.carWashHitMinPx,
+    gap: Tokens.spacing.targetGap,
+    hitRadius: (half) => carWashHitRadius(half, Tokens.ui.carWashHitMinPx),
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    renderScale: RENDER_SCALE,
+    design: { width: Tokens.design.width, height: Tokens.design.height },
+  };
+}
+
+/**
+ * Rửa xe screen rules (spec-rua-xe; run by `render`, `atlas` and `validate:content`). Each message names the id.
+ *   - required: every hit (≥ 3 points) and anchor; with the atlas, every frame;
+ *   - each car hull is at least carMinPx wide (x extent) and targetMin wide (min width), inside the interactive rect
+ *     and clear of the Home/Speaker zones; each of its dirt anchors lies on it; every anchor lies on the design rect;
+ *   - (atlas) the hose frame is drawn ≥ hoseMinPx (longest side); its tap circle (at its trimmed centre) is ≥ hitMinPx
+ *     wide, inside the interactive rect, clear of the Home/Speaker zones and ≥ gap from every car hull; every car and
+ *     dirt frame (drawn where rendered) lies inside the interactive rect, clear of the Hud.
+ */
+export function validateCarWash(layout: ScreenLayout, input: CarWashRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const hulls: { id: string; poly: readonly Point[] }[] = [];
+  for (const car of input.cars) {
+    const hull = layout.hits[car.hit];
+    if (!hull || hull.length < MIN_HIT_POINTS) continue;
+    hulls.push({ id: car.hit, poly: hull });
+    const xs = hull.map((p) => p.x);
+    const wide = Math.max(...xs) - Math.min(...xs);
+    if (wide < input.carMinPx) problems.push(`hit "${car.hit}": ${round2(wide)} px wide (min ${input.carMinPx})`);
+    const w = minWidth(hull);
+    if (w < input.targetMin) problems.push(`hit "${car.hit}": its narrowest width ${round2(w)} px (min ${input.targetMin})`);
+    const out = hull.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${car.hit}": ${fmt(out)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (polygonDistance(hull, rectPolygon4(k.rect)) === 0) problems.push(`hit "${car.hit}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+    for (const id of car.spots) {
+      const a = layout.anchors[id];
+      if (a && !pointInPolygon(a, hull)) problems.push(`anchor "${id}": ${fmt(a)} is not on hit "${car.hit}"`);
+    }
+  }
+  for (const id of input.ids.anchors) {
+    const a = layout.anchors[id];
+    if (a && (a.x < 0 || a.y < 0 || a.x > input.design.width || a.y > input.design.height)) problems.push(`anchor "${id}": ${fmt(a)} is off the screen`);
+  }
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "car-wash": frame "${f}" is missing`);
+  for (const car of input.cars) {
+    for (const f of car.frames) {
+      const at = designRect(atlas, f, input.renderScale);
+      if (!at) continue;
+      if (at.x < r.x0 || at.y < r.y0 || at.x + at.w > r.x1 || at.y + at.h > r.y1) problems.push(`frame "${f}" ${fmtRect(at)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+      for (const k of input.keepOut) if (overlaps(at, k.rect)) problems.push(`frame "${f}" ${fmtRect(at)}: reaches into the ${k.id} ${fmtRect(k.rect)}`);
+    }
+  }
+  const hose = designRect(atlas, input.hoseFrame, input.renderScale);
+  if (hose) {
+    const longest = Math.max(hose.w, hose.h);
+    if (longest < input.hoseMinPx) problems.push(`frame "${input.hoseFrame}": longest side ${round2(longest)} is under ${input.hoseMinPx}`);
+    const c = { x: hose.x + hose.w / 2, y: hose.y + hose.h / 2 };
+    const cr = input.hitRadius(longest / 2);
+    const id = input.hoseFrame;
+    if (2 * cr < input.hitMinPx) problems.push(`"${id}": its tap circle is ${round2(2 * cr)} px wide (min ${input.hitMinPx})`);
+    if (c.x - cr < r.x0 || c.y - cr < r.y0 || c.x + cr > r.x1 || c.y + cr > r.y1) problems.push(`"${id}": its tap circle ${fmt({ x: round2(c.x), y: round2(c.y) })} r ${round2(cr)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (circleHitsRect(c, cr, k.rect)) problems.push(`"${id}": its tap circle reaches into the ${k.id} ${fmtRect(k.rect)}`);
+    for (const h of hulls) {
+      const d = circleToPolygon(c, cr, h.poly);
+      if (d < input.gap) problems.push(`"${id}" and hit "${h.id}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
   return problems;
 }

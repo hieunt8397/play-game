@@ -410,6 +410,33 @@ export const Timing = {
   gardenFloatMs: 1400,
   /** Trồng cây: one controller tick covers at most this long (a stalled frame never skips a step's end). */
   gardenMaxTickMs: 250,
+  /** Rửa xe (2026-10-30): a dirty car drives in from the left (longer than 1.5 s: a tap skips it). */
+  carWashDriveInMs: 1800,
+  /** Rửa xe: the clean car drives out to the right. */
+  carWashDriveOutMs: 1300,
+  /** Rửa xe (spec): a drive-in or drive-out longer than this can be skipped with a tap. */
+  carWashSkipOverMs: 1500,
+  /** Rửa xe: the arrival honk (the car's little hop while it honks). */
+  carWashHonkMs: 600,
+  /** Rửa xe: one rinse (the hose tilts, water sprays, the foam and the dirt wash away): ≤ 1.5 s, taps ignored. */
+  carWashRinseMs: 1400,
+  /** Rửa xe: the clean car shines (soft twinkles, two headlight blinks, a happy honk and a bounce). */
+  carWashShineMs: 1800,
+  /** Rửa xe: one sparkle's soft twinkle (in and out; well under 3 Hz). */
+  carWashTwinkleMs: 900,
+  /** Rửa xe: a surprise (the duck, the sneezed bubble, the rainbow). */
+  carWashSurpriseMs: 1500,
+  /** Rửa xe: a foam puff pops in; the tickled car's wiggle (and the least time between two wiggles). */
+  carWashFoamPopMs: 180,
+  carWashWiggleMs: 420,
+  /** Rửa xe: the scrub sound plays at most this often while rubbing. */
+  carWashScrubGapMs: 380,
+  /** Rửa xe: after this long without a tap the car (or the hose) bounces and the step line plays (≤ ui.carWashHintMax per step). */
+  carWashIdleHintMs: 8000,
+  /** Rửa xe: a thing tapped out of its turn (the hose before the car is foamed): a small nudge; the hint bounce. */
+  carWashTapMs: 600,
+  /** Rửa xe: one controller tick covers at most this long (a stalled frame never skips a step's end). */
+  carWashMaxTickMs: 250,
 } as const;
 
 export type TimingTable = typeof Timing;
