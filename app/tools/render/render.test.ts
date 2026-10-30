@@ -82,6 +82,8 @@ describe('art:build', () => {
       petClinic: { wall: '#C6EBE2', wallDot: '#A8DCCF', floor: '#F2D3A8', floorDark: '#E0B987', skirting: '#FFFFFF', windowFrame: '#FFFFFF', sky: '#BFE6FF', mat: '#9FD8F7', matTrim: '#FFFFFF', cart: '#FFB7CE', cartDark: '#F294B3', cross: '#5CC8B4', shower: '#7FC8F8', showerDark: '#4FA8E0', chrome: '#E8EEF2', bottle: '#F4FBFF', milk: '#FFFFFF', teat: '#FFC26B', cap: '#8FD6A8', plaster: '#F7C9A0', plasterPad: '#FFF4EA', blanket: '#B9A6FF', blanketPatch: '#FFFFFF', mud: '#8B5E3C', mudDark: '#553823', scrape: '#F59A9A', scrapeDark: '#E98394', drop: '#8FD3FF', wave: '#7A6BB0', z: '#C9B8FF', sparkle: '#FFE066', heart: '#FF9EC4' },
       // Story 8.2: checked on its own below.
       dressUp: expect.any(Object),
+      // Trồng cây (2026-10-30): checked on its own below.
+      garden: expect.any(Object),
       map: {
         road: '#EE9F68',
         roadEdge: '#FFFFFF',
@@ -107,6 +109,23 @@ describe('art:build', () => {
     expect(p.outfit.map((i) => i.id)).toEqual(['party-hat', 'cowboy-hat', 'crown', 'beanie', 'round-glasses', 'heart-glasses', 'star-glasses', 'striped-tee', 'raincoat', 'heart-jumper', 'flower-shirt']);
     expect(p.outfit.filter((i) => i.slot === 'hat')).toHaveLength(4);
     expect(p.dressUp).toEqual({ iconPx: 100, itemHitPx: 110, gapPx: Tokens.spacing.targetGap, mirrorScale: Tokens.ui.dressUpMirrorScale });
+  });
+
+  it('Trồng cây (2026-10-30): the garden builder gets art.garden, the fruits, stages, slots and the tap sizes', () => {
+    const p = buildParams();
+    expect(Object.keys(p.art.garden)).toEqual(Object.keys(Tokens.art.garden));
+    expect(p.art.garden.lemon).toBe(Tokens.art.garden.lemon.css);
+    expect(p.garden).toEqual({
+      fruits: ['strawberry', 'watermelon', 'tomato', 'lemon'],
+      stages: ['sprout', 'small', 'flower', 'fruit'],
+      packets: 2,
+      fruitsPerPlant: 3,
+      giantFruit: 1,
+      giantScale: Tokens.ui.gardenGiantScale,
+      targetPx: 90,
+      hitMinPx: 80,
+      gapPx: Tokens.spacing.targetGap,
+    });
   });
 
   it('Story 5.6: the map builder gets art.map (the race road keeps colors.road) and the landmark minimum', () => {

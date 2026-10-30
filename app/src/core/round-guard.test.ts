@@ -71,6 +71,13 @@ describe('RoundGuard', () => {
     expect(inert).toHaveBeenCalledTimes(1);
   });
 
+  it('2026-10-30: leave with a snapshot (a free-play game with something to resume) hands it on round:leave', () => {
+    const { guard, leave } = setup();
+    guard.complete(OUTCOME);
+    expect(guard.leave(SNAP)).toBe(true);
+    expect(leave).toHaveBeenCalledWith({ gameId: 'ice-cream', snapshot: SNAP });
+  });
+
   it('leave while playing or after abandon emits nothing', () => {
     const { guard, leave } = setup();
     expect(guard.leave()).toBe(false);

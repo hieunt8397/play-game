@@ -777,4 +777,5 @@ def main():
     print(f'build_ice_cream: saved {args["out"]}')
 
 
-main()
+if __name__ == '__main__':
+    main()

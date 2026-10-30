@@ -7,6 +7,7 @@ import * as bedtime from './bedtime.ts';
 import * as dinoPuzzle from './dino-puzzle.ts';
 import * as dressUp from './dress-up.ts';
 import * as fishing from './fishing.ts';
+import * as garden from './garden.ts';
 import * as iceCream from './ice-cream.ts';
 import * as petClinic from './pet-clinic.ts';
 import * as pizza from './pizza.ts';
@@ -34,4 +35,6 @@ export const GAME_CONTENT: Readonly<Partial<Record<GameId, GameContent>>> = {
   'pet-clinic': { assets: petClinic.assets, screen: petClinic.screen },
   // Story 8.2: a yard game (no station, no ladder); registering it wakes the yard's wardrobe corner.
   'dress-up': { assets: dressUp.assets, screen: dressUp.screen },
+  // Trồng cây (2026-10-30): a yard game (no station, no ladder); registering it wakes the yard's garden corner.
+  garden: { assets: garden.assets, screen: garden.screen },
 };

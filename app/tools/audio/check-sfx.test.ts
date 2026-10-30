@@ -57,8 +57,8 @@ describe('creatureProblems', () => {
 });
 
 describe('creatureIds', () => {
-  it('the three dino calls, the touch-talk seagull and cheese (mouse squeak) and the animal-pens calls (Story 7.2) and the band singer frog notes (Story 7.3) and the bedtime Shiba giggle, yawn, snore and sigh (Story 7.4) and the pet-clinic burp and gurgle (Story 8.1) are the catalog creatures', () => {
-    expect(creatureIds()).toEqual(['sfx.shell.woof', 'sfx.shell.chirp', 'sfx.ice-cream.sneeze', 'sfx.dino-puzzle.apatosaurus.happy', 'sfx.dino-puzzle.triceratops.happy', 'sfx.dino-puzzle.stegosaurus.happy', 'sfx.touch-talk.seagull', 'sfx.touch-talk.cheese', ...['dog', 'cat', 'rooster', 'cow', 'pig', 'sheep', 'horse'].flatMap((a) => [`sfx.animal-pens.${a}.call`, `sfx.animal-pens.${a}.muffled`]), ...['g4', 'a4', 'c5', 'd5', 'e5'].map((n) => `sfx.band.frog.${n}`), 'sfx.bedtime.giggle', 'sfx.bedtime.yawn', 'sfx.bedtime.snore', 'sfx.bedtime.sigh', 'sfx.pet-clinic.burp', 'sfx.pet-clinic.gurgle']);
+  it('the three dino calls, the touch-talk seagull and cheese (mouse squeak) and the animal-pens calls (Story 7.2) and the band singer frog notes (Story 7.3) and the bedtime Shiba giggle, yawn, snore and sigh (Story 7.4) and the pet-clinic burp and gurgle (Story 8.1) and the garden crunch and slurp (2026-10-30) are the catalog creatures', () => {
+    expect(creatureIds()).toEqual(['sfx.shell.woof', 'sfx.shell.chirp', 'sfx.ice-cream.sneeze', 'sfx.dino-puzzle.apatosaurus.happy', 'sfx.dino-puzzle.triceratops.happy', 'sfx.dino-puzzle.stegosaurus.happy', 'sfx.touch-talk.seagull', 'sfx.touch-talk.cheese', ...['dog', 'cat', 'rooster', 'cow', 'pig', 'sheep', 'horse'].flatMap((a) => [`sfx.animal-pens.${a}.call`, `sfx.animal-pens.${a}.muffled`]), ...['g4', 'a4', 'c5', 'd5', 'e5'].map((n) => `sfx.band.frog.${n}`), 'sfx.bedtime.giggle', 'sfx.bedtime.yawn', 'sfx.bedtime.snore', 'sfx.bedtime.sigh', 'sfx.pet-clinic.burp', 'sfx.pet-clinic.gurgle', 'sfx.garden.crunch', 'sfx.garden.slurp']);
     expect(creatureIds({ a: { ...AUDIO_CATALOG['sfx.shell.pop'] } })).toEqual([]);
   });
 });

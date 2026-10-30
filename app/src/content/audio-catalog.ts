@@ -159,6 +159,10 @@ export const AUDIO_IDS = [
   'sfx.pet-clinic.gurgle',
   'sfx.pet-clinic.pat',
   'sfx.dress-up.pop',
+  'sfx.garden.pour',
+  'sfx.garden.pop',
+  'sfx.garden.crunch',
+  'sfx.garden.slurp',
 ] as const;
 
 export type AudioId = (typeof AUDIO_IDS)[number];
@@ -419,6 +423,11 @@ export const AUDIO_CATALOG: Record<AudioId, AudioEntry> = {
   'sfx.pet-clinic.pat': { path: 'assets/audio/sfx/sfx.pet-clinic.pat.m4a', kind: 'sfx' },
   /** Thay đồ cho Shiba (Story 8.2): the soft pop of an item coming off Shiba (our own ffmpeg recipe, tools/audio/make-dress-up.ts): 0.25 s, a 50 ms fade-in, nothing below 150 Hz, quiet. Load with the game. */
   'sfx.dress-up.pop': { path: 'assets/audio/sfx/sfx.dress-up.pop.m4a', kind: 'sfx' },
+  /** Trồng cây (2026-10-30): our own ffmpeg recipes (tools/audio/make-garden.ts): ≤ 0.8 s, a 50 ms fade-in, nothing below 150 Hz, quiet. The water pouring from the can; a soft pop (a growth step, a pick, the packets); Shiba's crunch and slurp (creature sounds: its mouth). Load with the game. */
+  'sfx.garden.pour': { path: 'assets/audio/sfx/sfx.garden.pour.m4a', kind: 'sfx' },
+  'sfx.garden.pop': { path: 'assets/audio/sfx/sfx.garden.pop.m4a', kind: 'sfx' },
+  'sfx.garden.crunch': { path: 'assets/audio/sfx/sfx.garden.crunch.m4a', kind: 'sfx', creature: true },
+  'sfx.garden.slurp': { path: 'assets/audio/sfx/sfx.garden.slurp.m4a', kind: 'sfx', creature: true },
   /** Island background loop, mastered to −30 LUFS (EXPERIENCE › Âm thanh: music ≤ −30 LUFS). */
   'music.island': { path: 'assets/audio/music/music.island.m4a', kind: 'music', loop: true },
 };

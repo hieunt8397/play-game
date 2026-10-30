@@ -177,6 +177,20 @@ export function keepAbandonSnapshot(
   }
 }
 
+/**
+ * `round:leave` as Map handles it (2026-10-30): a free-play game may hand a resume point with it (the garden's
+ * half-grown plant), kept first as on `round:abandon` (`keepAbandonSnapshot`); then the route (`routeRoundLeave`).
+ */
+export function onRoundLeave(
+  running: RunningGame | undefined,
+  e: { readonly gameId: GameId; readonly snapshot?: Snapshot | undefined },
+  chainActive: boolean,
+  store: { setResume(id: GameId, s: Snapshot): void },
+): TerminalRoute {
+  if (e.snapshot) keepAbandonSnapshot(running, e.gameId, e.snapshot, store);
+  return routeRoundLeave(running, e.gameId, chainActive);
+}
+
 /** What Map does when the chain ends (Story 2.4 regression guard: a queued tap never reaches the hook). */
 export type ChainEndRoute =
   | { readonly action: 'tap'; readonly stationId: string }

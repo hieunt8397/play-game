@@ -1,8 +1,8 @@
 // Image assets per screen (Story 1.4). Paths are relative to the app base (public/). Produced by
 // `npm run render -- <screen>` + `npm run atlas -- <screen>`; checked by `npm run check`.
 
-// Story 7.1: 'home' is the yard behind the island's home station (content/home.ts). Story 7.2: 'animal-pens', the yard's pen game. Story 7.3: 'band', the yard's stage game. Story 7.4: 'bedtime', the yard's bed game. Story 8.1: 'pet-clinic', the yard's clinic game. Story 8.2: 'dress-up', the yard's wardrobe game.
-export const SCREEN_IDS = ['map', 'ice-cream', 'pizza', 'dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up'] as const;
+// Story 7.1: 'home' is the yard behind the island's home station (content/home.ts). Story 7.2: 'animal-pens', the yard's pen game. Story 7.3: 'band', the yard's stage game. Story 7.4: 'bedtime', the yard's bed game. Story 8.1: 'pet-clinic', the yard's clinic game. Story 8.2: 'dress-up', the yard's wardrobe game. 2026-10-30: 'garden', the yard's garden game (Trồng cây).
+export const SCREEN_IDS = ['map', 'ice-cream', 'pizza', 'dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden'] as const;
 export type ScreenId = (typeof SCREEN_IDS)[number];
 
 export interface AtlasRef {
@@ -29,7 +29,7 @@ export interface BackgroundRef {
  * Story 3.3: screens whose atlas may span several pages (the dino frames cannot fit one 2048² page). Story 8.2: the
  * outfit overlays (11 items over every Shiba frame) push ice-cream and dress-up over one page.
  */
-export const ATLAS_MAX_PAGES: Readonly<Partial<Record<ScreenId, number>>> = { 'dino-puzzle': 4, 'shadow-match': 3, 'touch-talk': 3, 'pet-clinic': 3, 'ice-cream': 3, 'dress-up': 2 };
+export const ATLAS_MAX_PAGES: Readonly<Partial<Record<ScreenId, number>>> = { 'dino-puzzle': 4, 'shadow-match': 3, 'touch-talk': 3, 'pet-clinic': 3, 'ice-cream': 3, 'dress-up': 2, garden: 3 };
 
 /** The folder of every atlas (a multiatlas loads its pages from here). */
 export const ATLAS_DIR = 'assets/atlases/';
@@ -75,6 +75,7 @@ export const ATLASES: Readonly<Record<ScreenId, AtlasRef>> = {
   bedtime: atlas('bedtime'),
   'pet-clinic': atlas('pet-clinic'),
   'dress-up': atlas('dress-up'),
+  garden: atlas('garden'),
 };
 
 export const BACKGROUNDS: Readonly<Record<BackgroundId, BackgroundRef>> = {
@@ -97,6 +98,7 @@ export const BACKGROUNDS: Readonly<Record<BackgroundId, BackgroundRef>> = {
   bedtime: background('bedtime'),
   'pet-clinic': background('pet-clinic'),
   'dress-up': background('dress-up'),
+  garden: background('garden'),
 };
 
 /** Every background of a screen with its plate (undefined for a single-plate screen). */

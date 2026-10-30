@@ -17,7 +17,7 @@ export type IslandGameId = (typeof ISLAND_GAME_IDS)[number];
  * Story 7.2: the yard games (content/home.ts corners). They have no island station: the yard opens them
  * (scene key === GameId still holds).
  */
-export const YARD_GAME_IDS = ['animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up'] as const;
+export const YARD_GAME_IDS = ['animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden'] as const;
 export type YardGameId = (typeof YARD_GAME_IDS)[number];
 
 /** Every mini-game id: the island games, then the yard games. */
@@ -60,6 +60,11 @@ export type SnapshotPartials = {
   'pet-clinic': { patient: string; left: string[]; seen: string[] };
   /** Story 8.2: the wears and take-offs so far this round (the outfit itself lives in ProgressStore). */
   'dress-up': { changes: number };
+  /**
+   * Trồng cây (2026-10-30): the two packets on offer, the fruit planted (null: still choosing), the waterings so far,
+   * the fruits still on the plant (indices) and this plant's surprise. Kept on Home only while a plant grows.
+   */
+  garden: { offer: string[]; kind: string | null; waterings: number; left: number[]; surprise: string | null };
 };
 
 /** The closed questions of a round so far (Story 2.5): a resumed round judges `nextLevel` on all of them. */

@@ -57,6 +57,8 @@ import {
   dressUpLimits,
   validateDressUp,
   validateOutfitFrames,
+  gardenLimits,
+  validateGarden,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
@@ -108,6 +110,8 @@ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayou
   'pet-clinic': (layout, atlas) => validatePetClinic(layout, petClinicLimits(), atlas),
   // Story 8.2: the wardrobe's tap circles and hulls, every frame, every overlay.
   'dress-up': (layout, atlas) => [...validateDressUp(layout, dressUpLimits(), atlas), ...validateOutfitFrames('dress-up', atlas)],
+  // Trồng cây (2026-10-30): the tap circles, Shiba's hull, every frame, every outfit overlay.
+  garden: (layout, atlas) => [...validateGarden(layout, gardenLimits(), atlas), ...validateOutfitFrames('garden', atlas)],
 };
 
 /** PNG zlib level of the shipped background. */

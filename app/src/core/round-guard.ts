@@ -46,11 +46,14 @@ export class RoundGuard {
     return true;
   }
 
-  /** Emits `round:leave {gameId}` from free play, then `onInert`; false (nothing emitted) otherwise. */
-  leave(): boolean {
+  /**
+   * Emits `round:leave {gameId}` from free play (with `snapshot` when given: a free-play game's resume point), then
+   * `onInert`; false (nothing emitted) otherwise.
+   */
+  leave(snapshot?: Snapshot): boolean {
     if (this.state !== 'free') return false;
     this.state = 'done';
-    this.bus.emit('round:leave', { gameId: this.gameId });
+    this.bus.emit('round:leave', snapshot ? { gameId: this.gameId, snapshot } : { gameId: this.gameId });
     this.onInert();
     return true;
   }

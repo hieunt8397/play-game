@@ -10,14 +10,17 @@
 # One plate, 2048×1536: a soft lawn (the picnic lawn's palette), Xoài's house front (Tiny Treats Homely House
 # `house`) at the back centre with its doormat and a picket fence (Homely House fences) to both
 # sides, trees and bushes behind the fence, a gradient sky with clouds. The backdrop is hazed (as in Chạm là nói)
-# so the corners pop. Five big corner props, each its own `sprite.<corner>` (idle at frame 1; the runtime bounce
+# so the corners pop. Six big corner props, each its own `sprite.<corner>` (idle at frame 1; the runtime bounce
 # is a scale motion around the ground pivot), with `hit.<corner>` (convex hull of its meshes) and
 # `anchor.<corner>` (its ground pivot) in the hidden `layout` collection:
 #   - pen: a Homely House fence pen with a real Quaternius cow (Cow.fbx, its Idle pose) peeking over the front;
 #   - stage: a round wooden stage with a pink curtain arch and a big drum with sticks (script-built, cute.py);
 #   - bed: the KayKit Furniture single bed with an extra pillow (front row);
 #   - clinic: a big white vet box with a red cross and a handle (script-built, front row);
-#   - wardrobe (back row, right): a lilac wardrobe with two doors, knobs, a crown top and a shirt on its side hook (script-built).
+#   - wardrobe (back row, right): a lilac wardrobe with two doors, knobs, a crown top and a shirt on its side hook (script-built);
+#   - garden (Trồng cây, 2026-10-30; front row, between clinic and bed): a wooden raised bed of dark soil with a strawberry
+#     plant, a staked tomato plant and a seedling, a sign stake with a strawberry, and a light-blue watering can beside it
+#     (script-built; colours from art.garden).
 # Each prop is fitted into its CORNER_BOXES box (design px; bottom edge = its ground line) by unprojecting
 # through the camera, so the layout is exactly what tools/layout/rules.ts › validateHome checks (hulls inside
 # the interactive rect, clear of the Home/Speaker zones, ≥ targetGap apart, each frame ≥ 150 px).
@@ -69,18 +72,19 @@ SKY_EMISSION = 1.1
 CLOUDS = [(-30.0, 120.0, 20.0, 5.0), (-4.0, 130.0, 25.0, 4.2), (28.0, 120.0, 21.0, 5.5)]
 
 # --- the corners: design-px boxes (x0, y0, x1, y1), y1 = the ground line; the prop fills the box ---------------
-# Back row: pen, stage, wardrobe (tall and narrow, left of the Speaker zone); front row: clinic, bed. Padded by hitPad (24) each hull stays inside the
+# Back row: pen, stage, wardrobe (tall and narrow, left of the Speaker zone); front row: clinic, garden, bed. Padded by hitPad (24) each hull stays inside the
 # interactive rect (x 24…1000, y 66…694), off the Home/Speaker zones (top corners) and ≥ targetGap (24) apart.
 CORNER_BOXES = {
     'pen': (60, 225, 320, 395),
     'stage': (388, 190, 640, 395),
     'wardrobe': (712, 180, 870, 395),  # its hull stays left of the Speaker zone (x ≥ 900)
-    'clinic': (150, 480, 400, 664),
-    'bed': (600, 470, 900, 664),
+    'clinic': (50, 480, 260, 664),
+    'garden': (344, 480, 612, 664),
+    'bed': (650, 470, 900, 664),  # height-limited: the bed itself spans ~x 695…856
 }
 PLACE_PASSES = 6
 # Yaw (degrees) of each prop's root (0 = its front toward the camera).
-CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0}
+CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0, 'garden': 8.0}
 
 # The pen: a fence rectangle (modules) and the cow inside, its head over the front rail.
 PEN_W = 3.0  # x extent (m)
@@ -503,7 +507,85 @@ def build_wardrobe(root, coll, c):
         rbox(f'shirt-sleeve-{side}', (0.05, 0.3, 0.22), 0.05, shirt, coll, root, (sx + 0.03, -0.05 + side * 0.4, foot + h - 0.6), (side * 30.0, 0.0, 0.0))
 
 
-BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe}
+def build_garden(root, coll, c):
+    """A wooden raised bed of dark soil: a strawberry plant (berries over the front rim), a staked tomato plant, a
+    seedling, a sign stake with a strawberry on it, and a light-blue watering can on the ground beside the bed."""
+    g = c['garden']
+    wood, plank = mat(g['bed'], 0.6), mat(g['bedDark'], 0.6)
+    soil, lump = mat(g['soil'], 0.95), mat(g['soilDark'], 0.95)
+    leaf, leaf2, stem = mat(g['leaf'], 0.5), mat(g['leafDark'], 0.5), mat(g['stem'], 0.5)
+    berry, seed, tomato = mat(g['strawberry'], 0.3), mat(g['strawberrySeed'], 0.4), mat(g['tomato'], 0.3)
+    w, d, h = 2.1, 1.05, 0.5
+    # the bed: a wooden box, darker plank lines on the front, corner posts a little proud, the soil inside
+    rbox('garden-bed', (w, d, h), 0.1, wood, coll, root, (0.0, 0.0, h / 2))
+    fy = -d / 2 - 0.015
+    for k, z in enumerate((h * 0.36, h * 0.7)):
+        rbox(f'garden-plank-{k}', (w - 0.3, 0.04, 0.035), 0.015, plank, coll, root, (0.0, fy, z))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            rbox(f'garden-post-{sx}-{sy}', (0.17, 0.17, h + 0.1), 0.06, plank, coll, root, (sx * (w / 2 - 0.05), sy * (d / 2 - 0.05), (h + 0.1) / 2))
+    rbox('garden-soil', (w - 0.2, d - 0.2, 0.12), 0.05, soil, coll, root, (0.0, 0.0, h - 0.02))
+    rnd = random.Random(5)
+    for k in range(9):
+        x, y = rnd.uniform(-w / 2 + 0.2, w / 2 - 0.2), rnd.uniform(-d / 2 + 0.18, d / 2 - 0.18)
+        r = rnd.uniform(0.05, 0.08)
+        blob(f'garden-lump-{k}', lump, coll, root, (x, y, h + 0.04), (r, r, r * 0.6), seg=(16, 8))
+    top = h + 0.04
+
+    def berry_shape(v):  # narrower toward the tip (−z)
+        k = 0.62 + 0.38 * (v.z + 1) / 2
+        return Vector((v.x * k, v.y * k, v.z))
+
+    # the strawberry plant (left): a rosette of round leaves, berries hanging over the front rim
+    sx0 = -0.6
+    for k in range(6):
+        a = 2 * math.pi * k / 6 + 0.3
+        tilt = 25.0
+        blob(f'straw-leaf-{k}', leaf if k % 2 else leaf2, coll, root, (sx0 + math.cos(a) * 0.2, math.sin(a) * 0.17 + 0.05, top + 0.2), (0.2, 0.15, 0.07), (tilt * math.sin(a), -tilt * math.cos(a), math.degrees(a)), seg=(24, 12))
+    blob('straw-leaf-top', leaf, coll, root, (sx0, 0.08, top + 0.34), (0.17, 0.14, 0.09), seg=(24, 12))
+    for k, (x, y, z) in enumerate([(sx0 - 0.3, -0.5, top + 0.02), (sx0 + 0.02, -0.56, top - 0.04), (sx0 + 0.32, -0.48, top + 0.05)]):
+        rod(f'straw-runner-{k}', (sx0 + (x - sx0) * 0.3, 0.0, top + 0.15), (x, y + 0.05, z + 0.17), 0.022, stem, coll, root)
+        blob(f'straw-berry-{k}', berry, coll, root, (x, y, z), (0.16, 0.14, 0.18), shape=berry_shape)
+        blob(f'straw-cap-{k}', leaf2, coll, root, (x, y, z + 0.17), (0.12, 0.12, 0.04), seg=(16, 8))
+        for j, (dx, dz) in enumerate([(-0.05, 0.04), (0.05, 0.03), (0.0, -0.05), (-0.04, -0.02), (0.045, -0.025)]):
+            blob(f'straw-seed-{k}-{j}', seed, coll, root, (x + dx, y - 0.135 + abs(dx) * 0.6, z + dz), (0.018, 0.012, 0.024), seg=(8, 6))
+    # the tomato plant (centre right): a stake, a stem, leaf clusters, three red tomatoes with green star caps
+    tx = 0.35
+    rod('tomato-stake', (tx + 0.12, 0.12, top - 0.05), (tx + 0.12, 0.12, top + 1.15), 0.035, plank, coll, root)
+    rod('tomato-stem', (tx, 0.05, top), (tx + 0.04, 0.08, top + 1.0), 0.04, stem, coll, root)
+    for k, (dx, dz, sz) in enumerate([(-0.22, 0.35, 0.2), (0.24, 0.5, 0.2), (-0.18, 0.72, 0.18), (0.2, 0.88, 0.17), (0.02, 1.06, 0.2)]):
+        blob(f'tomato-leaf-{k}', leaf if k % 2 else leaf2, coll, root, (tx + dx, 0.06, top + dz), (sz, sz * 0.8, sz * 0.6), (0.0, 0.0, 20.0 * k), seg=(24, 12))
+    for k, (dx, dz) in enumerate([(-0.1, 0.42), (0.18, 0.66), (-0.12, 0.84)]):
+        x, y, z = tx + dx, -0.14, top + dz
+        blob(f'tomato-{k}', tomato, coll, root, (x, y, z), (0.18, 0.17, 0.16))
+        for j in range(5):
+            a = 2 * math.pi * j / 5
+            blob(f'tomato-cap-{k}-{j}', leaf2, coll, root, (x + math.cos(a) * 0.05, y + math.sin(a) * 0.05, z + 0.155), (0.05, 0.018, 0.012), (0.0, 0.0, math.degrees(a)), seg=(10, 6))
+    # a seedling (right): two round leaves on a short stem
+    px = 0.82
+    rod('sprout-stem', (px, -0.1, top), (px, -0.1, top + 0.2), 0.025, stem, coll, root)
+    for side in (-1, 1):
+        blob(f'sprout-leaf-{side}', leaf, coll, root, (px + side * 0.09, -0.1, top + 0.23), (0.1, 0.06, 0.035), (0.0, -side * 20.0, 0.0), seg=(20, 10))
+    # the sign stake at the front left: a post, a round-cornered board, a strawberry painted on it
+    gx = -w / 2 + 0.05
+    rod('sign-post', (gx, -d / 2 - 0.2, 0.0), (gx, -d / 2 - 0.2, 0.95), 0.04, plank, coll, root)
+    rbox('sign-board', (0.42, 0.06, 0.32), 0.06, mat(g['packet'], 0.5), coll, root, (gx, -d / 2 - 0.25, 0.85))
+    blob('sign-berry', berry, coll, root, (gx, -d / 2 - 0.29, 0.83), (0.08, 0.02, 0.09), shape=berry_shape)
+    blob('sign-berry-cap', leaf2, coll, root, (gx, -d / 2 - 0.3, 0.92), (0.06, 0.015, 0.025), seg=(12, 6))
+    # the watering can on the ground to the right of the bed, tipped a little toward it
+    can_root = add_empty('garden-can', (w / 2 + 0.5, -0.2, 0.0), coll)
+    can_root.parent = root
+    can_root.rotation_euler = (0.0, math.radians(-10.0), math.radians(-25.0))
+    can, can_dark = mat(g['can'], 0.3), mat(g['canDark'], 0.3)
+    cr, ch = 0.3, 0.46
+    lathe('can-body', rounded_profile(cr, 0.0, ch, 0.25), can, coll, can_root)
+    torus('can-rim', cr * 0.82, 0.035, can_dark, coll, can_root, (0.0, 0.0, ch + 0.005))
+    torus('can-handle', 0.2, 0.04, can_dark, coll, can_root, (0.1, 0.0, ch), (90.0, 0.0, 0.0), arc=(0.0, 180.0))
+    rod('can-spout', (-cr * 0.7, 0.0, ch * 0.3), (-cr - 0.32, 0.0, ch + 0.2), 0.045, can, coll, can_root)
+    blob('can-rose', can_dark, coll, can_root, (-cr - 0.36, 0.0, ch + 0.23), (0.07, 0.09, 0.09))
+
+
+BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe, 'garden': build_garden}
 
 
 def place_in_box(scene, screen, root, meshes, box):
@@ -525,7 +607,7 @@ def place_in_box(scene, screen, root, meshes, box):
 
 
 def build_corner(scene, screen, cid, params, sprites, layout):
-    c = {**params['colours'], **params['art']['home']}
+    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden']}
     coll = bpy.data.collections.new(f'sprite.{cid}')
     sprites.children.link(coll)
     root = add_empty(f'{cid}-root', (0.0, 0.0, 0.0), coll)

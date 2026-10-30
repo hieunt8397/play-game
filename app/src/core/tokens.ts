@@ -405,6 +405,45 @@ const ui = {
   dressUpGlowRings: 8,
   dressUpGlowAlpha: 0.6,
   dressUpGlowPadPx: 6,
+  /** Trồng cây (2026-10-30): the can, each packet and each fruit is drawn at least this big (longest side, design px). */
+  gardenTargetMinPx: 90,
+  /** Trồng cây: their tap circles are at least this wide (design px). */
+  gardenHitMinPx: 80,
+  /** Trồng cây: the giant fruit (the `giant` surprise) is drawn at this scale of a fruit. */
+  gardenGiantScale: 1.3,
+  /** Trồng cây: the idle hint (the next thing bounces, its step line plays) at most this many times per step. */
+  gardenHintMax: 3,
+  /** Trồng cây: the idle hint's bounce (scale) and a growth step's squash-and-stretch pop (scale). */
+  gardenHintBounce: 1.15,
+  gardenPopScale: 1.12,
+  /** Trồng cây: the can tilts this far over the soil while it pours (degrees, clockwise; × reducedMotionAmplitude when reduced). */
+  gardenPourDeg: 38,
+  /** Trồng cây: the water drops of one watering (count, x spread, fall, scale). */
+  gardenDrops: 7,
+  gardenDropSpreadPx: 30,
+  gardenDropFallPx: 80,
+  gardenDropScale: 0.7,
+  /** Trồng cây: Shiba's flourishes: the hop, the wag (degrees), the hearts (count, rise, scale); a tap's squash. */
+  gardenHopPx: 26,
+  gardenWagDeg: 6,
+  gardenHearts: 3,
+  gardenFloatRisePx: 60,
+  gardenHeartScale: 0.6,
+  gardenTapSquash: 1.06,
+  /** Trồng cây: the lemon's sour shiver (± design px, shakes; × reducedMotionAmplitude when reduced). */
+  gardenShiverPx: 5,
+  gardenShivers: 4,
+  /** Trồng cây: the watermelon's spat pips and the tomato's juice drops (count, flight, scale). */
+  gardenPips: 3,
+  gardenJuiceDrops: 5,
+  gardenSpitPx: 110,
+  gardenParticleScale: 0.6,
+  /** Trồng cây: the worm peeks this far out of the soil; the butterfly flies in from this far off (design px). */
+  gardenWormRisePx: 26,
+  gardenButterflyFromPx: 260,
+  gardenButterflyScale: 0.8,
+  /** Trồng cây: a picked fruit shrinks to this scale in Shiba's mouth. */
+  gardenBiteScale: 0.45,
   /** Story 5.6: a new station landmark (the ice-cream cone, the pizza chimney) is at least this tall (design px; build_map.py). */
   mapLandmarkMinPx: 60,
   /** Story 5.6: the map clouds drift right at this speed (design px per ms; × reducedMotionAmplitude when reduced). */
@@ -652,6 +691,59 @@ const art = {
     z: colour('#C9B8FF'),
     nightTint: colour('#6F7FD0'),
     glow: colour('#FFE7A3'),
+  },
+  /**
+   * Trồng cây (2026-10-30, build_garden.py): the yard bed (grass, the fence, the wooden bed and its soil), the plants
+   * (leaves, stems, the flowers), the four fruits (strawberry, watermelon, tomato, lemon) and their seed packets, the
+   * watering can, and the particles (water drop, seed, watermelon pip, tomato juice, heart, sparkle) and surprises
+   * (butterfly, worm, rainbow). Never red feedback (the strawberry and the tomato are the fruits' own colours).
+   */
+  garden: {
+    sky: colour('#BDE6FF'),
+    grass: colour('#9ED97A'),
+    grassDark: colour('#7CC25C'),
+    fence: colour('#FFF6EC'),
+    fenceShade: colour('#EBDCC9'),
+    bed: colour('#D9A066'),
+    bedDark: colour('#B97F48'),
+    soil: colour('#8A5A3B'),
+    soilDark: colour('#6B4329'),
+    leaf: colour('#5DBB63'),
+    leafDark: colour('#3F9A4B'),
+    leafLight: colour('#8FD98A'),
+    stem: colour('#6FB34F'),
+    flower: colour('#FFFFFF'),
+    flowerYellow: colour('#FFE066'),
+    flowerHeart: colour('#FFD23F'),
+    strawberry: colour('#F2475A'),
+    strawberrySeed: colour('#FFE9A6'),
+    watermelon: colour('#4FB35A'),
+    watermelonStripe: colour('#2E7D3A'),
+    watermelonFlesh: colour('#FF6F7D'),
+    tomato: colour('#F2553A'),
+    lemon: colour('#FFE14D'),
+    lemonLight: colour('#FFF3A6'),
+    packet: colour('#FFF6E0'),
+    packetBand: colour('#FFB7CE'),
+    can: colour('#7FC8F8'),
+    canDark: colour('#4FA8E0'),
+    drop: colour('#8FD3FF'),
+    seed: colour('#C98B4F'),
+    pip: colour('#2B2B2B'),
+    juice: colour('#FF7A5C'),
+    heart: colour('#FF9EC4'),
+    sparkle: colour('#FFE066'),
+    butterfly: colour('#FFB347'),
+    butterflyDot: colour('#FFFFFF'),
+    butterflyBody: colour('#5B4636'),
+    worm: colour('#FF9EB5'),
+    wormLight: colour('#FFC4D2'),
+    rainbow1: colour('#FF8FA3'),
+    rainbow2: colour('#FFC26B'),
+    rainbow3: colour('#FFE680'),
+    rainbow4: colour('#9ED97A'),
+    rainbow5: colour('#8FD3FF'),
+    rainbow6: colour('#B9A6FF'),
   },
   /**
    * Story 8.1: Bác sĩ thú cưng (build_pet_clinic.py): the clinic room (wall, wallpaper dots, floor, skirting, the

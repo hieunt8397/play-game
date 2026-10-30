@@ -10,6 +10,7 @@ import { Bedtime } from './bedtime/Bedtime';
 import { DinoPuzzle } from './dino-puzzle/DinoPuzzle';
 import { DressUp } from './dress-up/DressUp';
 import { Fishing } from './fishing/Fishing';
+import { Garden } from './garden/Garden';
 import { IceCream } from './ice-cream/IceCream';
 import { PetClinic } from './pet-clinic/PetClinic';
 import { Pizza } from './pizza/Pizza';
@@ -45,6 +46,8 @@ export const SCENE_CLASSES: Readonly<Partial<Record<GameId, GameSceneClass>>> = 
   'pet-clinic': PetClinic,
   // Story 8.2: a yard game; registering it wakes the yard's wardrobe corner.
   'dress-up': DressUp,
+  // Trồng cây (2026-10-30): a yard game; registering it wakes the yard's garden corner.
+  garden: Garden,
 };
 
 function buildGames(): Partial<Record<GameId, GameEntry>> {

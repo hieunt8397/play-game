@@ -382,6 +382,34 @@ export const Timing = {
   dressUpFadeMs: 220,
   /** Story 8.2: a tapped icon's bounce. */
   dressUpIconBounceMs: 260,
+  /** Trồng cây (2026-10-30): a packet tapped: the other fades, the seed drops into the soil and the sprout pops up. */
+  gardenPlantMs: 1300,
+  /** Trồng cây: one watering (the can flies over the soil, tilts and pours, the plant grows one stage, the can goes back): ≤ 1.5 s. */
+  gardenGrowMs: 1400,
+  /** Trồng cây: the can's flight to the soil and back (each, inside gardenGrowMs). */
+  gardenCanFlyMs: 300,
+  /** Trồng cây: a surprise (the worm peeks, the butterfly lands, the rainbow shows). */
+  gardenSurpriseMs: 1600,
+  /** Trồng cây: a picked fruit hops to Shiba's mouth; each bite; the fruit's own reaction; the flourish. */
+  gardenPickMs: 550,
+  gardenBiteMs: 600,
+  gardenReactMs: 1300,
+  gardenFlourishMs: 700,
+  /** Trồng cây: after the last fruit the plant fades back into the soil, then the new packets pop in. */
+  gardenClearMs: 1000,
+  gardenPacketsInMs: 500,
+  /** Trồng cây: a crossfade between two frames (plant stages, Shiba's faces). */
+  gardenFadeMs: 250,
+  /** Trồng cây: Shiba's frames swap this often (chewing, the wag, the shiver). */
+  gardenFrameMs: 180,
+  /** Trồng cây: after this long without a tap the next thing to tap bounces and its step line plays (≤ ui.gardenHintMax per step). */
+  gardenIdleHintMs: 8000,
+  /** Trồng cây: Shiba tapped (a squash and a woof); a thing tapped out of its turn (a small nudge). */
+  gardenTapMs: 600,
+  /** Trồng cây: a heart or a sparkle floats up and fades. */
+  gardenFloatMs: 1400,
+  /** Trồng cây: one controller tick covers at most this long (a stalled frame never skips a step's end). */
+  gardenMaxTickMs: 250,
 } as const;
 
 export type TimingTable = typeof Timing;

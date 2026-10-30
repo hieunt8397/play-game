@@ -89,6 +89,7 @@ export const VOICE_LINES = [
   { id: 'vo.shell.corner-name.bed', text: 'Giường ngủ' },
   { id: 'vo.shell.corner-name.clinic', text: 'Phòng khám' },
   { id: 'vo.shell.corner-name.wardrobe', text: 'Tủ đồ' },
+  { id: 'vo.shell.corner-name.garden', text: 'Vườn' },
   // Tiệm kem (Story 1.8; 5.2): the single-flavour ask names Xoài — "Xoài ơi, kem … nào!" (+ its colour word: hồng, trắng, xanh); the
   // retry after a wrong scoop. "sô-cô-la" counts as 3 words, so its lines carry no colour word.
   // Played only through core/hint-director. Not yet approved.
@@ -410,6 +411,18 @@ export const VOICE_LINES = [
   { id: 'vo.dress-up.name.heart-jumper', text: 'Áo len trái tim!' },
   { id: 'vo.dress-up.name.flower-shirt', text: 'Áo hoa!' },
   { id: 'vo.dress-up.parent.1', text: 'Hỏi mẹ xem | mẹ thích mũ nào nhé!', keywordPauseMs: 300 },
+  // Trồng cây (2026-10-30): the invitation as a fresh garden opens (it names Xoài), one short line per step (choose a
+  // seed, water it, pick the fruit; each is also the idle hint and the Speaker prompt), each fruit's name (as its seed is
+  // chosen and as its fruits appear) and the parent invitation. No praise. Not yet approved.
+  { id: 'vo.garden.prompt', text: 'Xoài ơi, | mình trồng cây nào!', keywordPauseMs: 300 },
+  { id: 'vo.garden.choose', text: 'Chọn một gói hạt nhé!' },
+  { id: 'vo.garden.water', text: 'Tưới nước cho cây nhé!' },
+  { id: 'vo.garden.pick', text: 'Hái quả cho Shiba nhé!' },
+  { id: 'vo.garden.name.strawberry', text: 'Quả dâu!' },
+  { id: 'vo.garden.name.watermelon', text: 'Quả dưa hấu!' },
+  { id: 'vo.garden.name.tomato', text: 'Quả cà chua!' },
+  { id: 'vo.garden.name.lemon', text: 'Quả chanh!' },
+  { id: 'vo.garden.parent.1', text: 'Mời bố mẹ | cùng trồng cây nhé!', keywordPauseMs: 300 },
 ] as const satisfies readonly VoiceLine[];
 
 export type VoiceLineId = (typeof VOICE_LINES)[number]['id'];

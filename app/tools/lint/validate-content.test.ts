@@ -117,6 +117,11 @@ function goodTree(): string {
   for (const t of du.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
   put(root, ATLASES['dress-up'].json, JSON.stringify(du));
   put(root, BACKGROUNDS['dress-up'].path, pngHeader(2048, 1536));
+  // Trồng cây (2026-10-30): the garden multiatlas JSON is the real one (each page a PNG header; its frames and circles are checked).
+  const gd = JSON.parse(readFileSync(join(APP, 'public', ATLASES.garden.json), 'utf8')) as { textures: { image: string }[] };
+  for (const t of gd.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
+  put(root, ATLASES.garden.json, JSON.stringify(gd));
+  put(root, BACKGROUNDS.garden.path, pngHeader(2048, 1536));
   return root;
 }
 
@@ -140,6 +145,7 @@ function layoutDir(): string {
   put(dir, 'bedtime.layout.json', JSON.stringify(realLayout('bedtime')));
   put(dir, 'pet-clinic.layout.json', JSON.stringify(realLayout('pet-clinic')));
   put(dir, 'dress-up.layout.json', JSON.stringify(realLayout('dress-up')));
+  put(dir, 'garden.layout.json', JSON.stringify(realLayout('garden')));
   return dir;
 }
 

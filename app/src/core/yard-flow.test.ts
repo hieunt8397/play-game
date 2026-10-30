@@ -11,7 +11,7 @@ import type { GameId, RoundOutcome, Snapshot } from '../content/types';
 import { YardController } from './home-yard';
 import { homeLine, VO_HOME, VO_HOME_YARD } from './hud';
 import { KartTrip, type TripCommand } from './kart-trip';
-import { keepAbandonSnapshot, PostRoundChain, routeRoundAbandon, routeRoundComplete, routeRoundLeave, routeRoundNext, type RunningGame } from './post-round-chain';
+import { keepAbandonSnapshot, onRoundLeave, PostRoundChain, routeRoundAbandon, routeRoundComplete, routeRoundLeave, routeRoundNext, type RunningGame } from './post-round-chain';
 import { createRoad } from './road';
 import { SessionStore, takeStartData } from './session-store';
 import { INITIAL_NAV, navEnterYard, navLeaveYard, navRestart, navReturn, navYardClosed, navYardOpen, type ShellNav } from './shell-nav';
@@ -174,6 +174,24 @@ describe('Story 7.1: a yard game mid-round, continuous play', () => {
     expect(y.woke()).toEqual([]);
     const again = open(back.state, openCorner(y)!, session);
     expect(again.effects[1]).toEqual({ kind: 'startGame', gameId: YARD_GAME, data: { level: snapshot.level, seed: snapshot.seed, resume: snapshot } });
+    expect(session.resumeIds()).toEqual([]);
+  });
+
+  it('2026-10-30 (the garden): Home in free play with a half-grown plant (round:leave + snapshot) keeps it; reopening resumes it', () => {
+    const session = new SessionStore();
+    const run: RunningGame = { id: 'garden', level: 0, origin: 'yard' };
+    const partial = { offer: ['lemon', 'tomato'], kind: 'lemon', waterings: 2, left: [], surprise: 'worm' };
+    const snapshot: Snapshot = { v: 1, level: 0, seed: 7, questionIndex: 0, partial };
+    // Map's round:leave handler: the snapshot is kept first, then the yard's fade return.
+    expect(onRoundLeave(run, { gameId: 'garden', snapshot }, false, session)).toEqual({ action: 'fade', gameId: 'garden' });
+    expect(session.resumeIds()).toEqual(['garden']);
+    const data = startData(session)('garden');
+    expect(data).toEqual({ level: 0, seed: 7, resume: snapshot });
+    // (games/garden/cycle.test.ts checks that resumeGarden accepts this kept partial: core may not import games/.)
+    expect(data.resume?.partial).toEqual(partial);
+    expect(session.resumeIds()).toEqual([]);
+    // Bare soil hands no snapshot: nothing is kept.
+    expect(onRoundLeave(run, { gameId: 'garden' }, false, session)).toEqual({ action: 'fade', gameId: 'garden' });
     expect(session.resumeIds()).toEqual([]);
   });
 

@@ -17,6 +17,7 @@ import { PIECES, SPECIES } from '../../src/content/games/dino-puzzle.ts';
 import { ITEM_IDS, SHADOW_COUNTS } from '../../src/content/games/shadow-match.ts';
 import { GAME_ICONS } from '../../src/content/game-icons.ts';
 import { OUTFIT_ITEMS } from '../../src/content/games/dress-up.ts';
+import { FRUIT_IDS, FRUITS_PER_PLANT, GIANT_FRUIT, PACKET_SLOTS, STAGES } from '../../src/content/games/garden.ts';
 import { GAME_IDS, ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
 import { RENDER_SCALE, layoutLimits } from '../layout/rules.ts';
@@ -52,6 +53,8 @@ export interface BuildParams {
     petClinic: Record<string, string>;
     /** Story 8.2: art.dressUp (the wardrobe room, the mirror, the eleven outfit items; also the map and ice-cream outfit overlays). */
     dressUp: Record<string, string>;
+    /** Trồng cây (2026-10-30): art.garden (the yard bed, the plants, the fruits and packets, the can, the particles and surprises). */
+    garden: Record<string, string>;
     /** Story 5.6: art.map (the map road, water, foam, cone and chimney). */
     map: Record<string, string>;
   };
@@ -85,6 +88,12 @@ export interface BuildParams {
   outfit: { id: string; slot: string }[];
   /** Story 8.2: the wardrobe's sizes (design px): an icon's longest side, an item's tap circle, the gap between tap targets, the reflection's scale. */
   dressUp: { iconPx: number; itemHitPx: number; gapPx: number; mirrorScale: number };
+  /**
+   * Trồng cây (2026-10-30): the fruits, the plant stages, the packet slots and fruits per plant (content/games/garden.ts),
+   * the giant fruit's index and scale, and the tap sizes (design px): every can/packet/fruit drawn ≥ targetPx, its tap
+   * circle ≥ hitMinPx wide, every circle ≥ gapPx from the others and from Shiba.
+   */
+  garden: { fruits: string[]; stages: string[]; packets: number; fruitsPerPlant: number; giantFruit: number; giantScale: number; targetPx: number; hitMinPx: number; gapPx: number };
   renderScale: number;
   design: { width: number; height: number };
   rect: { x0: number; y0: number; x1: number; y1: number };
@@ -111,6 +120,7 @@ export function buildParams(): BuildParams {
       bedtime: Object.fromEntries(Object.entries(art.bedtime).map(([id, c]) => [id, c.css])),
       petClinic: Object.fromEntries(Object.entries(art.petClinic).map(([id, c]) => [id, c.css])),
       dressUp: Object.fromEntries(Object.entries(art.dressUp).map(([id, c]) => [id, c.css])),
+      garden: Object.fromEntries(Object.entries(art.garden).map(([id, c]) => [id, c.css])),
       map: Object.fromEntries(Object.entries(art.map).map(([id, c]) => [id, c.css])),
     },
     dino: {
@@ -132,6 +142,17 @@ export function buildParams(): BuildParams {
     landmarkMin: Tokens.ui.mapLandmarkMinPx,
     outfit: OUTFIT_ITEMS.map((i) => ({ id: i.id, slot: i.slot })),
     dressUp: { iconPx: Tokens.ui.dressUpIconPx, itemHitPx: Tokens.ui.dressUpItemHitPx, gapPx: Tokens.spacing.targetGap, mirrorScale: Tokens.ui.dressUpMirrorScale },
+    garden: {
+      fruits: [...FRUIT_IDS],
+      stages: [...STAGES],
+      packets: PACKET_SLOTS,
+      fruitsPerPlant: FRUITS_PER_PLANT,
+      giantFruit: GIANT_FRUIT,
+      giantScale: Tokens.ui.gardenGiantScale,
+      targetPx: Tokens.ui.gardenTargetMinPx,
+      hitMinPx: Tokens.ui.gardenHitMinPx,
+      gapPx: Tokens.spacing.targetGap,
+    },
     renderScale: RENDER_SCALE,
     design: { width: Tokens.design.width, height: Tokens.design.height },
     rect: layoutLimits().rect,

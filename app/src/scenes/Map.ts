@@ -96,7 +96,7 @@ import {
   routeChainEnd,
   routeRoundAbandon,
   routeRoundComplete,
-  routeRoundLeave,
+  onRoundLeave,
   routeRoundNext,
   type ChainEnd,
   type RunningGame,
@@ -397,7 +397,8 @@ export class MapScene extends Scene {
     };
     scoped.on('round:complete', (outcome) => follow(routeRoundComplete(this.running, outcome)));
     // Story 5.8: Home in free play — the post-round chain runs now.
-    scoped.on('round:leave', ({ gameId }) => follow(routeRoundLeave(this.running, gameId, chain.active)));
+    // 2026-10-30: a free-play game may hand a resume point (the garden's half-grown plant): kept first, as on abandon.
+    scoped.on('round:leave', (e) => follow(onRoundLeave(this.running, e, chain.active, session)));
     // Seamless play: the finished round's game asks for its next round (a restart in place).
     scoped.on('round:next', ({ gameId }) => follow(routeRoundNext(this.running, gameId, chain.active)));
     scoped.on('round:abandon', ({ gameId, snapshot }) => {

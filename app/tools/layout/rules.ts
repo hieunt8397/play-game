@@ -16,6 +16,22 @@ import { heldRadius, shadowRadius } from '../../src/games/shadow-match/geometry.
 import { GATE_ANCHOR, GATE_YAWS, gateCrossAnchor, gateFrame, gatePostAnchor } from '../../src/content/games/race.ts';
 import { gateViews, roadGate } from '../../src/games/race/gate.ts';
 import { DRESS_UP_SCREEN, HITS as DRESS_UP_HITS, OUTFIT_ITEM_IDS, iconFrame, itemHitRadius, overlayFrame } from '../../src/content/games/dress-up.ts';
+import {
+  CAN_FRAME,
+  FRUIT_IDS,
+  FRUITS_PER_PLANT,
+  GARDEN_SCREEN,
+  GIANT_FRUIT,
+  HITS as GARDEN_HITS,
+  PACKET_SLOTS,
+  PLANT_FRAMES,
+  SHIBA_FRAMES as GARDEN_SHIBA_FRAMES,
+  fruitAnchor,
+  fruitFrame,
+  hitRadius as gardenHitRadius,
+  packetAnchor,
+  packetFrame,
+} from '../../src/content/games/garden.ts';
 import { DOOR_ANCHOR, PATIENT_ANCHOR, PATIENT_HIT, PATIENT_IDS, PET_CLINIC_SCREEN, TOOL_IDS, patientFrames, toolFrame, toolHitRadius } from '../../src/content/games/pet-clinic.ts';
 
 export interface LayoutLimits {
@@ -2215,5 +2231,151 @@ export function validateOutfitFrames(screen: string, atlas: AtlasJsonLike, base 
   const have = new Set(frames);
   const problems: string[] = [];
   for (const f of shiba) for (const id of OUTFIT_ITEM_IDS) if (!have.has(overlayFrame(f, id))) problems.push(`atlas "${screen}": overlay "${overlayFrame(f, id)}" is missing`);
+  return problems;
+}
+
+// --- Trồng cây (2026-10-30) ------------------------------------------------------------------------------------------
+
+export interface GardenRuleInput {
+  ids: ScreenIds;
+  /** `can/idle/00`: drawn where it rests; its tap circle is around its trimmed centre. */
+  canFrame: string;
+  /** Every packet frame: any of them may stand at any packet anchor (drawn by its trimmed centre there). */
+  packetFrames: readonly string[];
+  packetAnchors: readonly string[];
+  /** Every fruit frame: any of them may hang at any fruit anchor (drawn by its trimmed centre there). */
+  fruitFrames: readonly string[];
+  fruitAnchors: readonly string[];
+  /** The fruit anchor index that may grow giant, and its scale. */
+  giantFruit: number;
+  giantScale: number;
+  /** Frames drawn where they were rendered (the plant stages, Shiba): inside the rect, off the Hud. */
+  placedFrames: readonly string[];
+  /** Shiba's tap area: ≥ targetMin wide, inside the rect, off the Hud, ≥ gap from every tap circle. */
+  shibaHit: string;
+  limits: LayoutLimits;
+  targetMin: number;
+  /** ui.gardenTargetMinPx: every can, packet and fruit frame's longest side (design px). */
+  drawnMin: number;
+  /** ui.gardenHitMinPx: every tap circle is at least this wide. */
+  hitMinPx: number;
+  /** spacing.targetGap. */
+  gap: number;
+  /** content/games/garden.ts › hitRadius (with ui.gardenHitMinPx). */
+  hitRadius: (half: number) => number;
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  renderScale: number;
+  design: { width: number; height: number };
+}
+
+/** The garden rules from Tokens and content (spec-trong-cay). */
+export function gardenLimits(ids: ScreenIds = GARDEN_SCREEN): GardenRuleInput {
+  return {
+    ids,
+    canFrame: CAN_FRAME,
+    packetFrames: FRUIT_IDS.map(packetFrame),
+    packetAnchors: Array.from({ length: PACKET_SLOTS }, (_, n) => packetAnchor(n)),
+    fruitFrames: FRUIT_IDS.map(fruitFrame),
+    fruitAnchors: Array.from({ length: FRUITS_PER_PLANT }, (_, n) => fruitAnchor(n)),
+    giantFruit: GIANT_FRUIT,
+    giantScale: Tokens.ui.gardenGiantScale,
+    placedFrames: [...PLANT_FRAMES, ...GARDEN_SHIBA_FRAMES],
+    shibaHit: GARDEN_HITS.shiba,
+    limits: layoutLimits(),
+    targetMin: Tokens.spacing.targetMin,
+    drawnMin: Tokens.ui.gardenTargetMinPx,
+    hitMinPx: Tokens.ui.gardenHitMinPx,
+    gap: Tokens.spacing.targetGap,
+    hitRadius: (half) => gardenHitRadius(half, Tokens.ui.gardenHitMinPx),
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    renderScale: RENDER_SCALE,
+    design: { width: Tokens.design.width, height: Tokens.design.height },
+  };
+}
+
+/**
+ * Trồng cây screen rules (spec-trong-cay; run by `render`, `atlas` and `validate:content`). Each message names the id.
+ *   - required: every hit (≥ 3 points) and anchor; with the atlas, every frame;
+ *   - Shiba's hull is at least targetMin wide, inside the interactive rect and clear of the Home/Speaker zones; every
+ *     anchor lies on the design rect;
+ *   - (atlas) the can, every packet and every fruit frame is drawn ≥ drawnMin (longest side); the tap circles (the can
+ *     at its trimmed centre; a packet / fruit anchor with the largest packet / fruit that may stand there, the giant
+ *     fruit scaled) are ≥ hitMinPx wide, inside the interactive rect, clear of the Home/Speaker zones, ≥ gap from
+ *     Shiba's hull and from each other within what shows together (the can with the packets; the can with the fruits);
+ *     every plant stage and Shiba frame (drawn where rendered) lies inside the interactive rect, clear of the Hud.
+ */
+export function validateGarden(layout: ScreenLayout, input: GardenRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const hull = layout.hits[input.shibaHit];
+  const hullOk = hull !== undefined && hull.length >= MIN_HIT_POINTS;
+  if (hullOk) {
+    const w = minWidth(hull);
+    if (w < input.targetMin) problems.push(`hit "${input.shibaHit}": ${round2(w)} px wide (min ${input.targetMin})`);
+    const out = hull.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${input.shibaHit}": ${fmt(out)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (polygonDistance(hull, rectPolygon4(k.rect)) === 0) problems.push(`hit "${input.shibaHit}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  }
+  for (const id of input.ids.anchors) {
+    const a = layout.anchors[id];
+    if (a && (a.x < 0 || a.y < 0 || a.x > input.design.width || a.y > input.design.height)) problems.push(`anchor "${id}": ${fmt(a)} is off the screen`);
+  }
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "garden": frame "${f}" is missing`);
+  for (const f of input.placedFrames) {
+    const at = designRect(atlas, f, input.renderScale);
+    if (!at) continue;
+    if (at.x < r.x0 || at.y < r.y0 || at.x + at.w > r.x1 || at.y + at.h > r.y1) problems.push(`frame "${f}" ${fmtRect(at)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (overlaps(at, k.rect)) problems.push(`frame "${f}" ${fmtRect(at)}: reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  }
+  /** The longest drawn side over `frames` (design px); each is checked against drawnMin. */
+  const longest = (frames: readonly string[]): number => {
+    let most = 0;
+    for (const f of frames) {
+      const s = trimmedSize(atlas, f);
+      if (!s) continue;
+      const l = Math.max(s.w, s.h) / input.renderScale;
+      if (l < input.drawnMin) problems.push(`frame "${f}": longest side ${round2(l)} is under ${input.drawnMin}`);
+      most = Math.max(most, l);
+    }
+    return most;
+  };
+  type Circle = { id: string; c: Point; r: number };
+  const check = (circle: Circle): Circle => {
+    const { c, r: cr, id } = circle;
+    if (2 * cr < input.hitMinPx) problems.push(`"${id}": its tap circle is ${round2(2 * cr)} px wide (min ${input.hitMinPx})`);
+    if (c.x - cr < r.x0 || c.y - cr < r.y0 || c.x + cr > r.x1 || c.y + cr > r.y1) problems.push(`"${id}": its tap circle ${fmt({ x: round2(c.x), y: round2(c.y) })} r ${round2(cr)} leaves the interactive rect x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`);
+    for (const k of input.keepOut) if (circleHitsRect(c, cr, k.rect)) problems.push(`"${id}": its tap circle reaches into the ${k.id} ${fmtRect(k.rect)}`);
+    if (hullOk) {
+      const d = circleToPolygon(c, cr, hull);
+      if (d < input.gap) problems.push(`"${id}" and hit "${input.shibaHit}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+    return circle;
+  };
+  const apart = (group: readonly Circle[]): void => {
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const a = group[i]!;
+        const b = group[j]!;
+        const d = Math.hypot(a.c.x - b.c.x, a.c.y - b.c.y) - a.r - b.r;
+        if (d < input.gap) problems.push(`"${a.id}" and "${b.id}": ${round2(d)} px apart (min ${input.gap})`);
+      }
+    }
+  };
+  const canRect = designRect(atlas, input.canFrame, input.renderScale);
+  longest([input.canFrame]);
+  const can = canRect ? [check({ id: input.canFrame, c: { x: canRect.x + canRect.w / 2, y: canRect.y + canRect.h / 2 }, r: input.hitRadius(Math.max(canRect.w, canRect.h) / 2) })] : [];
+  const packetHalf = longest(input.packetFrames) / 2;
+  const packets = input.packetAnchors.flatMap((id) => {
+    const a = layout.anchors[id];
+    return a ? [check({ id: `anchor.${id}`, c: a, r: input.hitRadius(packetHalf) })] : [];
+  });
+  const fruitHalf = longest(input.fruitFrames) / 2;
+  const fruits = input.fruitAnchors.flatMap((id, n) => {
+    const a = layout.anchors[id];
+    return a ? [check({ id: `anchor.${id}`, c: a, r: input.hitRadius(fruitHalf * (n === input.giantFruit ? input.giantScale : 1)) })] : [];
+  });
+  apart([...can, ...packets]);
+  apart([...can, ...fruits]);
   return problems;
 }

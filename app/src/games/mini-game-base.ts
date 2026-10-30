@@ -52,7 +52,8 @@
 // cut); the round-start lead invitation is unchanged.
 // Story 7.3: `startFreePlay()` is for a game with no round at all (the band): `round:complete` once with the empty
 // tally, then free play WITHOUT `onFreePlay` or the next-round timer (no `round:next`); Home then leaves with
-// `round:leave` (no resume snapshot).
+// `round:leave` (no resume snapshot; 2026-10-30: unless the game's `leaveSnapshot()` hands one, as the garden does for
+// a half-grown plant).
 // Story 7.4: `finishRoundAndStay()` is the per-game opt-out of seamless play (the bedtime game: its ending is the
 // destination): `round:complete` once with the tallied outcome, then free play WITHOUT `onFreePlay` or the
 // next-round timer (no `round:next`, ever); Home then leaves with `round:leave`. It reuses the same path as Home
@@ -438,11 +439,20 @@ export abstract class MiniGameBase<G extends GameId = GameId> extends Scene {
     });
   }
 
-  /** Story 5.8: Home in free play — cleanup, then `round:leave` (once; input off). */
+  /** Story 5.8: Home in free play — cleanup, then `round:leave` (once; input off) with `leaveSnapshot()` when it has one. */
   protected leave(): void {
     if (!this.guard?.freePlay) return;
+    const snapshot = this.leaveSnapshot();
     this.cleanup();
-    this.guard.leave();
+    this.guard.leave(snapshot);
+  }
+
+  /**
+   * Trồng cây (2026-10-30): a free-play game's resume point on Home (Map keeps it as for `round:abandon`, and the next
+   * start resumes it). Default: none (every other free-play game leaves nothing to resume).
+   */
+  protected leaveSnapshot(): Snapshot<G> | undefined {
+    return undefined;
   }
 
   protected abandon(): void {

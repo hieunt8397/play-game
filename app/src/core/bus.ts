@@ -8,8 +8,12 @@ import type { HudMode } from './hud-mode';
 export interface EventMap {
   'round:complete': RoundOutcome;
   'round:abandon': { gameId: GameId; snapshot: Snapshot };
-  /** Story 5.8: Home in free play (after `round:complete`) — Map runs the post-round chain. */
-  'round:leave': { gameId: GameId };
+  /**
+   * Story 5.8: Home in free play (after `round:complete`) — Map runs the post-round chain. Trồng cây (2026-10-30): a
+   * free-play game with something to come back to (a half-grown plant) hands its resume `snapshot` too; Map keeps it
+   * as for `round:abandon`.
+   */
+  'round:leave': { gameId: GameId; snapshot?: Snapshot };
   /**
    * Seamless play (2026-10-21): the finished round's celebration and fade are over — Map restarts the
    * same game in place with its next start data (MiniGameBase emits it from free play).
