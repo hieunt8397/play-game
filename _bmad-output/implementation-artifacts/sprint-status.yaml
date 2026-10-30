@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-08-2026 12:41
-last_updated: 26-10-2026 19:30
+last_updated: 30-10-2026 09:00
 project: Bé Học Chơi
 project_key: NOKEY
 tracking_system: file-system
@@ -86,14 +86,14 @@ development_status:
   5-8-khung-chơi-tự-do-phản-ứng-chọn-khác-và-phản-ứng-ngẫu-nhiên: review
   epic-5-retrospective: optional
 
-  epic-6: in-progress
+  epic-6: done  # closed 2026-10-30: only 6.1 kept, 6.2–6.7 dropped by parent
   6-1-tiệm-kem-shiba-hắt-xì-lau-mũi-và-tháp-kem: review
-  6-2-pizza-chất-topping-thoải-mái-và-cáo-phản-ứng-theo-vị: backlog
-  6-3-đường-đua-đường-ngắn-chọn-màu-xe-và-rửa-xe: backlog
-  6-4-câu-cá-cá-ú-òa-sau-rong-và-bể-cá-của-bé: backlog
-  6-5-chạm-là-nói-nhiều-phản-ứng-và-chỗ-trốn: backlog
-  6-6-ghép-khủng-long-điệu-nhảy-riêng-và-mảnh-đặt-nhầm-ngộ-nghĩnh: backlog
-  6-7-tìm-bóng-vật-to-hơn-lắc-đầu-và-ló-ra-chào: backlog
+  6-2-pizza-chất-topping-thoải-mái-và-cáo-phản-ứng-theo-vị: backlog  # dropped 2026-10-30: parent decided Epic 6 not needed
+  6-3-đường-đua-đường-ngắn-chọn-màu-xe-và-rửa-xe: backlog  # dropped 2026-10-30: parent decided Epic 6 not needed
+  6-4-câu-cá-cá-ú-òa-sau-rong-và-bể-cá-của-bé: backlog  # dropped 2026-10-30: parent decided Epic 6 not needed
+  6-5-chạm-là-nói-nhiều-phản-ứng-và-chỗ-trốn: backlog  # dropped 2026-10-30: parent decided Epic 6 not needed
+  6-6-ghép-khủng-long-điệu-nhảy-riêng-và-mảnh-đặt-nhầm-ngộ-nghĩnh: backlog  # dropped 2026-10-30: parent decided Epic 6 not needed
+  6-7-tìm-bóng-vật-to-hơn-lắc-đầu-và-ló-ra-chào: backlog  # dropped 2026-10-30: parent decided Epic 6 not needed
   epic-6-retrospective: optional
 
   epic-7: in-progress
