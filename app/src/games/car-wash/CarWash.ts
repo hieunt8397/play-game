@@ -321,9 +321,10 @@ export class CarWash extends MiniGameBase<'car-wash'> {
     return this.pivoted(frame, { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }, at)?.setScale(scale / this.layout.renderScale);
   }
 
-  /** Re-points a full-frame image at another frame (same pivot). */
+  /** Re-points a full-frame image at another frame (same pivot: keep size and origin — the atlas's 0.5/0.5 `pivot`
+   *  would otherwise re-centre the full frame on the ground pivot and drop the car below its shadow). */
   private repoint(img: GameObjects.Image | undefined, frame: string): void {
-    if (img && this.hasFrame(frame)) img.setFrame(frame);
+    if (img && this.hasFrame(frame)) img.setFrame(frame, false, false);
   }
 
   /** A design point at rest → the car container's local point. */
