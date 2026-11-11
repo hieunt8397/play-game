@@ -15,6 +15,7 @@ import { Garden } from './garden/Garden';
 import { IceCream } from './ice-cream/IceCream';
 import { PetClinic } from './pet-clinic/PetClinic';
 import { Pizza } from './pizza/Pizza';
+import { Plane } from './plane/Plane';
 import { Race } from './race/Race';
 import { ShadowMatch } from './shadow-match/ShadowMatch';
 import { TouchTalk } from './touch-talk/TouchTalk';
@@ -51,6 +52,8 @@ export const SCENE_CLASSES: Readonly<Partial<Record<GameId, GameSceneClass>>> = 
   garden: Garden,
   // Rửa xe (2026-10-30): a yard game; registering it wakes the yard's car-wash corner.
   'car-wash': CarWash,
+  // Phi công nhí (2026-11-11): a yard game; registering it wakes the yard's plane corner.
+  plane: Plane,
 };
 
 function buildGames(): Partial<Record<GameId, GameEntry>> {

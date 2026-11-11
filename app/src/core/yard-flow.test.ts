@@ -211,6 +211,22 @@ describe('Story 7.1: a yard game mid-round, continuous play', () => {
     expect(session.resumeIds()).toEqual([]);
   });
 
+  it('2026-11-11 (the plane): Home in mid-flight (round:leave + snapshot) keeps the flight; reopening resumes it; a parked plane keeps nothing', () => {
+    const session = new SessionStore();
+    const run: RunningGame = { id: 'plane', level: 0, origin: 'yard' };
+    const partial = { friend: 'cat', gifts: ['red', 'purple'], surprise: 'rainbow' };
+    const snapshot: Snapshot = { v: 1, level: 0, seed: 9, questionIndex: 0, partial };
+    expect(onRoundLeave(run, { gameId: 'plane', snapshot }, false, session)).toEqual({ action: 'fade', gameId: 'plane' });
+    expect(session.resumeIds()).toEqual(['plane']);
+    const data = startData(session)('plane');
+    expect(data).toEqual({ level: 0, seed: 9, resume: snapshot });
+    // (games/plane/flight.test.ts checks that resumeFlight accepts this kept partial: core may not import games/.)
+    expect(data.resume?.partial).toEqual(partial);
+    expect(session.resumeIds()).toEqual([]);
+    expect(onRoundLeave(run, { gameId: 'plane' }, false, session)).toEqual({ action: 'fade', gameId: 'plane' });
+    expect(session.resumeIds()).toEqual([]);
+  });
+
   it('round complete → round:next: the restarted record keeps origin yard, so a later leave or abandon still wakes the yard', () => {
     const session = new SessionStore();
     const saved: Array<[GameId, number]> = [];

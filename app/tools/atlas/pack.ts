@@ -61,6 +61,8 @@ import {
   validateGarden,
   carWashLimits,
   validateCarWash,
+  planeLimits,
+  validatePlane,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
@@ -116,6 +118,8 @@ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayou
   garden: (layout, atlas) => [...validateGarden(layout, gardenLimits(), atlas), ...validateOutfitFrames('garden', atlas)],
   // Rửa xe (2026-10-30): the car hulls, the dirt spots, the hose's tap circle, every frame.
   'car-wash': (layout, atlas) => validateCarWash(layout, carWashLimits(), atlas),
+  // Phi công nhí (2026-11-11): the plane's flight band, the balloons, the friends and houses, every frame.
+  plane: (layout, atlas) => validatePlane(layout, planeLimits(), atlas),
 };
 
 /** PNG zlib level of the shipped background. */

@@ -483,6 +483,40 @@ const ui = {
   /** Rửa xe: the duck rises this far out of the foam; the sneezed bubble floats this far up (design px). */
   carWashDuckRisePx: 34,
   carWashBubbleRisePx: 150,
+  /** Phi công nhí (2026-11-11): a balloon (with its gift) is drawn at least this big (longest side, design px). */
+  planeBalloonMinPx: 90,
+  /** Phi công nhí: the plane catches a balloon whose centre is this close to its own (design px; ≥ planeCatchMinPx: generous). */
+  planeCatchRadiusPx: 100,
+  planeCatchMinPx: 80,
+  /** Phi công nhí: the friend and its house are each drawn at least this big (longest side); their tap areas (and the parked plane's) at least this wide. */
+  planeFriendMinPx: 150,
+  planeHitMinPx: 80,
+  /** Phi công nhí: the plane's centre flies between these heights (design px from the top); balloons come in at the top, the middle and the bottom of this band. */
+  planeTopY: 190,
+  planeBottomY: 440,
+  /** Phi công nhí: the ground scrolls this fast in flight (design px per second); a balloon floats in this fast; the clouds and the bird drift this fast. */
+  planeScrollPxPerS: 200,
+  planeBalloonPxPerS: 250,
+  planeCloudPxPerS: 110,
+  planeBirdPxPerS: 150,
+  /** Phi công nhí: under reduced motion every scroll speed is × this (a slower sky). */
+  planeReducedScroll: 0.6,
+  /** Phi công nhí: after this many misses in a row the next balloon comes in at the plane's own height. */
+  planeHelpAfterMisses: 2,
+  /** Phi công nhí: things enter and leave this far outside the screen (design px). */
+  planeEdgePadPx: 90,
+  /** Phi công nhí: a cloud whose centre is this close to the plane's gives a soft bounce (design px); the plane dips this far. */
+  planeCloudBumpPx: 70,
+  planeBouncePx: 16,
+  /** Phi công nhí: a press this close to a bird's or a cloud's centre makes it react (design px). */
+  planeTapRadiusPx: 64,
+  /** Phi công nhí: the bird crosses again after flying this far past the screen (design px). */
+  planeBirdGapPx: 1100,
+  /** Phi công nhí: the friend's house starts this far past the right edge (its ground pivot; the friend stands to its left), then scrolls in. */
+  planeHousePadPx: 300,
+  /** Phi công nhí: the idle hint at most this many times per step; its bounce (scale). */
+  planeHintMax: 3,
+  planeHintBounce: 1.1,
   /** Story 5.6: a new station landmark (the ice-cream cone, the pizza chimney) is at least this tall (design px; build_map.py). */
   mapLandmarkMinPx: 60,
   /** Story 5.6: the map clouds drift right at this speed (design px per ms; × reducedMotionAmplitude when reduced). */
@@ -852,6 +886,81 @@ const art = {
     drop: colour('#8FD3FF'),
     sparkle: colour('#FFE680'),
     headlight: colour('#FFF6C2'),
+    rainbow1: colour('#FF8FA3'),
+    rainbow2: colour('#FFC26B'),
+    rainbow3: colour('#FFE680'),
+    rainbow4: colour('#9ED97A'),
+    rainbow5: colour('#8FD3FF'),
+    rainbow6: colour('#B9A6FF'),
+  },
+  /**
+   * Phi công nhí (2026-11-11, build_plane.py): the sky plate (top and horizon colours, the sun), the clouds, the
+   * hills, the ground strip and its flowers, the toy plane (body, belly, wings, tail, nose, propeller and its blur,
+   * wheels, the pilot's goggles and scarf), the four balloons and gift boxes (red, yellow, green, purple: a colour and
+   * its shade each), the string and ribbon, the parachute, the pop burst, the six friends' houses (a wall and a roof
+   * each), the bird, the hot-air balloon and the rainbow. The friends use art.animalPens. Never red feedback.
+   */
+  plane: {
+    sky: colour('#8FD3FF'),
+    skyLow: colour('#DDF2FF'),
+    sun: colour('#FFE680'),
+    cloud: colour('#FFFFFF'),
+    cloudShade: colour('#E3F1FB'),
+    hill: colour('#A6DC8C'),
+    hillDark: colour('#86C873'),
+    grass: colour('#8FD46B'),
+    grassDark: colour('#6FBE55'),
+    soil: colour('#C99A6B'),
+    flower: colour('#FFB7CE'),
+    flowerCentre: colour('#FFE680'),
+    body: colour('#FFC94D'),
+    bodyDark: colour('#F2A93B'),
+    belly: colour('#FFF4E2'),
+    wing: colour('#FF9FB5'),
+    wingDark: colour('#F27F9B'),
+    nose: colour('#7FC8F8'),
+    prop: colour('#8E5B43'),
+    propBlur: colour('#EAF6FF'),
+    wheel: colour('#5E4B45'),
+    goggles: colour('#6B4A3A'),
+    gogglesGlass: colour('#BDE6FF'),
+    scarf: colour('#7FC8F8'),
+    balloonRed: colour('#F2616D'),
+    balloonRedDark: colour('#D64656'),
+    balloonYellow: colour('#FFD23F'),
+    balloonYellowDark: colour('#F2B33D'),
+    balloonGreen: colour('#6CCB6F'),
+    balloonGreenDark: colour('#4FAE57'),
+    balloonPurple: colour('#A98BEF'),
+    balloonPurpleDark: colour('#8A6BD6'),
+    string: colour('#FFFFFF'),
+    ribbon: colour('#FFFFFF'),
+    parachute: colour('#FFFFFF'),
+    parachuteStripe: colour('#FFB7CE'),
+    pop: colour('#FFF6C2'),
+    houseCat: colour('#C9B8F2'),
+    houseCatRoof: colour('#8A6BD6'),
+    housePig: colour('#FFC9D6'),
+    housePigRoof: colour('#F27F9B'),
+    houseSheep: colour('#FFF4E2'),
+    houseSheepRoof: colour('#7FC8F8'),
+    houseCow: colour('#E8735F'),
+    houseCowRoof: colour('#8E5B43'),
+    houseHorse: colour('#F4B870'),
+    houseHorseRoof: colour('#6FBE55'),
+    houseRooster: colour('#FFE08A'),
+    houseRoosterRoof: colour('#F2616D'),
+    door: colour('#8E5B43'),
+    window: colour('#BDE6FF'),
+    trim: colour('#FFFFFF'),
+    bird: colour('#7FC8F8'),
+    birdBelly: colour('#FFFFFF'),
+    birdBeak: colour('#FFC26B'),
+    hotAir: colour('#FF9FB5'),
+    hotAirStripe: colour('#FFE680'),
+    basket: colour('#C99A6B'),
+    heart: colour('#FFC9D6'),
+    heartShade: colour('#FFB0C4'),
     rainbow1: colour('#FF8FA3'),
     rainbow2: colour('#FFC26B'),
     rainbow3: colour('#FFE680'),

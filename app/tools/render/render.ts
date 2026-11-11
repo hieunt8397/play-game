@@ -53,6 +53,8 @@ import {
   validateGarden,
   carWashLimits,
   validateCarWash,
+  planeLimits,
+  validatePlane,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
@@ -113,10 +115,12 @@ export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames
   garden: (layout, frames) => validateGarden(layout, gardenLimits(), frames),
   // Rửa xe (2026-10-30): the car hulls and their dirt spots, the hose's tap circle, every car and dirt frame.
   'car-wash': (layout, frames) => validateCarWash(layout, carWashLimits(), frames),
+  // Phi công nhí (2026-11-11): the plane at every height of its flight, the balloons, the friends and their houses.
+  plane: (layout, frames) => validatePlane(layout, planeLimits(), frames),
 };
 
 /** Story 3.3: screens whose render-time rules get the rendered frames' trims. */
-export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash']);
+export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash', 'plane']);
 
 /** Per-screen toLayout options: hit ids kept `stationGap` apart (map), unpadded drop areas (ice-cream, the dino lawn). */
 export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'separate' | 'unpadded'>>> = {

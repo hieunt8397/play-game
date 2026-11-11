@@ -437,6 +437,41 @@ export const Timing = {
   carWashTapMs: 600,
   /** Rửa xe: one controller tick covers at most this long (a stalled frame never skips a step's end). */
   carWashMaxTickMs: 250,
+  /** Phi công nhí (2026-11-11): the take-off (the plane climbs from the grass to the middle height; longer than 1.5 s: a tap skips it). */
+  planeTakeOffMs: 1800,
+  /** Phi công nhí: the fly-off (the wings waggle, the house scrolls away; longer than 1.5 s: a tap skips it). */
+  planeFlyOffMs: 1800,
+  /** Phi công nhí (spec): a take-off or fly-off longer than this can be skipped with a tap. */
+  planeSkipOverMs: 1500,
+  /** Phi công nhí: the plane covers about two thirds of the way to its target height in this long (an exponential ease). */
+  planeGlideMs: 260,
+  /** Phi công nhí: after a balloon is caught or has left, the next one starts this much later. */
+  planeBalloonGapMs: 700,
+  /** Phi công nhí: the pilot's cheer after a catch (the happy frame). */
+  planeCatchMs: 600,
+  /** Phi công nhí: after this long without steering, the next balloon comes in at the plane's own height. */
+  planeHelpIdleMs: 6000,
+  /** Phi công nhí: the house scrolls in and the sky eases to a stop within this long. */
+  planeApproachMaxMs: 3500,
+  /** Phi công nhí: one gift floats down on its parachute (≤ 1.5 s); the next one starts this much later; taps ignored. */
+  planeDropMs: 1200,
+  planeDropStaggerMs: 350,
+  /** Phi công nhí: the friend's happy move and call once its gifts have landed. */
+  planeHappyMs: 1500,
+  /** Phi công nhí: a surprise passes (the rainbow, the flock, the hot-air balloon, the heart cloud); no balloon comes meanwhile. */
+  planeSurpriseMs: 2600,
+  /** Phi công nhí: the flying propeller swaps its two soft blur frames this often (a small low-contrast blur, not a flash). */
+  planePropFrameMs: 180,
+  /** Phi công nhí: a flying bird flaps (swaps its two frames) this often (under 3 Hz). */
+  planeFlapMs: 380,
+  /** Phi công nhí: a bumped or tapped cloud's puff, a tapped bird's loop, the plane's soft bounce. */
+  planeBumpMs: 500,
+  /** Phi công nhí: after this long idle the next thing to touch bounces and its line plays (≤ ui.planeHintMax per step). */
+  planeIdleHintMs: 8000,
+  /** Phi công nhí: the hint bounce. */
+  planeTapMs: 600,
+  /** Phi công nhí: one controller tick covers at most this long (a stalled frame never skips a step's end). */
+  planeMaxTickMs: 250,
 } as const;
 
 export type TimingTable = typeof Timing;

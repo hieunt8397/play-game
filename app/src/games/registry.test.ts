@@ -55,6 +55,7 @@ const { PetClinic } = await import('./pet-clinic/PetClinic');
 const { DressUp } = await import('./dress-up/DressUp');
 const { Garden } = await import('./garden/Garden');
 const { CarWash } = await import('./car-wash/CarWash');
+const { Plane } = await import('./plane/Plane');
 const { isIslandGameId } = await import('../content/types');
 const { Fishing } = await import('./fishing/Fishing');
 const { TouchTalk } = await import('./touch-talk/TouchTalk');
@@ -174,7 +175,7 @@ describe('games/registry', () => {
       expect((scene as unknown as { sys: { settings: { key: string } } }).sys.settings.key).toBe(id);
       expect(entry!.ladder).toBe(GAME_CONTENT[id as keyof typeof GAME_CONTENT]!.ladder);
     }
-    expect(GAME_SCENES).toEqual([IceCream, Pizza, Race, Fishing, TouchTalk, DinoPuzzle, ShadowMatch, AnimalPens, Band, Bedtime, PetClinic, DressUp, Garden, CarWash]);
+    expect(GAME_SCENES).toEqual([IceCream, Pizza, Race, Fishing, TouchTalk, DinoPuzzle, ShadowMatch, AnimalPens, Band, Bedtime, PetClinic, DressUp, Garden, CarWash, Plane]);
   });
 
   it('awake stations are exactly the registered island games', () => {
@@ -194,6 +195,8 @@ describe('games/registry', () => {
     expect(isIslandGameId('garden')).toBe(false);
     expect(isGameId('car-wash')).toBe(true);
     expect(isIslandGameId('car-wash')).toBe(false);
+    expect(isGameId('plane')).toBe(true);
+    expect(isIslandGameId('plane')).toBe(false);
     expect(STATIONS.find((s) => s.id === 'home')?.awake).toBe(true);
     expect(isGameId('home')).toBe(false);
     expect(isGameId('ice-cream')).toBe(true);

@@ -10,19 +10,22 @@
 # One plate, 2048×1536: a soft lawn (the picnic lawn's palette), Xoài's house front (Tiny Treats Homely House
 # `house`) at the back centre with its doormat and a picket fence (Homely House fences) to both
 # sides, trees and bushes behind the fence, a gradient sky with clouds. The backdrop is hazed (as in Chạm là nói)
-# so the corners pop. Six big corner props, each its own `sprite.<corner>` (idle at frame 1; the runtime bounce
+# so the corners pop. Eight big corner props (2026-11-11: four in the back row, four in the front row), each its own `sprite.<corner>` (idle at frame 1; the runtime bounce
 # is a scale motion around the ground pivot), with `hit.<corner>` (convex hull of its meshes) and
 # `anchor.<corner>` (its ground pivot) in the hidden `layout` collection:
-#   - pen: a Homely House fence pen with a real Quaternius cow (Cow.fbx, its Idle pose) peeking over the front;
-#   - stage: a round wooden stage with a pink curtain arch and a big drum with sticks (script-built, cute.py);
+#   - pen (back row, far left): a Homely House fence pen with a real Quaternius cow (Cow.fbx, its Idle pose) peeking over the front;
+#   - stage (back row, in front of the door): a round wooden stage with a pink curtain arch and a big drum with sticks (script-built, cute.py);
 #   - bed: the KayKit Furniture single bed with an extra pillow (front row);
 #   - clinic: a big white vet box with a red cross and a handle (script-built, front row);
-#   - wardrobe (back row, right): a lilac wardrobe with two doors, knobs, a crown top and a shirt on its side hook (script-built);
+#   - wardrobe (back row, third): a lilac wardrobe with two doors, knobs, a crown top and a shirt on its side hook (script-built);
 #   - garden (Trồng cây, 2026-10-30; front row, between clinic and bed): a wooden raised bed of dark soil with a strawberry
 #     plant, a staked tomato plant and a seedling, a sign stake with a strawberry, and a light-blue watering can beside it
 #     (script-built; colours from art.garden);
 #   - car-wash (Rửa xe, 2026-10-30; front row, far right): a pink arch with a bubble sign and a blue roller brush over the
-#     Kenney Car Kit taxi (CC0), foam on its roof and side (colours from art.carWash).
+#     Kenney Car Kit taxi (CC0), foam on its roof and side (colours from art.carWash);
+#   - plane (Phi công nhí, 2026-11-11; back row, far right, a step nearer and under the Speaker zone): a round yellow toy
+#     propeller plane parked on the grass, nose up — cream belly, pink wings and tail, a blue nose with brown blades, a
+#     glass canopy, small wheels — with a red and a purple balloon tied to its tail (script-built; colours from art.plane).
 # Each prop is fitted into its CORNER_BOXES box (design px; bottom edge = its ground line) by unprojecting
 # through the camera, so the layout is exactly what tools/layout/rules.ts › validateHome checks (hulls inside
 # the interactive rect, clear of the Home/Speaker zones, ≥ targetGap apart, each frame ≥ 150 px).
@@ -74,13 +77,15 @@ SKY_EMISSION = 1.1
 CLOUDS = [(-30.0, 120.0, 20.0, 5.0), (-4.0, 130.0, 25.0, 4.2), (28.0, 120.0, 21.0, 5.5)]
 
 # --- the corners: design-px boxes (x0, y0, x1, y1), y1 = the ground line; the prop fills the box ---------------
-# Back row: pen, stage, wardrobe (tall and narrow, left of the Speaker zone); front row (2026-10-30: four corners, each a
-# little smaller): clinic, garden, bed, car-wash. Padded by hitPad (24) each hull stays inside the
+# Back row (2026-11-11: four corners, each a little smaller): pen, stage, wardrobe (tall and narrow), plane (far right: its
+# whole box lies below the Speaker zone, y ≥ 257 + hitPad, and its ground line a step nearer than the others'); front row
+# (2026-10-30: four corners): clinic, garden, bed, car-wash. Padded by hitPad (24) each hull stays inside the
 # interactive rect (x 24…1000, y 66…694), off the Home/Speaker zones (top corners) and ≥ targetGap (24) apart.
 CORNER_BOXES = {
-    'pen': (60, 225, 320, 395),
-    'stage': (388, 190, 640, 395),
-    'wardrobe': (712, 180, 870, 395),  # its hull stays left of the Speaker zone (x ≥ 900)
+    'pen': (50, 235, 284, 395),
+    'stage': (358, 200, 528, 395),
+    'wardrobe': (602, 195, 726, 395),
+    'plane': (796, 284, 976, 432),  # under the Speaker zone (y ≤ 257): top ≥ 257 + hitPad; ≥ 72 px from the bed and the car-wash
     'clinic': (50, 496, 222, 664),
     'garden': (296, 490, 500, 664),
     'bed': (574, 476, 740, 664),
@@ -88,9 +93,12 @@ CORNER_BOXES = {
 }
 PLACE_PASSES = 6
 # Yaw (degrees) of each prop's root (0 = its front toward the camera).
-CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0, 'garden': 8.0, 'car-wash': -10.0}
+CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0, 'garden': 8.0, 'car-wash': -10.0, 'plane': -152.0}
 # Rửa xe corner: the Kenney Car Kit taxi (CC0) under the arch.
 CAR_WASH_CAR = os.path.join('kenney', 'kenney_car-kit', 'Models', 'GLB format', 'taxi.glb')
+
+# Phi công nhí corner: the parked plane's nose-up tilt (degrees).
+PLANE_TILT = 13.0
 
 # The pen: a fence rectangle (modules) and the cow inside, its head over the front rail.
 PEN_W = 3.0  # x extent (m)
@@ -635,7 +643,60 @@ def build_car_wash(root, coll, c):
         blob(f'cw-foam-{j}', foam if j % 3 else shade, coll, root, (x, y, z), (r, r * 0.9, r * 0.85), seg=(24, 12))
 
 
-BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe, 'garden': build_garden, 'car-wash': build_car_wash}
+def build_plane(root, coll, c):
+    """A round toy propeller plane parked on the grass (its nose along +x, tilted up; the corner's yaw turns it to a
+    three-quarter view): yellow body, cream belly, pink wings and tail, a blue nose with brown blades, a glass canopy,
+    two main wheels and a tail wheel, and a red and a purple balloon tied to its tail."""
+    p = c['plane']
+    body, body_dark, belly = mat(p['body'], 0.3), mat(p['bodyDark'], 0.35), mat(p['belly'], 0.4)
+    wing, wing_dark = mat(p['wing'], 0.35), mat(p['wingDark'], 0.35)
+    nose, prop, tyre = mat(p['nose'], 0.3), mat(p['prop'], 0.45), mat(p['wheel'], 0.55)
+    hull = add_empty('plane-hull', (0.0, 0.0, 1.0), coll)
+    hull.parent = root
+    hull.rotation_euler = (0.0, math.radians(-PLANE_TILT), 0.0)
+
+    def fuselage(d):  # slimmer toward the tail (−x)
+        t = max(0.0, -d.x)
+        k = 1.0 - 0.55 * t * t
+        return Vector((d.x, d.y * k, d.z * k + 0.1 * t * t))
+
+    blob('plane-body', body, coll, hull, (0.0, 0.0, 0.0), (1.35, 0.72, 0.7), shape=fuselage)
+    blob('plane-belly', belly, coll, hull, (0.12, 0.0, -0.2), (1.02, 0.63, 0.52))
+    blob('plane-nose', nose, coll, hull, (1.08, 0.0, 0.0), (0.4, 0.5, 0.5))
+    blob('plane-spinner', prop, coll, hull, (1.5, 0.0, 0.0), (0.17, 0.15, 0.15), seg=(24, 12))
+    for k, a in enumerate((25.0, 205.0)):
+        r = math.radians(a)
+        blob(f'plane-blade-{k}', prop, coll, hull, (1.52, -math.sin(r) * 0.36, math.cos(r) * 0.36), (0.045, 0.13, 0.4), (a, 0.0, 0.0), seg=(24, 12))
+    blob('plane-wing', wing, coll, hull, (0.22, 0.0, -0.2), (0.46, 1.62, 0.1))
+    for sy in (-1, 1):
+        blob(f'plane-wing-tip-{sy}', wing_dark, coll, hull, (0.22, sy * 1.42, -0.2), (0.34, 0.24, 0.115), seg=(24, 12))
+    blob('plane-tailplane', wing, coll, hull, (-1.14, 0.0, 0.12), (0.25, 0.62, 0.07), seg=(24, 12))
+    blob('plane-fin', wing_dark, coll, hull, (-1.16, 0.0, 0.42), (0.3, 0.07, 0.36), (0.0, 18.0, 0.0), seg=(24, 12))
+    blob('plane-canopy', mat(p['gogglesGlass'], 0.12), coll, hull, (0.3, 0.0, 0.56), (0.42, 0.4, 0.3))
+    torus('plane-canopy-rim', 0.36, 0.045, body_dark, coll, hull, (0.3, 0.0, 0.52), (0.0, 0.0, 0.0))
+    # the wheels stand on the ground (the root's frame): two under the wing, one under the tail
+    for sy in (-1, 1):
+        rod(f'plane-strut-{sy}', (0.45, sy * 0.48, 0.8), (0.52, sy * 0.62, 0.26), 0.055, body_dark, coll, root)
+        torus(f'plane-wheel-{sy}', 0.15, 0.1, tyre, coll, root, (0.52, sy * 0.66, 0.25), (90.0, 0.0, 0.0))
+        blob(f'plane-hub-{sy}', belly, coll, root, (0.52, sy * 0.72, 0.25), (0.1, 0.07, 0.1), seg=(16, 8))
+    tail = Vector((-1.15 * math.cos(math.radians(PLANE_TILT)), 0.0, 1.0 - 1.15 * math.sin(math.radians(PLANE_TILT))))
+    rod('plane-tail-strut', (tail.x, 0.0, tail.z - 0.05), (tail.x - 0.05, 0.0, 0.14), 0.045, body_dark, coll, root)
+    blob('plane-tail-wheel', tyre, coll, root, (tail.x - 0.05, 0.0, 0.11), (0.11, 0.08, 0.11), seg=(16, 8))
+
+    def balloon(d):  # a little narrower toward the knot (−z)
+        k = 0.8 + 0.2 * (d.z + 1) / 2
+        return Vector((d.x * k, d.y * k, d.z))
+
+    string, shine = mat(p['string'], 0.6), mat(p['cloud'], 0.2)
+    knot = (tail.x - 0.1, 0.0, tail.z + 0.5)
+    for name, colour, (x, y, z), r in (('red', p['balloonRed'], (-1.9, 0.12, 2.15), 0.4), ('purple', p['balloonPurple'], (-1.15, -0.12, 2.38), 0.36)):
+        rod(f'plane-string-{name}', knot, (x, y, z - r * 1.2), 0.02, string, coll, root, seg=8)
+        blob(f'plane-balloon-{name}', mat(colour, 0.22), coll, root, (x, y, z), (r, r, r * 1.18), shape=balloon)
+        blob(f'plane-balloon-knot-{name}', mat(colour, 0.22), coll, root, (x, y, z - r * 1.2), (0.07, 0.07, 0.06), seg=(12, 6))
+        blob(f'plane-balloon-shine-{name}', shine, coll, root, (x + r * 0.42, y + r * 0.62, z + r * 0.45), (r * 0.12, r * 0.14, r * 0.24), (0.0, 0.0, 0.0), seg=(12, 6))
+
+
+BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe, 'garden': build_garden, 'car-wash': build_car_wash, 'plane': build_plane}
 
 
 def place_in_box(scene, screen, root, meshes, box):
@@ -657,7 +718,7 @@ def place_in_box(scene, screen, root, meshes, box):
 
 
 def build_corner(scene, screen, cid, params, sprites, layout):
-    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden'], 'carWash': params['art']['carWash']}
+    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden'], 'carWash': params['art']['carWash'], 'plane': params['art']['plane']}
     coll = bpy.data.collections.new(f'sprite.{cid}')
     sprites.children.link(coll)
     root = add_empty(f'{cid}-root', (0.0, 0.0, 0.0), coll)

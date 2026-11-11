@@ -91,6 +91,7 @@ export const VOICE_LINES = [
   { id: 'vo.shell.corner-name.wardrobe', text: 'Tủ đồ' },
   { id: 'vo.shell.corner-name.garden', text: 'Vườn' },
   { id: 'vo.shell.corner-name.car-wash', text: 'Rửa xe' },
+  { id: 'vo.shell.corner-name.plane', text: 'Máy bay' },
   // Tiệm kem (Story 1.8; 5.2): the single-flavour ask names Xoài — "Xoài ơi, kem … nào!" (+ its colour word: hồng, trắng, xanh); the
   // retry after a wrong scoop. "sô-cô-la" counts as 3 words, so its lines carry no colour word.
   // Played only through core/hint-director. Not yet approved.
@@ -437,6 +438,24 @@ export const VOICE_LINES = [
   { id: 'vo.car-wash.name.garbage-truck', text: 'Xe rác!' },
   { id: 'vo.car-wash.name.tractor', text: 'Máy cày!' },
   { id: 'vo.car-wash.parent.1', text: 'Mời bố mẹ | cùng rửa xe nhé!', keywordPauseMs: 300 },
+  // Phi công nhí (2026-11-11): the invitation while the plane waits on the grass (it names Xoài; also the idle hint and
+  // the Speaker prompt there), "touch the balloons" (after take-off; the idle hint and the Speaker prompt in the air),
+  // the colour named as a balloon pops (the count reuses vo.pizza.count.1–3), each friend's "drop the gifts" line (as
+  // its house arrives; the idle hint and the Speaker prompt there) and the parent invitation. Naming only: never a
+  // question, no praise. Not yet approved.
+  { id: 'vo.plane.prompt', text: 'Xoài ơi, | mình lái máy bay nào!', keywordPauseMs: 300 },
+  { id: 'vo.plane.balloons', text: 'Chạm vào bóng bay nhé!' },
+  { id: 'vo.plane.colour.red', text: 'Bóng đỏ!' },
+  { id: 'vo.plane.colour.yellow', text: 'Bóng vàng!' },
+  { id: 'vo.plane.colour.green', text: 'Bóng xanh lá!' },
+  { id: 'vo.plane.colour.purple', text: 'Bóng tím!' },
+  { id: 'vo.plane.drop.cat', text: 'Thả quà cho bạn mèo nhé!' },
+  { id: 'vo.plane.drop.pig', text: 'Thả quà cho bạn lợn nhé!' },
+  { id: 'vo.plane.drop.sheep', text: 'Thả quà cho bạn cừu nhé!' },
+  { id: 'vo.plane.drop.cow', text: 'Thả quà cho bạn bò nhé!' },
+  { id: 'vo.plane.drop.horse', text: 'Thả quà cho bạn ngựa nhé!' },
+  { id: 'vo.plane.drop.rooster', text: 'Thả quà cho bạn gà nhé!' },
+  { id: 'vo.plane.parent.1', text: 'Mời bố mẹ | cùng lái máy bay nhé!', keywordPauseMs: 300 },
 ] as const satisfies readonly VoiceLine[];
 
 export type VoiceLineId = (typeof VOICE_LINES)[number]['id'];

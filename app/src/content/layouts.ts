@@ -15,6 +15,7 @@ import petClinicLayout from './generated/pet-clinic.layout.json';
 import dressUpLayout from './generated/dress-up.layout.json';
 import gardenLayout from './generated/garden.layout.json';
 import carWashLayout from './generated/car-wash.layout.json';
+import planeLayout from './generated/plane.layout.json';
 import type { ScreenId } from './assets.ts';
 import type { ScreenLayout } from './layout-types.ts';
 
@@ -35,4 +36,5 @@ export const LAYOUTS: Readonly<Record<ScreenId, ScreenLayout>> = {
   'dress-up': dressUpLayout as ScreenLayout,
   garden: gardenLayout as ScreenLayout,
   'car-wash': carWashLayout as ScreenLayout,
+  plane: planeLayout as ScreenLayout,
 };

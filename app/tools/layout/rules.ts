@@ -45,6 +45,23 @@ import {
   dirtFrame as carWashDirtFrame,
   hitRadius as carWashHitRadius,
 } from '../../src/content/games/car-wash.ts';
+import {
+  ALL_PLANE_FRAMES,
+  ANCHORS as PLANE_ANCHORS,
+  COLOUR_IDS as PLANE_COLOURS,
+  FRIEND_IDS as PLANE_FRIENDS,
+  FRIEND_STATES as PLANE_FRIEND_STATES,
+  GIFTS_PER_FLIGHT as PLANE_GIFTS,
+  PLANE_FRAMES,
+  PLANE_SCREEN,
+  balloonFrame as planeBalloonFrame,
+  cargoAnchor as planeCargoAnchor,
+  friendFrame as planeFriendFrame,
+  friendHit as planeFriendHit,
+  houseFrame as planeHouseFrame,
+  houseHit as planeHouseHit,
+  laneYs as planeLaneYs,
+} from '../../src/content/games/plane.ts';
 import { DOOR_ANCHOR, PATIENT_ANCHOR, PATIENT_HIT, PATIENT_IDS, PET_CLINIC_SCREEN, TOOL_IDS, patientFrames, toolFrame, toolHitRadius } from '../../src/content/games/pet-clinic.ts';
 
 export interface LayoutLimits {
@@ -2498,6 +2515,171 @@ export function validateCarWash(layout: ScreenLayout, input: CarWashRuleInput, a
     for (const h of hulls) {
       const d = circleToPolygon(c, cr, h.poly);
       if (d < input.gap) problems.push(`"${id}" and hit "${h.id}": ${round2(d)} px apart (min ${input.gap})`);
+    }
+  }
+  return problems;
+}
+
+// --- Phi công nhí (2026-11-11) -----------------------------------------------------------------------------------------
+
+export interface PlaneRuleInput {
+  ids: ScreenIds;
+  /** Every plane frame (drawn with the plane's centre on `anchor.plane`, moved up and down in flight). */
+  planeFrames: readonly string[];
+  /** `plane/idle/00`: the parked plane; its tap area is its drawn rect (with its centre on `anchor.plane-ground`). */
+  parkedFrame: string;
+  /** `anchor.plane` (the flying plane's centre) and `anchor.plane-ground` (its centre while parked). */
+  planeAnchor: string;
+  groundAnchor: string;
+  /** `anchor.cargo-<n>`: where the gifts ride (on the plane). */
+  cargoAnchors: readonly string[];
+  /** `anchor.gifts`: where the dropped gifts land. */
+  giftsAnchor: string;
+  balloonFrames: readonly string[];
+  /** Per friend: its hull and its house's hull, and their frames (drawn where rendered). */
+  friends: readonly { readonly hits: readonly string[]; readonly frames: readonly string[] }[];
+  limits: LayoutLimits;
+  /** ui.planeTopY / ui.planeBottomY: the plane's centre flies between these heights. */
+  topY: number;
+  bottomY: number;
+  /** The heights balloons come in at (content/games/plane.ts › laneYs). */
+  lanes: readonly number[];
+  /** ui.planeBalloonMinPx: a balloon frame's longest side. */
+  balloonMinPx: number;
+  /** ui.planeCatchRadiusPx and its floor ui.planeCatchMinPx. */
+  catchRadius: number;
+  catchMinPx: number;
+  /** ui.planeFriendMinPx: a friend's and a house's longest side. */
+  friendMinPx: number;
+  /** ui.planeHitMinPx: a friend's and a house's hull, and the parked plane's drawn rect, are at least this wide. */
+  hitMinPx: number;
+  /** spacing.targetGap: the flying plane stays this far from every friend and house. */
+  gap: number;
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  renderScale: number;
+  design: { width: number; height: number };
+}
+
+/** The plane's two anchors share their x within this (design px; an orthographic camera). */
+const PLANE_X_TOLERANCE = 1;
+
+/** The plane rules from Tokens and content (spec-phi-cong-nhi). */
+export function planeLimits(ids: ScreenIds = PLANE_SCREEN): PlaneRuleInput {
+  const u = Tokens.ui;
+  return {
+    ids,
+    planeFrames: ALL_PLANE_FRAMES,
+    parkedFrame: PLANE_FRAMES.idle,
+    planeAnchor: PLANE_ANCHORS.plane,
+    groundAnchor: PLANE_ANCHORS.ground,
+    cargoAnchors: Array.from({ length: PLANE_GIFTS }, (_, n) => planeCargoAnchor(n)),
+    giftsAnchor: PLANE_ANCHORS.gifts,
+    balloonFrames: PLANE_COLOURS.map(planeBalloonFrame),
+    friends: PLANE_FRIENDS.map((f) => ({ hits: [planeFriendHit(f), planeHouseHit(f)], frames: [...PLANE_FRIEND_STATES.map((s) => planeFriendFrame(f, s)), planeHouseFrame(f)] })),
+    limits: layoutLimits(),
+    topY: u.planeTopY,
+    bottomY: u.planeBottomY,
+    lanes: planeLaneYs(u.planeTopY, u.planeBottomY),
+    balloonMinPx: u.planeBalloonMinPx,
+    catchRadius: u.planeCatchRadiusPx,
+    catchMinPx: u.planeCatchMinPx,
+    friendMinPx: u.planeFriendMinPx,
+    hitMinPx: u.planeHitMinPx,
+    gap: Tokens.spacing.targetGap,
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    renderScale: RENDER_SCALE,
+    design: { width: Tokens.design.width, height: Tokens.design.height },
+  };
+}
+
+/**
+ * Phi công nhí screen rules (spec-phi-cong-nhi; run by `render`, `atlas` and `validate:content`). Each message names the id.
+ *   - required: every hit (≥ 3 points) and anchor; with the atlas, every frame;
+ *   - the catch radius is at least catchMinPx; every anchor lies on the design rect; `anchor.plane` and
+ *     `anchor.plane-ground` share one x (the plane's x never changes); `anchor.gifts` lies inside the interactive rect;
+ *   - each friend's and each house's hull is at least hitMinPx wide, inside the interactive rect and clear of the
+ *     Home/Speaker zones;
+ *   - (atlas) every plane frame, with the plane's centre at the top and at the bottom of its band and parked, lies
+ *     inside the interactive rect and clear of the Home/Speaker zones, and (in the air) ≥ gap from every friend and
+ *     house hull; the parked plane's drawn rect (its tap area) is ≥ hitMinPx wide and tall; each cargo
+ *     anchor lies on the plane; each balloon frame is drawn ≥ balloonMinPx and stays between the rect's top and bottom
+ *     at every lane; each friend and house frame is drawn ≥ friendMinPx, inside the rect and off the zones.
+ */
+export function validatePlane(layout: ScreenLayout, input: PlaneRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const rectOut = (at: Rect): boolean => at.x < r.x0 || at.y < r.y0 || at.x + at.w > r.x1 || at.y + at.h > r.y1;
+  const rectText = `x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`;
+  if (input.catchRadius < input.catchMinPx) problems.push(`the catch radius ${input.catchRadius} px is under ${input.catchMinPx}`);
+  for (const id of input.ids.anchors) {
+    const a = layout.anchors[id];
+    if (a && (a.x < 0 || a.y < 0 || a.x > input.design.width || a.y > input.design.height)) problems.push(`anchor "${id}": ${fmt(a)} is off the screen`);
+  }
+  const plane = layout.anchors[input.planeAnchor];
+  const ground = layout.anchors[input.groundAnchor];
+  if (plane && ground && Math.abs(plane.x - ground.x) > PLANE_X_TOLERANCE) problems.push(`anchors "${input.planeAnchor}" and "${input.groundAnchor}": x ${round2(plane.x)} and ${round2(ground.x)} differ (the plane's x never changes)`);
+  const gifts = layout.anchors[input.giftsAnchor];
+  if (gifts && !inRect(gifts, r)) problems.push(`anchor "${input.giftsAnchor}": ${fmt(gifts)} leaves the interactive rect ${rectText}`);
+  const hulls: { id: string; poly: readonly Point[] }[] = [];
+  for (const friend of input.friends) {
+    for (const id of friend.hits) {
+      const hull = layout.hits[id];
+      if (!hull || hull.length < MIN_HIT_POINTS) continue;
+      hulls.push({ id, poly: hull });
+      const w = minWidth(hull);
+      if (w < input.hitMinPx) problems.push(`hit "${id}": ${round2(w)} px wide (min ${input.hitMinPx})`);
+      const out = hull.find((p) => !inRect(p, r));
+      if (out) problems.push(`hit "${id}": ${fmt(out)} leaves the interactive rect ${rectText}`);
+      for (const k of input.keepOut) if (polygonDistance(hull, rectPolygon4(k.rect)) === 0) problems.push(`hit "${id}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+    }
+  }
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "plane": frame "${f}" is missing`);
+  if (plane && ground) {
+    const spots: readonly { name: string; dy: number; air: boolean }[] = [
+      { name: 'at the top of its band', dy: input.topY - plane.y, air: true },
+      { name: 'at the bottom of its band', dy: input.bottomY - plane.y, air: true },
+      { name: 'parked', dy: ground.y - plane.y, air: false },
+    ];
+    for (const f of input.planeFrames) {
+      const base = designRect(atlas, f, input.renderScale);
+      if (!base) continue;
+      for (const s of spots) {
+        const at = { ...base, y: base.y + s.dy };
+        if (rectOut(at)) problems.push(`frame "${f}" ${s.name} ${fmtRect(at)} leaves the interactive rect ${rectText}`);
+        for (const k of input.keepOut) if (overlaps(at, k.rect)) problems.push(`frame "${f}" ${s.name} ${fmtRect(at)}: reaches into the ${k.id} ${fmtRect(k.rect)}`);
+        if (!s.air) continue;
+        for (const h of hulls) {
+          const d = polygonDistance(rectPolygon4(at), h.poly);
+          if (d < input.gap) problems.push(`frame "${f}" ${s.name} and hit "${h.id}": ${round2(d)} px apart (min ${input.gap})`);
+        }
+      }
+    }
+    const parked = designRect(atlas, input.parkedFrame, input.renderScale);
+    if (parked) {
+      const narrow = Math.min(parked.w, parked.h);
+      if (narrow < input.hitMinPx) problems.push(`frame "${input.parkedFrame}": its tap area is ${round2(narrow)} px on its short side (min ${input.hitMinPx})`);
+      for (const cargo of input.cargoAnchors) {
+        const a = layout.anchors[cargo];
+        if (a && (a.x < parked.x || a.y < parked.y || a.x > parked.x + parked.w || a.y > parked.y + parked.h)) problems.push(`anchor "${cargo}": ${fmt(a)} is not on the plane ${fmtRect(parked)}`);
+      }
+    }
+  }
+  for (const f of input.balloonFrames) {
+    const t = trimmedSize(atlas, f);
+    if (!t) continue;
+    const h = t.h / input.renderScale;
+    const longest = Math.max(t.w, t.h) / input.renderScale;
+    if (longest < input.balloonMinPx) problems.push(`frame "${f}": longest side ${round2(longest)} is under ${input.balloonMinPx}`);
+    for (const y of input.lanes) if (y - h / 2 < r.y0 || y + h / 2 > r.y1) problems.push(`frame "${f}" at height ${round2(y)}: ${round2(h)} px tall, it leaves the interactive rect y∈[${r.y0},${r.y1}]`);
+  }
+  for (const friend of input.friends) {
+    for (const f of friend.frames) {
+      const at = designRect(atlas, f, input.renderScale);
+      if (!at) continue;
+      if (Math.max(at.w, at.h) < input.friendMinPx) problems.push(`frame "${f}": longest side ${round2(Math.max(at.w, at.h))} is under ${input.friendMinPx}`);
+      if (rectOut(at)) problems.push(`frame "${f}" ${fmtRect(at)} leaves the interactive rect ${rectText}`);
+      for (const k of input.keepOut) if (overlaps(at, k.rect)) problems.push(`frame "${f}" ${fmtRect(at)}: reaches into the ${k.id} ${fmtRect(k.rect)}`);
     }
   }
   return problems;

@@ -86,6 +86,8 @@ describe('art:build', () => {
       garden: expect.any(Object),
       // Rửa xe (2026-10-30): checked on its own below.
       carWash: expect.any(Object),
+      // Phi công nhí (2026-11-11): checked on its own below.
+      plane: expect.any(Object),
       map: {
         road: '#EE9F68',
         roadEdge: '#FFFFFF',
@@ -142,6 +144,23 @@ describe('art:build', () => {
       hoseMinPx: 90,
       hitMinPx: 80,
       gapPx: Tokens.spacing.targetGap,
+    });
+  });
+
+  it('Phi công nhí (2026-11-11): the plane builder gets art.plane, the friends, colours, surprises and the sizes', () => {
+    const p = buildParams();
+    expect(Object.keys(p.art.plane)).toEqual(Object.keys(Tokens.art.plane));
+    expect(p.art.plane.body).toBe(Tokens.art.plane.body.css);
+    expect(p.plane).toEqual({
+      friends: ['cat', 'pig', 'sheep', 'cow', 'horse', 'rooster'],
+      colours: ['red', 'yellow', 'green', 'purple'],
+      surprises: ['rainbow', 'flock', 'hot-air', 'heart'],
+      gifts: 3,
+      balloonMinPx: 90,
+      friendMinPx: 150,
+      hitMinPx: 80,
+      topY: Tokens.ui.planeTopY,
+      bottomY: Tokens.ui.planeBottomY,
     });
   });
 

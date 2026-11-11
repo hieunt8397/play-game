@@ -168,6 +168,9 @@ export const AUDIO_IDS = [
   'sfx.car-wash.fire-siren',
   'sfx.car-wash.ambulance-siren',
   'sfx.car-wash.honk-low',
+  'sfx.plane.propeller',
+  'sfx.plane.whoosh',
+  'sfx.plane.boing',
 ] as const;
 
 export type AudioId = (typeof AUDIO_IDS)[number];
@@ -439,6 +442,10 @@ export const AUDIO_CATALOG: Record<AudioId, AudioEntry> = {
   'sfx.car-wash.fire-siren': { path: 'assets/audio/sfx/sfx.car-wash.fire-siren.m4a', kind: 'sfx' },
   'sfx.car-wash.ambulance-siren': { path: 'assets/audio/sfx/sfx.car-wash.ambulance-siren.m4a', kind: 'sfx' },
   'sfx.car-wash.honk-low': { path: 'assets/audio/sfx/sfx.car-wash.honk-low.m4a', kind: 'sfx' },
+  /** Phi công nhí (2026-11-11): our own ffmpeg recipes (tools/audio/make-plane.ts): ≤ 0.8 s, a 50 ms fade-in, nothing below 150 Hz, quiet. The toy propeller starting up (a soft purr that rises); the whoosh as the plane flies on; the soft "boing" of a cloud the plane bumps. Load with the game. */
+  'sfx.plane.propeller': { path: 'assets/audio/sfx/sfx.plane.propeller.m4a', kind: 'sfx' },
+  'sfx.plane.whoosh': { path: 'assets/audio/sfx/sfx.plane.whoosh.m4a', kind: 'sfx' },
+  'sfx.plane.boing': { path: 'assets/audio/sfx/sfx.plane.boing.m4a', kind: 'sfx' },
   /** Island background loop, mastered to −30 LUFS (EXPERIENCE › Âm thanh: music ≤ −30 LUFS). */
   'music.island': { path: 'assets/audio/music/music.island.m4a', kind: 'music', loop: true },
 };

@@ -12,6 +12,7 @@ import * as garden from './garden.ts';
 import * as iceCream from './ice-cream.ts';
 import * as petClinic from './pet-clinic.ts';
 import * as pizza from './pizza.ts';
+import * as plane from './plane.ts';
 import * as race from './race.ts';
 import * as shadowMatch from './shadow-match.ts';
 import * as touchTalk from './touch-talk.ts';
@@ -40,4 +41,6 @@ export const GAME_CONTENT: Readonly<Partial<Record<GameId, GameContent>>> = {
   garden: { assets: garden.assets, screen: garden.screen },
   // Rửa xe (2026-10-30): a yard game (no station, no ladder); registering it wakes the yard's car-wash corner.
   'car-wash': { assets: carWash.assets, screen: carWash.screen },
+  // Phi công nhí (2026-11-11): a yard game (no station, no ladder); registering it wakes the yard's plane corner.
+  plane: { assets: plane.assets, screen: plane.screen },
 };

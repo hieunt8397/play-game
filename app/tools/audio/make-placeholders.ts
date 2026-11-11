@@ -14,6 +14,7 @@ import { petClinicArgs } from './make-pet-clinic.ts';
 import { dressUpArgs } from './make-dress-up.ts';
 import { gardenArgs } from './make-garden.ts';
 import { carWashArgs } from './make-car-wash.ts';
+import { planeArgs } from './make-plane.ts';
 
 /** Encoder settings shared by every file (Technical Decisions › Asset pipeline). */
 const ENCODE = ['-ac', '1', '-ar', '44100', '-c:a', 'aac', '-b:a', '64k'];
@@ -270,6 +271,9 @@ export function buildArgs(id: AudioId, outFile: string): string[] {
   // Rửa xe (2026-10-30): the squish, chime, sirens and low honk have their own recipes (tools/audio/make-car-wash.ts).
   const carWash = carWashArgs(id, outFile);
   if (carWash) return carWash;
+  // Phi công nhí (2026-11-11): the propeller, whoosh and boing have their own recipes (tools/audio/make-plane.ts).
+  const plane = planeArgs(id, outFile);
+  if (plane) return plane;
   switch (id) {
     case 'sfx.shell.pop':
       return ['-hide_banner', '-y', ...source(POP_EXPR, POP_SECONDS), '-af', POP_FILTER, ...ENCODE, outFile];

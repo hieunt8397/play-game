@@ -19,6 +19,7 @@ import { GAME_ICONS } from '../../src/content/game-icons.ts';
 import { OUTFIT_ITEMS } from '../../src/content/games/dress-up.ts';
 import { FRUIT_IDS, FRUITS_PER_PLANT, GIANT_FRUIT, PACKET_SLOTS, STAGES } from '../../src/content/games/garden.ts';
 import { DIRT_IDS, DIRT_SPOTS, VEHICLE_IDS } from '../../src/content/games/car-wash.ts';
+import { COLOUR_IDS as PLANE_COLOURS, FRIEND_IDS as PLANE_FRIENDS, GIFTS_PER_FLIGHT, SURPRISE_IDS as PLANE_SURPRISES } from '../../src/content/games/plane.ts';
 import { GAME_IDS, ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
 import { RENDER_SCALE, layoutLimits } from '../layout/rules.ts';
@@ -58,6 +59,8 @@ export interface BuildParams {
     garden: Record<string, string>;
     /** Rửa xe (2026-10-30): art.carWash (the bay, the hose, the dirt kinds, the foam, the particles, the rainbow). */
     carWash: Record<string, string>;
+    /** Phi công nhí (2026-11-11): art.plane (the sky, the clouds and hills, the ground, the plane, the balloons and gifts, the houses, the surprises). */
+    plane: Record<string, string>;
     /** Story 5.6: art.map (the map road, water, foam, cone and chimney). */
     map: Record<string, string>;
   };
@@ -99,6 +102,8 @@ export interface BuildParams {
   garden: { fruits: string[]; stages: string[]; packets: number; fruitsPerPlant: number; giantFruit: number; giantScale: number; targetPx: number; hitMinPx: number; gapPx: number };
   /** Rửa xe (2026-10-30): the vehicles, the dirt kinds and spots per car (content/games/car-wash.ts), the sizes (design px): every car's hull ≥ carMinPx wide, the hose drawn ≥ hoseMinPx with a tap circle ≥ hitMinPx, ≥ gapPx from every car. */
   carWash: { vehicles: string[]; dirts: string[]; spots: number; carMinPx: number; hoseMinPx: number; hitMinPx: number; gapPx: number };
+  /** Phi công nhí (2026-11-11): the friends, colours and surprises, the gifts per flight (content/games/plane.ts), the sizes (design px): a balloon drawn ≥ balloonMinPx, a friend and a house each ≥ friendMinPx with a tap area ≥ hitMinPx, and the plane's flight band (its centre between topY and bottomY). */
+  plane: { friends: string[]; colours: string[]; surprises: string[]; gifts: number; balloonMinPx: number; friendMinPx: number; hitMinPx: number; topY: number; bottomY: number };
   renderScale: number;
   design: { width: number; height: number };
   rect: { x0: number; y0: number; x1: number; y1: number };
@@ -127,6 +132,7 @@ export function buildParams(): BuildParams {
       dressUp: Object.fromEntries(Object.entries(art.dressUp).map(([id, c]) => [id, c.css])),
       garden: Object.fromEntries(Object.entries(art.garden).map(([id, c]) => [id, c.css])),
       carWash: Object.fromEntries(Object.entries(art.carWash).map(([id, c]) => [id, c.css])),
+      plane: Object.fromEntries(Object.entries(art.plane).map(([id, c]) => [id, c.css])),
       map: Object.fromEntries(Object.entries(art.map).map(([id, c]) => [id, c.css])),
     },
     dino: {
@@ -167,6 +173,17 @@ export function buildParams(): BuildParams {
       hoseMinPx: Tokens.ui.carWashHoseMinPx,
       hitMinPx: Tokens.ui.carWashHitMinPx,
       gapPx: Tokens.spacing.targetGap,
+    },
+    plane: {
+      friends: [...PLANE_FRIENDS],
+      colours: [...PLANE_COLOURS],
+      surprises: [...PLANE_SURPRISES],
+      gifts: GIFTS_PER_FLIGHT,
+      balloonMinPx: Tokens.ui.planeBalloonMinPx,
+      friendMinPx: Tokens.ui.planeFriendMinPx,
+      hitMinPx: Tokens.ui.planeHitMinPx,
+      topY: Tokens.ui.planeTopY,
+      bottomY: Tokens.ui.planeBottomY,
     },
     renderScale: RENDER_SCALE,
     design: { width: Tokens.design.width, height: Tokens.design.height },
