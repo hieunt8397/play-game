@@ -32,7 +32,7 @@ from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cute import blob, import_joined, mat, mesh_obj, rbox, soften_scene, tt_model  # noqa: E402
+from cute import blob, chibi, chibi_materials, import_joined, key_chibi, mat, mesh_obj, rbox, soften_scene, tt_model  # noqa: E402
 from common import add_empty, eval_world_verts, flat_material, force_opaque, hex_to_linear, hull_object, key_constant, move_to, parse_args, principled  # noqa: E402
 
 ASSETS = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', 'assets'))
@@ -95,6 +95,21 @@ ANIMALS = {
     'pig': ('quaternius/farm/Pig.glb', 1.45, -25.0, 0.0, 0.3),
     'sheep': ('quaternius/farm/Sheep.glb', 1.65, -25.0, 0.0, 0.3),
     'horse': ('quaternius/animals/Horse.fbx', 1.98, -25.0, 0.05, 0.3),
+}
+# 2026-11-03: the pens show chibi toys instead (cute.chibi, the soft big-headed look of the barn and of the island
+# Shiba); ANIMALS (the real models) stay for build_pet_clinic.py, which imports them. Per animal: the cute.chibi
+# kind, its colours (cute mats key → Tokens.art.animalPens key, or 'c:<Tokens.colors key>' / 'creatureLight'), the
+# height in m, the turn and nose offset and poke (as ANIMALS) and the head's turn back toward the camera (degrees).
+PEN_CHIBIS = {
+    'dog': ('dog', {'fur': 'c:creatureOrange', 'light': 'creatureLight'}, 1.6, -25.0, 0.0, 0.25, 12.0),
+    'cat': ('cat', {'fur': 'catFur', 'light': 'creatureLight', 'patch': 'catStripe', 'nose': 'catNose'}, 1.55, -25.0, 0.0, 0.25, 12.0),
+    'rooster': ('rooster', {'fur': 'roosterFur', 'light': 'roosterBreast', 'wing': 'roosterWing', 'comb': 'roosterComb',
+                            'beak': 'roosterBeak', 'tail': 'roosterTail', 'tail2': 'roosterTail2'}, 1.55, -25.0, 0.0, 0.2, 12.0),
+    'cow': ('cow', {'fur': 'cowFur', 'light': 'creatureLight', 'patch': 'cowPatch', 'muzzle': 'cowMuzzle', 'horn': 'cowHorn',
+                    'hoof': 'hoof', 'mane': 'cowPatch'}, 1.75, -25.0, 0.05, 0.3, 12.0),
+    'pig': ('pig', {'fur': 'pigFur', 'light': 'pigLight', 'muzzle': 'pigSnout', 'nose': 'pigHoof', 'hoof': 'pigHoof'}, 1.5, -25.0, 0.0, 0.3, 12.0),
+    'sheep': ('sheep', {'fur': 'sheepWool', 'light': 'creatureLight', 'wool': 'sheepWool', 'face': 'sheepFace', 'hoof': 'sheepLeg'}, 1.6, -25.0, 0.0, 0.3, 12.0),
+    'horse': ('horse', {'fur': 'horseFur', 'light': 'horseLight', 'muzzle': 'horseLight', 'mane': 'horseMane', 'hoof': 'hoof'}, 1.8, -25.0, 0.05, 0.3, 12.0),
 }
 # The animals' source front faces −y after import (FBX and glTF alike; checked on renders, Story 7.2).
 SOURCE_FRONT_DEG = 0.0
@@ -480,24 +495,40 @@ def pose_idle(arm, actions):
     bpy.context.scene.frame_set(IDLE_FRAME)
 
 
-def build_animal(aid, spec, sprites):
-    rel, height, turn, nose_dx, poke = spec
+def chibi_mats(params, colour_keys):
+    """cute.chibi materials for one pen animal from PEN_CHIBIS colour keys."""
+    colours, pens = params['colours'], params['art']['animalPens']
+
+    def hex_of(key):
+        if key == 'creatureLight':
+            return params['art']['creatureLight']
+        if key.startswith('c:'):
+            return colours[key[2:]]
+        if key not in pens:
+            fail(f'Tokens.art.animalPens.{key} is missing')
+        return pens[key]
+
+    mats = chibi_materials(colours, hex_of(colour_keys['fur']), hex_of(colour_keys['light']))
+    for k, key in colour_keys.items():
+        if k not in ('fur', 'light'):
+            mats[k] = flat_material(f'pen-{k}-{key}', hex_of(key), 0.6)
+    return mats
+
+
+def build_animal(aid, spec, sprites, params):
+    kind, colour_keys, height, turn, nose_dx, poke, head_yaw = spec
     coll = bpy.data.collections.new(f'sprite.animal-{aid}')
     sprites.children.link(coll)
     coll['holdout_occluders'] = 1
     coll['movable'] = 1
     coll['states'] = '{"peek": [1]}'
-    sc = coll
-    new, actions = import_model(rel, sc)
-    root = add_empty(f'animal-{aid}-root', (0.0, 0.0, 0.0), sc)
-    for o in new:
-        if o.parent is None:
-            o.parent = root
-    for arm in (o for o in new if o.type == 'ARMATURE'):
-        pose_idle(arm, actions)
-    meshes = [o for o in new if o.type == 'MESH']
+    rig = chibi(kind, f'animal-{aid}', coll, chibi_mats(params, colour_keys))
+    root = rig['root']
+    # The body turns away (turn), the head turns back a little toward the camera: a curious look out of the door.
+    key_chibi(rig, IDLE_FRAME, head_yaw=head_yaw * (1 if turn < 0 else -1), eyes='open')
+    meshes = rig['meshes']
     if not meshes:
-        fail(f'{rel} has no mesh')
+        fail(f'chibi {kind} has no mesh')
     bpy.context.view_layer.update()
     pts = eval_world_verts(meshes, bpy.context.evaluated_depsgraph_get())
     k = height / max(max(p.z for p in pts) - min(p.z for p in pts), 1e-6)
@@ -552,8 +583,8 @@ def main():
     layout.hide_render = True
     build_plate(params, plate)
     leaves = build_door(params['art']['animalPens'], sprites)
-    for aid, spec in ANIMALS.items():
-        build_animal(aid, spec, sprites)
+    for aid, spec in PEN_CHIBIS.items():
+        build_animal(aid, spec, sprites, params)
     scene.frame_set(IDLE_FRAME)
     bpy.context.view_layer.update()
     build_layout(screen, leaves['closed'], layout)

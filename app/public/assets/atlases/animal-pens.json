@@ -48,44 +48,20 @@
         "y": 0.5
       }
     },
-    "animal-cat/peek/00": {
-      "frame": {
-        "x": 2,
-        "y": 848,
-        "w": 197,
-        "h": 381
-      },
-      "rotated": false,
-      "trimmed": true,
-      "spriteSourceSize": {
-        "x": 284,
-        "y": 796,
-        "w": 197,
-        "h": 381
-      },
-      "sourceSize": {
-        "w": 2048,
-        "h": 1536
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
     "animal-horse/peek/00": {
       "frame": {
         "x": 2,
-        "y": 1233,
-        "w": 182,
-        "h": 381
+        "y": 848,
+        "w": 193,
+        "h": 357
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 303,
-        "y": 793,
-        "w": 182,
-        "h": 381
+        "x": 268,
+        "y": 818,
+        "w": 193,
+        "h": 357
       },
       "sourceSize": {
         "w": 2048,
@@ -99,17 +75,17 @@
     "animal-cow/peek/00": {
       "frame": {
         "x": 2,
-        "y": 1618,
-        "w": 240,
-        "h": 370
+        "y": 1209,
+        "w": 243,
+        "h": 348
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 245,
-        "y": 789,
-        "w": 240,
-        "h": 370
+        "x": 204,
+        "y": 830,
+        "w": 243,
+        "h": 348
       },
       "sourceSize": {
         "w": 2048,
@@ -122,18 +98,18 @@
     },
     "animal-dog/peek/00": {
       "frame": {
-        "x": 188,
-        "y": 1233,
-        "w": 215,
-        "h": 340
+        "x": 199,
+        "y": 848,
+        "w": 192,
+        "h": 324
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 270,
-        "y": 839,
-        "w": 215,
-        "h": 340
+        "x": 239,
+        "y": 857,
+        "w": 192,
+        "h": 324
       },
       "sourceSize": {
         "w": 2048,
@@ -146,18 +122,18 @@
     },
     "animal-sheep/peek/00": {
       "frame": {
-        "x": 203,
-        "y": 848,
-        "w": 200,
-        "h": 338
+        "x": 308,
+        "y": 434,
+        "w": 258,
+        "h": 321
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 285,
-        "y": 839,
-        "w": 200,
-        "h": 338
+        "x": 200,
+        "y": 858,
+        "w": 258,
+        "h": 321
       },
       "sourceSize": {
         "w": 2048,
@@ -168,20 +144,20 @@
         "y": 0.5
       }
     },
-    "animal-pig/peek/00": {
+    "animal-cat/peek/00": {
       "frame": {
-        "x": 308,
-        "y": 434,
-        "w": 257,
-        "h": 332
+        "x": 494,
+        "y": 2,
+        "w": 177,
+        "h": 314
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 228,
-        "y": 840,
-        "w": 257,
-        "h": 332
+        "x": 251,
+        "y": 870,
+        "w": 177,
+        "h": 314
       },
       "sourceSize": {
         "w": 2048,
@@ -194,18 +170,42 @@
     },
     "animal-rooster/peek/00": {
       "frame": {
-        "x": 494,
-        "y": 2,
-        "w": 147,
-        "h": 316
+        "x": 2,
+        "y": 1561,
+        "w": 169,
+        "h": 304
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 278,
-        "y": 872,
-        "w": 147,
-        "h": 316
+        "x": 267,
+        "y": 871,
+        "w": 169,
+        "h": 304
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "animal-pig/peek/00": {
+      "frame": {
+        "x": 175,
+        "y": 1561,
+        "w": 206,
+        "h": 301
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 237,
+        "y": 879,
+        "w": 206,
+        "h": 301
       },
       "sourceSize": {
         "w": 2048,
@@ -223,8 +223,8 @@
     "image": "animal-pens.png",
     "format": "RGBA8888",
     "size": {
-      "w": 643,
-      "h": 1990
+      "w": 673,
+      "h": 1867
     },
     "scale": 1
   }

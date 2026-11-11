@@ -191,12 +191,12 @@ def chibi(kind, name, coll, mats, nose_cream=False):
     _chibi_farm). Returns a rig dict: root, head, tail, tongue, meshes,
     eyes (Story 6.1: [(kind, part)] of the eyes and shines, for key_chibi's `eyes`), nose, and cream (the
     hidden nose-cream blob when `nose_cream`, made of `mats['cream']`; else None)."""
-    if kind in FARM_KINDS:
+    if kind in FARM_KINDS or kind in PEN_KINDS:
         if nose_cream:
             raise RuntimeError(f'cute: chibi "{kind}" has no nose cream')
-        return _chibi_farm(kind, name, coll, mats)
+        return _chibi_farm(kind, name, coll, mats) if kind in FARM_KINDS else _chibi_pen(kind, name, coll, mats)
     if kind not in ('dog', 'fox'):
-        raise RuntimeError(f'cute: chibi kind "{kind}" is not dog | fox | {" | ".join(FARM_KINDS)}')
+        raise RuntimeError(f'cute: chibi kind "{kind}" is not dog | fox | {" | ".join(FARM_KINDS + PEN_KINDS)}')
     fox = kind == 'fox'
     root = _pivot(f'{name}-root', (0.0, 0.0, 0.0), None, coll)
     body = _pivot(f'{name}-body', (0.0, 0.0, 0.0), root, coll)
@@ -367,6 +367,149 @@ def _chibi_farm(kind, name, coll, mats):
         _part(f'{name}-tail-puff', light, (0.0, 0.05, 0.02), (0.08, 0.08, 0.1), tail, coll=coll)
         for i, (px, py, pz) in enumerate([(0.2, -0.1, 0.25), (-0.2, 0.0, 0.26), (0.1, 0.22, 0.28), (-0.12, 0.3, 0.24), (0.24, 0.32, 0.15)]):
             _part(f'{name}-spot{i}', light, (px, 0.08 + py, tz + pz * tz_r / 0.31), (0.05, 0.05, 0.035), body, coll=coll)
+    meshes = [o for o in coll.objects if o.type == 'MESH' and o.name.startswith(f'{name}-')]
+    return {'root': root, 'body': body, 'head': head, 'tail': tail, 'tongue': tongue, 'meshes': meshes,
+            'eyes': eyes, 'nose': nose, 'cream': None}
+
+
+# --- chibi pen animals (2026-11-03, Ú òa chuồng thú) -----------------------------------------------------------
+# The cat, pig, sheep and rooster of the pens, in the same unit frame as chibi() (feet at z 0, facing -Y, ~2.0 tall):
+# a big round head on a small soft body, dot eyes with a shine and blush cheeks, each with its outline cue: cat
+# pointy ears, whiskers and an upright tail; pig snout disc and floppy ears; sheep a woolly cloud body and cap on
+# dark legs; rooster a red comb and wattle, a yellow beak and a fan tail. `mats` = chibi_materials(...) plus
+# optional 'patch', 'muzzle', 'hoof', 'nose', 'wool', 'face', 'comb', 'beak', 'wing', 'tail', 'tail2' (each falls
+# back to fur / light / ink).
+PEN_KINDS = ('cat', 'pig', 'sheep', 'rooster')
+
+
+def _chibi_eyes(name, head, coll, mats, ex, ey, ez, cheek_x, cheek_y, cheek_z):
+    eyes = []
+    for sx, side in ((-1, 'L'), (1, 'R')):
+        eyes.append(('eye', _part(f'{name}-eye{side}', mats['ink'], (ex * sx, ey, ez), EYE_SCALE, head, coll=coll)))
+        eyes.append(('shine', _part(f'{name}-shine{side}', mats['shine'], (ex * sx - 0.03 * sx, ey - 0.055, ez + 0.05), SHINE_SCALE, head, coll=coll)))
+        _part(f'{name}-cheek{side}', mats['blush'], (cheek_x * sx, cheek_y, cheek_z), (0.09, 0.04, 0.06), head, coll=coll)
+    return eyes
+
+
+def _chibi_pen(kind, name, coll, mats):
+    fur, light, ink = mats['fur'], mats['light'], mats['ink']
+    root = _pivot(f'{name}-root', (0.0, 0.0, 0.0), None, coll)
+    body = _pivot(f'{name}-body', (0.0, 0.0, 0.0), root, coll)
+    nose = None
+    if kind == 'cat':
+        _part(f'{name}-torso', fur, (0, 0.08, 0.52), (0.36, 0.42, 0.4), body, coll=coll)
+        _part(f'{name}-belly', light, (0, -0.18, 0.48), (0.26, 0.2, 0.3), body, coll=coll)
+        for sx, side in ((-1, 'L'), (1, 'R')):
+            _part(f'{name}-leg{side}', fur, (0.17 * sx, -0.14, 0.15), (0.11, 0.11, 0.17), body, coll=coll)
+            _part(f'{name}-paw{side}', light, (0.17 * sx, -0.22, 0.06), (0.11, 0.12, 0.07), body, coll=coll)
+            _part(f'{name}-hind{side}', fur, (0.25 * sx, 0.3, 0.15), (0.14, 0.17, 0.15), body, coll=coll)
+        # the tail: up from the rump in a soft S, a light tip
+        tail = _pivot(f'{name}-tail', (0.0, 0.44, 0.45), body, coll)
+        rod(f'{name}-tail-a', (0.0, 0.0, 0.0), (0.0, 0.2, 0.42), 0.075, fur, coll, tail)
+        rod(f'{name}-tail-b', (0.0, 0.2, 0.42), (0.0, 0.12, 0.85), 0.075, fur, coll, tail)
+        _part(f'{name}-tail-tip', light, (0.0, 0.1, 0.9), (0.085, 0.085, 0.1), tail, coll=coll)
+        head = _pivot(f'{name}-head', (0.0, -0.02, 0.9), body, coll)
+        hz = 0.4
+        _part(f'{name}-skull', fur, (0, -0.03, hz), (0.6, 0.52, 0.5), head, coll=coll)
+        for sx, side in ((-1, 'L'), (1, 'R')):  # the white muzzle puffs
+            _part(f'{name}-puff{side}', light, (0.1 * sx, -0.5, hz - 0.17), (0.13, 0.1, 0.1), head, coll=coll)
+        _part(f'{name}-chin', light, (0, -0.44, hz - 0.27), (0.12, 0.08, 0.07), head, coll=coll)
+        nose = _part(f'{name}-nose', mats.get('nose', mats['tongue']), (0, -0.6, hz - 0.08), (0.055, 0.035, 0.04), head, coll=coll)
+        tongue = _part(f'{name}-tongue', mats['tongue'], (0, -0.56, hz - 0.3), HIDDEN_SCALE, head, coll=coll)
+        for sx, side in ((-1, 'L'), (1, 'R')):  # tall pointy ears with a pink inside
+            tilt = (math.radians(-6), math.radians(-14 * sx), 0)
+            _part(f'{name}-ear{side}', fur, (0.3 * sx, 0.0, hz + 0.56), (0.19, 0.11, 0.24), head, kind='cone', rot=tilt, coll=coll)
+            _part(f'{name}-ear-in{side}', mats['blush'], (0.3 * sx, -0.06, hz + 0.53), (0.11, 0.05, 0.16), head, kind='cone', rot=tilt, coll=coll)
+            for i, dz in enumerate((0.04, -0.04)):  # whiskers
+                a = (0.2 * sx, -0.53, hz - 0.15 + dz)
+                rod(f'{name}-whisker{side}{i}', a, (0.52 * sx, -0.44, hz - 0.13 + dz * 2.2), 0.012, ink, coll, head, seg=8)
+        patch = mats.get('patch', ink)
+        for i, dx in enumerate((-0.12, 0.0, 0.12)):  # three tabby stripes on the forehead
+            _part(f'{name}-stripe{i}', patch, (dx, -0.36, hz + 0.33 - abs(dx) * 0.4), (0.035, 0.04, 0.1), head, coll=coll)
+        eyes = _chibi_eyes(name, head, coll, mats, 0.24, -0.48, hz + 0.06, 0.38, -0.42, hz - 0.12)
+    elif kind == 'pig':
+        hoof = mats.get('hoof', ink)
+        _part(f'{name}-torso', fur, (0, 0.1, 0.5), (0.48, 0.55, 0.42), body, coll=coll)
+        _part(f'{name}-belly', light, (0, -0.06, 0.38), (0.36, 0.42, 0.26), body, coll=coll)
+        for sx, side in ((-1, 'L'), (1, 'R')):
+            for ly, end in ((-0.2, 'F'), (0.4, 'B')):
+                _part(f'{name}-leg{end}{side}', fur, (0.26 * sx, ly, 0.14), (0.12, 0.12, 0.14), body, coll=coll)
+                _part(f'{name}-hoof{end}{side}', hoof, (0.26 * sx, ly - 0.01, 0.04), (0.11, 0.11, 0.05), body, coll=coll)
+        tail = _pivot(f'{name}-tail', (0.0, 0.64, 0.62), body, coll)
+        _part(f'{name}-curl', fur, (0, 0.04, 0.0), (0.09, 0.09, 0.09), tail, kind='torus', rot=(0, math.radians(90), 0), coll=coll)
+        head = _pivot(f'{name}-head', (0.0, -0.2, 0.78), body, coll)
+        hz = 0.42
+        _part(f'{name}-skull', fur, (0, -0.03, hz), (0.6, 0.52, 0.5), head, coll=coll)
+        snout = mats.get('muzzle', light)
+        _part(f'{name}-snout', snout, (0, -0.54, hz - 0.12), (0.22, 0.12, 0.16), head, coll=coll)
+        for sx, side in ((-1, 'L'), (1, 'R')):
+            n = _part(f'{name}-nostril{side}', mats.get('nose', ink), (0.07 * sx, -0.655, hz - 0.11), (0.035, 0.02, 0.055), head, coll=coll)
+            nose = nose or n
+        tongue = _part(f'{name}-tongue', mats['tongue'], (0, -0.52, hz - 0.32), HIDDEN_SCALE, head, coll=coll)
+        for sx, side in ((-1, 'L'), (1, 'R')):  # floppy ears folding forward over the brow
+            rot = (math.radians(-55), math.radians(-30 * sx), 0)
+            _part(f'{name}-ear{side}', fur, (0.33 * sx, -0.2, hz + 0.47), (0.17, 0.08, 0.2), head, kind='cone', rot=rot, coll=coll)
+            _part(f'{name}-ear-in{side}', snout, (0.33 * sx, -0.23, hz + 0.45), (0.11, 0.04, 0.14), head, kind='cone', rot=rot, coll=coll)
+        eyes = _chibi_eyes(name, head, coll, mats, 0.24, -0.47, hz + 0.1, 0.4, -0.4, hz - 0.12)
+    elif kind == 'sheep':
+        wool = mats.get('wool', fur)
+        face = mats.get('face', light)
+        legc = mats.get('hoof', ink)
+        for sx, side in ((-1, 'L'), (1, 'R')):  # dark legs under the wool
+            for ly, end in ((-0.18, 'F'), (0.36, 'B')):
+                rod(f'{name}-leg{end}{side}', (0.22 * sx, ly, 0.06), (0.22 * sx, ly, 0.45), 0.085, legc, coll, body)
+        _part(f'{name}-wool-core', wool, (0, 0.1, 0.66), (0.44, 0.5, 0.36), body, coll=coll)
+        rnd = [(0.33, -0.2, 0.6, 0.2), (-0.33, -0.2, 0.6, 0.2), (0.38, 0.12, 0.66, 0.22), (-0.38, 0.12, 0.66, 0.22),
+               (0.32, 0.42, 0.62, 0.2), (-0.32, 0.42, 0.62, 0.2), (0.0, 0.5, 0.7, 0.22), (0.16, -0.1, 0.92, 0.2),
+               (-0.16, -0.1, 0.92, 0.2), (0.18, 0.25, 0.95, 0.21), (-0.18, 0.25, 0.95, 0.21), (0.0, 0.45, 0.9, 0.18),
+               (0.26, 0.1, 0.44, 0.19), (-0.26, 0.1, 0.44, 0.19), (0.0, -0.22, 0.45, 0.18)]
+        for i, (px, py, pz, r) in enumerate(rnd):
+            _part(f'{name}-wool{i}', wool, (px, py, pz), (r, r, r * 0.92), body, coll=coll)
+        tail = _pivot(f'{name}-tail', (0.0, 0.62, 0.7), body, coll)
+        _part(f'{name}-tail-puff', wool, (0.0, 0.04, 0.0), (0.13, 0.12, 0.13), tail, coll=coll)
+        head = _pivot(f'{name}-head', (0.0, -0.28, 0.86), body, coll)
+        hz = 0.4
+        _part(f'{name}-skull', face, (0, -0.04, hz), (0.46, 0.44, 0.47), head, coll=coll)
+        _part(f'{name}-muzzle', face, (0, -0.42, hz - 0.14), (0.24, 0.14, 0.15), head, coll=coll)
+        nose = _part(f'{name}-nose', mats.get('nose', ink), (0, -0.55, hz - 0.08), (0.06, 0.03, 0.04), head, coll=coll)
+        tongue = _part(f'{name}-tongue', mats['tongue'], (0, -0.5, hz - 0.3), HIDDEN_SCALE, head, coll=coll)
+        for i, (px, py, pz, r) in enumerate([(0.0, -0.12, 0.44, 0.19), (0.2, -0.02, 0.4, 0.17), (-0.2, -0.02, 0.4, 0.17),
+                                             (0.1, 0.12, 0.46, 0.17), (-0.1, 0.12, 0.46, 0.17)]):  # the woolly cap
+            _part(f'{name}-cap{i}', wool, (px, py, hz + pz), (r, r, r * 0.9), head, coll=coll)
+        for sx, side in ((-1, 'L'), (1, 'R')):  # ears sticking out sideways
+            rot = (0, math.radians(-20 * sx), 0)
+            _part(f'{name}-ear{side}', face, (0.5 * sx, -0.02, hz + 0.12), (0.19, 0.06, 0.09), head, rot=rot, coll=coll)
+            _part(f'{name}-ear-in{side}', mats['blush'], (0.52 * sx, -0.06, hz + 0.12), (0.12, 0.03, 0.05), head, rot=rot, coll=coll)
+        eyes = _chibi_eyes(name, head, coll, mats, 0.19, -0.42, hz + 0.08, 0.31, -0.37, hz - 0.1)
+    elif kind == 'rooster':
+        beak = mats.get('beak', light)
+        comb = mats.get('comb', mats['tongue'])
+        wing = mats.get('wing', fur)
+        _part(f'{name}-torso', fur, (0, 0.1, 0.72), (0.4, 0.46, 0.42), body, coll=coll)
+        _part(f'{name}-breast', light, (0, -0.16, 0.66), (0.3, 0.22, 0.32), body, coll=coll)
+        for sx, side in ((-1, 'L'), (1, 'R')):
+            _part(f'{name}-wing{side}', wing, (0.37 * sx, 0.14, 0.74), (0.09, 0.3, 0.22), body, rot=(math.radians(15), 0, 0), coll=coll)
+            rod(f'{name}-leg{side}', (0.14 * sx, 0.06, 0.06), (0.14 * sx, 0.06, 0.4), 0.045, beak, coll, body, seg=12)
+            for t, (dx, dy) in enumerate(((-0.06, -0.08), (0.0, -0.11), (0.06, -0.08))):  # three toes
+                _part(f'{name}-toe{side}{t}', beak, (0.14 * sx + dx * sx, 0.06 + dy, 0.035), (0.03, 0.08, 0.03), body,
+                      rot=(0, 0, math.radians(-dx * 300 * sx)), coll=coll)
+        # the fan tail: soft feathers up and back
+        tail = _pivot(f'{name}-tail', (0.0, 0.48, 0.9), body, coll)
+        for i, (ang, roll) in enumerate(((-15, 0), (-35, -22), (-35, 22), (-58, -12), (-58, 12))):
+            m = mats.get('tail' if i % 2 == 0 else 'tail2', ink)
+            _part(f'{name}-feather{i}', m, (math.sin(math.radians(roll)) * 0.18, 0.1, 0.3), (0.1, 0.12, 0.36), tail,
+                  rot=(math.radians(ang), math.radians(roll), 0), coll=coll)
+        head = _pivot(f'{name}-head', (0.0, -0.18, 1.0), body, coll)
+        hz = 0.38
+        _part(f'{name}-skull', fur, (0, -0.03, hz), (0.46, 0.43, 0.45), head, coll=coll)
+        _part(f'{name}-beak', beak, (0, -0.5, hz - 0.06), (0.1, 0.08, 0.13), head, kind='cone', rot=(math.radians(90), 0, 0), coll=coll)
+        nose = _part(f'{name}-wattle', comb, (0, -0.42, hz - 0.26), (0.06, 0.05, 0.1), head, coll=coll)
+        tongue = _part(f'{name}-tongue', mats['tongue'], (0, -0.46, hz - 0.12), HIDDEN_SCALE, head, coll=coll)
+        for i, (py, pz, r) in enumerate(((-0.2, 0.44, 0.1), (-0.05, 0.5, 0.12), (0.12, 0.45, 0.1))):  # the comb
+            _part(f'{name}-comb{i}', comb, (0, py, hz + pz), (0.07, r, r * 1.15), head, coll=coll)
+        eyes = _chibi_eyes(name, head, coll, mats, 0.2, -0.38, hz + 0.08, 0.32, -0.33, hz - 0.08)
+    else:
+        raise RuntimeError(f'cute: pen chibi kind "{kind}" is not {" | ".join(PEN_KINDS)}')
     meshes = [o for o in coll.objects if o.type == 'MESH' and o.name.startswith(f'{name}-')]
     return {'root': root, 'body': body, 'head': head, 'tail': tail, 'tongue': tongue, 'meshes': meshes,
             'eyes': eyes, 'nose': nose, 'cream': None}
