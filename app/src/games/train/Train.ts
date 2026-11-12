@@ -7,7 +7,7 @@
 // Taps any time: the engine toots, a car wobbles and the voice names its colour, the cow and the bird react. Home goes
 // back to the yard (`round:leave`); a trip with a friend aboard is kept (`leaveSnapshot`) and comes back next time.
 // The scene only wires Phaser: the still sky plate, the looping scenery (hills, trees, fences, the ground strip with
-// the track), the train (the engine and the cars in containers, the friends seated behind the cars' sides), the
+// the track), the train (the engine and the cars in containers, the friends seated inside the cars, under their front walls), the
 // scrolling things (platforms, the destination, the tunnel's two layers, the cow, the crossing, the bridge), the dim,
 // the tap areas, tweens, and the pure model (trip.ts) that owns every position: each frame it draws what the model says.
 import type { GameObjects } from 'phaser';
@@ -43,6 +43,7 @@ import {
   WORLD,
   carAnchor,
   carFrame,
+  carFrontFrame,
   carHit,
   carLine,
   countLine,
@@ -454,7 +455,7 @@ export class Train extends MiniGameBase<'train'> {
     this.birdFrame = BIRD_FRAMES[0];
   }
 
-  /** The train: the engine and each car in a container on its ground pivot; a car's friend sits behind its side. */
+  /** The train: the engine and each car in a container on its ground pivot; a car's friend sits inside it, between the wagon and its front wall. */
   private addTrain(): void {
     const zero = { x: 0, y: 0 };
     const box = this.add.container(this.engineAt.x, this.engineAt.y).setDepth(Depth.train);
@@ -467,10 +468,13 @@ export class Train extends MiniGameBase<'train'> {
       const at = this.anchor(carAnchor(n)) ?? this.engineAt;
       const seat = this.anchor(seatAnchor(n)) ?? at;
       const car = this.add.container(at.x, at.y).setDepth(Depth.train);
-      const rider = this.pivoted(seatFrame(ALL_FRIENDS[0]!), seat0, { x: seat.x - at.x, y: seat.y - at.y })?.setVisible(false);
-      if (rider) car.add(rider);
+      // The open wagon, then its friend sitting on the floor, then the front wall over the friend's legs.
       const img = this.pivoted(carFrame(colour), at, zero);
       if (img) car.add(img);
+      const rider = this.pivoted(seatFrame(ALL_FRIENDS[0]!), seat0, { x: seat.x - at.x, y: seat.y - at.y })?.setVisible(false);
+      if (rider) car.add(rider);
+      const front = this.pivoted(carFrontFrame(colour), at, zero);
+      if (front) car.add(front);
       this.carBoxes.push(car);
       this.seats.push(rider);
     });

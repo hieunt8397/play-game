@@ -17,8 +17,9 @@
 #     chimney, a lamp, a cowcatcher, three red wheels with yellow hubs and a rod), driven by the chibi Shiba
 #     (cute.chibi('dog')) in a blue conductor's cap. States: idle [1], run [10, 11] (the wheels a quarter turn apart,
 #     the rod up / forward), toot [20] (a puff over the chimney, the Shiba's head up), happy [30] (eyes shut, tongue);
-#   - car-<colour>: three open wagons (red, yellow, blue), each where it stands behind the engine;
-#   - seat-<friend>: the friend sitting in car 0 (drawn behind the car: only its head and shoulders show);
+#   - car-<colour>: three open wagons (red, yellow, blue), each where it stands behind the engine (states idle: the
+#     whole wagon; front: its front wall alone, drawn over the friend sitting inside);
+#   - seat-<friend>: the friend sitting in car 0 (drawn between the car and its front wall: it sits inside);
 #   - friend-<friend> (idle [1], wave [10], happy [20]) on the platform's ground pivot anchor.friend;
 #   - platform (a wooden platform with a little blue roof and a round sign), dest-<id> (the beach, a playground, a
 #     fair), tunnel (states back: the hill behind the train; front: its lower slope with the two stone portals, drawn
@@ -353,30 +354,43 @@ def build_car(n, colour, params, c, sprites, layout):
     key = CAR_COLOUR_KEYS[colour]
     if key not in c or f'{key}Dark' not in c:
         fail(f'Tokens.art.train.{key}(Dark) is missing')
-    coll = sprite(sprites, f'car-{colour}')
-    root = ground_root(f'car-{colour}-root', coll, CAR_X[n], 0.0)
+    group = sprite(sprites, f'car-{colour}')
     main, dark = mat(c[key], 0.32), mat(c[f'{key}Dark'], 0.4)
     trim = mat(c['trim'], 0.4)
     ink = mat(c['chimney'], 0.5)
-    rbox(f'car-{colour}-chassis', (CAR_LEN - 0.06, CAR_W, 0.1), 0.04, ink, coll, root, (0.0, 0.0, 0.5))
-    # The wagon: a deep box whose top shows its dark inside under a light rim (an open wagon).
-    rbox(f'car-{colour}-body', (CAR_LEN, CAR_W, 0.44), 0.1, main, coll, root, (0.0, 0.0, 0.78))
-    rbox(f'car-{colour}-inside', (CAR_LEN - 0.14, CAR_W - 0.14, 0.05), 0.03, dark, coll, root, (0.0, 0.0, 0.985))
-    for sy in (-1, 1):
-        rbox(f'car-{colour}-rim-long-{sy}', (CAR_LEN + 0.02, 0.08, 0.07), 0.03, trim, coll, root, (0.0, sy * (CAR_W / 2 - 0.02), 1.0))
+    wall, half_w, z0, z1 = 0.08, CAR_W / 2, 0.56, 1.0
+
+    def front_wall(tag, coll, root):
+        """The near wall, its rim and its dots: drawn over the friend sitting inside (and part of the whole car)."""
+        rbox(f'car-{colour}-{tag}-front', (CAR_LEN, wall, z1 - z0), 0.04, main, coll, root, (0.0, -(half_w - wall / 2), (z0 + z1) / 2))
+        rbox(f'car-{colour}-{tag}-rim-front', (CAR_LEN + 0.02, 0.1, 0.07), 0.03, trim, coll, root, (0.0, -(half_w - 0.03), z1))
+        face_y = -half_w - 0.005
+        blob(f'car-{colour}-{tag}-dot', trim, coll, root, (0.0, face_y, 0.76), (0.13, 0.02, 0.13), seg=(28, 8))
+        for sx in (-1, 1):
+            blob(f'car-{colour}-{tag}-dot-{sx}', trim, coll, root, (0.33 * sx, face_y, 0.76), (0.06, 0.02, 0.06), seg=(20, 8))
+
+    # idle: the whole open wagon (a floor, the back and end walls, their rims, the front wall, wheels and hooks); the
+    # friend sits on its floor, drawn over it. front: the front wall alone, drawn over the friend.
+    idle = bp.state_child(group, f'car-{colour}', 'idle')
+    root = ground_root(f'car-{colour}-root', idle, CAR_X[n], 0.0)
+    rbox(f'car-{colour}-chassis', (CAR_LEN - 0.06, CAR_W, 0.1), 0.04, ink, idle, root, (0.0, 0.0, 0.5))
+    rbox(f'car-{colour}-floor', (CAR_LEN, CAR_W, 0.08), 0.03, dark, idle, root, (0.0, 0.0, z0 + 0.04))
+    rbox(f'car-{colour}-back', (CAR_LEN, wall, z1 - z0), 0.04, main, idle, root, (0.0, half_w - wall / 2, (z0 + z1) / 2))
+    rbox(f'car-{colour}-back-in', (CAR_LEN - 2 * wall, 0.01, z1 - z0 - 0.06), 0.004, dark, idle, root, (0.0, half_w - wall - 0.006, (z0 + z1) / 2))
+    rbox(f'car-{colour}-rim-back', (CAR_LEN + 0.02, 0.1, 0.07), 0.03, trim, idle, root, (0.0, half_w - 0.03, z1))
     for sx in (-1, 1):
-        rbox(f'car-{colour}-rim-end-{sx}', (0.08, CAR_W + 0.02, 0.07), 0.03, trim, coll, root, (sx * (CAR_LEN / 2 - 0.02), 0.0, 1.0))
-    # A big white dot on the side, and a smaller one either side of it.
-    face_y = -CAR_W / 2 - 0.005
-    blob(f'car-{colour}-dot', trim, coll, root, (0.0, face_y, 0.76), (0.13, 0.02, 0.13), seg=(28, 8))
-    for sx in (-1, 1):
-        blob(f'car-{colour}-dot-{sx}', trim, coll, root, (0.33 * sx, face_y, 0.76), (0.06, 0.02, 0.06), seg=(20, 8))
+        rbox(f'car-{colour}-end-{sx}', (wall, CAR_W, z1 - z0), 0.04, main, idle, root, (sx * (CAR_LEN / 2 - wall / 2), 0.0, (z0 + z1) / 2))
+        rbox(f'car-{colour}-rim-end-{sx}', (0.1, CAR_W + 0.02, 0.07), 0.03, trim, idle, root, (sx * (CAR_LEN / 2 - 0.03), 0.0, z1))
+    front_wall('idle', idle, root)
     # Two wheels a side and short hooks at the ends (kept inside the car's own length).
     near = -(CAR_W / 2 + 0.02)
     for k, x in enumerate((-0.33, 0.33)):
-        wheel_set(f'car-{colour}-wheel-{k}', c, coll, root, x, CAR_WHEEL_R, near, E_RUN, [1], tyre_key='carWheel')
+        wheel_set(f'car-{colour}-wheel-{k}', c, idle, root, x, CAR_WHEEL_R, near, E_RUN, [1], tyre_key='carWheel')
     for sx in (-1, 1):
-        blob(f'car-{colour}-hook-{sx}', ink, coll, root, (sx * (CAR_LEN / 2 - 0.02), 0.0, 0.52), (0.05, 0.06, 0.05), seg=(12, 8))
+        blob(f'car-{colour}-hook-{sx}', ink, idle, root, (sx * (CAR_LEN / 2 - 0.02), 0.0, 0.52), (0.05, 0.06, 0.05), seg=(12, 8))
+    front = bp.state_child(group, f'car-{colour}', 'front')
+    froot = ground_root(f'car-{colour}-front-root', front, CAR_X[n], 0.0)
+    front_wall('front', front, froot)
     bpy.context.view_layer.update()
     meshes = bp.meshes_of(root)
     r = mesh_rect(meshes)

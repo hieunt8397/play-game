@@ -17,8 +17,10 @@
 // rainbow).
 // Frames (one camera; `<sprite>/<state>/<nn>`):
 //   - `engine/<idle|run|toot|happy>/<nn>` (run 00–01: the wheels and rods turning; toot: a puff from the chimney),
-//     `car-<colour>/idle/00`: rendered where they stand (full frame; the train never moves sideways);
-//   - `seat-<friend>/idle/00`: the friend sitting in car 0 (drawn behind the car; moved by the car anchors);
+//     `car-<colour>/<idle|front>/00` (the open wagon; its front wall alone): rendered where they stand (full frame;
+//     the train never moves sideways);
+//   - `seat-<friend>/idle/00`: the friend sitting in car 0, drawn between the car and its front wall (moved by the car
+//     anchors);
 //   - `friend-<friend>/<idle|wave|happy>/00` on its platform (ground pivot `anchor.friend`);
 //   - `platform/idle/00` (ground pivot `anchor.platform`), `dest-<id>/idle/00` (`anchor.dest`),
 //     `tunnel/<back|front>/00` (`anchor.tunnel`: its left portal on the track): drawn where they stop, scrolled;
@@ -178,6 +180,8 @@ export const ENGINE_FRAMES = {
 } as const;
 export const ALL_ENGINE_FRAMES: readonly string[] = [ENGINE_FRAMES.idle, ...ENGINE_FRAMES.run, ENGINE_FRAMES.toot, ENGINE_FRAMES.happy];
 export const carFrame = (c: CarColour): string => `car-${c}/idle/00`;
+/** The car's front wall alone: drawn over the friend sitting inside (the whole car is drawn under it). */
+export const carFrontFrame = (c: CarColour): string => `car-${c}/front/00`;
 export const seatFrame = (f: FriendId): string => `seat-${f}/idle/00`;
 export const FRIEND_STATES = ['idle', 'wave', 'happy'] as const;
 export type FriendState = (typeof FRIEND_STATES)[number];
@@ -233,7 +237,7 @@ export function trainScreen(): ScreenRequirements {
     slots: [],
     frames: [
       ...ALL_ENGINE_FRAMES,
-      ...CAR_COLOURS.map(carFrame),
+      ...CAR_COLOURS.flatMap((c) => [carFrame(c), carFrontFrame(c)]),
       ...FRIEND_IDS.flatMap((f) => [seatFrame(f), ...FRIEND_STATES.map((s) => friendFrame(f, s))]),
       ...DESTINATION_IDS.map(destFrame),
       PLATFORM_FRAME,
