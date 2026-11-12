@@ -5,100 +5,25 @@
       "format": "RGBA8888",
       "size": {
         "w": 2047,
-        "h": 2042
+        "h": 2047
       },
       "scale": 1,
       "frames": [
         {
-          "filename": "car-blue/idle/00",
+          "filename": "bird/a/00",
           "frame": {
-            "x": 1784,
-            "y": 938,
-            "w": 242,
-            "h": 224
+            "x": 1740,
+            "y": 1931,
+            "w": 129,
+            "h": 114
           },
           "rotated": false,
           "trimmed": true,
           "spriteSourceSize": {
-            "x": 123,
-            "y": 979,
-            "w": 242,
-            "h": 224
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "car-red/idle/00",
-          "frame": {
-            "x": 1784,
-            "y": 1166,
-            "w": 242,
-            "h": 224
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 715,
-            "y": 979,
-            "w": 242,
-            "h": 224
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "car-yellow/idle/00",
-          "frame": {
-            "x": 1784,
-            "y": 1394,
-            "w": 242,
-            "h": 224
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 419,
-            "y": 979,
-            "w": 242,
-            "h": 224
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "crossing-road/idle/00",
-          "frame": {
-            "x": 2,
-            "y": 1531,
-            "w": 222,
-            "h": 507
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 913,
-            "y": 1029,
-            "w": 222,
-            "h": 507
+            "x": 1336,
+            "y": 343,
+            "w": 129,
+            "h": 114
           },
           "sourceSize": {
             "w": 2048,
@@ -112,8 +37,8 @@
         {
           "filename": "crossing/idle/00",
           "frame": {
-            "x": 1254,
-            "y": 1622,
+            "x": 1028,
+            "y": 1626,
             "w": 352,
             "h": 392
           },
@@ -135,20 +60,20 @@
           }
         },
         {
-          "filename": "friend-rooster/idle/00",
+          "filename": "crossing/wave/00",
           "frame": {
-            "x": 1610,
-            "y": 1531,
-            "w": 166,
-            "h": 265
+            "x": 1384,
+            "y": 1626,
+            "w": 352,
+            "h": 392
           },
           "rotated": false,
           "trimmed": true,
           "spriteSourceSize": {
-            "x": 1653,
-            "y": 838,
-            "w": 166,
-            "h": 265
+            "x": 898,
+            "y": 964,
+            "w": 352,
+            "h": 392
           },
           "sourceSize": {
             "w": 2048,
@@ -187,8 +112,8 @@
         {
           "filename": "hill/a/00",
           "frame": {
-            "x": 228,
-            "y": 1622,
+            "x": 2,
+            "y": 1626,
             "w": 1022,
             "h": 402
           },
@@ -210,45 +135,20 @@
           }
         },
         {
-          "filename": "pop/idle/00",
+          "filename": "puff/idle/00",
           "frame": {
-            "x": 1780,
-            "y": 1622,
-            "w": 160,
-            "h": 160
+            "x": 1873,
+            "y": 1931,
+            "w": 141,
+            "h": 112
           },
           "rotated": false,
           "trimmed": true,
           "spriteSourceSize": {
-            "x": 760,
-            "y": 320,
-            "w": 160,
-            "h": 160
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "seat-sheep/idle/00",
-          "frame": {
-            "x": 1776,
-            "y": 1800,
-            "w": 184,
-            "h": 233
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 744,
-            "y": 845,
-            "w": 184,
-            "h": 233
+            "x": 529,
+            "y": 344,
+            "w": 141,
+            "h": 112
           },
           "sourceSize": {
             "w": 2048,
@@ -262,8 +162,8 @@
         {
           "filename": "tree/a/00",
           "frame": {
-            "x": 1784,
-            "y": 633,
+            "x": 1740,
+            "y": 1626,
             "w": 260,
             "h": 301
           },
@@ -285,45 +185,20 @@
           }
         },
         {
-          "filename": "tree/b/00",
-          "frame": {
-            "x": 1610,
-            "y": 1800,
-            "w": 162,
-            "h": 240
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 943,
-            "y": 819,
-            "w": 162,
-            "h": 240
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
           "filename": "tunnel/back/00",
           "frame": {
             "x": 2,
             "y": 633,
-            "w": 1778,
-            "h": 894
+            "w": 1978,
+            "h": 989
           },
           "rotated": false,
           "trimmed": true,
           "spriteSourceSize": {
             "x": 34,
-            "y": 298,
-            "w": 1778,
-            "h": 894
+            "y": 203,
+            "w": 1978,
+            "h": 989
           },
           "sourceSize": {
             "w": 2048,
@@ -341,40 +216,15 @@
       "format": "RGBA8888",
       "size": {
         "w": 2048,
-        "h": 2038
+        "h": 2040
       },
       "scale": 1,
       "frames": [
         {
-          "filename": "bird/a/00",
-          "frame": {
-            "x": 2,
-            "y": 1885,
-            "w": 129,
-            "h": 114
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1336,
-            "y": 343,
-            "w": 129,
-            "h": 114
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
           "filename": "bird/b/00",
           "frame": {
-            "x": 390,
-            "y": 894,
+            "x": 1886,
+            "y": 1876,
             "w": 129,
             "h": 94
           },
@@ -399,7 +249,7 @@
           "filename": "bridge/idle/00",
           "frame": {
             "x": 2,
-            "y": 1245,
+            "y": 910,
             "w": 382,
             "h": 636
           },
@@ -423,8 +273,8 @@
         {
           "filename": "car-blue/front/00",
           "frame": {
-            "x": 548,
-            "y": 1672,
+            "x": 1438,
+            "y": 910,
             "w": 236,
             "h": 94
           },
@@ -448,8 +298,8 @@
         {
           "filename": "car-red/front/00",
           "frame": {
-            "x": 788,
-            "y": 1672,
+            "x": 952,
+            "y": 1909,
             "w": 236,
             "h": 94
           },
@@ -473,8 +323,8 @@
         {
           "filename": "car-yellow/front/00",
           "frame": {
-            "x": 1028,
-            "y": 1660,
+            "x": 1192,
+            "y": 1909,
             "w": 236,
             "h": 94
           },
@@ -496,10 +346,35 @@
           }
         },
         {
+          "filename": "cloud/a/00",
+          "frame": {
+            "x": 952,
+            "y": 646,
+            "w": 421,
+            "h": 250
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 813,
+            "y": 175,
+            "w": 421,
+            "h": 250
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
           "filename": "cloud/b/00",
           "frame": {
-            "x": 943,
-            "y": 1440,
+            "x": 1678,
+            "y": 910,
             "w": 353,
             "h": 216
           },
@@ -523,8 +398,8 @@
         {
           "filename": "cow/idle/00",
           "frame": {
-            "x": 1694,
-            "y": 1411,
+            "x": 567,
+            "y": 646,
             "w": 146,
             "h": 177
           },
@@ -546,20 +421,20 @@
           }
         },
         {
-          "filename": "crossing/wave/00",
+          "filename": "crossing-road/idle/00",
           "frame": {
-            "x": 1494,
-            "y": 1015,
-            "w": 352,
-            "h": 392
+            "x": 726,
+            "y": 1531,
+            "w": 222,
+            "h": 507
           },
           "rotated": false,
           "trimmed": true,
           "spriteSourceSize": {
-            "x": 898,
-            "y": 964,
-            "w": 352,
-            "h": 392
+            "x": 913,
+            "y": 1029,
+            "w": 222,
+            "h": 507
           },
           "sourceSize": {
             "w": 2048,
@@ -573,8 +448,8 @@
         {
           "filename": "dest-beach/idle/00",
           "frame": {
-            "x": 555,
-            "y": 894,
+            "x": 1497,
+            "y": 1712,
             "w": 385,
             "h": 322
           },
@@ -596,60 +471,10 @@
           }
         },
         {
-          "filename": "dest-fair/idle/00",
-          "frame": {
-            "x": 2,
-            "y": 894,
-            "w": 384,
-            "h": 345
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1564,
-            "y": 793,
-            "w": 384,
-            "h": 345
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "dest-playground/idle/00",
-          "frame": {
-            "x": 555,
-            "y": 1220,
-            "w": 384,
-            "h": 448
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1564,
-            "y": 690,
-            "w": 384,
-            "h": 448
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
           "filename": "engine/happy/00",
           "frame": {
-            "x": 946,
-            "y": 570,
+            "x": 1484,
+            "y": 475,
             "w": 451,
             "h": 431
           },
@@ -673,8 +498,8 @@
         {
           "filename": "engine/idle/00",
           "frame": {
-            "x": 1401,
-            "y": 580,
+            "x": 1497,
+            "y": 1277,
             "w": 451,
             "h": 431
           },
@@ -698,8 +523,8 @@
         {
           "filename": "engine/run/00",
           "frame": {
-            "x": 1401,
-            "y": 580,
+            "x": 1497,
+            "y": 1277,
             "w": 451,
             "h": 431
           },
@@ -723,8 +548,8 @@
         {
           "filename": "engine/run/01",
           "frame": {
-            "x": 944,
-            "y": 1005,
+            "x": 952,
+            "y": 1474,
             "w": 451,
             "h": 431
           },
@@ -748,8 +573,8 @@
         {
           "filename": "engine/toot/00",
           "frame": {
-            "x": 1424,
-            "y": 107,
+            "x": 1484,
+            "y": 2,
             "w": 451,
             "h": 469
           },
@@ -773,8 +598,8 @@
         {
           "filename": "fence/idle/00",
           "frame": {
-            "x": 1424,
-            "y": 2,
+            "x": 812,
+            "y": 903,
             "w": 622,
             "h": 101
           },
@@ -798,8 +623,8 @@
         {
           "filename": "fish/idle/00",
           "frame": {
-            "x": 1694,
-            "y": 1858,
+            "x": 1667,
+            "y": 1130,
             "w": 141,
             "h": 130
           },
@@ -821,185 +646,10 @@
           }
         },
         {
-          "filename": "friend-cat/happy/00",
-          "frame": {
-            "x": 388,
-            "y": 1503,
-            "w": 156,
-            "h": 264
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1672,
-            "y": 830,
-            "w": 156,
-            "h": 264
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "friend-cat/idle/00",
-          "frame": {
-            "x": 604,
-            "y": 1770,
-            "w": 154,
-            "h": 265
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1659,
-            "y": 838,
-            "w": 154,
-            "h": 265
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "friend-cat/wave/00",
-          "frame": {
-            "x": 762,
-            "y": 1770,
-            "w": 154,
-            "h": 265
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1653,
-            "y": 833,
-            "w": 154,
-            "h": 265
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "friend-cow/idle/00",
-          "frame": {
-            "x": 1856,
-            "y": 960,
-            "w": 188,
-            "h": 281
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1642,
-            "y": 822,
-            "w": 188,
-            "h": 281
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "friend-cow/wave/00",
-          "frame": {
-            "x": 1856,
-            "y": 674,
-            "w": 189,
-            "h": 282
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1641,
-            "y": 816,
-            "w": 189,
-            "h": 282
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "friend-horse/happy/00",
-          "frame": {
-            "x": 1879,
-            "y": 377,
-            "w": 164,
-            "h": 293
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1651,
-            "y": 800,
-            "w": 164,
-            "h": 293
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "friend-horse/idle/00",
-          "frame": {
-            "x": 1494,
-            "y": 1648,
-            "w": 194,
-            "h": 293
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1639,
-            "y": 810,
-            "w": 194,
-            "h": 293
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
           "filename": "friend-pig/happy/00",
           "frame": {
-            "x": 388,
-            "y": 1243,
+            "x": 201,
+            "y": 646,
             "w": 163,
             "h": 256
           },
@@ -1023,8 +673,8 @@
         {
           "filename": "friend-pig/idle/00",
           "frame": {
-            "x": 1841,
-            "y": 1766,
+            "x": 726,
+            "y": 646,
             "w": 180,
             "h": 253
           },
@@ -1048,8 +698,8 @@
         {
           "filename": "friend-pig/wave/00",
           "frame": {
-            "x": 1844,
-            "y": 1509,
+            "x": 368,
+            "y": 646,
             "w": 195,
             "h": 253
           },
@@ -1071,10 +721,596 @@
           }
         },
         {
+          "filename": "friend-rooster/idle/00",
+          "frame": {
+            "x": 1497,
+            "y": 1008,
+            "w": 166,
+            "h": 265
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1653,
+            "y": 838,
+            "w": 166,
+            "h": 265
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "friend-sheep/happy/00",
+          "frame": {
+            "x": 2,
+            "y": 646,
+            "w": 195,
+            "h": 260
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1647,
+            "y": 833,
+            "w": 195,
+            "h": 260
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "platform/idle/00",
+          "frame": {
+            "x": 316,
+            "y": 1550,
+            "w": 406,
+            "h": 478
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1553,
+            "y": 695,
+            "w": 406,
+            "h": 478
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "pop/idle/00",
+          "frame": {
+            "x": 1886,
+            "y": 1712,
+            "w": 160,
+            "h": 160
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 760,
+            "y": 320,
+            "w": 160,
+            "h": 160
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "rainbow/idle/00",
+          "frame": {
+            "x": 812,
+            "y": 1008,
+            "w": 681,
+            "h": 462
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 683,
+            "y": 329,
+            "w": 681,
+            "h": 462
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tunnel-portal/back/00",
+          "frame": {
+            "x": 2,
+            "y": 1550,
+            "w": 310,
+            "h": 486
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 869,
+            "y": 693,
+            "w": 310,
+            "h": 486
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tunnel-portal/front/00",
+          "frame": {
+            "x": 388,
+            "y": 910,
+            "w": 420,
+            "h": 617
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 814,
+            "y": 613,
+            "w": 420,
+            "h": 617
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tunnel/front/00",
+          "frame": {
+            "x": 2,
+            "y": 2,
+            "w": 1478,
+            "h": 640
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 284,
+            "y": 579,
+            "w": 1478,
+            "h": 640
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "image": "train-2.png",
+      "format": "RGBA8888",
+      "size": {
+        "w": 1966,
+        "h": 1370
+      },
+      "scale": 1,
+      "frames": [
+        {
+          "filename": "car-blue/idle/00",
+          "frame": {
+            "x": 1722,
+            "y": 2,
+            "w": 242,
+            "h": 224
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 123,
+            "y": 979,
+            "w": 242,
+            "h": 224
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-red/idle/00",
+          "frame": {
+            "x": 1722,
+            "y": 230,
+            "w": 242,
+            "h": 224
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 715,
+            "y": 979,
+            "w": 242,
+            "h": 224
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "car-yellow/idle/00",
+          "frame": {
+            "x": 1334,
+            "y": 351,
+            "w": 242,
+            "h": 224
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 419,
+            "y": 979,
+            "w": 242,
+            "h": 224
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "cow/happy/00",
+          "frame": {
+            "x": 1580,
+            "y": 351,
+            "w": 135,
+            "h": 191
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 958,
+            "y": 1171,
+            "w": 135,
+            "h": 191
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dest-fair/idle/00",
+          "frame": {
+            "x": 1334,
+            "y": 2,
+            "w": 384,
+            "h": 345
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1564,
+            "y": 793,
+            "w": 384,
+            "h": 345
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "dest-playground/idle/00",
+          "frame": {
+            "x": 946,
+            "y": 2,
+            "w": 384,
+            "h": 448
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1564,
+            "y": 690,
+            "w": 384,
+            "h": 448
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "friend-cat/happy/00",
+          "frame": {
+            "x": 1008,
+            "y": 454,
+            "w": 156,
+            "h": 264
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1672,
+            "y": 830,
+            "w": 156,
+            "h": 264
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "friend-cat/idle/00",
+          "frame": {
+            "x": 1328,
+            "y": 579,
+            "w": 154,
+            "h": 265
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1659,
+            "y": 838,
+            "w": 154,
+            "h": 265
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "friend-cat/wave/00",
+          "frame": {
+            "x": 1168,
+            "y": 691,
+            "w": 154,
+            "h": 265
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1653,
+            "y": 833,
+            "w": 154,
+            "h": 265
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "friend-cow/happy/00",
+          "frame": {
+            "x": 821,
+            "y": 454,
+            "w": 183,
+            "h": 291
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1651,
+            "y": 803,
+            "w": 183,
+            "h": 291
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "friend-cow/idle/00",
+          "frame": {
+            "x": 200,
+            "y": 595,
+            "w": 188,
+            "h": 281
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1642,
+            "y": 822,
+            "w": 188,
+            "h": 281
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "friend-cow/wave/00",
+          "frame": {
+            "x": 440,
+            "y": 326,
+            "w": 189,
+            "h": 282
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1641,
+            "y": 816,
+            "w": 189,
+            "h": 282
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "friend-horse/happy/00",
+          "frame": {
+            "x": 200,
+            "y": 880,
+            "w": 164,
+            "h": 293
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1651,
+            "y": 800,
+            "w": 164,
+            "h": 293
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "friend-horse/idle/00",
+          "frame": {
+            "x": 2,
+            "y": 594,
+            "w": 194,
+            "h": 293
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1639,
+            "y": 810,
+            "w": 194,
+            "h": 293
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "friend-horse/wave/00",
+          "frame": {
+            "x": 633,
+            "y": 579,
+            "w": 180,
+            "h": 293
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 1635,
+            "y": 804,
+            "w": 180,
+            "h": 293
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
           "filename": "friend-rooster/happy/00",
           "frame": {
-            "x": 1694,
-            "y": 1592,
+            "x": 1008,
+            "y": 722,
             "w": 143,
             "h": 262
           },
@@ -1098,8 +1334,8 @@
         {
           "filename": "friend-rooster/wave/00",
           "frame": {
-            "x": 1879,
-            "y": 107,
+            "x": 392,
+            "y": 749,
             "w": 165,
             "h": 266
           },
@@ -1121,35 +1357,10 @@
           }
         },
         {
-          "filename": "friend-sheep/happy/00",
-          "frame": {
-            "x": 1850,
-            "y": 1245,
-            "w": 195,
-            "h": 260
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1647,
-            "y": 833,
-            "w": 195,
-            "h": 260
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
           "filename": "friend-sheep/idle/00",
           "frame": {
-            "x": 388,
-            "y": 1771,
+            "x": 224,
+            "y": 326,
             "w": 212,
             "h": 265
           },
@@ -1173,8 +1384,8 @@
         {
           "filename": "friend-sheep/wave/00",
           "frame": {
-            "x": 920,
-            "y": 1770,
+            "x": 2,
+            "y": 326,
             "w": 218,
             "h": 264
           },
@@ -1199,7 +1410,7 @@
           "filename": "hill/b/00",
           "frame": {
             "x": 2,
-            "y": 570,
+            "y": 2,
             "w": 940,
             "h": 320
           },
@@ -1223,8 +1434,8 @@
         {
           "filename": "hot-air/idle/00",
           "frame": {
-            "x": 1268,
-            "y": 1660,
+            "x": 1719,
+            "y": 458,
             "w": 222,
             "h": 362
           },
@@ -1246,35 +1457,10 @@
           }
         },
         {
-          "filename": "puff/idle/00",
-          "frame": {
-            "x": 135,
-            "y": 1885,
-            "w": 141,
-            "h": 112
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 529,
-            "y": 344,
-            "w": 141,
-            "h": 112
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
           "filename": "seat-cat/idle/00",
           "frame": {
-            "x": 1559,
-            "y": 1411,
+            "x": 1580,
+            "y": 546,
             "w": 131,
             "h": 233
           },
@@ -1298,8 +1484,8 @@
         {
           "filename": "seat-cow/idle/00",
           "frame": {
-            "x": 390,
-            "y": 1005,
+            "x": 2,
+            "y": 1135,
             "w": 161,
             "h": 233
           },
@@ -1323,8 +1509,8 @@
         {
           "filename": "seat-horse/idle/00",
           "frame": {
-            "x": 1142,
-            "y": 1758,
+            "x": 1486,
+            "y": 783,
             "w": 122,
             "h": 233
           },
@@ -1348,8 +1534,8 @@
         {
           "filename": "seat-pig/idle/00",
           "frame": {
-            "x": 1399,
-            "y": 1411,
+            "x": 1168,
+            "y": 454,
             "w": 156,
             "h": 233
           },
@@ -1371,196 +1557,10 @@
           }
         },
         {
-          "filename": "tunnel/front/00",
-          "frame": {
-            "x": 2,
-            "y": 2,
-            "w": 1418,
-            "h": 564
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 214,
-            "y": 686,
-            "w": 1418,
-            "h": 564
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        }
-      ]
-    },
-    {
-      "image": "train-2.png",
-      "format": "RGBA8888",
-      "size": {
-        "w": 1791,
-        "h": 551
-      },
-      "scale": 1,
-      "frames": [
-        {
-          "filename": "cloud/a/00",
-          "frame": {
-            "x": 687,
-            "y": 2,
-            "w": 421,
-            "h": 250
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 813,
-            "y": 175,
-            "w": 421,
-            "h": 250
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "cow/happy/00",
-          "frame": {
-            "x": 1522,
-            "y": 2,
-            "w": 135,
-            "h": 191
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 958,
-            "y": 1171,
-            "w": 135,
-            "h": 191
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "friend-cow/happy/00",
-          "frame": {
-            "x": 687,
-            "y": 256,
-            "w": 183,
-            "h": 291
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1651,
-            "y": 803,
-            "w": 183,
-            "h": 291
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "friend-horse/wave/00",
-          "frame": {
-            "x": 874,
-            "y": 256,
-            "w": 180,
-            "h": 293
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1635,
-            "y": 804,
-            "w": 180,
-            "h": 293
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "platform/idle/00",
-          "frame": {
-            "x": 1112,
-            "y": 2,
-            "w": 406,
-            "h": 478
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 1553,
-            "y": 695,
-            "w": 406,
-            "h": 478
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
-          "filename": "rainbow/idle/00",
-          "frame": {
-            "x": 2,
-            "y": 2,
-            "w": 681,
-            "h": 462
-          },
-          "rotated": false,
-          "trimmed": true,
-          "spriteSourceSize": {
-            "x": 683,
-            "y": 329,
-            "w": 681,
-            "h": 462
-          },
-          "sourceSize": {
-            "w": 2048,
-            "h": 1536
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          }
-        },
-        {
           "filename": "seat-rooster/idle/00",
           "frame": {
-            "x": 1661,
-            "y": 2,
+            "x": 817,
+            "y": 848,
             "w": 128,
             "h": 233
           },
@@ -1571,6 +1571,56 @@
             "y": 845,
             "w": 128,
             "h": 233
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "seat-sheep/idle/00",
+          "frame": {
+            "x": 633,
+            "y": 326,
+            "w": 184,
+            "h": 233
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 744,
+            "y": 845,
+            "w": 184,
+            "h": 233
+          },
+          "sourceSize": {
+            "w": 2048,
+            "h": 1536
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "filename": "tree/b/00",
+          "frame": {
+            "x": 2,
+            "y": 891,
+            "w": 162,
+            "h": 240
+          },
+          "rotated": false,
+          "trimmed": true,
+          "spriteSourceSize": {
+            "x": 943,
+            "y": 819,
+            "w": 162,
+            "h": 240
           },
           "sourceSize": {
             "w": 2048,

@@ -22,16 +22,18 @@
 #   - seat-<friend>: the friend sitting in car 0 (drawn between the car and its front wall: it sits inside);
 #   - friend-<friend> (idle [1], wave [10], happy [20]) on the platform's ground pivot anchor.friend;
 #   - platform (a wooden platform with a little blue roof and a round sign), dest-<id> (the beach, a playground, a
-#     fair), tunnel (states back: the hill behind the train; front: its lower slope with the two stone portals, drawn
-#     over the train): drawn where they stop (the scene scrolls them);
+#     fair), tunnel (states back: the hill behind the train; front: the mound over the track, drawn over the train),
+#     tunnel-portal (one stone portal on the track, drawn at both ends; back: its dark mouth behind the train; front: the
+#     arch and the grass wall over it, drawn over the train): drawn where they stop (the scene scrolls them);
 #   - ground (a strip as wide as the frame with the track on it; it tiles), hill (a, b), tree (a, b), fence: their
 #     rendered y kept;
 #   - cloud (a, b), bird (a, b), cow (idle, happy), puff, pop, crossing (idle, wave: a level crossing, its sign and a
-#     little pink car whose fox driver waves), bridge (a river under the track and its stone bridge), fish,
+#     little pink car whose fox driver waves), crossing-road (its road, drawn under the train), bridge (a river under the track and its stone bridge), fish,
 #     hot-air, rainbow.
 # Layout: hit.engine, hit.car-<n> (raw hulls: render.ts keeps them unpadded), hit.platform, hit.friend-<id>,
 # hit.dest-<id>; anchors engine, chimney, nose, tail, car-<n>, seat-<n>, platform, friend, dest, drop-<n>, tunnel,
-# tunnel-end, surprise, cow.
+# tunnel-end, portal, portal-edge, surprise, cow.
+import bmesh
 import json
 import math
 import os
@@ -95,10 +97,11 @@ HIT_PAD_PX = 24.0  # Tokens.spacing.hitPad (the pipeline pads the platform, frie
 
 # --- the tunnel (design px) -----------------------------------------------------------------------------------------
 TUNNEL_MARGIN_PX = 20.0  # each end of the mound this far outside the train's tail and nose
-TUNNEL_SHIFT_PX = 66.0
-TUNNEL_FRONT_TOP_PX = 352.0  # the mound's front edge: well over the engine's roof and the seated friends' heads
-TUNNEL_END_PX = 105.0  # each stone arch's centre this far inside its end of the mound (the arch stays on its face)
-TUNNEL_BACK_TOP_PX = 262.0
+TUNNEL_SHIFT_PX = 116.0  # the hill rendered this far right of the train: centred in frame
+TUNNEL_FRONT_TOP_PX = 300.0  # the mound's front edge: over the portals' arches (and the engine's roof)
+TUNNEL_BACK_TOP_PX = 215.0
+PORTAL_X = 512.0  # the portal sprite is rendered here (the scene draws it at both ends of the tunnel)
+PORTAL_R, PORTAL_LEG = 0.86, 1.7  # the arch (m; its tube 0.14): the opening is taller than the engine (~2.2 m)
 
 # --- the ground, hills, trees, fences (design px) -------------------------------------------------------------------
 GROUND_TOP_DEPTH = 7.0
@@ -614,54 +617,96 @@ def hill_shape(d):
 
 
 def build_tunnel(c, sprites, layout, tail_x, nose_x):
+    """The tunnel, in two sprites. `tunnel` (back: the tall hill behind the track; front: the grassy mound over the
+    track between the portals, drawn over the train) runs from x0 to x1 (anchor.tunnel, anchor.tunnel-end: where the
+    train goes out of sight). `tunnel-portal` is one stone portal standing ON the track (the scene draws it at both
+    ends, its inner opening edge on x0 and on x1): back, its dark mouth behind the track (the train passes in front of
+    it, in the doorway); front, the arch, its legs and the wall of grass over it (drawn over the train). The train
+    rides into the dark doorway and goes out of sight behind the portal's inner leg and the mound; never under a
+    rounded corner (the cab's roof once peeked out there). Two sprites keep each one well under the atlas width."""
     group = sprite(sprites, 'tunnel')
-    # Rendered TUNNEL_SHIFT_PX right of the train (it scrolls: only its length matters), so the whole hill is in frame.
+    # Rendered so the whole hill is centred in frame (it scrolls: only its length matters).
     x0, x1 = tail_x - TUNNEL_MARGIN_PX + TUNNEL_SHIFT_PX, nose_x + TUNNEL_MARGIN_PX + TUNNEL_SHIFT_PX
     mid = (x0 + x1) / 2
     half = (x1 - x0) / 2 / bp.ORTHO_PX_PER_M
     hill, hill_dark = mat(c['tunnelHill'], 0.85), mat(c['tunnelHillDark'], 0.85)
     stone, stone_dark = mat(c['stone'], 0.7), mat(c['stoneDark'], 0.7)
     inside = mat(c['tunnelInside'], 0.9)
-    # Back: a tall rounded hill behind the track with a few trees on it.
+    fz = (REF_PX[1] - TUNNEL_FRONT_TOP_PX) / bp.ORTHO_PX_PER_M / math.cos(bp.P) - 1.0 * math.tan(bp.P)
+    # Back: a tall rounded hill behind the track (past both portals) with a few trees on it.
     back = bp.state_child(group, 'tunnel', 'back')
     broot = ground_root('tunnel-back-root', back, mid, 1.2)
     top_z = (REF_PX[1] - TUNNEL_BACK_TOP_PX) / bp.ORTHO_PX_PER_M / math.cos(bp.P)
-    blob('tunnel-back-hill', hill_dark, back, broot, (0.0, 0.6, 0.0), (half + 0.9, 1.6, top_z), shape=hill_shape, seg=(64, 24))
+    blob('tunnel-back-hill', hill_dark, back, broot, (0.0, 0.6, 0.0), (half + 1.4, 1.6, top_z), shape=hill_shape, seg=(64, 24))
     for k, (dx, s) in enumerate(((-0.45, 1.0), (0.1, 1.2), (0.55, 0.9))):
         x = dx * half
-        z = top_z * math.sqrt(max(0.0, 1 - (x / (half + 0.9)) ** 2)) - 0.12
+        z = top_z * math.sqrt(max(0.0, 1 - (x / (half + 1.4)) ** 2)) - 0.12
         bp.tree(f'tunnel-tree-{k}', c, back, broot, (x, 0.2, z), s)
-    # Front: a long grassy mound across the track, taller than the train (drawn over it): the train goes out of sight
-    # at its square-ish ends (x0, x1: the anchors), never under a rounded corner (that let the cab's roof peek out). A
-    # stone arch with its dark mouth faces the camera on the mound's face by each end; flowers between them.
+    # Front: the mound over the track from x0 to x1 (its ends go under the portals' walls), flowers on its face.
     front = bp.state_child(group, 'tunnel', 'front')
     froot = ground_root('tunnel-front-root', front, mid, -0.1)
-    fz = (REF_PX[1] - TUNNEL_FRONT_TOP_PX) / bp.ORTHO_PX_PER_M / math.cos(bp.P) - 1.0 * math.tan(bp.P)
-    rbox('tunnel-front-hill', (2 * half, 1.9, fz), 0.22, hill, front, froot, (0.0, 0.0, fz / 2), seg=6)
-    blob('tunnel-front-crest', hill, front, froot, (0.0, 0.2, fz - 0.2), (half - 0.1, 0.8, 0.45), seg=(96, 16))
-    for k, x in enumerate((-half * 0.33, -half * 0.1, half * 0.12, half * 0.35)):
-        bp.flower(f'tunnel-flower-{k}', front, froot, (x, -0.98, fz * (0.45 + 0.12 * (k % 2))), 0.13, mat(c['flower'] if k % 2 else c['trim'], 0.5), mat(c['flowerCentre'], 0.5))
-        bp.flower(f'tunnel-flower-top-{k}', front, froot, (x + 0.3, -0.4, fz + 0.02), 0.11, mat(c['flower'], 0.5), mat(c['flowerCentre'], 0.5))
-    arch_r, arch_leg = 0.8, 1.35
-    end = TUNNEL_END_PX / bp.ORTHO_PX_PER_M
-    for side, sx in (('left', -1), ('right', 1)):
-        portal = empty(f'tunnel-portal-{side}', front, froot, (sx * (half - end), -1.0, 0.0))
-        arch = torus_bm(arch_r, 0.16, arc=(0.0, 180.0), seg=40, tube=12)
-        o = mesh_obj(f'tunnel-arch-{side}', arch, stone, front)
-        bp.place(o, portal, (0.0, 0.0, arch_leg), (90.0, 0.0, 0.0))
-        o['cute'] = 1
-        for s2 in (-1, 1):
-            rbox(f'tunnel-jamb-{side}-{s2}', (0.32, 0.3, arch_leg + 0.02), 0.07, stone, front, portal, (arch_r * s2, 0.0, (arch_leg + 0.02) / 2))
-        blob(f'tunnel-mouth-{side}', inside, front, portal, (0.0, 0.03, 0.0), (arch_r - 0.08, 0.05, arch_leg + arch_r - 0.08), shape=hill_shape, seg=(40, 16))
-        for k in range(5):
-            a = math.radians(18.0 + 36.0 * k)
-            blob(f'tunnel-stone-{side}-{k}', stone_dark, front, portal, (math.cos(a) * arch_r, -0.14, arch_leg + math.sin(a) * arch_r), (0.09, 0.05, 0.07), seg=(12, 8))
+    rbox('tunnel-front-hill', (2 * half + 0.3, 1.5, fz), 0.22, hill, front, froot, (0.0, 0.2, fz / 2), seg=6)
+    blob('tunnel-front-crest', hill, front, froot, (0.0, 0.3, fz - 0.2), (half, 0.7, 0.45), seg=(96, 16))
+    for k, x in enumerate((-half * 0.55, -half * 0.2, half * 0.18, half * 0.55)):
+        bp.flower(f'tunnel-flower-{k}', front, froot, (x, -0.58, fz * (0.45 + 0.12 * (k % 2))), 0.13, mat(c['flower'] if k % 2 else c['trim'], 0.5), mat(c['flowerCentre'], 0.5))
+        bp.flower(f'tunnel-flower-top-{k}', front, froot, (x + 0.3, -0.1, fz + 0.02), 0.11, mat(c['flower'], 0.5), mat(c['flowerCentre'], 0.5))
     bpy.context.view_layer.update()
     rb = mesh_rect(bp.meshes_of(broot))
     rf = mesh_rect(bp.meshes_of(froot))
-    log(f'tunnel back {fmt_rect(rb)}, front {fmt_rect(rf)}; portals x {x0:.0f} … {x1:.0f}')
+    log(f'tunnel back {fmt_rect(rb)}, front {fmt_rect(rf)}; out of sight x {x0:.0f} … {x1:.0f}')
     add_empty('anchor.tunnel', (wx(x0), 0.0, 0.0), layout)
     add_empty('anchor.tunnel-end', (wx(x1), 0.0, 0.0), layout)
+
+    # The portal (one, drawn at both ends): the arch on the track, just in front of the train's near side.
+    pgroup = sprite(sprites, 'tunnel-portal')
+    pr, tube, leg = PORTAL_R, 0.14, PORTAL_LEG
+    inner = pr - tube
+    outer = pr + tube
+    pback = bp.state_child(pgroup, 'tunnel-portal', 'back')
+    pbroot = ground_root('tunnel-portal-back-root', pback, PORTAL_X, 0.55)
+    # The dark mouth fills the opening (a box up to the legs' tops, a disc over it), behind the track.
+    rbox('tunnel-mouth-low', (2 * inner + 0.1, 0.1, leg), 0.02, inside, pback, pbroot, (0.0, 0.0, leg / 2))
+    blob('tunnel-mouth-top', inside, pback, pbroot, (0.0, 0.0, leg), (inner + 0.05, 0.05, inner + 0.05), seg=(40, 16))
+    pfront = bp.state_child(pgroup, 'tunnel-portal', 'front')
+    pfroot = ground_root('tunnel-portal-front-root', pfront, PORTAL_X, -0.62)
+    arch = torus_bm(pr, tube, arc=(0.0, 180.0), seg=40, tube=12)
+    o = mesh_obj('tunnel-arch', arch, stone, pfront)
+    bp.place(o, pfroot, (0.0, 0.0, leg), (90.0, 0.0, 0.0))
+    o['cute'] = 1
+    for s2 in (-1, 1):
+        rbox(f'tunnel-jamb-{s2}', (2 * tube + 0.04, 0.3, leg + 0.02), 0.07, stone, pfront, pfroot, (pr * s2, 0.0, (leg + 0.02) / 2))
+    for k in range(5):
+        a = math.radians(18.0 + 36.0 * k)
+        blob(f'tunnel-stone-{k}', stone_dark, pfront, pfroot, (math.cos(a) * pr, -0.13, leg + math.sin(a) * pr), (0.09, 0.05, 0.07), seg=(12, 8))
+    # The wall of grass over the arch, up to the mound's top: a slab with an arched hole (its edge under the arch).
+    hole = pr
+    bm = bmesh.new()
+    outline = [(-outer, leg)]
+    for i in range(33):
+        a = math.pi * (1 - i / 32)
+        outline.append((math.cos(a) * hole, leg + math.sin(a) * hole))
+    outline += [(outer, leg), (outer, fz), (-outer, fz)]
+    ring_f = [bm.verts.new((x, -0.12, z)) for x, z in outline]
+    ring_b = [bm.verts.new((x, 0.12, z)) for x, z in outline]
+    bm.faces.new(ring_f)
+    bm.faces.new(list(reversed(ring_b)))
+    n = len(outline)
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((ring_f[j], ring_f[i], ring_b[i], ring_b[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    wall = mesh_obj('tunnel-wall', bm, hill, pfront, smooth=False)
+    bp.place(wall, pfroot, (0.0, 0.08, 0.0), (0.0, 0.0, 0.0))
+    blob('tunnel-wall-crest', hill, pfront, pfroot, (0.0, 0.1, fz - 0.05), (outer + 0.05, 0.25, 0.3), seg=(32, 12))
+    for s2 in (-1, 1):
+        bp.flower(f'tunnel-wall-flower-{s2}', pfront, pfroot, (s2 * (inner * 0.55), -0.16, leg + inner + 0.25), 0.11, mat(c['flower'], 0.5), mat(c['flowerCentre'], 0.5))
+    bpy.context.view_layer.update()
+    rp = mesh_rect(bp.meshes_of(pfroot))
+    log(f'tunnel portal front {fmt_rect(rp)}; opening ±{inner * bp.ORTHO_PX_PER_M:.0f} px')
+    # The portal's pivot (its middle on the track) and its opening's right edge: the scene puts that edge on x0 (and
+    # the mirrored left edge on x1).
+    add_empty('anchor.portal', (wx(PORTAL_X), 0.0, 0.0), layout)
+    add_empty('anchor.portal-edge', (wx(PORTAL_X + inner * bp.ORTHO_PX_PER_M), 0.0, 0.0), layout)
     return rf
 
 

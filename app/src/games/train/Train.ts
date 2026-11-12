@@ -134,6 +134,10 @@ export class Train extends MiniGameBase<'train'> {
   private friendAt: Point = { x: 0, y: 0 };
   private destAt: Point = { x: 0, y: 0 };
   private tunnelAt: Point = { x: 0, y: 0 };
+  /** The portal's ground pivot (its middle on the track) and how far its opening's edge is from it (design px). */
+  private portalAt: Point = { x: 0, y: 0 };
+  private portalEdge = 0;
+  private tunnelLen = 0;
   private surpriseAt: Point = { x: 0, y: 0 };
   private cowAt: Point = { x: 0, y: 0 };
   private engineBox: GameObjects.Container | undefined;
@@ -214,6 +218,9 @@ export class Train extends MiniGameBase<'train'> {
     const nose = this.anchor(ANCHORS.nose) ?? centre;
     const tail = this.anchor(ANCHORS.tail) ?? centre;
     const tunnelEnd = this.anchor(ANCHORS.tunnelEnd) ?? this.tunnelAt;
+    this.tunnelLen = tunnelEnd.x - this.tunnelAt.x;
+    this.portalAt = this.anchor(ANCHORS.portal) ?? this.tunnelAt;
+    this.portalEdge = (this.anchor(ANCHORS.portalEdge)?.x ?? this.portalAt.x) - this.portalAt.x;
 
     const rs = this.layout.renderScale;
     const bg = BACKGROUNDS.train;
@@ -239,7 +246,7 @@ export class Train extends MiniGameBase<'train'> {
         tailX: tail.x,
         platformX: this.platformAt.x,
         destX: this.destAt.x,
-        tunnelLen: tunnelEnd.x - this.tunnelAt.x,
+        tunnelLen: this.tunnelLen,
         cowY: cowRect ? cowRect.y + cowRect.height / 2 : this.cowAt.y,
         surpriseY: this.surpriseAt.y,
       },
@@ -499,6 +506,16 @@ export class Train extends MiniGameBase<'train'> {
     } else if (thing.kind === 'tunnel') {
       part(T(TUNNEL_FRAMES.back, this.tunnelAt, Depth.tunnelBack), this.tunnelAt, this.tunnelAt);
       part(T(TUNNEL_FRAMES.front, this.tunnelAt, Depth.tunnelFront), this.tunnelAt, this.tunnelAt);
+      // A portal on the track at each end (drawn after the mound: its arch and wall over the mound's end). The
+      // train rides into its dark doorway and goes out of sight at the opening's inner edge (x, and x + tunnelLen).
+      const portal = (dx: number): void => {
+        const back = T(TUNNEL_FRAMES.portalBack, this.portalAt, Depth.tunnelBack);
+        const front = T(TUNNEL_FRAMES.portalFront, this.portalAt, Depth.tunnelFront);
+        if (back) set.parts.push({ img: back, dx });
+        if (front) set.parts.push({ img: front, dx });
+      };
+      portal(-this.portalEdge);
+      portal(this.tunnelLen + this.portalEdge);
     } else if (thing.kind === 'cow') {
       part(T(COW_FRAMES.idle, this.cowAt, Depth.near), this.cowAt, this.cowAt);
     } else if (thing.kind === 'crossing') {

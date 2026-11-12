@@ -23,14 +23,17 @@
 //     anchors);
 //   - `friend-<friend>/<idle|wave|happy>/00` on its platform (ground pivot `anchor.friend`);
 //   - `platform/idle/00` (ground pivot `anchor.platform`), `dest-<id>/idle/00` (`anchor.dest`),
-//     `tunnel/<back|front>/00` (`anchor.tunnel`: its left portal on the track): drawn where they stop, scrolled;
+//     `tunnel/<back|front>/00` (`anchor.tunnel`: where the train goes out of sight, on the track), and
+//     `tunnel-portal/<back|front>/00` (one stone portal on the track, ground pivot `anchor.portal`; drawn at both ends,
+//     its opening's edge (`anchor.portal-edge`) on `anchor.tunnel` and, mirrored, on `anchor.tunnel-end`): drawn where
+//     they stop, scrolled;
 //   - `hill/<a|b>/00`, `tree/<a|b>/00`, `fence/idle/00`, `ground/idle/00` (the strip with the track; it tiles):
 //     their rendered y kept;
 //   - `cloud/<a|b>/00`, `bird/<a|b>/00`, `cow/<idle|happy>/00` (grazing on the near grass, in front of the track), `puff/idle/00`, `pop/idle/00`, the surprises
 //     (`crossing/<idle|wave>/00`, `bridge/idle/00`, `fish/idle/00`, `hot-air/idle/00`, `rainbow/idle/00`): placed by
 //     their trimmed centre (the crossing and the bridge by `anchor.surprise`, their ground pivot).
 // Layout: anchors engine, car-<n>, seat-<n>, chimney, nose, tail, platform, friend, dest, drop-<n>, tunnel,
-// tunnel-end, surprise; hits engine, car-<n>, platform, friend-<id>, dest-<id>. tools/layout/rules.ts › validateTrain
+// tunnel-end, portal, portal-edge, surprise; hits engine, car-<n>, platform, friend-<id>, dest-<id>. tools/layout/rules.ts › validateTrain
 // checks the sizes and that every tap area stays inside the interactive rect, off the Hud and apart.
 import { ATLASES, BACKGROUNDS } from '../assets.ts';
 import type { ReactionSet } from '../../core/reactions.ts';
@@ -188,7 +191,7 @@ export type FriendState = (typeof FRIEND_STATES)[number];
 export const friendFrame = (f: FriendId, state: FriendState = 'idle'): string => `friend-${f}/${state}/00`;
 export const destFrame = (d: DestinationId): string => `dest-${d}/idle/00`;
 export const PLATFORM_FRAME = 'platform/idle/00';
-export const TUNNEL_FRAMES = { back: 'tunnel/back/00', front: 'tunnel/front/00' } as const;
+export const TUNNEL_FRAMES = { back: 'tunnel/back/00', front: 'tunnel/front/00', portalBack: 'tunnel-portal/back/00', portalFront: 'tunnel-portal/front/00' } as const;
 export const HILL_FRAMES = ['hill/a/00', 'hill/b/00'] as const;
 export const TREE_FRAMES = ['tree/a/00', 'tree/b/00'] as const;
 export const FENCE_FRAME = 'fence/idle/00';
@@ -218,6 +221,8 @@ export const ANCHORS = {
   dest: 'dest',
   tunnel: 'tunnel',
   tunnelEnd: 'tunnel-end',
+  portal: 'portal',
+  portalEdge: 'portal-edge',
   surprise: 'surprise',
   cow: 'cow',
 } as const;
