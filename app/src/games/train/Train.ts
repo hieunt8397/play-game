@@ -398,7 +398,8 @@ export class Train extends MiniGameBase<'train'> {
 
   /** Re-points a full-frame image at another frame of the same pivot (size and origin kept). */
   private repoint(img: GameObjects.Image | undefined, frame: string): void {
-    if (img && this.hasFrame(frame)) img.setFrame(frame, false, false);
+    // A delayed swap (the crossing's wave, the cow's happy face) may come after its thing scrolled away (destroyed).
+    if (img && img.active && this.hasFrame(frame)) img.setFrame(frame, false, false);
   }
 
   /** Re-points an image drawn by its trimmed centre at another frame (its origin moves to that frame's centre). */
@@ -501,6 +502,7 @@ export class Train extends MiniGameBase<'train'> {
     } else if (thing.kind === 'cow') {
       part(T(COW_FRAMES.idle, this.cowAt, Depth.near), this.cowAt, this.cowAt);
     } else if (thing.kind === 'crossing') {
+      part(T(SURPRISE_FRAMES.crossingRoad, this.surpriseAt, Depth.place), this.surpriseAt, this.surpriseAt);
       set.crossing = T(SURPRISE_FRAMES.crossing, this.surpriseAt, Depth.near);
       part(set.crossing, this.surpriseAt, this.surpriseAt);
     } else if (thing.kind === 'bridge') {
@@ -627,8 +629,9 @@ export class Train extends MiniGameBase<'train'> {
   private wobble(n: number): void {
     const box = this.carBoxes[n];
     if (!box) return;
+    // Its landing squash (carBounce) is cut short too: back to full size, or the car stays squashed.
     this.tweens.killTweensOf(box);
-    box.setAngle(0);
+    box.setAngle(0).setScale(1);
     this.tweens.add({ targets: box, angle: this.amp(MOTION.wobbleDeg), duration: Tokens.Timing.trainWobbleMs / MOTION.wobbleSwings, ease: SINE, yoyo: true, repeat: 1, onComplete: () => box.setAngle(0) });
   }
 
@@ -699,6 +702,8 @@ export class Train extends MiniGameBase<'train'> {
   private carBounce(n: number): void {
     const box = this.carBoxes[n];
     if (!box || this.reduced) return;
+    this.tweens.killTweensOf(box);
+    box.setAngle(0).setScale(1);
     this.tweens.add({ targets: box, scaleY: MOTION.carSquash, duration: Tokens.Timing.trainTapMs * MOTION.carSquashShare, ease: SINE, yoyo: true, onComplete: () => box.setScale(1) });
   }
 
@@ -824,7 +829,11 @@ export class Train extends MiniGameBase<'train'> {
   /** A bounce from the rest scale (the hint; the friend as the train stops). */
   private bounce(target: GameObjects.Image | GameObjects.Container | undefined): void {
     if (!target) return;
-    const base = target.scaleX;
+    // Its rest scale (kept from the first bounce): a bounce that starts mid-bounce never grows it for good.
+    const base = (target.getData('restScale') as number | undefined) ?? target.scaleX;
+    target.setData('restScale', base);
+    this.tweens.killTweensOf(target);
+    target.setScale(base);
     this.tweens.add({
       targets: target,
       scale: base * (1 + this.amp(Tokens.ui.trainHintBounce - 1)),

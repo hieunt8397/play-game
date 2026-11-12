@@ -199,6 +199,8 @@ export const COW_FRAMES = { idle: 'cow/idle/00', happy: 'cow/happy/00' } as cons
 export const PARTICLES = { puff: 'puff/idle/00', pop: 'pop/idle/00' } as const;
 export const SURPRISE_FRAMES = {
   crossing: 'crossing/idle/00',
+  /** The crossing's road (on the ground, under the train). */
+  crossingRoad: 'crossing-road/idle/00',
   crossingWave: 'crossing/wave/00',
   bridge: 'bridge/idle/00',
   fish: 'fish/idle/00',
@@ -301,9 +303,10 @@ export const MOTION = {
   carLag: 1,
   /** A tapped car wobbles ± this many degrees (twice). */
   wobbleDeg: 6,
-  /** A boarding friend hops this high (design px) on its way into its car; a friend getting off, this high. */
-  boardHopPx: 70,
-  dropHopPx: 60,
+  /** A boarding friend hops this high (design px) over its seat on its way into its car (its feet clear the cab's roof,
+   * ~384: a lower hop went through the cab and Shiba); a friend getting off (it crosses the engine too: to the drop spots right of it), this high. */
+  boardHopPx: 190,
+  dropHopPx: 190,
   /** A puff from the chimney rises this far (design px) as it grows to this scale and fades. */
   puffRisePx: 80,
   puffScale: 1.8,

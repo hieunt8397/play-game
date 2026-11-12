@@ -94,9 +94,10 @@ DROP_DEPTH = 0.5  # the dropped friends stand in front of the destination (the s
 HIT_PAD_PX = 24.0  # Tokens.spacing.hitPad (the pipeline pads the platform, friend and destination hulls)
 
 # --- the tunnel (design px) -----------------------------------------------------------------------------------------
-TUNNEL_MARGIN_PX = 20.0  # each portal this far outside the train's tail and nose
+TUNNEL_MARGIN_PX = 20.0  # each end of the mound this far outside the train's tail and nose
 TUNNEL_SHIFT_PX = 66.0
-TUNNEL_FRONT_TOP_PX = 372.0  # the mound's front edge: over the engine's roof and the seated friends' heads
+TUNNEL_FRONT_TOP_PX = 352.0  # the mound's front edge: well over the engine's roof and the seated friends' heads
+TUNNEL_END_PX = 105.0  # each stone arch's centre this far inside its end of the mound (the arch stays on its face)
 TUNNEL_BACK_TOP_PX = 262.0
 
 # --- the ground, hills, trees, fences (design px) -------------------------------------------------------------------
@@ -630,26 +631,28 @@ def build_tunnel(c, sprites, layout, tail_x, nose_x):
         x = dx * half
         z = top_z * math.sqrt(max(0.0, 1 - (x / (half + 0.9)) ** 2)) - 0.12
         bp.tree(f'tunnel-tree-{k}', c, back, broot, (x, 0.2, z), s)
-    # Front: a long grassy mound across the track, taller than the train (drawn over it), with a stone portal and its
-    # dark mouth at each end (turned a little toward the camera), flowers on its face.
+    # Front: a long grassy mound across the track, taller than the train (drawn over it): the train goes out of sight
+    # at its square-ish ends (x0, x1: the anchors), never under a rounded corner (that let the cab's roof peek out). A
+    # stone arch with its dark mouth faces the camera on the mound's face by each end; flowers between them.
     front = bp.state_child(group, 'tunnel', 'front')
     froot = ground_root('tunnel-front-root', front, mid, -0.1)
     fz = (REF_PX[1] - TUNNEL_FRONT_TOP_PX) / bp.ORTHO_PX_PER_M / math.cos(bp.P) - 1.0 * math.tan(bp.P)
-    rbox('tunnel-front-hill', (2 * half + 0.5, 1.9, fz), 0.7, hill, front, froot, (0.0, 0.0, fz / 2), seg=6)
-    blob('tunnel-front-crest', hill, front, froot, (0.0, 0.2, fz - 0.25), (half + 0.1, 0.8, 0.5), seg=(96, 16))
-    for k, x in enumerate((-half * 0.6, -half * 0.2, half * 0.25, half * 0.62)):
+    rbox('tunnel-front-hill', (2 * half, 1.9, fz), 0.22, hill, front, froot, (0.0, 0.0, fz / 2), seg=6)
+    blob('tunnel-front-crest', hill, front, froot, (0.0, 0.2, fz - 0.2), (half - 0.1, 0.8, 0.45), seg=(96, 16))
+    for k, x in enumerate((-half * 0.33, -half * 0.1, half * 0.12, half * 0.35)):
         bp.flower(f'tunnel-flower-{k}', front, froot, (x, -0.98, fz * (0.45 + 0.12 * (k % 2))), 0.13, mat(c['flower'] if k % 2 else c['trim'], 0.5), mat(c['flowerCentre'], 0.5))
         bp.flower(f'tunnel-flower-top-{k}', front, froot, (x + 0.3, -0.4, fz + 0.02), 0.11, mat(c['flower'], 0.5), mat(c['flowerCentre'], 0.5))
     arch_r, arch_leg = 0.8, 1.35
+    end = TUNNEL_END_PX / bp.ORTHO_PX_PER_M
     for side, sx in (('left', -1), ('right', 1)):
-        portal = empty(f'tunnel-portal-{side}', front, froot, (sx * (half + 0.12), -0.5, 0.0), (0.0, 0.0, 45.0 * sx))
+        portal = empty(f'tunnel-portal-{side}', front, froot, (sx * (half - end), -1.0, 0.0))
         arch = torus_bm(arch_r, 0.16, arc=(0.0, 180.0), seg=40, tube=12)
         o = mesh_obj(f'tunnel-arch-{side}', arch, stone, front)
         bp.place(o, portal, (0.0, 0.0, arch_leg), (90.0, 0.0, 0.0))
         o['cute'] = 1
         for s2 in (-1, 1):
             rbox(f'tunnel-jamb-{side}-{s2}', (0.32, 0.3, arch_leg + 0.02), 0.07, stone, front, portal, (arch_r * s2, 0.0, (arch_leg + 0.02) / 2))
-        blob(f'tunnel-mouth-{side}', inside, front, portal, (0.0, 0.06, 0.0), (arch_r - 0.08, 0.05, arch_leg + arch_r - 0.08), shape=hill_shape, seg=(40, 16))
+        blob(f'tunnel-mouth-{side}', inside, front, portal, (0.0, 0.03, 0.0), (arch_r - 0.08, 0.05, arch_leg + arch_r - 0.08), shape=hill_shape, seg=(40, 16))
         for k in range(5):
             a = math.radians(18.0 + 36.0 * k)
             blob(f'tunnel-stone-{side}-{k}', stone_dark, front, portal, (math.cos(a) * arch_r, -0.14, arch_leg + math.sin(a) * arch_r), (0.09, 0.05, 0.07), seg=(12, 8))
@@ -840,15 +843,19 @@ def build_particles(c, sprites):
 # --- the surprises --------------------------------------------------------------------------------------------------
 
 def build_crossing(params, c, sprites, layout):
-    coll = sprite(sprites, 'crossing', states=json.dumps({'idle': [1], 'wave': [10]}, separators=(',', ':')))
-    root = ground_root('crossing-root', coll, SURPRISE_X, 0.0)
+    # The road is a sprite of its own (crossing-road), drawn on the ground under the train: one sprite drawn over the
+    # train cut the stopped train's cars in two. The crossbuck and the little car (in front of the track) stay here.
+    ground = sprite(sprites, 'crossing-road')
+    groot = ground_root('crossing-road-root', ground, SURPRISE_X, 0.0)
     road = mat(c['road'], 0.85)
     # The road across the track (planks between the rails), from the far grass to the near grass.
-    rbox('crossing-road', (1.1, 13.0, 0.02), 0.01, road, coll, root, (0.0, -2.6, 0.035))
+    rbox('crossing-road', (1.1, 13.0, 0.02), 0.01, road, ground, groot, (0.0, -2.6, 0.035))
     for k in range(4):
-        rbox(f'crossing-plank-{k}', (1.1, 0.14, 0.03), 0.01, mat(c['sleeper'], 0.7), coll, root, (0.0, -0.25 + 0.17 * k, 0.09))
+        rbox(f'crossing-plank-{k}', (1.1, 0.14, 0.03), 0.01, mat(c['sleeper'], 0.7), ground, groot, (0.0, -0.25 + 0.17 * k, 0.09))
     for k in range(3):
-        rbox(f'crossing-stripe-{k}', (0.12, 0.5, 0.01), 0.004, mat(c['crossingSign'], 0.6), coll, root, (0.0, -1.6 - 1.0 * k, 0.05))
+        rbox(f'crossing-stripe-{k}', (0.12, 0.5, 0.01), 0.004, mat(c['crossingSign'], 0.6), ground, groot, (0.0, -1.6 - 1.0 * k, 0.05))
+    coll = sprite(sprites, 'crossing', states=json.dumps({'idle': [1], 'wave': [10]}, separators=(',', ':')))
+    root = ground_root('crossing-root', coll, SURPRISE_X, 0.0)
     # The crossbuck on its post by the road (near side).
     post = Vector((0.85, -1.0, 0.0))
     rod('crossing-post', post, post + Vector((0.0, 0.0, 1.25)), 0.04, mat(c['crossingSign'], 0.4), coll, root, seg=10)
