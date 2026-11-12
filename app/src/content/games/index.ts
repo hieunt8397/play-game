@@ -14,6 +14,7 @@ import * as petClinic from './pet-clinic.ts';
 import * as pizza from './pizza.ts';
 import * as plane from './plane.ts';
 import * as race from './race.ts';
+import * as train from './train.ts';
 import * as shadowMatch from './shadow-match.ts';
 import * as touchTalk from './touch-talk.ts';
 import type { GameContent } from './types.ts';
@@ -43,4 +44,6 @@ export const GAME_CONTENT: Readonly<Partial<Record<GameId, GameContent>>> = {
   'car-wash': { assets: carWash.assets, screen: carWash.screen },
   // Phi công nhí (2026-11-11): a yard game (no station, no ladder); registering it wakes the yard's plane corner.
   plane: { assets: plane.assets, screen: plane.screen },
+  // Tàu hỏa chở bạn (2026-11-12): a yard game (no station, no ladder); registering it wakes the yard's train corner.
+  train: { assets: train.assets, screen: train.screen },
 };

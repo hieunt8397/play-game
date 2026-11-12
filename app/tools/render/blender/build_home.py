@@ -10,7 +10,7 @@
 # One plate, 2048×1536: a soft lawn (the picnic lawn's palette), Xoài's house front (Tiny Treats Homely House
 # `house`) at the back centre with its doormat and a picket fence (Homely House fences) to both
 # sides, trees and bushes behind the fence, a gradient sky with clouds. The backdrop is hazed (as in Chạm là nói)
-# so the corners pop. Eight big corner props (2026-11-11: four in the back row, four in the front row), each its own `sprite.<corner>` (idle at frame 1; the runtime bounce
+# so the corners pop. Nine big corner props (2026-11-12: the train up by the fence at the top left, four in the back row, four in the front row), each its own `sprite.<corner>` (idle at frame 1; the runtime bounce
 # is a scale motion around the ground pivot), with `hit.<corner>` (convex hull of its meshes) and
 # `anchor.<corner>` (its ground pivot) in the hidden `layout` collection:
 #   - pen (back row, far left): a Homely House fence pen with a real Quaternius cow (Cow.fbx, its Idle pose) peeking over the front;
@@ -25,7 +25,9 @@
 #     Kenney Car Kit taxi (CC0), foam on its roof and side (colours from art.carWash);
 #   - plane (Phi công nhí, 2026-11-11; back row, far right, a step nearer and under the Speaker zone): a round yellow toy
 #     propeller plane parked on the grass, nose up — cream belly, pink wings and tail, a blue nose with brown blades, a
-#     glass canopy, small wheels — with a red and a purple balloon tied to its tail (script-built; colours from art.plane).
+#     glass canopy, small wheels — with a red and a purple balloon tied to its tail (script-built; colours from art.plane);
+#   - train (Tàu hỏa chở bạn, 2026-11-12; top left, up by the fence): a toy steam engine with a puff of smoke and one red
+#     car on a stub of track (script-built; colours from art.train).
 # Each prop is fitted into its CORNER_BOXES box (design px; bottom edge = its ground line) by unprojecting
 # through the camera, so the layout is exactly what tools/layout/rules.ts › validateHome checks (hulls inside
 # the interactive rect, clear of the Home/Speaker zones, ≥ targetGap apart, each frame ≥ 150 px).
@@ -81,11 +83,15 @@ CLOUDS = [(-30.0, 120.0, 20.0, 5.0), (-4.0, 130.0, 25.0, 4.2), (28.0, 120.0, 21.
 # whole box lies below the Speaker zone, y ≥ 257 + hitPad, and its ground line a step nearer than the others'); front row
 # (2026-10-30: four corners): clinic, garden, bed, car-wash. Padded by hitPad (24) each hull stays inside the
 # interactive rect (x 24…1000, y 66…694), off the Home/Speaker zones (top corners) and ≥ targetGap (24) apart.
+# 2026-11-12 (Tàu hỏa chở bạn): a ninth corner, the train, stands on the lawn in front of the fence at the top left (right of the Home zone:
+# x ≥ 124 + hitPad); the pen steps down under it and the stage, wardrobe and plane step right, each box ≥ 72 px
+# (2 × hitPad + targetGap) from its neighbours.
 CORNER_BOXES = {
-    'pen': (50, 235, 284, 395),
-    'stage': (358, 200, 528, 395),
-    'wardrobe': (602, 195, 726, 395),
-    'plane': (796, 284, 976, 432),  # under the Speaker zone (y ≤ 257): top ≥ 257 + hitPad; ≥ 72 px from the bed and the car-wash
+    'train': (156, 150, 330, 255),  # a long low prop on the lawn in front of the fence: ≥ 150 px wide, right of the Home zone
+    'pen': (50, 327, 270, 432),
+    'stage': (412, 200, 560, 395),
+    'wardrobe': (636, 195, 746, 395),
+    'plane': (818, 284, 974, 432),  # under the Speaker zone (y ≤ 257): top ≥ 257 + hitPad; ≥ 72 px from the bed and the car-wash
     'clinic': (50, 496, 222, 664),
     'garden': (296, 490, 500, 664),
     'bed': (574, 476, 740, 664),
@@ -93,7 +99,7 @@ CORNER_BOXES = {
 }
 PLACE_PASSES = 6
 # Yaw (degrees) of each prop's root (0 = its front toward the camera).
-CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0, 'garden': 8.0, 'car-wash': -10.0, 'plane': -152.0}
+CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0, 'garden': 8.0, 'car-wash': -10.0, 'plane': -152.0, 'train': -16.0}
 # Rửa xe corner: the Kenney Car Kit taxi (CC0) under the arch.
 CAR_WASH_CAR = os.path.join('kenney', 'kenney_car-kit', 'Models', 'GLB format', 'taxi.glb')
 
@@ -696,7 +702,53 @@ def build_plane(root, coll, c):
         blob(f'plane-balloon-shine-{name}', shine, coll, root, (x + r * 0.42, y + r * 0.62, z + r * 0.45), (r * 0.12, r * 0.14, r * 0.24), (0.0, 0.0, 0.0), seg=(12, 6))
 
 
-BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe, 'garden': build_garden, 'car-wash': build_car_wash, 'plane': build_plane}
+def build_train(root, coll, c):
+    """A toy steam engine and one car on a short stub of track (the engine's nose along +x; the corner's yaw turns it
+    to a three-quarter view): a green boiler with yellow bands, a red cab roof, a dark chimney with a puff of smoke,
+    red wheels with yellow hubs; a red wagon with a white dot; rails on wooden sleepers."""
+    t = c['train']
+    body, dark, band = mat(t['engine'], 0.32), mat(t['engineDark'], 0.4), mat(t['boilerBand'], 0.35)
+    roof, ink, hub = mat(t['cabRoof'], 0.35), mat(t['chimney'], 0.5), mat(t['wheelHub'], 0.35)
+    wheel_m, rail = mat(t['wheel'], 0.4), mat(t['rail'], 0.3)
+    # The track: two rails on six sleepers.
+    for k in range(6):
+        rbox(f'train-sleeper-{k}', (0.22, 1.1, 0.07), 0.02, mat(t['sleeper'], 0.7), coll, root, (-1.75 + 0.62 * k, 0.0, 0.035))
+    for s in (-1, 1):
+        rbox(f'train-rail-{s}', (3.7, 0.08, 0.08), 0.02, rail, coll, root, (-0.2, 0.36 * s, 0.11))
+    # The engine (x 0 … 1.9) and the car behind it (x −1.9 … −0.75).
+    z0 = 0.15
+    rbox('train-footplate', (1.9, 0.92, 0.12), 0.05, dark, coll, root, (0.95, 0.0, z0 + 0.5))
+    lathe('train-boiler', rounded_profile(0.36, 0.0, 1.15, 0.25), body, coll, root, (0.75, 0.0, z0 + 0.9), (0.0, 90.0, 0.0))
+    blob('train-smokebox', ink, coll, root, (1.88, 0.0, z0 + 0.9), (0.06, 0.33, 0.33), seg=(32, 12))
+    for k, x in enumerate((1.0, 1.35, 1.7)):
+        torus(f'train-band-{k}', 0.365, 0.035, band, coll, root, (x, 0.0, z0 + 0.9), (0.0, 90.0, 0.0))
+    lathe('train-chimney', [(0.0, 0.0), (0.13, 0.0), (0.12, 0.28), (0.17, 0.38), (0.22, 0.46), (0.22, 0.5), (0.0, 0.5)], ink, coll, root, (1.58, 0.0, z0 + 1.16), seg=32)
+    blob('train-dome', band, coll, root, (1.2, 0.0, z0 + 1.24), (0.17, 0.17, 0.16), seg=(32, 16))
+    smoke = mat(t['smoke'], 0.7)
+    for k, (dx, dz, r) in enumerate(((-0.08, 1.8, 0.18), (-0.42, 1.92, 0.22), (-0.86, 1.98, 0.24))):
+        blob(f'train-smoke-{k}', smoke, coll, root, (1.58 + dx, 0.0, z0 + dz), (r, r * 0.9, r * 0.85), seg=(24, 12))
+    rbox('train-cab', (0.72, 0.96, 0.5), 0.08, body, coll, root, (0.36, 0.0, z0 + 0.83))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            rod(f'train-post-{sx}-{sy}', (0.36 + 0.3 * sx, 0.4 * sy, z0 + 1.05), (0.36 + 0.3 * sx, 0.4 * sy, z0 + 1.82), 0.04, dark, coll, root, seg=12)
+    rbox('train-roof', (0.92, 1.18, 0.12), 0.06, roof, coll, root, (0.36, 0.0, z0 + 1.86))
+    rbox('train-cowcatcher', (0.3, 0.8, 0.3), 0.08, roof, coll, root, (1.98, 0.0, z0 + 0.15))
+    for k, x in enumerate((0.4, 0.95, 1.5)):
+        for sy in (-1, 1):
+            blob(f'train-wheel-{k}-{sy}', wheel_m, coll, root, (x, 0.47 * sy, z0 + 0.25), (0.25, 0.07, 0.25), seg=(32, 12))
+            blob(f'train-hub-{k}-{sy}', hub, coll, root, (x, 0.53 * sy, z0 + 0.25), (0.08, 0.03, 0.08), seg=(16, 8))
+    red, red_dark = mat(t['carRed'], 0.32), mat(t['carRedDark'], 0.4)
+    rbox('train-car', (1.15, 0.86, 0.44), 0.1, red, coll, root, (-1.3, 0.0, z0 + 0.62))
+    rbox('train-car-inside', (1.0, 0.72, 0.05), 0.03, red_dark, coll, root, (-1.3, 0.0, z0 + 0.83))
+    for sy in (-1, 1):
+        blob(f'train-car-dot-{sy}', mat(t['trim'], 0.4), coll, root, (-1.3, 0.44 * sy, z0 + 0.6), (0.13, 0.02, 0.13), seg=(24, 8))
+        for k, x in enumerate((-1.62, -0.98)):
+            blob(f'train-car-wheel-{k}-{sy}', mat(t['carWheel'], 0.5), coll, root, (x, 0.45 * sy, z0 + 0.19), (0.19, 0.06, 0.19), seg=(28, 10))
+            blob(f'train-car-hub-{k}-{sy}', hub, coll, root, (x, 0.5 * sy, z0 + 0.19), (0.06, 0.03, 0.06), seg=(12, 8))
+    rod('train-coupler', (-0.72, 0.0, z0 + 0.42), (0.02, 0.0, z0 + 0.42), 0.04, ink, coll, root, seg=8)
+
+
+BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe, 'garden': build_garden, 'car-wash': build_car_wash, 'plane': build_plane, 'train': build_train}
 
 
 def place_in_box(scene, screen, root, meshes, box):
@@ -718,7 +770,7 @@ def place_in_box(scene, screen, root, meshes, box):
 
 
 def build_corner(scene, screen, cid, params, sprites, layout):
-    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden'], 'carWash': params['art']['carWash'], 'plane': params['art']['plane']}
+    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden'], 'carWash': params['art']['carWash'], 'plane': params['art']['plane'], 'train': params['art']['train']}
     coll = bpy.data.collections.new(f'sprite.{cid}')
     sprites.children.link(coll)
     root = add_empty(f'{cid}-root', (0.0, 0.0, 0.0), coll)

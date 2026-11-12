@@ -62,6 +62,23 @@ import {
   houseHit as planeHouseHit,
   laneYs as planeLaneYs,
 } from '../../src/content/games/plane.ts';
+import {
+  ALL_ENGINE_FRAMES as ALL_TRAIN_ENGINE_FRAMES,
+  ANCHORS as TRAIN_ANCHORS,
+  CAR_COLOURS as TRAIN_CAR_COLOURS,
+  DESTINATION_IDS as TRAIN_DESTINATIONS,
+  ENGINE_HIT as TRAIN_ENGINE_HIT,
+  FRIEND_IDS as TRAIN_FRIENDS,
+  FRIEND_STATES as TRAIN_FRIEND_STATES,
+  PLATFORM_HIT as TRAIN_PLATFORM_HIT,
+  TRAIN_SCREEN,
+  carFrame as trainCarFrame,
+  carHit as trainCarHit,
+  destFrame as trainDestFrame,
+  destHit as trainDestHit,
+  friendFrame as trainFriendFrame,
+  friendHit as trainFriendHit,
+} from '../../src/content/games/train.ts';
 import { DOOR_ANCHOR, PATIENT_ANCHOR, PATIENT_HIT, PATIENT_IDS, PET_CLINIC_SCREEN, TOOL_IDS, patientFrames, toolFrame, toolHitRadius } from '../../src/content/games/pet-clinic.ts';
 
 export interface LayoutLimits {
@@ -2682,5 +2699,153 @@ export function validatePlane(layout: ScreenLayout, input: PlaneRuleInput, atlas
       for (const k of input.keepOut) if (overlaps(at, k.rect)) problems.push(`frame "${f}" ${fmtRect(at)}: reaches into the ${k.id} ${fmtRect(k.rect)}`);
     }
   }
+  return problems;
+}
+
+// --- Tàu hỏa chở bạn (2026-11-12) ------------------------------------------------------------------------------------
+
+export interface TrainRuleInput {
+  ids: ScreenIds;
+  /** `hit.engine` and `hit.car-<n>` (raw hulls) with their frames (every engine frame; each car's). */
+  engine: { readonly hit: string; readonly frames: readonly string[] };
+  cars: readonly { readonly hit: string; readonly frame: string }[];
+  /** `hit.platform` and each `hit.friend-<id>` (tapped at rest, while the train waits), each friend's frames. */
+  platformHit: string;
+  friends: readonly { readonly hit: string; readonly frames: readonly string[] }[];
+  /** Each `hit.dest-<id>` and its frame. */
+  dests: readonly { readonly hit: string; readonly frame: string }[];
+  /** `anchor.nose` / `anchor.tail` (the train's front and back) and `anchor.tunnel` / `anchor.tunnel-end` (its portals). */
+  noseAnchor: string;
+  tailAnchor: string;
+  tunnelAnchor: string;
+  tunnelEndAnchor: string;
+  limits: LayoutLimits;
+  /** ui.trainCarMinPx: the engine and each car are drawn at least this wide. */
+  carMinPx: number;
+  /** ui.trainFriendMinPx / ui.trainDestMinPx: a friend's and a destination's longest side. */
+  friendMinPx: number;
+  destMinPx: number;
+  /** ui.trainHitMinPx: every tap area is at least this wide. */
+  hitMinPx: number;
+  /** spacing.targetGap: the engine and the cars are this far apart, and every waiting target this far from the train. */
+  gap: number;
+  /** The cruise speed (design px per s) and its reduced-motion share: the dim's fade-in and the time in the dark. */
+  scrollPxPerS: number;
+  reducedScroll: number;
+  dimInMinMs: number;
+  darkMaxMs: number;
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  renderScale: number;
+  design: { width: number; height: number };
+}
+
+/** The train rules from Tokens and content (spec-tau-hoa). */
+export function trainLimits(ids: ScreenIds = TRAIN_SCREEN): TrainRuleInput {
+  const u = Tokens.ui;
+  return {
+    ids,
+    engine: { hit: TRAIN_ENGINE_HIT, frames: ALL_TRAIN_ENGINE_FRAMES },
+    cars: TRAIN_CAR_COLOURS.map((c, n) => ({ hit: trainCarHit(n), frame: trainCarFrame(c) })),
+    platformHit: TRAIN_PLATFORM_HIT,
+    friends: TRAIN_FRIENDS.map((f) => ({ hit: trainFriendHit(f), frames: TRAIN_FRIEND_STATES.map((s) => trainFriendFrame(f, s)) })),
+    dests: TRAIN_DESTINATIONS.map((d) => ({ hit: trainDestHit(d), frame: trainDestFrame(d) })),
+    noseAnchor: TRAIN_ANCHORS.nose,
+    tailAnchor: TRAIN_ANCHORS.tail,
+    tunnelAnchor: TRAIN_ANCHORS.tunnel,
+    tunnelEndAnchor: TRAIN_ANCHORS.tunnelEnd,
+    limits: layoutLimits(),
+    carMinPx: u.trainCarMinPx,
+    friendMinPx: u.trainFriendMinPx,
+    destMinPx: u.trainDestMinPx,
+    hitMinPx: u.trainHitMinPx,
+    gap: Tokens.spacing.targetGap,
+    scrollPxPerS: u.trainScrollPxPerS,
+    reducedScroll: u.trainReducedScroll,
+    dimInMinMs: u.trainDimInMinMs,
+    darkMaxMs: u.trainDarkMaxMs,
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    renderScale: RENDER_SCALE,
+    design: { width: Tokens.design.width, height: Tokens.design.height },
+  };
+}
+
+/**
+ * Tàu hỏa chở bạn screen rules (spec-tau-hoa; run by `render`, `atlas` and `validate:content`). Each message names the id.
+ *   - required: every hit (≥ 3 points) and anchor; with the atlas, every frame;
+ *   - every anchor lies on the design rect; every tap area (the engine, the cars, the platform, each friend, each
+ *     destination) is at least hitMinPx wide, inside the interactive rect and clear of the Home/Speaker zones;
+ *   - the engine and the cars are ≥ gap apart, and the platform, each friend and each destination ≥ gap from all of them;
+ *   - the tunnel covers the whole train (its portals outside the tail and the nose); at the fastest cruise the dim fades
+ *     in over ≥ dimInMinMs; at the slowest (reduced) the whole train stays in the dark ≤ darkMaxMs;
+ *   - (atlas) the engine and each car are drawn ≥ carMinPx wide, every engine frame inside the interactive rect; each
+ *     friend frame is drawn ≥ friendMinPx (longest side) and each destination ≥ destMinPx, both inside the rect.
+ */
+export function validateTrain(layout: ScreenLayout, input: TrainRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const rectOut = (at: Rect): boolean => at.x < r.x0 || at.y < r.y0 || at.x + at.w > r.x1 || at.y + at.h > r.y1;
+  const rectText = `x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`;
+  for (const id of input.ids.anchors) {
+    const a = layout.anchors[id];
+    if (a && (a.x < 0 || a.y < 0 || a.x > input.design.width || a.y > input.design.height)) problems.push(`anchor "${id}": ${fmt(a)} is off the screen`);
+  }
+  const hull = (id: string): readonly Point[] | undefined => {
+    const h = layout.hits[id];
+    return h && h.length >= MIN_HIT_POINTS ? h : undefined;
+  };
+  const tapArea = (id: string): void => {
+    const h = hull(id);
+    if (!h) return;
+    const w = minWidth(h);
+    if (w < input.hitMinPx) problems.push(`hit "${id}": ${round2(w)} px wide (min ${input.hitMinPx})`);
+    const out = h.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${id}": ${fmt(out)} leaves the interactive rect ${rectText}`);
+    for (const k of input.keepOut) if (polygonDistance(h, rectPolygon4(k.rect)) === 0) problems.push(`hit "${id}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  };
+  const apart = (a: string, b: string): void => {
+    const ha = hull(a);
+    const hb = hull(b);
+    if (!ha || !hb) return;
+    const d = polygonDistance(ha, hb);
+    if (d < input.gap) problems.push(`hits "${a}" and "${b}": ${round2(d)} px apart (min ${input.gap})`);
+  };
+  const train = [input.engine.hit, ...input.cars.map((c) => c.hit)];
+  const waiting = [input.platformHit, ...input.friends.map((f) => f.hit), ...input.dests.map((d) => d.hit)];
+  for (const id of [...train, ...waiting]) tapArea(id);
+  for (let i = 0; i < train.length; i++) for (let j = i + 1; j < train.length; j++) apart(train[i]!, train[j]!);
+  for (const w of waiting) for (const t of train) apart(w, t);
+  const nose = layout.anchors[input.noseAnchor];
+  const tail = layout.anchors[input.tailAnchor];
+  const t0 = layout.anchors[input.tunnelAnchor];
+  const t1 = layout.anchors[input.tunnelEndAnchor];
+  if (nose && tail && t0 && t1) {
+    const trainLen = nose.x - tail.x;
+    const len = t1.x - t0.x;
+    if (trainLen <= 0) problems.push(`anchors "${input.tailAnchor}" and "${input.noseAnchor}": the tail ${round2(tail.x)} is not left of the nose ${round2(nose.x)}`);
+    if (len < trainLen) problems.push(`the tunnel is ${round2(len)} px long, shorter than the train (${round2(trainLen)} px): it never covers it all`);
+    const fadeMs = (trainLen / input.scrollPxPerS) * 1000;
+    if (fadeMs < input.dimInMinMs) problems.push(`the dim fades in over ${round2(fadeMs)} ms (min ${input.dimInMinMs})`);
+    const darkMs = ((len - trainLen) / (input.scrollPxPerS * input.reducedScroll)) * 1000;
+    if (darkMs > input.darkMaxMs) problems.push(`the whole train stays in the dark ${round2(darkMs)} ms at the slowest cruise (max ${input.darkMaxMs})`);
+  }
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "train": frame "${f}" is missing`);
+  const wide = (f: string): void => {
+    const at = designRect(atlas, f, input.renderScale);
+    if (!at) return;
+    if (at.w < input.carMinPx) problems.push(`frame "${f}": ${round2(at.w)} px wide (min ${input.carMinPx})`);
+    if (rectOut(at)) problems.push(`frame "${f}" ${fmtRect(at)} leaves the interactive rect ${rectText}`);
+  };
+  for (const f of input.engine.frames) wide(f);
+  for (const c of input.cars) wide(c.frame);
+  const big = (f: string, min: number): void => {
+    const at = designRect(atlas, f, input.renderScale);
+    if (!at) return;
+    if (Math.max(at.w, at.h) < min) problems.push(`frame "${f}": longest side ${round2(Math.max(at.w, at.h))} is under ${min}`);
+    if (rectOut(at)) problems.push(`frame "${f}" ${fmtRect(at)} leaves the interactive rect ${rectText}`);
+    for (const k of input.keepOut) if (overlaps(at, k.rect)) problems.push(`frame "${f}" ${fmtRect(at)}: reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  };
+  for (const fr of input.friends) for (const f of fr.frames) big(f, input.friendMinPx);
+  for (const d of input.dests) big(d.frame, input.destMinPx);
   return problems;
 }

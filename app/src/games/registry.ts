@@ -17,6 +17,7 @@ import { PetClinic } from './pet-clinic/PetClinic';
 import { Pizza } from './pizza/Pizza';
 import { Plane } from './plane/Plane';
 import { Race } from './race/Race';
+import { Train } from './train/Train';
 import { ShadowMatch } from './shadow-match/ShadowMatch';
 import { TouchTalk } from './touch-talk/TouchTalk';
 import type { MiniGameBase } from './mini-game-base';
@@ -54,6 +55,8 @@ export const SCENE_CLASSES: Readonly<Partial<Record<GameId, GameSceneClass>>> = 
   'car-wash': CarWash,
   // Phi công nhí (2026-11-11): a yard game; registering it wakes the yard's plane corner.
   plane: Plane,
+  // Tàu hỏa chở bạn (2026-11-12): a yard game; registering it wakes the yard's train corner.
+  train: Train,
 };
 
 function buildGames(): Partial<Record<GameId, GameEntry>> {

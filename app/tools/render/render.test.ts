@@ -88,6 +88,8 @@ describe('art:build', () => {
       carWash: expect.any(Object),
       // Phi công nhí (2026-11-11): checked on its own below.
       plane: expect.any(Object),
+      // Tàu hỏa chở bạn (2026-11-12): checked on its own below.
+      train: expect.any(Object),
       map: {
         road: '#EE9F68',
         roadEdge: '#FFFFFF',
@@ -144,6 +146,27 @@ describe('art:build', () => {
       hoseMinPx: 90,
       hitMinPx: 80,
       gapPx: Tokens.spacing.targetGap,
+    });
+  });
+
+  it('Tàu hỏa chở bạn (2026-11-12): the train builder gets art.train, the friends, cars, destinations, surprises and the sizes', () => {
+    const p = buildParams();
+    expect(Object.keys(p.art.train)).toEqual(Object.keys(Tokens.art.train));
+    expect(p.art.train.engine).toBe(Tokens.art.train.engine.css);
+    expect(p.train).toEqual({
+      friends: ['cat', 'pig', 'sheep', 'cow', 'horse', 'rooster'],
+      cars: ['red', 'yellow', 'blue'],
+      destinations: ['beach', 'playground', 'fair'],
+      surprises: ['crossing', 'bridge', 'hot-air', 'rainbow'],
+      carMinPx: 110,
+      friendMinPx: 120,
+      destMinPx: 150,
+      hitMinPx: 80,
+      gapPx: Tokens.spacing.targetGap,
+      scrollPxPerS: Tokens.ui.trainScrollPxPerS,
+      reducedScroll: Tokens.ui.trainReducedScroll,
+      dimInMinMs: 400,
+      darkMaxMs: 600,
     });
   });
 

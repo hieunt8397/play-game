@@ -171,6 +171,10 @@ export const AUDIO_IDS = [
   'sfx.plane.propeller',
   'sfx.plane.whoosh',
   'sfx.plane.boing',
+  'sfx.train.toot',
+  'sfx.train.chug',
+  'sfx.train.puff',
+  'sfx.train.hiss',
 ] as const;
 
 export type AudioId = (typeof AUDIO_IDS)[number];
@@ -446,6 +450,11 @@ export const AUDIO_CATALOG: Record<AudioId, AudioEntry> = {
   'sfx.plane.propeller': { path: 'assets/audio/sfx/sfx.plane.propeller.m4a', kind: 'sfx' },
   'sfx.plane.whoosh': { path: 'assets/audio/sfx/sfx.plane.whoosh.m4a', kind: 'sfx' },
   'sfx.plane.boing': { path: 'assets/audio/sfx/sfx.plane.boing.m4a', kind: 'sfx' },
+  /** Tàu hỏa chở bạn (2026-11-12): our own ffmpeg recipes (tools/audio/make-train.ts): ≤ 0.8 s, a 50 ms fade-in, nothing below 150 Hz, quiet. The toy whistle's "tu tu" (two soft notes); the chug as the train pulls away; the soft puff of smoke from the chimney; the brakes' gentle hiss as it stops. Load with the game. */
+  'sfx.train.toot': { path: 'assets/audio/sfx/sfx.train.toot.m4a', kind: 'sfx' },
+  'sfx.train.chug': { path: 'assets/audio/sfx/sfx.train.chug.m4a', kind: 'sfx' },
+  'sfx.train.puff': { path: 'assets/audio/sfx/sfx.train.puff.m4a', kind: 'sfx' },
+  'sfx.train.hiss': { path: 'assets/audio/sfx/sfx.train.hiss.m4a', kind: 'sfx' },
   /** Island background loop, mastered to −30 LUFS (EXPERIENCE › Âm thanh: music ≤ −30 LUFS). */
   'music.island': { path: 'assets/audio/music/music.island.m4a', kind: 'music', loop: true },
 };

@@ -55,6 +55,8 @@ import {
   validateCarWash,
   planeLimits,
   validatePlane,
+  trainLimits,
+  validateTrain,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
@@ -73,6 +75,7 @@ import { HITS, screen as iceCreamScreen } from '../../src/content/games/ice-crea
 import { HITS as DRESS_UP_HITS } from '../../src/content/games/dress-up.ts';
 import { HITS as GARDEN_HITS } from '../../src/content/games/garden.ts';
 import { VEHICLE_IDS as CAR_WASH_VEHICLES, carHit } from '../../src/content/games/car-wash.ts';
+import { CAR_COLOURS as TRAIN_CARS, ENGINE_HIT as TRAIN_ENGINE_HIT, carHit as trainCarHit } from '../../src/content/games/train.ts';
 import { LayoutError, formatLayout, toLayout, type RawProjection, type ToLayoutOptions } from '../layout/to-layout.ts';
 import { resolveBlender, type Env } from '../shared/binaries.ts';
 import { BLENDER_SCRIPTS, LAYOUT_DIR, RENDER_DIR, blendPath, blenderArgs, runBlender, runProcess, screenSpec, type Runner } from './blender.ts';
@@ -117,10 +120,12 @@ export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames
   'car-wash': (layout, frames) => validateCarWash(layout, carWashLimits(), frames),
   // Phi công nhí (2026-11-11): the plane at every height of its flight, the balloons, the friends and their houses.
   plane: (layout, frames) => validatePlane(layout, planeLimits(), frames),
+  // Tàu hỏa chở bạn (2026-11-12): the engine and cars apart, the platform, friends and destinations clear of them, the tunnel.
+  train: (layout, frames) => validateTrain(layout, trainLimits(), frames),
 };
 
 /** Story 3.3: screens whose render-time rules get the rendered frames' trims. */
-export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash', 'plane']);
+export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash', 'plane', 'train']);
 
 /** Per-screen toLayout options: hit ids kept `stationGap` apart (map), unpadded drop areas (ice-cream, the dino lawn). */
 export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'separate' | 'unpadded'>>> = {
@@ -137,6 +142,8 @@ export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'sep
   garden: { unpadded: [GARDEN_HITS.shiba] },
   // Rửa xe: each car's tap area is its raw hull (the hose circle keeps ≥ targetGap from it; the rub reaches a little further at runtime).
   'car-wash': { unpadded: CAR_WASH_VEHICLES.map(carHit) },
+  // Tàu hỏa chở bạn: the engine's and each car's tap areas are their raw hulls (they stand close in a row, ≥ targetGap apart).
+  train: { unpadded: [TRAIN_ENGINE_HIT, ...TRAIN_CARS.map((_, n) => trainCarHit(n))] },
 };
 
 export const layoutPath = (screen: string): string => join(LAYOUT_DIR, `${screen}.layout.json`);

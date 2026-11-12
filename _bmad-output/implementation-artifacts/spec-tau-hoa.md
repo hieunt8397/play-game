@@ -2,7 +2,7 @@
 title: 'Trò mới: Tàu hỏa chở bạn'
 type: 'feature'
 created: '2026-11-11'
-status: 'ready-for-dev'
+status: 'in-review'
 route: 'dispatch'
 baseline_commit: '2419d84'
 review_loop_iteration: 0
@@ -154,8 +154,8 @@ Voice needs `ELEVENLABS_API_KEY` in `.env`. Neither tool is set up on the machin
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Back up the files to be edited to `_backup/2026-11-11-tau-hoa/`.
-- [ ] Ids, content, the pure trip model and its tests. Cover:
+- [x] Back up the files to be edited to `_backup/2026-11-11-tau-hoa/`.
+- [x] Ids, content, the pure trip model and its tests. Cover:
   - departure and arrival with a skip;
   - boarding at each station, and taps ignored during a boarding;
   - the count;
@@ -163,7 +163,7 @@ Voice needs `ELEVENLABS_API_KEY` in `.env`. Neither tool is set up on the machin
   - the destination after the third friend, the drop-off, then the next trip;
   - car and chimney taps;
   - the three bags, and resume.
-- [ ] `build_train.py`:
+- [x] `build_train.py`:
   - the sky plate;
   - the engine with the capped Shiba driver (idle, wheel frames, a toot pose with a smoke puff, a happy pose);
   - three cars, empty and with a friend seated;
@@ -174,11 +174,11 @@ Voice needs `ELEVENLABS_API_KEY` in `.env`. Neither tool is set up on the machin
   - the surprise frames.
 
   Then render and atlas, and iterate on composites.
-- [ ] Re-lay out the yard to 9 corners with a train corner prop, re-render home, and wire `home.ts`, `validateHome`, the tests and the corner-name line.
-- [ ] `validateTrain` in `tools/layout/rules.ts`, wired into render, atlas and validate-content, with its test.
-- [ ] Sounds (toot, chug, puff, brake hiss; `make-train.ts`) and voice lines (`npm run tts`).
-- [ ] The `Train.ts` scene, the registry entry, and scene tests: opening, Home mid-trip then resume, and a full trip.
-- [ ] README provenance.
+- [x] Re-lay out the yard to 9 corners with a train corner prop, re-render home, and wire `home.ts`, `validateHome`, the tests and the corner-name line.
+- [x] `validateTrain` in `tools/layout/rules.ts`, wired into render, atlas and validate-content, with its test.
+- [x] Sounds (toot, chug, puff, brake hiss; `make-train.ts`) and voice lines (`npm run tts`).
+- [x] The `Train.ts` scene, the registry entry, and scene tests: opening, Home mid-trip then resume, and a full trip.
+- [x] README provenance.
 
 **Acceptance Criteria:**
 - Given the yard, when Xoài taps the "Tàu hỏa" corner, then the train waits at the station and the voice invites her. When she taps the train, it toots and pulls away and the countryside starts to scroll.
@@ -220,6 +220,17 @@ These are the agent's choices; the parent would not notice them.
 
 ## Implementation Notes
 
+2026-11-12 (dev). Built on this machine after all: Blender 5.2.2 LTS is installed (not on PATH: `BLENDER_BIN="C:/Program Files/Blender Foundation/Blender 5.2/blender.exe"`), ffmpeg and the ElevenLabs key are present. Backups in `_backup/2026-11-11-tau-hoa/`.
+- **Ids and content:** `train` in every shared list (mirroring the plane); `SnapshotPartials['train'] = { friends, aboard, dest, surprise, tunnelLeg }`; six chibi pen friends; cars red, yellow, blue; destinations beach, playground, fair; surprises crossing, bridge, hot-air, rainbow. Counts reuse `vo.pizza.count.1–3`.
+- **Trip model** (`games/train/trip.ts`, pure): start → depart → ride → arrive → wait → board → … → dest → dropoff → depart (next trip). The model owns the scroll and every scrolling thing (platforms, destination, tunnel, cow, crossing, bridge, clouds, bird). Arrivals ease from cruise to a stop (cubic Hermite, as the plane's house). The tunnel's `dim` is the share of the train its hill covers: at cruise the dim rises over ≈ 3 s, the whole train is dark ≈ 0.2 s (0.3 s reduced), and "Ú òa!" plays as the engine comes out; the arrival waits until the dim is gone. `tapDest` moves the state to the next trip at once (Home during the drop-off keeps nothing).
+- **Art** (`build_train.py`, 3 atlas pages; it imports `build_plane` for the orthographic camera, `fit` and shared shapes): the train spans x 61…730; the engine and car hulls are raw (unpadded, ≥ 24 px apart); the platform's tap area is its deck (padded); the destinations are fitted into 192 × 250 px; the dropped friends stand in front of the destination at 0.82 scale. The tunnel is rendered right of the train (it scrolls; only its length matters).
+- **Rules:** `validateTrain` checks every tap area (size, rect, Hud zones), the train pieces' gaps and the waiting targets' gaps to the train, the tunnel's length against the train's (it covers it; the fade-in ≥ 400 ms at cruise; the time wholly dark ≤ 600 ms at the reduced cruise) and the frame sizes.
+- **Sounds:** `make-train.ts` toot (two soft chord humps), chug (three chuffs), puff, hiss; peaks −20.5…−28.5 dBFS; `audio:check` OK. 17 new voice lines via `npm run tts`, not yet approved.
+- **Verified in a browser** (headless Chrome driven over CDP at 1024×768 against `npm run dev`): Start → map → Nhà Xoài → the yard's train corner → a full trip (three boardings, the tunnel, the bridge, the fair, the drop-off, the next trip with a hot-air balloon), a car tap, a toot, Home mid-trip and the resume. Not yet played on the iPad.
+- **Deviations** (see the change log): the yard is 1 + 4 + 4, not 5 + 4; the prompt line is "Xoài ơi, chạm tàu cho tàu chạy nhé!" (8 words: the voice rule caps lines at 8); the grazing cow stands on the near grass (on the far grass the train always hid it); "a shorter dim" under reduced motion is read as a lighter one (`ui.trainDimReduced` 0.3 vs 0.45): the slower scroll makes the ramp longer, and the time wholly in the dark stays ≤ 600 ms.
+
 ## Spec Change Log
+
+- 2026-11-12 (dev): the yard re-layout. Five back-row corners do not fit: each padded hull (hitPad 24) must stay ≥ targetGap from the next, so the boxes need ≥ 72 px gaps, and 5 × 150 + 4 × 72 = 1038 px > the 928 px row. The train corner stands instead on the lawn in front of the fence at the top left (right of the Home zone); the pen steps down under it and the stage, wardrobe and plane step right. Every corner still passes `validateHome` (≥ 150 px, ≥ targetGap apart, off the Home/Speaker zones).
 
 ## Review Triage Log

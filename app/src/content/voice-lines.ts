@@ -92,6 +92,7 @@ export const VOICE_LINES = [
   { id: 'vo.shell.corner-name.garden', text: 'Vườn' },
   { id: 'vo.shell.corner-name.car-wash', text: 'Rửa xe' },
   { id: 'vo.shell.corner-name.plane', text: 'Máy bay' },
+  { id: 'vo.shell.corner-name.train', text: 'Tàu hỏa' },
   // Tiệm kem (Story 1.8; 5.2): the single-flavour ask names Xoài — "Xoài ơi, kem … nào!" (+ its colour word: hồng, trắng, xanh); the
   // retry after a wrong scoop. "sô-cô-la" counts as 3 words, so its lines carry no colour word.
   // Played only through core/hint-director. Not yet approved.
@@ -456,6 +457,27 @@ export const VOICE_LINES = [
   { id: 'vo.plane.drop.horse', text: 'Thả quà cho bạn ngựa nhé!' },
   { id: 'vo.plane.drop.rooster', text: 'Thả quà cho bạn gà nhé!' },
   { id: 'vo.plane.parent.1', text: 'Mời bố mẹ | cùng lái máy bay nhé!', keywordPauseMs: 300 },
+  // Tàu hỏa chở bạn (2026-11-12): the invitation at the start station (it names Xoài; also the idle hint and the Speaker
+  // prompt there), the station line as the train stops by a waiting friend (the idle hint and the Speaker prompt
+  // there), each friend's boarding line (the count reuses vo.pizza.count.1–3), the car colours named on a tap, "Ú òa!"
+  // as the engine comes out of the tunnel, each destination's line (said as the train stops there; the idle hint and
+  // the Speaker prompt there) and the parent invitation. Naming only: never a question, no praise. Not yet approved.
+  { id: 'vo.train.prompt', text: 'Xoài ơi, | chạm tàu cho tàu chạy nhé!', keywordPauseMs: 300 },
+  { id: 'vo.train.station', text: 'Có bạn chờ tàu kìa!' },
+  { id: 'vo.train.board.cat', text: 'Bạn mèo lên tàu!' },
+  { id: 'vo.train.board.pig', text: 'Bạn lợn lên tàu!' },
+  { id: 'vo.train.board.sheep', text: 'Bạn cừu lên tàu!' },
+  { id: 'vo.train.board.cow', text: 'Bạn bò lên tàu!' },
+  { id: 'vo.train.board.horse', text: 'Bạn ngựa lên tàu!' },
+  { id: 'vo.train.board.rooster', text: 'Bạn gà lên tàu!' },
+  { id: 'vo.train.car.red', text: 'Toa đỏ!' },
+  { id: 'vo.train.car.yellow', text: 'Toa vàng!' },
+  { id: 'vo.train.car.blue', text: 'Toa xanh dương!' },
+  { id: 'vo.train.tunnel', text: 'Ú òa!' },
+  { id: 'vo.train.dest.beach', text: 'Đến biển rồi!' },
+  { id: 'vo.train.dest.playground', text: 'Đến sân chơi rồi!' },
+  { id: 'vo.train.dest.fair', text: 'Đến hội chợ rồi!' },
+  { id: 'vo.train.parent.1', text: 'Mời bố mẹ | cùng đi tàu nhé!', keywordPauseMs: 300 },
 ] as const satisfies readonly VoiceLine[];
 
 export type VoiceLineId = (typeof VOICE_LINES)[number]['id'];

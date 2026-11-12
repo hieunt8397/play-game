@@ -17,7 +17,7 @@ export type IslandGameId = (typeof ISLAND_GAME_IDS)[number];
  * Story 7.2: the yard games (content/home.ts corners). They have no island station: the yard opens them
  * (scene key === GameId still holds).
  */
-export const YARD_GAME_IDS = ['animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash', 'plane'] as const;
+export const YARD_GAME_IDS = ['animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash', 'plane', 'train'] as const;
 export type YardGameId = (typeof YARD_GAME_IDS)[number];
 
 /** Every mini-game id: the island games, then the yard games. */
@@ -75,6 +75,11 @@ export type SnapshotPartials = {
    * and this flight's surprise. Kept on Home only while the plane is in the air with its gifts not yet dropped.
    */
   plane: { friend: string; gifts: string[]; surprise: string };
+  /**
+   * Tàu hỏa chở bạn (2026-11-12): this trip's three friends (in boarding order), how many are aboard, its
+   * destination, its surprise and the leg its tunnel falls on. Kept on Home only while a friend is aboard.
+   */
+  train: { friends: string[]; aboard: number; dest: string; surprise: string; tunnelLeg: number };
 };
 
 /** The closed questions of a round so far (Story 2.5): a resumed round judges `nextLevel` on all of them. */

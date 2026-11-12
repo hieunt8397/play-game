@@ -16,7 +16,7 @@ import { HOME_STATION, STATIONS } from './stations';
 import { inviteLine, isVoiceLineId, stationNameLine, VOICE_LINES } from './voice-lines';
 
 describe('content/home (Story 7.1)', () => {
-  it('has the 8 corners of the specs (2026-10-30: the garden, the car wash; 2026-11-11: the plane), each with its game id and a parent label', () => {
+  it('has the 9 corners of the specs (2026-10-30: the garden, the car wash; 2026-11-11: the plane; 2026-11-12: the train), each with its game id and a parent label', () => {
     expect(YARD_CORNERS.map((c) => [c.id, c.gameId])).toEqual([
       ['pen', 'animal-pens'],
       ['stage', 'band'],
@@ -26,6 +26,7 @@ describe('content/home (Story 7.1)', () => {
       ['garden', 'garden'],
       ['car-wash', 'car-wash'],
       ['plane', 'plane'],
+      ['train', 'train'],
     ]);
     expect(YARD_CORNERS.map((c) => c.id)).toEqual([...CORNER_IDS]);
   });
@@ -40,9 +41,9 @@ describe('content/home (Story 7.1)', () => {
     expect(isVoiceLineId(inviteLine(HOME_STATION))).toBe(true);
   });
 
-  it('awake is derived from the registry: a registered game wakes its corner (Story 7.2: the pen; Story 7.3: the stage; Story 7.4: the bed; Story 8.1: the clinic; Story 8.2: the wardrobe; 2026-10-30: the garden, the car wash; 2026-11-11: the plane), the others sleep', () => {
+  it('awake is derived from the registry: a registered game wakes its corner (Story 7.2: the pen; Story 7.3: the stage; Story 7.4: the bed; Story 8.1: the clinic; Story 8.2: the wardrobe; 2026-10-30: the garden, the car wash; 2026-11-11: the plane; 2026-11-12: the train), the others sleep', () => {
     const playable = (id: string): boolean => Object.prototype.hasOwnProperty.call(GAME_CONTENT, id);
-    expect(yardCorners(playable).filter((c) => c.awake).map((c) => c.id)).toEqual(['pen', 'stage', 'bed', 'clinic', 'wardrobe', 'garden', 'car-wash', 'plane']);
+    expect(yardCorners(playable).filter((c) => c.awake).map((c) => c.id)).toEqual(['pen', 'stage', 'bed', 'clinic', 'wardrobe', 'garden', 'car-wash', 'plane', 'train']);
     expect(yardCorners((id) => id === 'bedtime').filter((c) => c.awake).map((c) => c.id)).toEqual(['bed']);
   });
 

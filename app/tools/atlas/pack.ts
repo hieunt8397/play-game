@@ -63,6 +63,8 @@ import {
   validateCarWash,
   planeLimits,
   validatePlane,
+  trainLimits,
+  validateTrain,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
@@ -120,6 +122,8 @@ export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayou
   'car-wash': (layout, atlas) => validateCarWash(layout, carWashLimits(), atlas),
   // Phi công nhí (2026-11-11): the plane's flight band, the balloons, the friends and houses, every frame.
   plane: (layout, atlas) => validatePlane(layout, planeLimits(), atlas),
+  // Tàu hỏa chở bạn (2026-11-12): the train's and the waiting targets' tap areas, the tunnel against the train, every frame.
+  train: (layout, atlas) => validateTrain(layout, trainLimits(), atlas),
 };
 
 /** PNG zlib level of the shipped background. */

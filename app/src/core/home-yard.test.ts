@@ -37,7 +37,7 @@ describe('planYard (Story 7.1)', () => {
   it('places every corner on its ground pivot at 1/renderScale, back to front, with its hit and label', () => {
     const plan = planYard(layout(), yardCorners(() => false), () => true);
     expect(plan.warnings).toEqual([]);
-    expect(plan.corners.map((c) => c.id)).toEqual(['plane', 'car-wash', 'garden', 'wardrobe', 'clinic', 'bed', 'stage', 'pen']);
+    expect(plan.corners.map((c) => c.id)).toEqual(['train', 'plane', 'car-wash', 'garden', 'wardrobe', 'clinic', 'bed', 'stage', 'pen']);
     const pen = plan.corners.find((c) => c.id === 'pen')!;
     expect(pen.image).toEqual({ frame: 'pen/idle/00', x: 100, y: 600, originX: 100 / 1024, originY: 600 / 768, scale: 0.5 });
     expect(pen.hit).toEqual(sq(40, 400, 160));
