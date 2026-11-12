@@ -2,6 +2,7 @@
 // `validate:content` (inside `npm run check`). Every message names the offending id or file.
 import type { Rect } from '../../src/core/safe-rect.ts';
 import { Tokens } from '../../src/core/tokens.ts';
+import { relativeLuminance, rgbOf } from '../shared/colour.ts';
 import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
 import type { Station } from '../../src/content/stations.ts';
 import { FRAME_NAME } from '../../src/content/assets.ts';
@@ -2898,12 +2899,6 @@ export interface RocketRuleInput {
   design: { width: number; height: number };
 }
 
-/** The relative luminance (WCAG) of a `#RRGGBB` colour. */
-export function relativeLuminance(hex: string): number {
-  const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * v[0]! + 0.7152 * v[1]! + 0.0722 * v[2]!;
-}
-
 /** The rocket rules from Tokens and content (spec-ten-lua). */
 export function rocketLimits(ids: ScreenIds = ROCKET_SCREEN): RocketRuleInput {
   const u = Tokens.ui;
@@ -2984,7 +2979,7 @@ export function validateRocket(layout: ScreenLayout, input: RocketRuleInput, atl
     apart(input.craterHits[i]!, input.moonRocketHit, input.gap);
     apart(input.craterHits[i]!, input.earthMoonHit, input.gap);
   }
-  const lum = relativeLuminance(input.spaceDeep);
+  const lum = relativeLuminance(rgbOf(parseInt(input.spaceDeep.slice(1), 16)));
   if (lum < input.spaceDeepMinLum) problems.push(`space's darkest colour ${input.spaceDeep} has luminance ${round2(lum)} (min ${input.spaceDeepMinLum}): too close to black`);
   if (!atlas) return problems;
   for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "rocket": frame "${f}" is missing`);

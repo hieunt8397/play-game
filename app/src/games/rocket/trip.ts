@@ -23,7 +23,6 @@
 // fitted), 'pad' (the rocket built: it resumes at the countdown) or 'moon'; `resumeTrip` validates it.
 import {
   ALIEN_IDS,
-  COLOUR_IDS,
   CRATERS,
   JUMP_IDS,
   PART_IDS,
@@ -250,7 +249,6 @@ export interface TripSounds {
   readonly twinkle: string;
   readonly chute: string;
   readonly pop: string;
-  readonly chime: string;
   readonly alien: (a: AlienId) => string;
 }
 
@@ -329,6 +327,10 @@ export function createTripController(opts: TripOptions): TripController {
   let surprise: SurpriseId = r ? r.surprise : bags.surprises.draw();
   if (r) bags.surprises.note(r.surprise);
   let flagged = r ? r.flag : false;
+  /** The flag is on its way (planted after flagMs). */
+  let flagDue = false;
+  /** The tap that hurried a motion: the rest of that same tap does nothing more (one reaction per tap). */
+  let swallow = false;
   let pair: [ColourId, ColourId] = pairOf(bags.pairs.draw());
   let phase: TripPhase = 'build';
   let alt = 0;
@@ -360,6 +362,12 @@ export function createTripController(opts: TripOptions): TripController {
   }));
   for (let i = 0; i < stars.length; i++) starAt.push(-Infinity);
 
+  /** True (once) when this tap already hurried a motion. */
+  const consumeSwallow = (): boolean => {
+    const was = swallow;
+    swallow = false;
+    return was;
+  };
   const after = (ms: number, fn: () => void): void => {
     queue.push({ at: now + ms, fn });
     queue.sort((a, b) => a.at - b.at);
@@ -466,6 +474,7 @@ export function createTripController(opts: TripOptions): TripController {
     homeT = 0;
     colours = [];
     flagged = false;
+    flagDue = false;
     surprise = bags.surprises.draw();
     said = { light: false };
     audio.say(opts.lines.home);
@@ -487,10 +496,13 @@ export function createTripController(opts: TripOptions): TripController {
   /** A Moon tap counted: the flag once a trip, and home after enough. */
   const moonTap = (): void => {
     moonTaps += 1;
-    if (!flagged && moonTaps >= WORLD.flagAfter) {
-      flagged = true;
+    if (!flagged && !flagDue && moonTaps >= WORLD.flagAfter) {
+      flagDue = true;
       after(t.flagMs, () => {
+        flagDue = false;
         if (phase !== 'moon') return;
+        // It counts as planted (and is kept by a snapshot) only once it stands.
+        flagged = true;
         audio.sfx(opts.sounds.sparkle);
         view.flag();
       });
@@ -544,6 +556,7 @@ export function createTripController(opts: TripOptions): TripController {
       }
     },
     tapChoice(n) {
+      if (consumeSwallow()) return false;
       if (stopped || phase !== 'build' || isBusy() || n < 0 || n > 1) return false;
       const c = pair[n]!;
       const p = part();
@@ -562,7 +575,7 @@ export function createTripController(opts: TripOptions): TripController {
       return true;
     },
     tapRocket() {
-      if (stopped) return false;
+      if (consumeSwallow() || stopped) return false;
       if (phase === 'countdown') {
         launch();
         return true;
@@ -574,6 +587,7 @@ export function createTripController(opts: TripOptions): TripController {
       return false;
     },
     tapCrater(n) {
+      if (consumeSwallow()) return false;
       if (stopped || phase !== 'moon' || n < 0 || n >= CRATERS || now - craterAt[n]! < t.peekMs) return false;
       craterAt[n] = now;
       idleMs = 0;
@@ -585,6 +599,7 @@ export function createTripController(opts: TripOptions): TripController {
       return true;
     },
     tapEarth() {
+      if (consumeSwallow()) return false;
       if (stopped || (phase !== 'moon' && phase !== 'space') || now - earthAt < t.earthSpinMs) return false;
       earthAt = now;
       audio.sfx(opts.sounds.twinkle);
@@ -594,7 +609,7 @@ export function createTripController(opts: TripOptions): TripController {
       return true;
     },
     press(p) {
-      if (stopped) return 'none';
+      if (consumeSwallow() || stopped) return 'none';
       if (phase === 'ascent') {
         if (now - boostAt < t.boostMs) return 'none';
         boostAt = now;
@@ -654,6 +669,7 @@ export function createTripController(opts: TripOptions): TripController {
       for (const q of queue) q.at = Math.max(now, q.at - jump);
       busyUntil = Math.max(now, busyUntil - jump);
       skipEnd = now;
+      swallow = true;
       if (phase === 'home') homeT = t.returnMs;
       motion(0);
       view.skip();
@@ -663,6 +679,7 @@ export function createTripController(opts: TripOptions): TripController {
       if (stopped) return;
       const dt = Math.max(0, Math.min(t.maxDtMs, Number.isFinite(dtMs) ? dtMs : 0));
       now += dt;
+      swallow = false;
       motion(dt);
       runDue();
       if (stopped || isBusy()) return;
@@ -683,7 +700,8 @@ export function createTripController(opts: TripOptions): TripController {
       queue = [];
     },
     progress() {
-      const stepNow: TripStep = phase === 'build' || phase === 'fit' ? 'build' : phase === 'moon' ? 'moon' : 'pad';
+      // A fully built rocket resumes at the countdown, even while its last part is still flying on.
+      const stepNow: TripStep = phase === 'moon' ? 'moon' : colours.length >= PART_IDS.length ? 'pad' : 'build';
       return { questionIndex: 0, partial: { step: stepNow, colours: [...colours], surprise, flag: flagged } };
     },
     get phase() {
@@ -749,4 +767,3 @@ export function resumeTrip(resumeAt: { readonly questionIndex: number; readonly 
 export const ALL_SURPRISES: readonly SurpriseId[] = SURPRISE_IDS;
 export const ALL_ALIENS: readonly AlienId[] = ALIEN_IDS;
 export const ALL_JUMPS: readonly JumpId[] = JUMP_IDS;
-export const ALL_COLOURS: readonly ColourId[] = COLOUR_IDS;

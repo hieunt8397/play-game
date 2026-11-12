@@ -8,7 +8,7 @@
 // The scene only wires Phaser: the runtime sunrise → space gradient under the space plate, the pad world and the Moon
 // world (containers that slide), the rocket (a container of its parts, the pilot, the flame and its soft glow),
 // the passers-by of the climb, the stars, the tap areas, tweens, and the pure model (trip.ts) that owns the steps.
-import type { GameObjects, Textures } from 'phaser';
+import type { GameObjects, Textures, Time } from 'phaser';
 import { ATLASES, BACKGROUNDS } from '../../content/assets';
 import {
   ALIENS,
@@ -156,6 +156,10 @@ export class Rocket extends MiniGameBase<'rocket'> {
   private earthBig: GameObjects.Image | undefined;
   private earthSmall: GameObjects.Image | undefined;
   private moonFar: GameObjects.Image | undefined;
+  /** Where the big Earth, the small Earth and the far Moon rest (their centres: they scale in place). */
+  private earthAt: Point = { x: 0, y: 0 };
+  private earthSmallAt: Point = { x: 0, y: 0 };
+  private moonFarAt: Point = { x: 0, y: 0 };
   private surpriseImg: GameObjects.Image | undefined;
   private flagImg: GameObjects.Image | undefined;
   private rocks: (GameObjects.Image | undefined)[] = [];
@@ -165,10 +169,14 @@ export class Rocket extends MiniGameBase<'rocket'> {
   private passers: { img: GameObjects.Image | undefined; at: number; x: number; kind: string; extra: (GameObjects.Image | undefined)[] }[] = [];
   /** Tweened values the scene reads each frame. */
   private flight = { padY: 0, moonY: 0, earthY: 0, flame: 0, sway: 0 };
+  /** The tapped big Earth's little hop (added to its place). */
+  private earthHop = { dy: 0 };
   private flameClock = 0;
   private flapClock = 0;
   private glowClock = 0;
   private prompt: string | undefined;
+  /** The return's parachute moment (cancelled when the return is hurried to its end). */
+  private homeTimer: Time.TimerEvent | undefined;
 
   constructor() {
     super('rocket');
@@ -190,6 +198,8 @@ export class Rocket extends MiniGameBase<'rocket'> {
     this.choiceImgs = [];
     this.passers = [];
     this.flight = { padY: 0, moonY: this.layout.design.height, earthY: MOTION.earthRisePx, flame: 0, sway: 0 };
+    this.earthHop = { dy: 0 };
+    this.homeTimer = undefined;
     this.skyDrawn = -1;
     this.flameClock = 0;
     this.flapClock = 0;
@@ -246,7 +256,6 @@ export class Rocket extends MiniGameBase<'rocket'> {
         twinkle: SFX.twinkle,
         chute: SFX.chute,
         pop: SFX.pop,
-        chime: SFX.chime,
         alien: (a) => ALIENS[a].sfx,
       },
       audio: {
@@ -401,6 +410,12 @@ export class Rocket extends MiniGameBase<'rocket'> {
     return img?.setScale((this.s() * d.width) / Math.max(1, rect.width), this.s());
   }
 
+  /** A frame drawn where it was rendered, but with its origin at its trimmed centre (so it scales and turns in place). */
+  private centredInPlace(frame: string): { img: GameObjects.Image | undefined; at: Point } {
+    const c = this.centreOf(frame) ?? { x: 0, y: 0 };
+    return { img: this.pivoted(frame, c, c), at: c };
+  }
+
   /** `frame` drawn with its trimmed centre on `at`, at `scale` of its rendered size. */
   private centred(frame: string, at: Point, scale = 1): GameObjects.Image | undefined {
     const rect = this.frameRect(frame);
@@ -489,8 +504,12 @@ export class Rocket extends MiniGameBase<'rocket'> {
 
   /** Space: the big Earth below, the far Moon, the surprise (made when it comes). */
   private addSpace(): void {
-    this.earthBig = this.inPlace(EARTH_FRAME)?.setDepth(Depth.earth).setVisible(false);
-    this.moonFar = this.inPlace(MOONFAR_FRAME)?.setDepth(Depth.far).setAlpha(0);
+    const earth = this.centredInPlace(EARTH_FRAME);
+    this.earthBig = earth.img?.setDepth(Depth.earth).setVisible(false);
+    this.earthAt = earth.at;
+    const moon = this.centredInPlace(MOONFAR_FRAME);
+    this.moonFar = moon.img?.setDepth(Depth.far).setAlpha(0);
+    this.moonFarAt = moon.at;
   }
 
   /** The Moon world: the ground, the rocks, the flag (hidden until planted), the small Earth, Shiba on the Moon. */
@@ -511,7 +530,9 @@ export class Rocket extends MiniGameBase<'rocket'> {
     if (this.flagImg) box.add(this.flagImg);
     this.astroMoon = this.pivoted(astroFrame('idle'), this.astroAt, this.astroMoonAt)?.setVisible(false);
     if (this.astroMoon) box.add(this.astroMoon);
-    this.earthSmall = this.inPlace(EARTH_SMALL_FRAME)?.setDepth(Depth.far).setAlpha(0);
+    const small = this.centredInPlace(EARTH_SMALL_FRAME);
+    this.earthSmall = small.img?.setDepth(Depth.far).setAlpha(0);
+    this.earthSmallAt = small.at;
   }
 
   /** The rocket: its parts, the pilot, the flame (under the parts) and its soft glow, the parachute. */
@@ -589,7 +610,7 @@ export class Rocket extends MiniGameBase<'rocket'> {
     this.padWorld?.setY(padY).setVisible(padY < d.height * SCENE.padHidden);
     this.astro?.setY(this.astroAt.y + padY);
     this.moonWorld?.setY(this.flight.moonY).setVisible(this.flight.moonY < d.height);
-    this.earthBig?.setY(this.flight.earthY);
+    this.earthBig?.setY(this.earthAt.y + this.flight.earthY + this.earthHop.dy);
     // The passers-by cross top to bottom over their share of the climb.
     for (const p of this.passers) {
       const k = c.phase === 'ascent' ? (c.alt - p.at) / WORLD.passSpan : -1;
@@ -680,7 +701,6 @@ export class Rocket extends MiniGameBase<'rocket'> {
       }
       if (this.rocketBox && !this.reduced) this.tweens.add({ targets: this.rocketBox, scaleY: SCENE.clickSquash, duration: SCENE.clickMs, yoyo: true, ease: SINE, onComplete: () => this.rocketBox?.setScale(1) });
       if (target) this.sparkles(target, MOTION.sparkles);
-      this.time.delayedCall(Tokens.Timing.rocketNextPartMs, () => this.clearChoices());
     };
     if (!flyer || !target) {
       this.time.delayedCall(ms, land);
@@ -718,6 +738,7 @@ export class Rocket extends MiniGameBase<'rocket'> {
 
   /** Shiba hops from the pad into the rocket, then waves through the porthole. */
   private board(ms: number): void {
+    this.clearChoices();
     const port = this.anchor(ANCHORS.porthole);
     const a = this.astro;
     const done = (): void => {
@@ -798,10 +819,14 @@ export class Rocket extends MiniGameBase<'rocket'> {
     this.earthBig?.setVisible(true);
     this.flight.earthY = MOTION.earthRisePx;
     this.tweens.add({ targets: this.flight, earthY: 0, duration: this.dur(ms * SCENE.earthRise), ease: EASE_OUT });
-    if (this.moonFar) this.tweens.add({ targets: this.moonFar, alpha: 1, duration: ms * SCENE.moonFarIn, ease: SINE });
+    this.earthBig?.setScale(this.s()).setAngle(0);
+    if (this.moonFar) {
+      this.tweens.killTweensOf(this.moonFar);
+      this.moonFar.setScale(this.s()).setPosition(this.moonFarAt.x, this.moonFarAt.y).setAlpha(0);
+      this.tweens.add({ targets: this.moonFar, alpha: 1, duration: ms * SCENE.moonFarIn, ease: SINE });
+    }
     this.surpriseImg?.destroy();
-    const frame = surprise === 'ufo' ? SURPRISE_FRAMES.ufo : surprise === 'satellite' ? SURPRISE_FRAMES.satellite : SURPRISE_FRAMES[surprise];
-    this.surpriseImg = this.centred(frame, { x: SCENE.surpriseHidePx, y: SCENE.surpriseHidePx })?.setDepth(Depth.surprise);
+    this.surpriseImg = this.centred(SURPRISE_FRAMES[surprise], { x: SCENE.surpriseHidePx, y: SCENE.surpriseHidePx })?.setDepth(Depth.surprise);
     if (this.surpriseImg && !this.reduced) this.tweens.add({ targets: this.surpriseImg, angle: surprise === 'ringed' ? SCENE.surpriseRockDeg : -SCENE.surpriseRockDeg, duration: SCENE.surpriseRockMs, yoyo: true, repeat: -1, ease: SINE });
   }
 
@@ -815,7 +840,11 @@ export class Rocket extends MiniGameBase<'rocket'> {
     this.tweens.add({ targets: this.flight, earthY: d.height, duration: ms * SCENE.landEarthOut, ease: EASE_IN });
     this.tweens.add({ targets: this.flight, moonY: 0, duration: ms * SCENE.landMoonIn, ease: EASE_OUT });
     if (this.moonFar) this.tweens.add({ targets: this.moonFar, alpha: 0, scale: this.moonFar.scale * MOTION.moonfarGrow, duration: ms * 0.5 });
-    if (this.earthSmall) this.tweens.add({ targets: this.earthSmall, alpha: 1, delay: ms * SCENE.landSmallAt, duration: ms * SCENE.landSmallIn });
+    if (this.earthSmall) {
+      this.tweens.killTweensOf(this.earthSmall);
+      this.earthSmall.setScale(this.s()).setPosition(this.earthSmallAt.x, this.earthSmallAt.y).setAngle(0).setAlpha(0);
+      this.tweens.add({ targets: this.earthSmall, alpha: 1, delay: ms * SCENE.landSmallAt, duration: ms * SCENE.landSmallIn });
+    }
     this.tweens.add({ targets: this.flight, flame: SCENE.landFlame, duration: ms * SCENE.landFlameIn });
     if (this.rocketBox) {
       this.tweens.add({ targets: this.rocketBox, angle: 0, duration: ms * SCENE.landTurn });
@@ -834,14 +863,22 @@ export class Rocket extends MiniGameBase<'rocket'> {
     this.flight.earthY = this.layout.design.height;
     this.earthBig?.setVisible(false);
     this.moonWorld?.setVisible(true);
-    this.earthSmall?.setAlpha(1);
+    if (this.earthSmall) {
+      this.tweens.killTweensOf(this.earthSmall);
+      this.earthSmall.setScale(this.s()).setPosition(this.earthSmallAt.x, this.earthSmallAt.y).setAngle(0).setAlpha(1);
+    }
+    if (this.moonFar) {
+      this.tweens.killTweensOf(this.moonFar);
+      this.moonFar.setAlpha(0);
+    }
     this.rocketBox?.setPosition(this.moonRocketAt.x, this.moonRocketAt.y).setAngle(0);
     this.dustRing({ x: this.moonRocketAt.x, y: this.moonRocketAt.y });
     this.setPilot('empty');
     const a = this.astroMoon;
     if (!a) return;
     this.repoint(a, astroFrame('happy'));
-    a.setVisible(true).setAlpha(1).setPosition(this.astroMoonAt.x, this.astroMoonAt.y);
+    this.tweens.killTweensOf(a);
+    a.setVisible(true).setAlpha(1).setScale(this.s()).setAngle(0).setPosition(this.astroMoonAt.x, this.astroMoonAt.y);
     if (!this.reduced) {
       const toY = this.astroMoonAt.y;
       a.setPosition(this.moonRocketAt.x + SCENE.hopOutX, toY - SCENE.hopOutY);
@@ -872,7 +909,7 @@ export class Rocket extends MiniGameBase<'rocket'> {
     const ms = T.rocketJumpMs;
     const y0 = this.astroMoonAt.y;
     this.tweens.killTweensOf(a);
-    a.setPosition(this.astroMoonAt.x, y0).setAngle(0);
+    a.setPosition(this.astroMoonAt.x, y0).setAngle(0).setScale(this.s());
     this.repoint(a, astroFrame(kind === 'wave' ? 'wave' : 'jump'));
     const land = (): void => {
       a.setAngle(0);
@@ -886,7 +923,18 @@ export class Rocket extends MiniGameBase<'rocket'> {
         { y: y0, duration: ms * (1 - SCENE.jumpUp), ease: 'Sine.easeIn', onComplete: land },
       ],
     });
-    if (kind === 'spin' && !this.reduced) this.tweens.add({ targets: a, angle: MOTION.spinDeg, duration: ms * SCENE.spinShare, ease: SINE });
+    // The 'spin' jump rocks Shiba side to side in the air (its pivot is its feet: a full turn would swing it round).
+    if (kind === 'spin' && !this.reduced) {
+      const q = (ms * SCENE.spinShare) / SCENE.spinSwings;
+      this.tweens.chain({
+        targets: a,
+        tweens: [
+          { angle: MOTION.spinDeg, duration: q, ease: SINE },
+          { angle: -MOTION.spinDeg, duration: 2 * q, ease: SINE },
+          { angle: 0, duration: q, ease: SINE },
+        ],
+      });
+    }
   }
 
   /** An alien rises out of crater `n` (it grows up from the crater), waves, and sinks back. */
@@ -921,17 +969,30 @@ export class Rocket extends MiniGameBase<'rocket'> {
   }
 
   private earthSpin(): void {
-    const img = this.ctl?.phase === 'moon' ? this.earthSmall : this.earthBig;
+    if (this.ctl?.phase !== 'moon') {
+      // The big Earth is only its top cap (its centre is below the screen): it hops up a little instead of turning.
+      this.tweens.killTweensOf(this.earthHop);
+      this.earthHop.dy = 0;
+      this.tweens.add({ targets: this.earthHop, dy: -this.amp(MOTION.earthHopPx), duration: Tokens.Timing.rocketEarthSpinMs / 2, yoyo: true, ease: SINE, onComplete: () => (this.earthHop.dy = 0) });
+      this.sparkles({ x: this.earthAt.x, y: SCENE.earthSparkY }, SCENE.earthSparks);
+      return;
+    }
+    const img = this.earthSmall;
     if (!img) return;
-    const c = this.centreOf(this.ctl?.phase === 'moon' ? EARTH_SMALL_FRAME : EARTH_FRAME);
-    this.tweens.add({ targets: img, scale: img.scale * (1 + this.amp(MOTION.tapGrow - 1) * SCENE.earthGrow), duration: Tokens.Timing.rocketEarthSpinMs / 2, yoyo: true, ease: SINE });
-    if (c) this.sparkles(this.ctl?.phase === 'moon' ? c : { x: c.x, y: SCENE.earthSparkY }, SCENE.earthSparks);
+    const c = this.earthSmallAt;
+    // From its rest scale every time (a tap during the bounce never grows it further).
+    this.tweens.killTweensOf(img);
+    img.setScale(this.s()).setAngle(0);
+    this.tweens.add({ targets: img, scale: this.s() * (1 + this.amp(MOTION.tapGrow - 1) * SCENE.earthGrow), angle: this.amp(MOTION.earthSpinDeg), duration: Tokens.Timing.rocketEarthSpinMs / 2, yoyo: true, ease: SINE, onComplete: () => img.setScale(this.s()).setAngle(0) });
+    this.sparkles(c, SCENE.earthSparks);
   }
 
+  /** A star twinkles: a quarter turn and back (its scale is the pulse's: a tap never touches it). */
   private twinkle(img: GameObjects.Image | undefined): void {
     if (!img) return;
-    const base = img.scale;
-    this.tweens.add({ targets: img, scale: base * this.amp(MOTION.tapGrow), angle: SCENE.twinkleDeg, duration: Tokens.Timing.rocketTwinkleMs / 2, yoyo: true, ease: SINE, onComplete: () => img.setAngle(0) });
+    if (img.angle !== 0) return;
+    this.tweens.add({ targets: img, angle: SCENE.twinkleDeg, duration: Tokens.Timing.rocketTwinkleMs / 2, yoyo: true, ease: SINE, onComplete: () => img.setAngle(0) });
+    this.sparkles({ x: img.x, y: img.y }, SCENE.boostSparks);
   }
 
   private surpriseTap(s: SurpriseId): void {
@@ -944,7 +1005,8 @@ export class Rocket extends MiniGameBase<'rocket'> {
       this.repoint(img, SURPRISE_FRAMES.satelliteFlap);
       this.time.delayedCall(SCENE.satFlapMs, () => img.active && this.repoint(img, SURPRISE_FRAMES.satellite));
     }
-    this.twinkle(img);
+    // A bounce from its rest scale (its rocking angle tween keeps going).
+    if (img.scale === this.s()) this.tweens.add({ targets: img, scale: this.s() * MOTION.tapGrow, duration: Tokens.Timing.rocketTwinkleMs / 2, yoyo: true, ease: SINE, onComplete: () => img.setScale(this.s()) });
     this.sparkles({ x: img.x, y: img.y }, SCENE.surpriseSparks);
   }
 
@@ -979,9 +1041,11 @@ export class Rocket extends MiniGameBase<'rocket'> {
       });
     }
     this.tweens.add({ targets: this.flight, moonY: d.height, duration: ms * SCENE.homeMoonOut, ease: EASE_IN });
-    if (this.earthSmall) this.tweens.add({ targets: this.earthSmall, scale: this.earthSmall.scale * SCENE.homeEarthGrow, y: this.earthSmall.y + d.height * SCENE.homeEarthDrop, alpha: 0, duration: ms * SCENE.homeEarthShare, ease: EASE_IN });
+    if (this.earthSmall) this.tweens.add({ targets: this.earthSmall, scale: this.earthSmall.scale * SCENE.homeEarthGrow, y: this.earthSmallAt.y + d.height * SCENE.homeEarthDrop, alpha: 0, duration: ms * SCENE.homeEarthShare, ease: EASE_IN });
     // The parachute opens and the flame goes out; the pad world rises from below to meet the rocket.
-    this.time.delayedCall(ms * SCENE.homeChuteAt, () => {
+    this.homeTimer?.remove(false);
+    this.homeTimer = this.time.delayedCall(ms * SCENE.homeChuteAt, () => {
+      this.homeTimer = undefined;
       this.tweens.add({ targets: this.flight, flame: 0, duration: ms * SCENE.homeFlameIn });
       const c = this.chute;
       if (c) {
@@ -997,13 +1061,16 @@ export class Rocket extends MiniGameBase<'rocket'> {
 
   /** Back on the pad: the parachute folds, the parts pop off one by one; Shiba hops out to stand by the pad. */
   private unpack(ms: number): void {
+    this.homeTimer?.remove(false);
+    this.homeTimer = undefined;
     this.tweens.killTweensOf(this.flight);
     this.flight.padY = 0;
     this.flight.moonY = this.layout.design.height;
     this.flight.flame = 0;
     this.moonWorld?.setVisible(false);
     this.flagImg?.setVisible(false);
-    this.astroMoon?.setVisible(false).setAlpha(1).setAngle(0);
+    if (this.astroMoon) this.tweens.killTweensOf(this.astroMoon);
+    this.astroMoon?.setVisible(false).setAlpha(1).setAngle(0).setScale(this.s());
     this.earthSmall?.setAlpha(0);
     this.rocketBox?.setPosition(this.padAt.x, this.padAt.y).setAngle(0);
     this.chute?.setVisible(false);

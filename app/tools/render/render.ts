@@ -126,7 +126,7 @@ export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames
   // Tàu hỏa chở bạn (2026-11-12): the engine and cars apart, the platform, friends and destinations clear of them, the tunnel.
   train: (layout, frames) => validateTrain(layout, trainLimits(), frames),
   // Tên lửa lên Mặt Trăng (2026-11-12): the choices, the rocket, the Earth and the craters; space never black.
-  rocket: (layout) => validateRocket(layout, rocketLimits()),
+  rocket: (layout, frames) => validateRocket(layout, rocketLimits(), frames),
 };
 
 /** Story 3.3: screens whose render-time rules get the rendered frames' trims. */

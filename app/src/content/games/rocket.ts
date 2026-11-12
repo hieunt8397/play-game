@@ -131,9 +131,9 @@ export const WORLD = {
   ],
   /** A passer-by crosses the screen top to bottom over this share of the climb. */
   passSpan: 0.22,
-  /** The surprise crosses space from right to left over this share of the space step, at this height (share of the screen). */
+  /** The surprise crosses space from right to left over this share of the space step, at this height (share of the screen: below the far Moon, behind the rocket). */
   surpriseSpan: 0.9,
-  surpriseY: 0.3,
+  surpriseY: 0.46,
   /** A boost adds this share of the whole climb (it never overshoots). */
   boostShare: 0.08,
   /** Speeds and the model's clock. */
@@ -332,12 +332,14 @@ export const MOTION = {
   /** The stars twinkle between these alphas. */
   starLow: 0.45,
   starHigh: 1,
-  /** A tapped star (or the Earth) spins this much (degrees) and grows to this scale. */
+  /** The tapped Earth turns this much (degrees); the tapped Earth and surprise grow to this scale (the Earth by earthGrow of it). */
   earthSpinDeg: 25,
+  /** The tapped big Earth (seen from space) hops up this far (design px). */
+  earthHopPx: 14,
   tapGrow: 1.3,
-  /** Shiba's Moon jump: this high (design px); the spin jump turns this many degrees. */
+  /** Shiba's Moon jump: this high (design px); the 'spin' jump rocks ± this many degrees in the air. */
   jumpPx: 200,
-  spinDeg: 360,
+  spinDeg: 16,
   /** A peeking alien rises this far (design px) out of its crater, then sinks back. */
   peekPx: 90,
   /** A tapped rock bounces this high (design px), slowly. */
@@ -491,6 +493,8 @@ export const SCENE = {
   /** Shiba's jump: the rise takes this share; the spin this share. */
   jumpUp: 0.3,
   spinShare: 0.9,
+  /** The 'spin' jump's rocking: this many half swings share its time. */
+  spinSwings: 4,
   /** An alien's peek: it grows out over this share, waves over this, waits this, sinks over this; sparkles this far above, this many. A flat scale. */
   peekGrow: 0.25,
   peekWave: 0.12,

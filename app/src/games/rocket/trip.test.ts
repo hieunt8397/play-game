@@ -31,7 +31,7 @@ const LINES = {
   peek: 'peek',
   home: 'home',
 };
-const SOUNDS = { clank: 'clank', sparkle: 'sparkle', ignite: 'ignite', boost: 'boost', retro: 'retro', dust: 'dust', twinkle: 'twinkle', chute: 'chute', pop: 'pop', chime: 'chime', alien: (a: AlienId) => `alien.${a}` };
+const SOUNDS = { clank: 'clank', sparkle: 'sparkle', ignite: 'ignite', boost: 'boost', retro: 'retro', dust: 'dust', twinkle: 'twinkle', chute: 'chute', pop: 'pop', alien: (a: AlienId) => `alien.${a}` };
 
 function fixedBag<I extends string>(ids: readonly I[]): ShuffleBag<I> {
   let i = 0;
@@ -323,6 +323,50 @@ describe('rocket trip: hints, bags, progress and resume', () => {
     expect(r.ctl.progress().partial.step).toBe('pad');
     expect(r.until(() => r.ctl.phase === 'moon')).toBe(true);
     expect(r.ctl.progress().partial.step).toBe('moon');
+  });
+
+  it('review: a snapshot right after the third pick (the fins still flying on) is a built rocket: step pad, and it resumes', () => {
+    const r = rig();
+    r.ctl.start();
+    build(r);
+    expect(r.ctl.phase).toBe('fit');
+    const p = r.ctl.progress();
+    expect(p.partial).toMatchObject({ step: 'pad', colours: ['red', 'yellow', 'white'] });
+    expect(resumeTrip(p)).not.toBeNull();
+  });
+
+  it('review: the tap that hurries the launch or the landing does nothing more (no boost, no jump)', () => {
+    const r = rig();
+    r.ctl.start();
+    build(r);
+    expect(r.until(() => r.ctl.phase === 'launch')).toBe(true);
+    r.ctl.anyTap();
+    expect(r.ctl.phase).toBe('ascent');
+    expect(r.ctl.press({ x: 500, y: 300 })).toBe('none');
+    expect(r.ctl.alt).toBe(0);
+    expect(r.until(() => r.ctl.phase === 'land')).toBe(true);
+    r.ctl.anyTap();
+    expect(r.ctl.phase).toBe('moon');
+    expect(r.ctl.press({ x: 400, y: 600 })).toBe('none');
+    expect(r.ctl.moonTaps).toBe(0);
+    // The next tap (a new frame) works.
+    r.run(50);
+    expect(r.ctl.press({ x: 400, y: 600 })).toBe('ground');
+  });
+
+  it('review: the flag counts as planted only once it stands (a snapshot in between keeps no flag)', () => {
+    const r = rig();
+    r.ctl.start();
+    toMoon(r);
+    for (let i = 0; i < WORLD.flagAfter; i++) {
+      expect(r.until(() => !r.ctl.busy)).toBe(true);
+      r.ctl.press({ x: 400, y: 600 });
+    }
+    expect(r.ctl.flagged).toBe(false);
+    expect(r.ctl.progress().partial.flag).toBe(false);
+    r.run(T.flagMs + 50);
+    expect(r.ctl.flagged).toBe(true);
+    expect(r.calls.filter((c) => c === 'flag')).toHaveLength(1);
   });
 
   it('resumeTrip validates the partial', () => {

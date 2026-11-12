@@ -30,8 +30,10 @@ import { pointInPolygon } from '../layout/geometry.ts';
 import { atlasFrames } from '../layout/rules.ts';
 import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
+import { relativeLuminance, rgbOf } from '../shared/colour.ts';
 
-export type Rgb = readonly [number, number, number];
+export type { Rgb } from '../shared/colour.ts';
+import type { Rgb } from '../shared/colour.ts';
 
 /** Samples per ring. */
 export const RING_SAMPLES = 32;
@@ -40,18 +42,8 @@ export const MIN_RING_CONTRAST = 3;
 /** Extra design px between the halo's outer edge and the sampled pixels. */
 const OUTSIDE_GAP = 2;
 
-export function rgbOf(value: number): Rgb {
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-}
-
-/** WCAG relative luminance of an sRGB colour (0–255 channels). */
-export function relativeLuminance([r, g, b]: Rgb): number {
-  const lin = (c: number): number => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-}
+// rgbOf and relativeLuminance live in tools/shared/colour.ts (shared with tools/layout/rules.ts).
+export { relativeLuminance, rgbOf };
 
 export function contrastRatio(a: Rgb, b: Rgb): number {
   const la = relativeLuminance(a);
