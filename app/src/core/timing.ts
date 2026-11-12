@@ -506,6 +506,51 @@ export const Timing = {
   trainTapMs: 600,
   /** Tàu hỏa: one controller tick covers at most this long (a stalled frame never skips a step's end). */
   trainMaxTickMs: 250,
+  /** Tên lửa lên Mặt Trăng (2026-11-12, spec-ten-lua): a picked part flies from its bubble onto the rocket; the next part's bubbles come this much later. */
+  rocketFitMs: 700,
+  rocketNextPartMs: 350,
+  /** Tên lửa: Shiba climbs into the rocket (it hops in, then waves through the porthole). */
+  rocketBoardMs: 1100,
+  /** Tên lửa: each number of the countdown ("Ba! Hai! Một!") lasts this long; "Phóng!" then the launch. */
+  rocketCountMs: 950,
+  /** Tên lửa: the launch (ignition, smoke, liftoff to the flight height; longer than 1.5 s: a tap hurries it). */
+  rocketLaunchMs: 2000,
+  /** Tên lửa (spec): a motion longer than this can be hurried with a tap. */
+  rocketSkipOverMs: 1500,
+  /** Tên lửa: the climb from the pad to space untapped (each boost shortens it). */
+  rocketAscentMs: 5600,
+  /** Tên lửa: space (the Earth below, the surprise drifting past), then the landing (≤ 2.5 s). */
+  rocketSpaceMs: 4800,
+  rocketLandMs: 2300,
+  /** Tên lửa: the trip home (liftoff, the Earth growing, the parachute, the soft landing on the pad; ≤ 4 s); then the parts pop off. */
+  rocketReturnMs: 3800,
+  rocketUnpackMs: 1200,
+  /** Tên lửa: a boost (the flame burst); another boost's sound can come after this long. */
+  rocketBoostMs: 450,
+  /** Tên lửa: the launch rumble (≤ 800 ms). */
+  rocketRumbleMs: 700,
+  /** Tên lửa: Shiba's Moon jump (up, a slow float down); an alien's peek (up, a wave, down); a rock's slow bounce; the Earth's spin. */
+  rocketJumpMs: 1700,
+  rocketPeekMs: 1600,
+  rocketRockMs: 1100,
+  rocketEarthSpinMs: 900,
+  /** Tên lửa: Shiba plants the flag; a star or the surprise twinkles; the same thing reacts again after rocketTapGapMs. */
+  rocketFlagMs: 900,
+  rocketTwinkleMs: 600,
+  rocketTapGapMs: 500,
+  /** Tên lửa: the flame swaps frames this often; its glow pulses (half a cycle; a full cycle ≥ 500 ms: ≤ 2 Hz). */
+  rocketFlameFrameMs: 90,
+  rocketGlowPulseMs: 260,
+  /** Tên lửa: a part's sparkles, a puff, the smoke bank's life. */
+  rocketSparkMs: 600,
+  rocketPuffMs: 900,
+  rocketSmokeMs: 1600,
+  /** Tên lửa: after this long idle the next thing to touch bounces and its line plays (≤ ui.rocketHintMax per step). */
+  rocketIdleHintMs: 8000,
+  /** Tên lửa: the hint bounce. */
+  rocketTapMs: 600,
+  /** Tên lửa: one controller tick covers at most this long. */
+  rocketMaxTickMs: 250,
 } as const;
 
 export type TimingTable = typeof Timing;

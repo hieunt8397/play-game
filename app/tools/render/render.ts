@@ -57,6 +57,8 @@ import {
   validatePlane,
   trainLimits,
   validateTrain,
+  rocketLimits,
+  validateRocket,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
 import { TOUCH_TALK_SCENES, TOUCH_TALK_SCREEN } from '../../src/content/games/touch-talk.ts';
@@ -76,6 +78,7 @@ import { HITS as DRESS_UP_HITS } from '../../src/content/games/dress-up.ts';
 import { HITS as GARDEN_HITS } from '../../src/content/games/garden.ts';
 import { VEHICLE_IDS as CAR_WASH_VEHICLES, carHit } from '../../src/content/games/car-wash.ts';
 import { CAR_COLOURS as TRAIN_CARS, ENGINE_HIT as TRAIN_ENGINE_HIT, carHit as trainCarHit } from '../../src/content/games/train.ts';
+import { CHOICES as ROCKET_CHOICES, CRATERS as ROCKET_CRATERS, EARTH_HIT as ROCKET_EARTH_HIT, EARTH_MOON_HIT as ROCKET_EARTH_MOON_HIT, MOON_ROCKET_HIT as ROCKET_MOON_HIT, choiceHit as rocketChoiceHit, craterHit as rocketCraterHit } from '../../src/content/games/rocket.ts';
 import { LayoutError, formatLayout, toLayout, type RawProjection, type ToLayoutOptions } from '../layout/to-layout.ts';
 import { resolveBlender, type Env } from '../shared/binaries.ts';
 import { BLENDER_SCRIPTS, LAYOUT_DIR, RENDER_DIR, blendPath, blenderArgs, runBlender, runProcess, screenSpec, type Runner } from './blender.ts';
@@ -122,10 +125,12 @@ export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames
   plane: (layout, frames) => validatePlane(layout, planeLimits(), frames),
   // Tàu hỏa chở bạn (2026-11-12): the engine and cars apart, the platform, friends and destinations clear of them, the tunnel.
   train: (layout, frames) => validateTrain(layout, trainLimits(), frames),
+  // Tên lửa lên Mặt Trăng (2026-11-12): the choices, the rocket, the Earth and the craters; space never black.
+  rocket: (layout) => validateRocket(layout, rocketLimits()),
 };
 
 /** Story 3.3: screens whose render-time rules get the rendered frames' trims. */
-export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash', 'plane', 'train']);
+export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash', 'plane', 'train', 'rocket']);
 
 /** Per-screen toLayout options: hit ids kept `stationGap` apart (map), unpadded drop areas (ice-cream, the dino lawn). */
 export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'separate' | 'unpadded'>>> = {
@@ -144,6 +149,8 @@ export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'sep
   'car-wash': { unpadded: CAR_WASH_VEHICLES.map(carHit) },
   // Tàu hỏa chở bạn: the engine's and each car's tap areas are their raw hulls (they stand close in a row, ≥ targetGap apart).
   train: { unpadded: [TRAIN_ENGINE_HIT, ...TRAIN_CARS.map((_, n) => trainCarHit(n))] },
+  // Tên lửa: the two bubbles, the Moon rocket, the craters (they stand close; ≥ targetGap apart) and the two Earths (already cut to the interactive rect) are their raw shapes.
+  rocket: { unpadded: [...Array.from({ length: ROCKET_CHOICES }, (_, n) => rocketChoiceHit(n)), ROCKET_MOON_HIT, ROCKET_EARTH_HIT, ROCKET_EARTH_MOON_HIT, ...Array.from({ length: ROCKET_CRATERS }, (_, n) => rocketCraterHit(n))] },
 };
 
 export const layoutPath = (screen: string): string => join(LAYOUT_DIR, `${screen}.layout.json`);

@@ -93,6 +93,7 @@ export const VOICE_LINES = [
   { id: 'vo.shell.corner-name.car-wash', text: 'Rửa xe' },
   { id: 'vo.shell.corner-name.plane', text: 'Máy bay' },
   { id: 'vo.shell.corner-name.train', text: 'Tàu hỏa' },
+  { id: 'vo.shell.corner-name.rocket', text: 'Tên lửa' },
   // Tiệm kem (Story 1.8; 5.2): the single-flavour ask names Xoài — "Xoài ơi, kem … nào!" (+ its colour word: hồng, trắng, xanh); the
   // retry after a wrong scoop. "sô-cô-la" counts as 3 words, so its lines carry no colour word.
   // Played only through core/hint-director. Not yet approved.
@@ -478,6 +479,31 @@ export const VOICE_LINES = [
   { id: 'vo.train.dest.playground', text: 'Đến sân chơi rồi!' },
   { id: 'vo.train.dest.fair', text: 'Đến hội chợ rồi!' },
   { id: 'vo.train.parent.1', text: 'Mời bố mẹ | cùng đi tàu nhé!', keywordPauseMs: 300 },
+  // Tên lửa lên Mặt Trăng (2026-11-12): the invitation (names Xoài), each part as it is offered (the idle hint and the
+  // Speaker prompt while building), each colour as it is picked, "Phóng!" after the countdown (the numbers reuse
+  // vo.pizza.count.3–1), the Earth, the Moon's arrival (the idle hint and the Speaker prompt there), the light jump,
+  // "Ú òa!" for a peeking alien, each space surprise, going home and the parent invitation. Naming only: never a
+  // question, no praise. Not yet approved.
+  { id: 'vo.rocket.prompt', text: 'Xoài ơi, | mình cùng làm tên lửa nhé!', keywordPauseMs: 300 },
+  { id: 'vo.rocket.part.body', text: 'Thân tên lửa!' },
+  { id: 'vo.rocket.part.nose', text: 'Mũi tên lửa!' },
+  { id: 'vo.rocket.part.fins', text: 'Cánh tên lửa!' },
+  { id: 'vo.rocket.colour.red', text: 'Màu đỏ!' },
+  { id: 'vo.rocket.colour.yellow', text: 'Màu vàng!' },
+  { id: 'vo.rocket.colour.blue', text: 'Màu xanh dương!' },
+  { id: 'vo.rocket.colour.green', text: 'Màu xanh lá!' },
+  { id: 'vo.rocket.colour.white', text: 'Màu trắng!' },
+  { id: 'vo.rocket.launch', text: 'Phóng!' },
+  { id: 'vo.rocket.earth', text: 'Trái Đất, | nhà của Xoài!', keywordPauseMs: 300 },
+  { id: 'vo.rocket.moon', text: 'Đến Mặt Trăng rồi!' },
+  { id: 'vo.rocket.light', text: 'Trên Mặt Trăng | nhẹ tênh!', keywordPauseMs: 300 },
+  { id: 'vo.rocket.peek', text: 'Ú òa!' },
+  { id: 'vo.rocket.surprise.comet', text: 'Sao chổi kìa!' },
+  { id: 'vo.rocket.surprise.ringed', text: 'Hành tinh có vòng kìa!' },
+  { id: 'vo.rocket.surprise.ufo', text: 'Đĩa bay kìa!' },
+  { id: 'vo.rocket.surprise.satellite', text: 'Vệ tinh kìa!' },
+  { id: 'vo.rocket.home', text: 'Về nhà thôi!' },
+  { id: 'vo.rocket.parent.1', text: 'Bố mẹ | cùng đếm ngược nhé!', keywordPauseMs: 300 },
 ] as const satisfies readonly VoiceLine[];
 
 export type VoiceLineId = (typeof VOICE_LINES)[number]['id'];

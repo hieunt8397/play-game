@@ -137,6 +137,11 @@ function goodTree(): string {
   for (const t of tr.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
   put(root, ATLASES.train.json, JSON.stringify(tr));
   put(root, BACKGROUNDS.train.path, pngHeader(2048, 1536));
+  // Tên lửa lên Mặt Trăng (2026-11-12): the rocket multiatlas JSON is the real one.
+  const rk = JSON.parse(readFileSync(join(APP, 'public', ATLASES.rocket.json), 'utf8')) as { textures: { image: string }[] };
+  for (const t of rk.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
+  put(root, ATLASES.rocket.json, JSON.stringify(rk));
+  put(root, BACKGROUNDS.rocket.path, pngHeader(2048, 1536));
   return root;
 }
 
@@ -164,6 +169,7 @@ function layoutDir(): string {
   put(dir, 'car-wash.layout.json', JSON.stringify(realLayout('car-wash')));
   put(dir, 'plane.layout.json', JSON.stringify(realLayout('plane')));
   put(dir, 'train.layout.json', JSON.stringify(realLayout('train')));
+  put(dir, 'rocket.layout.json', JSON.stringify(realLayout('rocket')));
   return dir;
 }
 

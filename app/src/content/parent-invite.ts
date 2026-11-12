@@ -27,4 +27,5 @@ export const PARENT_INVITE_LINES: Readonly<Record<GameId, readonly VoiceLineId[]
   'car-wash': ['vo.car-wash.parent.1'],
   plane: ['vo.plane.parent.1'],
   train: ['vo.train.parent.1'],
+  rocket: ['vo.rocket.parent.1'],
 };

@@ -21,6 +21,7 @@ import { FRUIT_IDS, FRUITS_PER_PLANT, GIANT_FRUIT, PACKET_SLOTS, STAGES } from '
 import { DIRT_IDS, DIRT_SPOTS, VEHICLE_IDS } from '../../src/content/games/car-wash.ts';
 import { COLOUR_IDS as PLANE_COLOURS, FRIEND_IDS as PLANE_FRIENDS, GIFTS_PER_FLIGHT, SURPRISE_IDS as PLANE_SURPRISES } from '../../src/content/games/plane.ts';
 import { CAR_COLOURS as TRAIN_CARS, DESTINATION_IDS as TRAIN_DESTINATIONS, FRIEND_IDS as TRAIN_FRIENDS, SURPRISE_IDS as TRAIN_SURPRISES } from '../../src/content/games/train.ts';
+import { ALIEN_IDS as ROCKET_ALIENS, COLOUR_IDS as ROCKET_COLOURS, CRATERS as ROCKET_CRATERS, PART_IDS as ROCKET_PARTS, ROCKS as ROCKET_ROCKS, SURPRISE_IDS as ROCKET_SURPRISES } from '../../src/content/games/rocket.ts';
 import { GAME_IDS, ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
 import { RENDER_SCALE, layoutLimits } from '../layout/rules.ts';
@@ -64,6 +65,8 @@ export interface BuildParams {
     plane: Record<string, string>;
     /** Tàu hỏa chở bạn (2026-11-12): art.train (the sky, the scenery, the track, the engine and cars, the platform, the tunnel, the destinations, the surprises). */
     train: Record<string, string>;
+    /** Tên lửa lên Mặt Trăng (2026-11-12): art.rocket (the skies, the pad world, the rocket's parts, Shiba's suit, the Earth, the Moon, the aliens, the surprises). */
+    rocket: Record<string, string>;
     /** Story 5.6: art.map (the map road, water, foam, cone and chimney). */
     map: Record<string, string>;
   };
@@ -109,6 +112,8 @@ export interface BuildParams {
   plane: { friends: string[]; colours: string[]; surprises: string[]; gifts: number; balloonMinPx: number; friendMinPx: number; hitMinPx: number; topY: number; bottomY: number };
   /** Tàu hỏa chở bạn (2026-11-12): the friends, car colours, destinations and surprises (content/games/train.ts), the sizes (design px): the engine and each car ≥ carMinPx wide, a friend ≥ friendMinPx, a destination ≥ destMinPx, every tap area ≥ hitMinPx, ≥ gapPx apart; the tunnel's length against the train's at cruise (scrollPxPerS, × reducedScroll), so the dim fades in over ≥ dimInMinMs and the train is wholly in the dark ≤ darkMaxMs. */
   train: { friends: string[]; cars: string[]; destinations: string[]; surprises: string[]; carMinPx: number; friendMinPx: number; destMinPx: number; hitMinPx: number; gapPx: number; scrollPxPerS: number; reducedScroll: number; dimInMinMs: number; darkMaxMs: number };
+  /** Tên lửa lên Mặt Trăng (2026-11-12): the parts, colours, surprises and aliens, the craters and rocks (content/games/rocket.ts), the sizes (design px): a choice bubble ≥ choiceMinPx with a tap area ≥ choiceHitMinPx, the two ≥ choiceGapPx apart; the built rocket ≥ rocketMinPx tall; Shiba on the Moon ≥ astroMinPx; every other tap area ≥ hitMinPx, ≥ gapPx apart; space's darkest colour keeps ≥ spaceDeepMinLum. */
+  rocket: { parts: string[]; colours: string[]; surprises: string[]; aliens: string[]; craters: number; rocks: number; choiceMinPx: number; choiceHitMinPx: number; choiceGapPx: number; rocketMinPx: number; astroMinPx: number; hitMinPx: number; gapPx: number; spaceDeepMinLum: number };
   renderScale: number;
   design: { width: number; height: number };
   rect: { x0: number; y0: number; x1: number; y1: number };
@@ -139,6 +144,7 @@ export function buildParams(): BuildParams {
       carWash: Object.fromEntries(Object.entries(art.carWash).map(([id, c]) => [id, c.css])),
       plane: Object.fromEntries(Object.entries(art.plane).map(([id, c]) => [id, c.css])),
       train: Object.fromEntries(Object.entries(art.train).map(([id, c]) => [id, c.css])),
+      rocket: Object.fromEntries(Object.entries(art.rocket).map(([id, c]) => [id, c.css])),
       map: Object.fromEntries(Object.entries(art.map).map(([id, c]) => [id, c.css])),
     },
     dino: {
@@ -205,6 +211,22 @@ export function buildParams(): BuildParams {
       reducedScroll: Tokens.ui.trainReducedScroll,
       dimInMinMs: Tokens.ui.trainDimInMinMs,
       darkMaxMs: Tokens.ui.trainDarkMaxMs,
+    },
+    rocket: {
+      parts: [...ROCKET_PARTS],
+      colours: [...ROCKET_COLOURS],
+      surprises: [...ROCKET_SURPRISES],
+      aliens: [...ROCKET_ALIENS],
+      craters: ROCKET_CRATERS,
+      rocks: ROCKET_ROCKS,
+      choiceMinPx: Tokens.ui.rocketChoiceMinPx,
+      choiceHitMinPx: Tokens.ui.rocketChoiceHitMinPx,
+      choiceGapPx: Tokens.ui.rocketChoiceGapPx,
+      rocketMinPx: Tokens.ui.rocketMinPx,
+      astroMinPx: Tokens.ui.rocketAstroMinPx,
+      hitMinPx: Tokens.ui.rocketHitMinPx,
+      gapPx: Tokens.spacing.targetGap,
+      spaceDeepMinLum: Tokens.ui.rocketSpaceDeepMinLum,
     },
     renderScale: RENDER_SCALE,
     design: { width: Tokens.design.width, height: Tokens.design.height },

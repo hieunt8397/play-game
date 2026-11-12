@@ -79,6 +79,23 @@ import {
   friendFrame as trainFriendFrame,
   friendHit as trainFriendHit,
 } from '../../src/content/games/train.ts';
+import {
+  ASTRO_STATES as ROCKET_ASTRO_STATES,
+  BUBBLE_FRAME as ROCKET_BUBBLE_FRAME,
+  CHOICES as ROCKET_CHOICES,
+  COLOUR_IDS as ROCKET_COLOUR_IDS,
+  CRATERS as ROCKET_CRATERS,
+  EARTH_HIT as ROCKET_EARTH_HIT,
+  EARTH_MOON_HIT as ROCKET_EARTH_MOON_HIT,
+  MOON_ROCKET_HIT as ROCKET_MOON_ROCKET_HIT,
+  PART_IDS as ROCKET_PART_IDS,
+  ROCKET_HIT,
+  ROCKET_SCREEN,
+  astroFrame as rocketAstroFrame,
+  choiceHit as rocketChoiceHit,
+  craterHit as rocketCraterHit,
+  partFrame as rocketPartFrame,
+} from '../../src/content/games/rocket.ts';
 import { DOOR_ANCHOR, PATIENT_ANCHOR, PATIENT_HIT, PATIENT_IDS, PET_CLINIC_SCREEN, TOOL_IDS, patientFrames, toolFrame, toolHitRadius } from '../../src/content/games/pet-clinic.ts';
 
 export interface LayoutLimits {
@@ -2847,5 +2864,141 @@ export function validateTrain(layout: ScreenLayout, input: TrainRuleInput, atlas
   };
   for (const fr of input.friends) for (const f of fr.frames) big(f, input.friendMinPx);
   for (const d of input.dests) big(d.frame, input.destMinPx);
+  return problems;
+}
+
+/** Tên lửa lên Mặt Trăng (spec-ten-lua): what validateRocket needs (rocketLimits fills it from Tokens and content). */
+export interface RocketRuleInput {
+  ids: ScreenIds;
+  /** `hit.choice-<n>` (raw circles) and the bubble frame. */
+  choiceHits: readonly string[];
+  bubbleFrame: string;
+  /** `hit.rocket` (on the pad) and `hit.moon-rocket`; `hit.earth` (space), `hit.earth-moon`; each `hit.crater-<n>` (raw). */
+  rocketHit: string;
+  moonRocketHit: string;
+  earthHit: string;
+  earthMoonHit: string;
+  craterHits: readonly string[];
+  /** One full set of the rocket's part frames (their union is the built rocket) and Shiba's frames. */
+  rocketFrames: readonly string[];
+  astroFrames: readonly string[];
+  limits: LayoutLimits;
+  choiceMinPx: number;
+  choiceHitMinPx: number;
+  choiceGapPx: number;
+  rocketMinPx: number;
+  astroMinPx: number;
+  hitMinPx: number;
+  gap: number;
+  /** art.rocket.spaceDeep and the least relative luminance it keeps (space is never black). */
+  spaceDeep: string;
+  spaceDeepMinLum: number;
+  keepOut: readonly { readonly id: string; readonly rect: Rect }[];
+  renderScale: number;
+  design: { width: number; height: number };
+}
+
+/** The relative luminance (WCAG) of a `#RRGGBB` colour. */
+export function relativeLuminance(hex: string): number {
+  const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * v[0]! + 0.7152 * v[1]! + 0.0722 * v[2]!;
+}
+
+/** The rocket rules from Tokens and content (spec-ten-lua). */
+export function rocketLimits(ids: ScreenIds = ROCKET_SCREEN): RocketRuleInput {
+  const u = Tokens.ui;
+  return {
+    ids,
+    choiceHits: Array.from({ length: ROCKET_CHOICES }, (_, n) => rocketChoiceHit(n)),
+    bubbleFrame: ROCKET_BUBBLE_FRAME,
+    rocketHit: ROCKET_HIT,
+    moonRocketHit: ROCKET_MOON_ROCKET_HIT,
+    earthHit: ROCKET_EARTH_HIT,
+    earthMoonHit: ROCKET_EARTH_MOON_HIT,
+    craterHits: Array.from({ length: ROCKET_CRATERS }, (_, n) => rocketCraterHit(n)),
+    rocketFrames: ROCKET_PART_IDS.map((p) => rocketPartFrame(p, ROCKET_COLOUR_IDS[0])),
+    astroFrames: ROCKET_ASTRO_STATES.map(rocketAstroFrame),
+    limits: layoutLimits(),
+    choiceMinPx: u.rocketChoiceMinPx,
+    choiceHitMinPx: u.rocketChoiceHitMinPx,
+    choiceGapPx: u.rocketChoiceGapPx,
+    rocketMinPx: u.rocketMinPx,
+    astroMinPx: u.rocketAstroMinPx,
+    hitMinPx: u.rocketHitMinPx,
+    gap: Tokens.spacing.targetGap,
+    spaceDeep: Tokens.art.rocket.spaceDeep.css,
+    spaceDeepMinLum: u.rocketSpaceDeepMinLum,
+    keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
+    renderScale: RENDER_SCALE,
+    design: { width: Tokens.design.width, height: Tokens.design.height },
+  };
+}
+
+/**
+ * Tên lửa lên Mặt Trăng screen rules (spec-ten-lua; run by `render`, `atlas` and `validate:content`).
+ *   - required: every hit (≥ 3 points) and anchor; with the atlas, every frame; every anchor on the design rect;
+ *   - the choices: each tap area ≥ choiceHitMinPx wide, the two ≥ choiceGapPx apart and ≥ gap from the rocket;
+ *   - every other tap area (the rocket on the pad and on the Moon, the Earth from space and from the Moon, each
+ *     crater) ≥ hitMinPx wide; the craters ≥ gap apart and from the Moon rocket; every tap area inside the
+ *     interactive rect and clear of the Home/Speaker zones;
+ *   - space's darkest colour keeps ≥ spaceDeepMinLum relative luminance (never black);
+ *   - (atlas) the bubble is drawn ≥ choiceMinPx; the built rocket (one colour's parts) ≥ rocketMinPx tall; each Shiba
+ *     frame's longest side ≥ astroMinPx.
+ */
+export function validateRocket(layout: ScreenLayout, input: RocketRuleInput, atlas?: AtlasJsonLike): string[] {
+  const problems = requiredIdProblems(layout, input.ids);
+  const r = input.limits.rect;
+  const rectText = `x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`;
+  for (const id of input.ids.anchors) {
+    const a = layout.anchors[id];
+    if (a && (a.x < 0 || a.y < 0 || a.x > input.design.width || a.y > input.design.height)) problems.push(`anchor "${id}": ${fmt(a)} is off the screen`);
+  }
+  const hull = (id: string): readonly Point[] | undefined => {
+    const h = layout.hits[id];
+    return h && h.length >= MIN_HIT_POINTS ? h : undefined;
+  };
+  const tapArea = (id: string, min: number): void => {
+    const h = hull(id);
+    if (!h) return;
+    const w = minWidth(h);
+    if (w < min) problems.push(`hit "${id}": ${round2(w)} px wide (min ${min})`);
+    const out = h.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${id}": ${fmt(out)} leaves the interactive rect ${rectText}`);
+    for (const k of input.keepOut) if (polygonDistance(h, rectPolygon4(k.rect)) === 0) problems.push(`hit "${id}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  };
+  const apart = (a: string, b: string, min: number): void => {
+    const ha = hull(a);
+    const hb = hull(b);
+    if (!ha || !hb) return;
+    const d = polygonDistance(ha, hb);
+    if (d < min) problems.push(`hits "${a}" and "${b}": ${round2(d)} px apart (min ${min})`);
+  };
+  for (const id of input.choiceHits) tapArea(id, input.choiceHitMinPx);
+  for (const id of [input.rocketHit, input.moonRocketHit, input.earthHit, input.earthMoonHit, ...input.craterHits]) tapArea(id, input.hitMinPx);
+  for (let i = 0; i < input.choiceHits.length; i++) {
+    for (let j = i + 1; j < input.choiceHits.length; j++) apart(input.choiceHits[i]!, input.choiceHits[j]!, input.choiceGapPx);
+    apart(input.choiceHits[i]!, input.rocketHit, input.gap);
+  }
+  for (let i = 0; i < input.craterHits.length; i++) {
+    for (let j = i + 1; j < input.craterHits.length; j++) apart(input.craterHits[i]!, input.craterHits[j]!, input.gap);
+    apart(input.craterHits[i]!, input.moonRocketHit, input.gap);
+    apart(input.craterHits[i]!, input.earthMoonHit, input.gap);
+  }
+  const lum = relativeLuminance(input.spaceDeep);
+  if (lum < input.spaceDeepMinLum) problems.push(`space's darkest colour ${input.spaceDeep} has luminance ${round2(lum)} (min ${input.spaceDeepMinLum}): too close to black`);
+  if (!atlas) return problems;
+  for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "rocket": frame "${f}" is missing`);
+  const bubble = designRect(atlas, input.bubbleFrame, input.renderScale);
+  if (bubble && Math.min(bubble.w, bubble.h) < input.choiceMinPx) problems.push(`frame "${input.bubbleFrame}": ${round2(Math.min(bubble.w, bubble.h))} px (min ${input.choiceMinPx})`);
+  const parts = input.rocketFrames.map((f) => designRect(atlas, f, input.renderScale)).filter((x): x is Rect => x !== undefined);
+  if (parts.length === input.rocketFrames.length) {
+    const top = Math.min(...parts.map((p) => p.y));
+    const bottom = Math.max(...parts.map((p) => p.y + p.h));
+    if (bottom - top < input.rocketMinPx) problems.push(`the built rocket is ${round2(bottom - top)} px tall (min ${input.rocketMinPx})`);
+  }
+  for (const f of input.astroFrames) {
+    const at = designRect(atlas, f, input.renderScale);
+    if (at && Math.max(at.w, at.h) < input.astroMinPx) problems.push(`frame "${f}": longest side ${round2(Math.max(at.w, at.h))} is under ${input.astroMinPx}`);
+  }
   return problems;
 }

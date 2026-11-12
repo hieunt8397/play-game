@@ -161,10 +161,11 @@ describe('SnapshotPartials (compile-time)', () => {
       'car-wash': { vehicle: 'taxi', dirt: 'mud', covered: [0, 3], surprise: 'duck' },
       plane: { friend: 'cat', gifts: ['red', 'purple'], surprise: 'rainbow' },
       train: { friends: ['cat', 'pig', 'cow'], aboard: 2, dest: 'beach', surprise: 'bridge', tunnelLeg: 1 },
+      rocket: { step: 'moon', colours: ['red', 'blue', 'white'], surprise: 'ufo', flag: true },
     };
     expect(isJsonOnly(touch)).toBe(true);
     expect(isJsonOnly(all)).toBe(true);
-    expect(Object.keys(all)).toHaveLength(16);
+    expect(Object.keys(all)).toHaveLength(17);
     expect(wrong.partial).toEqual({ placed: [] });
     expect(flavour.placed).toEqual(['banana']);
   });

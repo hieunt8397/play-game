@@ -71,6 +71,8 @@ import {
   validatePlane,
   trainLimits,
   validateTrain,
+  rocketLimits,
+  validateRocket,
   validateShadowMatch,
   type AtlasJsonLike,
 } from '../layout/rules.ts';
@@ -95,6 +97,7 @@ import { GARDEN_SCREEN } from '../../src/content/games/garden.ts';
 import { CAR_WASH_SCREEN } from '../../src/content/games/car-wash.ts';
 import { PLANE_SCREEN } from '../../src/content/games/plane.ts';
 import { TRAIN_SCREEN } from '../../src/content/games/train.ts';
+import { ROCKET_SCREEN } from '../../src/content/games/rocket.ts';
 import { sceneBubbleKeepOutRect } from '../layout/hud-keep-out.ts';
 import { ALL_FISH, FISHING_SCREEN, POND_HIT } from '../../src/content/games/fishing.ts';
 import { CONE_ANCHORS, FLAG_ANCHORS, RACE_SCREEN, ladder as raceLadder } from '../../src/content/games/race.ts';
@@ -137,6 +140,8 @@ export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
   plane: PLANE_SCREEN.frames,
   // Tàu hỏa chở bạn (2026-11-12): the engine and cars, the friends (standing and seated), the platform, the tunnel, the destinations, the scenery, the surprises.
   train: TRAIN_SCREEN.frames,
+  // Tên lửa lên Mặt Trăng (2026-11-12): the parts in every colour, the pilot, Shiba, the flame, the smoke, the pad world, space, the Moon.
+  rocket: ROCKET_SCREEN.frames,
 };
 
 function listFiles(dir: string): string[] {
@@ -219,6 +224,8 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[] 
       for (const p of validatePlane(layout, planeLimits(), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'train') {
       for (const p of validateTrain(layout, trainLimits(), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
+    } else if (screen === 'rocket') {
+      for (const p of validateRocket(layout, rocketLimits(), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'pet-clinic') {
       for (const p of validatePetClinic(layout, petClinicLimits(), readAtlas(publicDir, screen))) problems.push(`layout "${screen}": ${p}`);
     } else if (screen === 'home') {

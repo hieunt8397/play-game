@@ -43,7 +43,7 @@ from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cute import blob, import_joined, lathe, mat, mesh_obj, rbox, rod, rounded_profile, soften_scene, torus, tt_model  # noqa: E402
+from cute import blob, import_joined, lathe, mat, mesh_obj, rbox, rod, rounded_profile, soften_scene, torus, torus_bm, tt_model  # noqa: E402
 from common import add_empty, eval_world_verts, flat_material, force_opaque, hex_to_linear, hull_object, key_constant, move_to, parse_args, principled  # noqa: E402
 
 ASSETS = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', 'assets'))
@@ -86,12 +86,15 @@ CLOUDS = [(-30.0, 120.0, 20.0, 5.0), (-4.0, 130.0, 25.0, 4.2), (28.0, 120.0, 21.
 # 2026-11-12 (Tàu hỏa chở bạn): a ninth corner, the train, stands on the lawn in front of the fence at the top left (right of the Home zone:
 # x ≥ 124 + hitPad); the pen steps down under it and the stage, wardrobe and plane step right, each box ≥ 72 px
 # (2 × hitPad + targetGap) from its neighbours.
+# 2026-11-12 (Tên lửa lên Mặt Trăng): a tenth corner, the rocket, tall and narrow at the top right just left of the
+# Speaker zone (its padded hull's right edge < 900); the wardrobe narrows and steps left, the plane steps down under it.
 CORNER_BOXES = {
+    'rocket': (806, 96, 874, 255),  # a tall narrow prop: longest side ≥ 150; ≥ 72 px from the wardrobe and the plane
     'train': (156, 150, 330, 255),  # a long low prop on the lawn in front of the fence: ≥ 150 px wide, right of the Home zone
     'pen': (50, 327, 270, 432),
     'stage': (412, 200, 560, 395),
-    'wardrobe': (636, 195, 746, 395),
-    'plane': (818, 284, 974, 432),  # under the Speaker zone (y ≤ 257): top ≥ 257 + hitPad; ≥ 72 px from the bed and the car-wash
+    'wardrobe': (636, 195, 732, 395),
+    'plane': (818, 327, 974, 470),  # under the Speaker zone (y ≤ 257): top ≥ 257 + hitPad; ≥ 72 px from the bed and the car-wash
     'clinic': (50, 496, 222, 664),
     'garden': (296, 490, 500, 664),
     'bed': (574, 476, 740, 664),
@@ -99,7 +102,7 @@ CORNER_BOXES = {
 }
 PLACE_PASSES = 6
 # Yaw (degrees) of each prop's root (0 = its front toward the camera).
-CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0, 'garden': 8.0, 'car-wash': -10.0, 'plane': -152.0, 'train': -16.0}
+CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0, 'garden': 8.0, 'car-wash': -10.0, 'plane': -152.0, 'train': -16.0, 'rocket': -10.0}
 # Rửa xe corner: the Kenney Car Kit taxi (CC0) under the arch.
 CAR_WASH_CAR = os.path.join('kenney', 'kenney_car-kit', 'Models', 'GLB format', 'taxi.glb')
 
@@ -748,7 +751,43 @@ def build_train(root, coll, c):
     rod('train-coupler', (-0.72, 0.0, z0 + 0.42), (0.02, 0.0, z0 + 0.42), 0.04, ink, coll, root, seg=8)
 
 
-BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe, 'garden': build_garden, 'car-wash': build_car_wash, 'plane': build_plane, 'train': build_train}
+
+def build_rocket(root, coll, c):
+    """A toy rocket on a little round pad (Tên lửa lên Mặt Trăng): a red body with white bands and a round porthole, a
+    yellow nose, blue fins, a soft puff of smoke at its foot."""
+    k = c['rocket']
+    body, nose, fin = mat(k['red'], 0.28), mat(k['yellow'], 0.28), mat(k['blue'], 0.28)
+    white, metal = mat(k['white'], 0.3), mat(k['metal'], 0.3)
+    lathe('rocket-pad', [(0.0, 0.0), (0.52, 0.0), (0.56, 0.06), (0.52, 0.16), (0.0, 0.16)], mat(k['pad'], 0.45), coll, root)
+    torus('rocket-pad-trim', 0.5, 0.035, mat(k['padTrim'], 0.35), coll, root, (0.0, 0.0, 0.16))
+    z = 0.16
+    lathe('rocket-nozzle', [(0.0, z), (0.3, z), (0.37, z + 0.04), (0.33, z + 0.14), (0.25, z + 0.34), (0.0, z + 0.36)], metal, coll, root)
+    prof = [(0.0, z + 0.3), (0.3, z + 0.31), (0.44, z + 0.37), (0.52, z + 0.5)]
+    for i in range(1, 13):
+        t = i / 12
+        prof.append((0.52 + 0.07 * math.sin(math.pi * min(1.0, t * 1.1)), z + 0.5 + t * 1.65))
+    prof.append((0.0, z + 2.15))
+    lathe('rocket-body', prof, body, coll, root, seg=48)
+    cone = [(0.0, z + 2.1)] + [(0.53 * (1 - (i / 13) ** 1.7) ** 0.62, z + 2.1 + (i / 13) * 0.95) for i in range(14)]
+    cone[-1] = (0.0, z + 3.08)
+    lathe('rocket-nose', cone, nose, coll, root, seg=48)
+    torus('rocket-band-low', 0.55, 0.055, white, coll, root, (0.0, 0.0, z + 0.62))
+    torus('rocket-band-top', 0.535, 0.06, white, coll, root, (0.0, 0.0, z + 2.12))
+    rim = mesh_obj('rocket-port-rim', torus_bm(0.3, 0.07, seg=40, tube=12), white, coll)
+    rim.parent = root
+    rim.location = (0.0, -0.585, z + 1.5)
+    rim.rotation_euler = (math.radians(90), 0.0, 0.0)
+    blob('rocket-port', mat(k['glass'], 0.15), coll, root, (0.0, -0.58, z + 1.5), (0.28, 0.08, 0.28), seg=(32, 12))
+    blob('rocket-port-shine', mat(k['white'], 0.15), coll, root, (-0.1, -0.65, z + 1.6), (0.07, 0.02, 0.04), seg=(12, 6))
+    for n, ang in enumerate((90.0, 270.0, 180.0)):
+        a = math.radians(ang)
+        ca, sa = math.cos(a), math.sin(a)
+        blob(f'rocket-fin-{n}', fin, coll, root, (0.5 * sa, -0.5 * ca, z + 0.55), (0.12 * abs(sa) + 0.08 * abs(ca), 0.12 * abs(ca) + 0.08 * abs(sa), 0.45), seg=(28, 14))
+    for n, (dx, r) in enumerate(((-0.36, 0.15), (0.34, 0.14), (0.0, 0.14))):
+        blob(f'rocket-puff-{n}', mat(k['smoke'], 0.7), coll, root, (dx, -0.3, 0.2 + r * 0.6), (r, r * 0.9, r * 0.8), seg=(20, 10))
+
+
+BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe, 'garden': build_garden, 'car-wash': build_car_wash, 'plane': build_plane, 'train': build_train, 'rocket': build_rocket}
 
 
 def place_in_box(scene, screen, root, meshes, box):
@@ -770,7 +809,7 @@ def place_in_box(scene, screen, root, meshes, box):
 
 
 def build_corner(scene, screen, cid, params, sprites, layout):
-    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden'], 'carWash': params['art']['carWash'], 'plane': params['art']['plane'], 'train': params['art']['train']}
+    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden'], 'carWash': params['art']['carWash'], 'plane': params['art']['plane'], 'train': params['art']['train'], 'rocket': params['art']['rocket']}
     coll = bpy.data.collections.new(f'sprite.{cid}')
     sprites.children.link(coll)
     root = add_empty(f'{cid}-root', (0.0, 0.0, 0.0), coll)

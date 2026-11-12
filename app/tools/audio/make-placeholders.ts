@@ -16,6 +16,7 @@ import { gardenArgs } from './make-garden.ts';
 import { carWashArgs } from './make-car-wash.ts';
 import { planeArgs } from './make-plane.ts';
 import { trainArgs } from './make-train.ts';
+import { rocketArgs } from './make-rocket.ts';
 
 /** Encoder settings shared by every file (Technical Decisions › Asset pipeline). */
 const ENCODE = ['-ac', '1', '-ar', '44100', '-c:a', 'aac', '-b:a', '64k'];
@@ -278,6 +279,9 @@ export function buildArgs(id: AudioId, outFile: string): string[] {
   // Tàu hỏa chở bạn (2026-11-12): the toot, chug, puff and hiss have their own recipes (tools/audio/make-train.ts).
   const train = trainArgs(id, outFile);
   if (train) return train;
+  // Tên lửa lên Mặt Trăng (2026-11-12): the rocket's own sounds (tools/audio/make-rocket.ts).
+  const rocket = rocketArgs(id, outFile);
+  if (rocket) return rocket;
   switch (id) {
     case 'sfx.shell.pop':
       return ['-hide_banner', '-y', ...source(POP_EXPR, POP_SECONDS), '-af', POP_FILTER, ...ENCODE, outFile];

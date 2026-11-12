@@ -246,7 +246,8 @@ export const NAME_INTENTS: readonly string[] = ['greeting', 'invite', 'ask', 'pr
  * Story 7.1: lines where "Xoài" is part of a place's own name, never praise: the home station "Nhà Xoài"
  * (its parent label and name line, required by spec-7-1). Only these exact ids are exempt.
  */
-export const NAME_PLACE_LINES: readonly string[] = ['vo.shell.station-name.home'];
+// 2026-11-12 (Tên lửa lên Mặt Trăng, spec-ten-lua): "Trái Đất, nhà của Xoài!" names the Earth as the child's home (a place), like "Nhà Xoài".
+export const NAME_PLACE_LINES: readonly string[] = ['vo.shell.station-name.home', 'vo.rocket.earth'];
 
 /**
  * Story 5.3 (NFR15): the "câu yêu cầu" intents — the hint system's prompt and retry families — whose

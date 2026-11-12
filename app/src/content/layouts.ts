@@ -17,6 +17,7 @@ import gardenLayout from './generated/garden.layout.json';
 import carWashLayout from './generated/car-wash.layout.json';
 import planeLayout from './generated/plane.layout.json';
 import trainLayout from './generated/train.layout.json';
+import rocketLayout from './generated/rocket.layout.json';
 import type { ScreenId } from './assets.ts';
 import type { ScreenLayout } from './layout-types.ts';
 
@@ -39,4 +40,5 @@ export const LAYOUTS: Readonly<Record<ScreenId, ScreenLayout>> = {
   'car-wash': carWashLayout as ScreenLayout,
   plane: planeLayout as ScreenLayout,
   train: trainLayout as ScreenLayout,
+  rocket: rocketLayout as ScreenLayout,
 };

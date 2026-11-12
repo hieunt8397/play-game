@@ -18,6 +18,7 @@ import { Pizza } from './pizza/Pizza';
 import { Plane } from './plane/Plane';
 import { Race } from './race/Race';
 import { Train } from './train/Train';
+import { Rocket } from './rocket/Rocket';
 import { ShadowMatch } from './shadow-match/ShadowMatch';
 import { TouchTalk } from './touch-talk/TouchTalk';
 import type { MiniGameBase } from './mini-game-base';
@@ -57,6 +58,8 @@ export const SCENE_CLASSES: Readonly<Partial<Record<GameId, GameSceneClass>>> = 
   plane: Plane,
   // Tàu hỏa chở bạn (2026-11-12): a yard game; registering it wakes the yard's train corner.
   train: Train,
+  // Tên lửa lên Mặt Trăng (2026-11-12): a yard game; registering it wakes the yard's rocket corner.
+  rocket: Rocket,
 };
 
 function buildGames(): Partial<Record<GameId, GameEntry>> {

@@ -90,6 +90,8 @@ describe('art:build', () => {
       plane: expect.any(Object),
       // Tàu hỏa chở bạn (2026-11-12): checked on its own below.
       train: expect.any(Object),
+      // Tên lửa lên Mặt Trăng (2026-11-12): checked on its own below.
+      rocket: expect.any(Object),
       map: {
         road: '#EE9F68',
         roadEdge: '#FFFFFF',
@@ -146,6 +148,28 @@ describe('art:build', () => {
       hoseMinPx: 90,
       hitMinPx: 80,
       gapPx: Tokens.spacing.targetGap,
+    });
+  });
+
+  it('Tên lửa lên Mặt Trăng (2026-11-12): the rocket builder gets art.rocket, the parts, colours, surprises, aliens and the sizes', () => {
+    const p = buildParams();
+    expect(Object.keys(p.art.rocket)).toEqual(Object.keys(Tokens.art.rocket));
+    expect(p.art.rocket.spaceDeep).toBe(Tokens.art.rocket.spaceDeep.css);
+    expect(p.rocket).toEqual({
+      parts: ['body', 'nose', 'fins'],
+      colours: ['red', 'yellow', 'blue', 'green', 'white'],
+      surprises: ['comet', 'ringed', 'ufo', 'satellite'],
+      aliens: ['mint', 'peach', 'lilac'],
+      craters: 3,
+      rocks: 2,
+      choiceMinPx: 130,
+      choiceHitMinPx: 100,
+      choiceGapPx: 48,
+      rocketMinPx: 160,
+      astroMinPx: 120,
+      hitMinPx: 80,
+      gapPx: Tokens.spacing.targetGap,
+      spaceDeepMinLum: 0.12,
     });
   });
 

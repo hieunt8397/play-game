@@ -175,6 +175,17 @@ export const AUDIO_IDS = [
   'sfx.train.chug',
   'sfx.train.puff',
   'sfx.train.hiss',
+  'sfx.rocket.clank',
+  'sfx.rocket.sparkle',
+  'sfx.rocket.ignite',
+  'sfx.rocket.boost',
+  'sfx.rocket.retro',
+  'sfx.rocket.dust',
+  'sfx.rocket.twinkle',
+  'sfx.rocket.chute',
+  'sfx.rocket.boing',
+  'sfx.rocket.bloop',
+  'sfx.rocket.trill',
 ] as const;
 
 export type AudioId = (typeof AUDIO_IDS)[number];
@@ -455,6 +466,18 @@ export const AUDIO_CATALOG: Record<AudioId, AudioEntry> = {
   'sfx.train.chug': { path: 'assets/audio/sfx/sfx.train.chug.m4a', kind: 'sfx' },
   'sfx.train.puff': { path: 'assets/audio/sfx/sfx.train.puff.m4a', kind: 'sfx' },
   'sfx.train.hiss': { path: 'assets/audio/sfx/sfx.train.hiss.m4a', kind: 'sfx' },
+  /** Tên lửa lên Mặt Trăng (2026-11-12): our own ffmpeg recipes (tools/audio/make-rocket.ts): ≤ 0.8 s, a 50 ms fade-in, nothing below 150 Hz, quiet; no deep rumble, no explosion. A part clicking on, a sparkle, the flame's soft whoosh, a boost's "vút", a retro puff, a landing in Moon dust, a star's twinkle, the parachute opening, and the three aliens' toy voices (a spring, a water drop, a trill). Load with the game. */
+  'sfx.rocket.clank': { path: 'assets/audio/sfx/sfx.rocket.clank.m4a', kind: 'sfx' },
+  'sfx.rocket.sparkle': { path: 'assets/audio/sfx/sfx.rocket.sparkle.m4a', kind: 'sfx' },
+  'sfx.rocket.ignite': { path: 'assets/audio/sfx/sfx.rocket.ignite.m4a', kind: 'sfx' },
+  'sfx.rocket.boost': { path: 'assets/audio/sfx/sfx.rocket.boost.m4a', kind: 'sfx' },
+  'sfx.rocket.retro': { path: 'assets/audio/sfx/sfx.rocket.retro.m4a', kind: 'sfx' },
+  'sfx.rocket.dust': { path: 'assets/audio/sfx/sfx.rocket.dust.m4a', kind: 'sfx' },
+  'sfx.rocket.twinkle': { path: 'assets/audio/sfx/sfx.rocket.twinkle.m4a', kind: 'sfx' },
+  'sfx.rocket.chute': { path: 'assets/audio/sfx/sfx.rocket.chute.m4a', kind: 'sfx' },
+  'sfx.rocket.boing': { path: 'assets/audio/sfx/sfx.rocket.boing.m4a', kind: 'sfx' },
+  'sfx.rocket.bloop': { path: 'assets/audio/sfx/sfx.rocket.bloop.m4a', kind: 'sfx' },
+  'sfx.rocket.trill': { path: 'assets/audio/sfx/sfx.rocket.trill.m4a', kind: 'sfx' },
   /** Island background loop, mastered to −30 LUFS (EXPERIENCE › Âm thanh: music ≤ −30 LUFS). */
   'music.island': { path: 'assets/audio/music/music.island.m4a', kind: 'music', loop: true },
 };

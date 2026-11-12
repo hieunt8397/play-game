@@ -48,6 +48,8 @@ export const SCREENS: Readonly<Record<string, ScreenSpec>> = {
   plane: { source: 'art/src/map-v3.blend', builder: 'build_plane.py' },
   // 2026-11-12: the yard's train game (Tàu hỏa chở bạn).
   train: { source: 'art/src/map-v3.blend', builder: 'build_train.py' },
+  // 2026-11-12: the yard's rocket game (Tên lửa lên Mặt Trăng).
+  rocket: { source: 'art/src/map-v3.blend', builder: 'build_rocket.py' },
 };
 
 /** Throws listing the known screens when `screen` is not one. */
