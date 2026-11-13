@@ -91,9 +91,14 @@ export const VOICE_LINES = [
   { id: 'vo.shell.corner-name.wardrobe', text: 'Tủ đồ' },
   { id: 'vo.shell.corner-name.garden', text: 'Vườn' },
   { id: 'vo.shell.corner-name.car-wash', text: 'Rửa xe' },
-  { id: 'vo.shell.corner-name.plane', text: 'Máy bay' },
-  { id: 'vo.shell.corner-name.train', text: 'Tàu hỏa' },
-  { id: 'vo.shell.corner-name.rocket', text: 'Tên lửa' },
+  // 2026-11-13 (spec-dao-moi-xe-ra-dao): the rides on the island (content/stations.ts › RIDES): their names (said on a
+  // tap, like a station's; the audio of the former yard corner-name lines) and their idle invitations.
+  { id: 'vo.shell.station-name.train', text: 'Tàu hỏa' },
+  { id: 'vo.shell.station-name.plane', text: 'Máy bay' },
+  { id: 'vo.shell.station-name.rocket', text: 'Tên lửa' },
+  { id: 'vo.shell.invite.train', text: 'Xoài ơi, mình đi | tàu hỏa nào!', keywordPauseMs: 300 },
+  { id: 'vo.shell.invite.plane', text: 'Xoài ơi, mình lái | máy bay nào!', keywordPauseMs: 300 },
+  { id: 'vo.shell.invite.rocket', text: 'Xoài ơi, mình bay | lên Mặt Trăng nào!', keywordPauseMs: 300 },
   // Tiệm kem (Story 1.8; 5.2): the single-flavour ask names Xoài — "Xoài ơi, kem … nào!" (+ its colour word: hồng, trắng, xanh); the
   // retry after a wrong scoop. "sô-cô-la" counts as 3 words, so its lines carry no colour word.
   // Played only through core/hint-director. Not yet approved.

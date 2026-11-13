@@ -17,13 +17,26 @@ export type IslandGameId = (typeof ISLAND_GAME_IDS)[number];
  * Story 7.2: the yard games (content/home.ts corners). They have no island station: the yard opens them
  * (scene key === GameId still holds).
  */
-export const YARD_GAME_IDS = ['animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash', 'plane', 'train', 'rocket'] as const;
+export const YARD_GAME_IDS = ['animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash'] as const;
 export type YardGameId = (typeof YARD_GAME_IDS)[number];
 
-/** Every mini-game id: the island games, then the yard games. */
-export const GAME_IDS = [...ISLAND_GAME_IDS, ...YARD_GAME_IDS] as const;
+/**
+ * 2026-11-13 (spec-dao-moi-xe-ra-dao): the rides — the plane, the train and the rocket left the yard for the island.
+ * Each is a moving (or parked) thing on the map with no kart stop: a tap on it zooms in and opens its game
+ * (content/stations.ts › RIDES). Scene key === GameId still holds.
+ */
+export const RIDE_GAME_IDS = ['plane', 'train', 'rocket'] as const;
+export type RideGameId = (typeof RIDE_GAME_IDS)[number];
+
+/** Every mini-game id: the island games, the yard games, then the rides. */
+export const GAME_IDS = [...ISLAND_GAME_IDS, ...YARD_GAME_IDS, ...RIDE_GAME_IDS] as const;
 
 export type GameId = (typeof GAME_IDS)[number];
+
+/** 2026-11-13: true for a ride (the plane, the train, the rocket: opened from the island, no kart stop). */
+export function isRideGameId(id: string): id is RideGameId {
+  return (RIDE_GAME_IDS as readonly string[]).includes(id);
+}
 
 /** Story 7.2: true for an island game (one with a Map station). */
 export function isIslandGameId(id: string): id is IslandGameId {

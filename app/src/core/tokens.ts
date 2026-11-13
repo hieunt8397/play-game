@@ -577,6 +577,19 @@ const ui = {
   mapWaveBobPhaseStep: 0.37,
   /** Story 5.6: the clouds and waves draw at this depth: above the plate (−1), below every station, decoration and the kart. */
   mapAmbientBackDepth: -0.5,
+  /**
+   * 2026-11-13 (review): where a sprite in front hides the track (`path.rail-back`), the train draws at this depth: above
+   * the plate and the clouds' and waves' layer, under every station, occluder and the volcano.
+   */
+  mapTrainBackDepth: -0.25,
+  /** 2026-11-13: the plane in flight draws above every station, the kart and the labels' plate (but under the labels). */
+  mapPlaneFlightDepth: 5000,
+  /**
+   * 2026-11-13: a moving ride's tap box around each piece's ground point (design px at the ride's render scale,
+   * before hitPad): the toy train's engine or car, the flying plane.
+   */
+  mapTrainPieceBox: { w: 62, h: 54, lift: 20 },
+  mapPlaneBox: { w: 78, h: 54, lift: 24 },
 } as const;
 
 /** A colour in the generated-token shape (`css`, `value`, `alpha`). */
@@ -709,6 +722,28 @@ const art = {
     chimneyBrick: colour('#E8825E'),
     chimneyCap: colour('#F3E6CC'),
     chimneySoot: colour('#8A5A48'),
+    // 2026-11-13 (spec-dao-moi-xe-ra-dao): the railway round the island, the tunnel, the level crossing, Ga tàu, the
+    // airstrip and the rocket's steam (tools/render/blender/map_rides.py).
+    rail: colour('#9AA7BD'),
+    sleeper: colour('#B9875A'),
+    ballast: colour('#E2CDA6'),
+    portal: colour('#C9B6A0'),
+    portalDark: colour('#4A3A3A'),
+    crossingBoard: colour('#C98B55'),
+    signalPost: colour('#5E6B82'),
+    signalLight: colour('#7BE07B'),
+    barrierPost: colour('#FFFFFF'),
+    barrierStripe: colour('#FF6B6B'),
+    barrierArm: colour('#FFFFFF'),
+    platform: colour('#E8B27A'),
+    platformEdge: colour('#FFE17A'),
+    platformPost: colour('#FFFFFF'),
+    platformRoof: colour('#5BB8F0'),
+    sign: colour('#FFF4E0'),
+    airstrip: colour('#C7CFDB'),
+    airstripLine: colour('#FFFFFF'),
+    windsock: colour('#FF8A3D'),
+    puff: colour('#FFFFFF'),
   },
   /**
    * Story 7.1: the yard (build_home.py): the stage's wood, the drum, the vet box's cross, the wardrobe and

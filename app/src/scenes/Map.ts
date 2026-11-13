@@ -54,15 +54,20 @@
 // back to the yard (never the island), `round:next` restarts it in place keeping that origin. `yard:leave` (Home in the yard)
 // stops the yard and wakes Map, the kart parked at `home-stop`; the yard's assets are released when it
 // shuts down.
+// 2026-11-13 (spec-dao-moi-xe-ra-dao): the rides (content/stations › RIDES; scenes/map-rides-view, core/map-rides): the
+// toy train going round the island's rail loop, the plane on its airstrip (it takes off for a loop now and then), the
+// rocket on its pad. A tap on one (z 1: it wins over a station) bounces it and says its name, loads its game, zooms
+// in on it and starts the game with origin 'island' — the kart does not move. Ignored while the kart drives, a chain
+// runs or a game is opening. Every wake parks the train at Ga tàu and the plane on its strip.
 // Timing, routing and geometry are pure core code; this
 // scene only wires Phaser. The kart moves only in `update` (no timers or tweens), so a pause freezes it.
 import { Scene, type GameObjects, type Time } from 'phaser';
-import { ATLASES, BACKGROUNDS, MAP_AMBIENT, MAP_GUIDE, MAP_KART } from '../content/assets';
+import { ATLASES, BACKGROUNDS, MAP_AMBIENT, MAP_GUIDE, MAP_KART, MAP_RIDES } from '../content/assets';
 import type { Point } from '../content/layout-types';
-import { isIslandGameId, type GameId, type GameStartData } from '../content/types';
+import { isIslandGameId, isRideGameId, type GameId, type GameStartData, type RideGameId } from '../content/types';
 import { LAYOUTS } from '../content/layouts';
 import { HOME_ASSETS, YARD_SCENE_KEY } from '../content/home';
-import { HOME_STATION, isHomeStation, KART_START_ANCHOR, ROAD_PATH, STATIONS, stopAnchor } from '../content/stations';
+import { HOME_STATION, isHomeStation, KART_START_ANCHOR, RIDES, ROAD_PATH, STATIONS, stopAnchor } from '../content/stations';
 import type { GameAssets } from '../content/games/types';
 import { inviteLine, islandPrompt, stationNameLine } from '../content/voice-lines';
 import { audio } from '../core/audio-director';
@@ -119,6 +124,7 @@ import { bob, bounce, isMoving, stopMotion } from '../core/ui/scale-motion';
 import { addStationLabel } from '../core/ui/station-label';
 import { attachTapReactions } from '../core/ui/tap-reactions';
 import { GAMES, isGameId, ladderLength } from '../games/registry';
+import { createMapRides, type MapRidesView } from './map-rides-view';
 
 const HUD_KEY = 'Hud';
 const WAKE = 'wake';
@@ -198,6 +204,12 @@ export class MapScene extends Scene {
   private guideModel: MapGuide | undefined;
   /** Story 5.6: the ambient dressing (clouds, waves, fountain, whale). */
   private ambientView: AmbientView | undefined;
+  /** 2026-11-13: the rides (train, plane, rocket); undefined on a layout without the rail. */
+  private rides: MapRidesView | undefined;
+  /** 2026-11-13: the ride whose game is loading / zooming in (one at a time). */
+  private pendingRide: RideGameId | undefined;
+  /** 2026-11-13: the ride played last (the Speaker names it on wake), until the next station tap. */
+  private lastRide: RideGameId | undefined;
 
   /**
    * Story 2.3: runs when a post-round chain ends without a queued station tap: Map returns to "Mời chơi"
@@ -302,6 +314,16 @@ export class MapScene extends Scene {
     this.guide = plan.guide ? this.addGuide(plan.guide, router, atlasKey) : undefined;
     // Story 5.6: the ambient dressing (images only, no hotspots).
     this.ambientView = this.addAmbient(plan.ambient, atlasKey);
+    // 2026-11-13: the rides and the railway's sprites (their taps win over a station's: z 1).
+    this.pendingRide = undefined;
+    this.rides = createMapRides(this, {
+      layout,
+      atlasKey,
+      hasFrame: (frame) => hasAtlas && this.textures.get(atlasKey).has(frame),
+      router,
+      reduced: this.reduced,
+      onTap: (id) => this.tapRide(id),
+    });
 
     // The road and the kart (Story 1.7). The kart registers last: it is on top of the stations it passes.
     const roadPoints = layout.paths[ROAD_PATH] ?? [];
@@ -331,7 +353,8 @@ export class MapScene extends Scene {
 
     this.idle = createMapIdle({
       stations: plan.stations.map((s) => s.id),
-      awake: plan.stations.filter((s) => s.awake).map((s) => s.id),
+      // 2026-11-13: the rides are invited too (after the stations), never bounced as ambient.
+      awake: [...plan.stations.filter((s) => s.awake).map((s) => s.id), ...(this.rides ? RIDES.filter((r) => isGameId(r.id)).map((r) => r.id) : [])],
       timing: {
         ambientMinMs: Tokens.Timing.mapAmbientMinMs,
         ambientMaxMs: Tokens.Timing.mapAmbientMaxMs,
@@ -437,6 +460,9 @@ export class MapScene extends Scene {
       this.ambientView?.spout?.remove(false);
       this.ambientView = undefined;
       this.guideModel = undefined;
+      this.rides?.destroy();
+      this.rides = undefined;
+      this.pendingRide = undefined;
     });
 
     // Story 5.2: the first Map entry of the session greets (the prompt only when the island has none).
@@ -449,8 +475,17 @@ export class MapScene extends Scene {
     if (this.idle) this.handle(this.idle.tick(delta));
     this.tickAmbient(delta);
     if (!this.trip) return;
+    this.rides?.tick(Math.min(delta, MAX_TICK_MS), {
+      kartDriving: this.trip.state !== 'parked',
+      // The kart's stops all lie on the island side of the crossing (the road runs on past it to the beach only).
+      kartOnCrossing: false,
+      busy: this.ring !== undefined || (this.chain?.active ?? false) || this.pendingRide !== undefined,
+    });
     this.applyAll(this.trip.tick(delta));
-    for (const id of this.tracker.drainSettled()) this.applyAll(this.trip.assetsSettled(id));
+    for (const id of this.tracker.drainSettled()) {
+      if (id === this.pendingRide && isRideGameId(id)) void this.enterRide(id);
+      else this.applyAll(this.trip.assetsSettled(id));
+    }
   }
 
   // --- resume marks (Story 2.5) ---------------------------------------------------------------------
@@ -465,7 +500,9 @@ export class MapScene extends Scene {
     }
     const missing = [...held].filter((id) => !this.resumeMarks.has(id));
     if (missing.length === 0) return;
-    for (const at of resumeMarkPlan(missing, LAYOUTS.map.hits)) {
+    // 2026-11-13: a ride's mark sits on its tap area (the train's on Ga tàu: it is never anywhere else for long).
+    const hits = { ...LAYOUTS.map.hits, ...(LAYOUTS.map.hits[MAP_RIDES.gaTau] ? { train: LAYOUTS.map.hits[MAP_RIDES.gaTau] } : {}) };
+    for (const at of resumeMarkPlan(missing, hits)) {
       this.resumeMarks.set(at.id as GameId, drawResumeMark(this, at));
     }
   }
@@ -482,6 +519,9 @@ export class MapScene extends Scene {
   /** A station tap: queued while the chain runs (no reaction), else the kart trip. */
   private tapStation(id: string): void {
     if (this.skipTap) return;
+    // 2026-11-13: a ride's game is opening (its zoom is on): no kart trip meanwhile.
+    if (this.pendingRide) return;
+    this.lastRide = undefined;
     if (this.chain?.active) {
       this.chain.queueTap(id);
       return;
@@ -769,7 +809,7 @@ export class MapScene extends Scene {
    */
   private syncIdle(): void {
     if (!this.idle || !this.trip) return;
-    if (this.trip.state === 'parked' && !this.chain?.active) this.idle.resume();
+    if (this.trip.state === 'parked' && !this.chain?.active && this.pendingRide === undefined) this.idle.resume();
     else this.handle(this.idleSuspend(this.idle));
   }
 
@@ -822,6 +862,13 @@ export class MapScene extends Scene {
     const focus = LAYOUTS.map.anchors[id] ?? { x: this.kart?.body.x ?? 0, y: this.kart?.body.y ?? 0 };
     await enterStation(this, focus, this.reduced);
     if (!this.trip) return; // Map shut down meanwhile
+    this.startIslandGame(id, entry);
+    this.trip.entered();
+    this.syncIdle();
+  }
+
+  /** Starts a game opened from the island (a station or a ride) and sleeps Map. */
+  private startIslandGame(id: GameId, entry: NonNullable<(typeof GAMES)[GameId]>): void {
     // Story 2.5: a held snapshot resumes the game (its own level and seed). Every start clears the
     // resume point: a start without resume drops it, a resumed start consumes it.
     const data = takeStartData(id, ladderLength(entry));
@@ -835,7 +882,38 @@ export class MapScene extends Scene {
     this.listenShutdown(id);
     this.scene.manager.start(id, data);
     this.scene.sleep();
-    this.trip.entered();
+  }
+
+  // --- the rides (2026-11-13) ---------------------------------------------------------------------
+
+  /** A ride tap: bounce, its name, load its game (enterRide runs once the assets settle). */
+  private tapRide(id: RideGameId): void {
+    if (this.skipTap || this.chain?.active || this.running || this.pendingRide || this.yardOpen) return;
+    if (!this.trip || this.trip.state !== 'parked') return;
+    if (!isGameId(id) || !GAMES[id]) return;
+    this.pendingRide = id;
+    this.rides?.open(id);
+    audio.say(stationNameLine(id));
+    this.syncIdle();
+    this.loadGame(id);
+  }
+
+  /** The ride's assets are in: zoom in on it and start its game. */
+  private async enterRide(id: RideGameId): Promise<void> {
+    const entry = isGameId(id) ? GAMES[id] : undefined;
+    if (!entry) {
+      this.pendingRide = undefined;
+      this.rides?.release();
+      this.syncIdle();
+      return;
+    }
+    setHomeTarget('island');
+    const focus = this.rides?.focus(id) ?? LAYOUTS.map.anchors[id] ?? { x: Tokens.design.width / 2, y: Tokens.design.height / 2 };
+    await enterStation(this, focus, this.reduced);
+    if (!this.trip) return; // Map shut down meanwhile
+    this.pendingRide = undefined;
+    this.lastRide = id;
+    this.startIslandGame(id, entry);
     this.syncIdle();
   }
 
@@ -980,9 +1058,11 @@ export class MapScene extends Scene {
     }
     setHudMode('map');
     // The game's request must not stay on the Speaker (its line may already be released).
-    const prompt = islandPrompt(session.lastStation);
+    const prompt = this.lastRide ? stationNameLine(this.lastRide) : islandPrompt(session.lastStation);
     if (prompt) audio.setPrompt(prompt);
     else audio.clearPrompt();
+    // 2026-11-13: the rides are back in their places (the train at Ga tàu, the plane on its strip).
+    this.rides?.parkAll();
     if (chaining) this.enterChainIdle();
     else if (this.idle) this.handle(this.idleReset(this.idle));
     this.syncResumeMarks();
@@ -1014,6 +1094,10 @@ export class MapScene extends Scene {
   }
 
   private invite(id: string): void {
+    if (isRideGameId(id)) {
+      this.inviteRide(id);
+      return;
+    }
     const view = this.views.get(id);
     if (!view) return;
     // One prominent motion at a time: settle any ambient bounce still running on another station.
@@ -1036,6 +1120,21 @@ export class MapScene extends Scene {
     audio.sayChain([line, stationNameLine(id)]);
     audio.setPrompt(line);
     // Story 5.2: the guide Shiba waves with the invitation (one combined call to action).
+    this.applyGuide(this.guideModel?.invite() ?? []);
+  }
+
+  /** 2026-11-13: a ride's invitation: the ring round its tap area, its pulse, the lines, the guide's wave. */
+  private inviteRide(id: RideGameId): void {
+    const hit = this.rides?.inviteHit(id);
+    if (!hit || hit.length === 0) return;
+    for (const other of this.views.values()) {
+      if (other.image) stopMotion(other.image, other.plan.image?.scale ?? 1);
+    }
+    this.ring = createHintRing(this, boundingBox(hit), { reduced: this.reduced, depth: this.plan?.ringDepth });
+    this.rides?.pulse(id);
+    const line = inviteLine(id);
+    audio.sayChain([line, stationNameLine(id)]);
+    audio.setPrompt(line);
     this.applyGuide(this.guideModel?.invite() ?? []);
   }
 

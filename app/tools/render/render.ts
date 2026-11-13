@@ -28,6 +28,8 @@ import {
   validateDinoPuzzle,
   validateIceCream,
   validateLayout,
+  validateMapRides,
+  mapRidesLimits,
   validatePizza,
   validateShadowMatch,
   raceLimits,
@@ -91,7 +93,11 @@ sharp.cache(false);
  * trim boxes in the atlas JSON shape for the screens listed in FRAME_RULE_SCREENS.
  */
 export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames?: AtlasJsonLike) => string[]>> = {
-  map: (layout) => validateLayout(layout, { stations: STATIONS, gameIds: ISLAND_GAME_IDS, shellStations: [HOME_STATION], limits: layoutLimits(), guide: MAP_GUIDE.id }),
+  map: (layout) => [
+    ...validateLayout(layout, { stations: STATIONS, gameIds: ISLAND_GAME_IDS, shellStations: [HOME_STATION], limits: layoutLimits(), guide: MAP_GUIDE.id }),
+    // 2026-11-13: the rides and the railway (spec-dao-moi-xe-ra-dao).
+    ...validateMapRides(layout, mapRidesLimits(STATIONS.map((s) => s.id))),
+  ],
   // The atlas does not exist yet at render time: the frame rules run in `atlas` and `validate:content`.
   'ice-cream': (layout) => validateIceCream(layout, iceCreamLimits(iceCreamScreen)),
   pizza: (layout) => validatePizza(layout, pizzaLimits(pizzaScreen)),

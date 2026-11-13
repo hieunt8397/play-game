@@ -333,9 +333,9 @@ describe('bootAudio', () => {
 });
 
 describe('bootTextures (Story 1.5)', () => {
-  it('loads the map atlas and the map plate', () => {
+  it('loads the map atlas (a multiatlas since 2026-11-13: the rides) and the map plate', () => {
     expect(bootTextures()).toEqual([
-      { kind: 'atlas', key: 'atlas.map', png: 'assets/atlases/map.png', json: 'assets/atlases/map.json' },
+      { kind: 'multiatlas', key: 'atlas.map', json: 'assets/atlases/map.json', path: 'assets/atlases/' },
       { kind: 'image', key: 'bg.map', path: 'assets/bg/map.png' },
     ]);
   });

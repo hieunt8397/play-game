@@ -15,7 +15,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ATLASES, MAP_AMBIENT_ANCHORS, MAP_AMBIENT_FRAMES, MAP_GUIDE, SCREEN_IDS, screenBackgrounds } from '../../src/content/assets.ts';
+import { ATLASES, MAP_AMBIENT_ANCHORS, MAP_AMBIENT_FRAMES, MAP_GUIDE, MAP_RIDE_FRAMES, SCREEN_IDS, screenBackgrounds } from '../../src/content/assets.ts';
 import { AUDIO_CATALOG } from '../../src/content/audio-catalog.ts';
 import { DECORATIONS } from '../../src/content/decorations.ts';
 import { GAME_ICONS } from '../../src/content/game-icons.ts';
@@ -28,16 +28,16 @@ import { Tokens } from '../../src/core/tokens.ts';
 import { m4aDurationMs } from '../audio/m4a-duration.ts';
 import {
   RENDER_SCALE,
-  decorationLimits,
   iceCreamLimits,
   layoutLimits,
   pngSizeOf,
   validateAssets,
-  validateDecorations,
   validateIceCream,
   pizzaLimits,
   validatePizza,
   validateLayout,
+  validateMapRides,
+  mapRidesLimits,
   validatePlayAgainIcons,
   atlasFrames,
   dinoPuzzleLimits,
@@ -112,7 +112,8 @@ export const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
 export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
   // Decoration frames are checked by validateDecorations (layoutProblems), naming the decoration id.
   // Story 5.2: the guide Shiba's idle and wave frames (MAP_GUIDE); Story 5.6: the whale, fountain, cloud and wave (MAP_AMBIENT).
-  map: [...STATIONS.map((s) => stationFrame(s.id)), KART_FRAME, MAP_GUIDE.idle, ...MAP_GUIDE.wave, ...MAP_AMBIENT_FRAMES],
+  // 2026-11-13: the rides (the train's and the plane's 8 headings, the rocket, the crossing's barriers, the volcano).
+  map: [...STATIONS.map((s) => stationFrame(s.id)), KART_FRAME, MAP_GUIDE.idle, ...MAP_GUIDE.wave, ...MAP_AMBIENT_FRAMES, ...MAP_RIDE_FRAMES],
   'ice-cream': iceCreamScreen.frames,
   pizza: pizzaScreen.frames,
   'dino-puzzle': dinoScreen.frames,
@@ -184,10 +185,11 @@ export function layoutProblems(layoutDir: string, publicDir?: string): string[] 
     if (missing.length > 0) continue;
     if (screen === 'map') {
       for (const p of validateLayout(layout, { stations: STATIONS, gameIds: ISLAND_GAME_IDS, shellStations: [HOME_STATION], limits: layoutLimits(), guide: MAP_GUIDE.id })) problems.push(`layout "${screen}": ${p}`);
+      // 2026-11-13: the rides and the railway (spec-dao-moi-xe-ra-dao).
+      for (const p of validateMapRides(layout, mapRidesLimits(STATIONS.map((s) => s.id)))) problems.push(`layout "${screen}": ${p}`);
       // Story 5.6: the ambient dressing's anchors (whale, fountain, cloud-1..3, wave-1..5), like its frames.
       for (const id of MAP_AMBIENT_ANCHORS) if (!layout.anchors[id]) problems.push(`layout "${screen}": anchor "${id}": missing (the ambient dressing)`);
-      const decorations = validateDecorations(layout, decorationLimits(GAME_STATIONS, ISLAND_GAME_IDS, DECORATIONS, [HOME_STATION]), readAtlas(publicDir, screen));
-      for (const p of decorations) problems.push(`layout "${screen}": ${p}`);
+      // 2026-11-13: the island decorations (removed at runtime on 2026-10-21) are no longer checked (tools/atlas/pack.ts).
       const atlas = readAtlas(publicDir, screen);
       // Story 2.4: the play-again icon frames (icon/<id>/00, ≥ ui.playAgainIconPx).
       if (atlas) for (const p of validatePlayAgainIcons(Object.keys(GAME_ICONS), atlas, layout.renderScale, Tokens.ui.playAgainIconPx)) problems.push(`layout "${screen}": ${p}`);

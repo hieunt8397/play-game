@@ -40,6 +40,7 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cute import _keyframes, _part, import_joined, key_chibi, soften_scene, tt_model  # noqa: E402
 from outfit import dress  # noqa: E402
+from map_rides import build_rides  # noqa: E402  (2026-11-13: the railway and the rides)
 from common import add_empty, descendants, eval_world_verts, flat_material, force_opaque, hex_to_linear, hull_object, key_constant, move_to, principled, recolor_creature, sphere  # noqa: E402
 from common import parse_args as common_args  # noqa: E402
 
@@ -141,6 +142,7 @@ ROAD_CENTRE = [
     (-1.50, 4.46), (0.50, 3.99), (1.50, 3.90), (2.03, 3.94), (2.88, 4.09), (5.50, 4.80),
 ]
 ROAD_HALF_WIDTH = 0.725
+ISLAND_CENTRE = (0.34, 0.42)  # the grass's centre (world XY): the rides' angles are measured round it
 ROAD_TOP_Z = 0.53
 
 # Decoration slots (Story 2.2, review loop 1b): ground points beside each station, in fill order.
@@ -268,7 +270,7 @@ CONE_CHERRY_R = 0.16
 CHIMNEY_ROOF = 'building-c'
 CHIMNEY_AT = (0.08, 0.3)
 CHIMNEY_RADIUS = 0.22
-CHIMNEY_HEIGHT = 1.15
+CHIMNEY_HEIGHT = 1.3
 CHIMNEY_SINK = 0.3
 CHIMNEY_CAP = (0.3, 0.3, 0.3)  # scale of the cap torus (cute.py torus: major radius 1, minor 0.34)
 
@@ -276,7 +278,7 @@ CHIMNEY_CAP = (0.3, 0.3, 0.3)  # scale of the cap torus (cute.py torus: major ra
 # From the approved v4 trial (scratch map_trial.py). The fountain and the whale are their own map sprites
 # with frame states (occlude 1); the swim ring stays in the plate. Each sprite adds `anchor.<id>` at its
 # ground (fountain) or water (whale) pivot. No hit: a tap on them is a background tap (Story 5.4 ripple).
-FOUNTAIN = {'id': 'fountain', 'model': 'fountain', 'at': (-1.2, -6.05), 'scale': 0.5}
+FOUNTAIN = {'id': 'fountain', 'model': 'fountain', 'at': (-1.6, -5.35), 'scale': 0.5}  # 2026-11-13: up toward the road: Ga tàu stands on its old spot
 FOUNTAIN_STATES = {'spray': [1, 2, 3]}
 # Jets: FOUNTAIN_JETS arcs from the top of the fountain into its basin; each arc holds
 # FOUNTAIN_DROPS_PER_FRAME droplets per frame, shifted along the arc frame by frame (a flowing loop).
@@ -287,8 +289,9 @@ FOUNTAIN_JET_REACH = 0.42  # landing radius as a fraction of the fountain's half
 FOUNTAIN_BASIN = 0.35  # landing height as a fraction of the fountain's height
 FOUNTAIN_DROP_R = 0.07
 FOUNTAIN_COLUMN = [0.1, 0.25, 0.4]  # the centre column's droplet heights above the top, one per frame
-RING = {'at': (1.0, -7.45, 0.33), 'major': 0.42, 'minor': 0.17, 'tilt_deg': 12.0, 'yaw_rad': 0.3, 'stripes': 8}
-WHALE = {'id': 'whale', 'at': (7.3, -8.2, -0.15), 'yaw_deg': -25.0, 'scale': 0.8}
+# 2026-11-13: the ring's old spot is Ga tàu's; it lies on the outer beach now (the track runs along the sand).
+RING = {'at': (-2.7, -9.05, 0.33), 'major': 0.42, 'minor': 0.17, 'tilt_deg': 12.0, 'yaw_rad': 0.3, 'stripes': 8}
+WHALE = {'id': 'whale', 'at': (8.6, -9.4, -0.15), 'yaw_deg': -25.0, 'scale': 0.8}  # 2026-11-13: out past the wider beach
 WHALE_STATES = {'idle': [1], 'spout': [2, 3, 4, 5]}
 # Whale parts in its root space (unit whale, facing -Y): (name, material, location, scale[, rotation deg]).
 WHALE_PARTS = [
@@ -324,7 +327,7 @@ CLOUD_AT = (-5.49, 9.26, 4.0)
 CLOUD_ANCHORS = [CLOUD_AT, (3.67, 9.62, 4.0), (10.52, 8.92, 4.0)]
 CLOUD_SCALE = 0.7
 WAVE_Z = -0.1  # just above the shallow water
-WAVE_ANCHORS = [(-11.12, 10.98), (5.25, 12.3), (13.18, 10.69), (-12.63, 6.26), (-7.69, -8.17)]
+WAVE_ANCHORS = [(-11.12, 10.98), (5.25, 12.3), (13.18, 10.69), (-13.4, 6.6), (-7.4, -9.7)]  # 2026-11-13: the last two off the wider beach
 # The crescent: WAVE_PUFFS flattened spheres on an arc of WAVE_ARC_DEG (radius WAVE_ARC_R, m), the
 # middle ones larger; the arc opens away from the camera.
 WAVE_PUFFS = 5
@@ -1311,6 +1314,10 @@ def build(args):
     for sid, pts in slots.items():
         for n, p in enumerate(pts, 1):
             add_empty(f'slot.{sid}-{n}', p, layout)
+
+    # 2026-11-13 (spec-dao-moi-xe-ra-dao): the railway round the island, the tunnel, the crossing, Ga tàu and the rides.
+    rides = build_rides(scene, params, screen, sprite_parent, layout, ROAD_CENTRE, ROAD_HALF_WIDTH, ISLAND_CENTRE)
+    RING['at'] = (rides['ring'][0], rides['ring'][1], RING['at'][2])
 
     # Story 5.6: the island dressing (after the slots: their ground rays never see it).
     fountain = build_fountain(scene, sprite_parent, layout, mats)

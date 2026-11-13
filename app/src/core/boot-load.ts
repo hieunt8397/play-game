@@ -5,7 +5,7 @@
 //   active worker; bounded by Timing.swPrecacheTimeoutMs, Story 1.11) + the self-hosted Baloo 2 font.
 // - `createBootLoader`: the load loop (dispatch / attempt / gate) over a Phaser adapter (Story 1.11).
 import { AUDIO_CATALOG, AUDIO_IDS } from "../content/audio-catalog";
-import { ATLASES, BACKGROUNDS } from "../content/assets";
+import { ATLAS_DIR, ATLASES, BACKGROUNDS } from "../content/assets";
 import { VOICE_LINES, voicePath } from "../content/voice-lines";
 import type { SwRegistrationLike } from "./sw";
 import { Timing } from "./timing";
@@ -34,6 +34,8 @@ export function bootAudio(): ReadonlyArray<readonly [string, string]> {
 /** One texture Boot loads (Story 1.5: the Map atlas and plate). */
 export type TextureLoad =
   | { readonly kind: "atlas"; readonly key: string; readonly png: string; readonly json: string }
+  /** 2026-11-13: the map atlas spans pages (the rides' heading frames): one multiatlas JSON, pages under `path`. */
+  | { readonly kind: "multiatlas"; readonly key: string; readonly json: string; readonly path: string }
   | { readonly kind: "image"; readonly key: string; readonly path: string };
 
 /** Textures Boot loads: `atlas.map` (`load.atlas`) and `bg.map` (`load.image`). Map keeps them for the session. */
@@ -41,7 +43,9 @@ export function bootTextures(): readonly TextureLoad[] {
   const atlas = ATLASES.map;
   const bg = BACKGROUNDS.map;
   return [
-    { kind: "atlas", key: atlas.key, png: atlas.png, json: atlas.json },
+    atlas.pages !== undefined && atlas.pages > 1
+      ? { kind: "multiatlas", key: atlas.key, json: atlas.json, path: ATLAS_DIR }
+      : { kind: "atlas", key: atlas.key, png: atlas.png, json: atlas.json },
     { kind: "image", key: bg.key, path: bg.path },
   ];
 }

@@ -12,22 +12,17 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { ATLASES, ATLAS_MAX_PAGES, FRAME_NAME, SCREEN_IDS, atlasPagePng, screenBackgrounds, type ScreenId } from '../../src/content/assets.ts';
 import { BAY_ANCHORS, DROP_ORDER, PIECES, SPECIES, screen as dinoScreen } from '../../src/content/games/dino-puzzle.ts';
-import { DECORATIONS } from '../../src/content/decorations.ts';
 import { GAME_ICONS } from '../../src/content/game-icons.ts';
 import { Tokens } from '../../src/core/tokens.ts';
 import { screen as iceCreamScreen } from '../../src/content/games/ice-cream.ts';
 import { screen as pizzaScreen } from '../../src/content/games/pizza.ts';
 import { ITEM_IDS, SHADOW_COUNTS, screen as shadowScreen } from '../../src/content/games/shadow-match.ts';
-import { GAME_STATIONS, HOME_STATION } from '../../src/content/stations.ts';
 import { CORNER_IDS, HOME_SCREEN_REQUIREMENTS } from '../../src/content/home.ts';
-import { ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import type { ScreenLayout } from '../../src/content/layout-types.ts';
 import {
   MAX_FILE_BYTES,
   MAX_PAGE_SIDE,
-  decorationLimits,
   iceCreamLimits,
-  validateDecorations,
   validateIceCream,
   pizzaLimits,
   validatePizza,
@@ -93,8 +88,10 @@ const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
  * layout. Any problem refuses the write.
  */
 export const ATLAS_RULES: Readonly<Partial<Record<ScreenId, (layout: ScreenLayout, atlas: AtlasJsonLike) => string[]>>> = {
+  // 2026-11-13: the island decorations are no longer checked here. The parent removed them at runtime on 2026-10-21;
+  // their frames and slots are still built but never drawn, and the zoomed-out island (spec-dao-moi-xe-ra-dao) makes
+  // them smaller than the old tap rules. validateDecorations stays (and stays unit-tested) for a return of the feature.
   map: (layout, atlas) => [
-    ...validateDecorations(layout, decorationLimits(GAME_STATIONS, ISLAND_GAME_IDS, DECORATIONS, [HOME_STATION]), atlas),
     ...validatePlayAgainIcons(Object.keys(GAME_ICONS), atlas, layout.renderScale, Tokens.ui.playAgainIconPx),
     // Story 8.2: every guide frame has its overlay for every outfit item.
     ...validateOutfitFrames('map', atlas),

@@ -20,7 +20,7 @@ export interface ScreenSpec {
 
 /** Screens with a Blender scene. art/<screen>.blend is built from `source` by `builder`. */
 export const SCREENS: Readonly<Record<string, ScreenSpec>> = {
-  map: { source: 'art/src/map-v3.blend', builder: 'build_map.py' },
+  map: { source: 'art/src/map-v4.blend', builder: 'build_map.py' },
   'ice-cream': { source: 'art/src/map-v3.blend', builder: 'build_ice_cream.py' },
   pizza: { source: 'art/src/map-v3.blend', builder: 'build_pizza.py' },
   'dino-puzzle': { source: 'art/src/map-v3.blend', builder: 'build_dino_puzzle.py' },

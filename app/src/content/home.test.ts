@@ -12,11 +12,12 @@ import {
   YARD_INVITE_LINE,
   yardCorners,
 } from './home';
-import { HOME_STATION, STATIONS } from './stations';
+import { HOME_STATION, RIDES, STATIONS } from './stations';
+import { RIDE_GAME_IDS } from './types';
 import { inviteLine, isVoiceLineId, stationNameLine, VOICE_LINES } from './voice-lines';
 
 describe('content/home (Story 7.1)', () => {
-  it('has the 10 corners of the specs (2026-10-30: the garden, the car wash; 2026-11-11: the plane; 2026-11-12: the train, the rocket), each with its game id and a parent label', () => {
+  it('has the 7 corners of the specs (2026-10-30: the garden, the car wash; 2026-11-13: the plane, the train and the rocket left for the island), each with its game id and a parent label', () => {
     expect(YARD_CORNERS.map((c) => [c.id, c.gameId])).toEqual([
       ['pen', 'animal-pens'],
       ['stage', 'band'],
@@ -25,9 +26,6 @@ describe('content/home (Story 7.1)', () => {
       ['wardrobe', 'dress-up'],
       ['garden', 'garden'],
       ['car-wash', 'car-wash'],
-      ['plane', 'plane'],
-      ['train', 'train'],
-      ['rocket', 'rocket'],
     ]);
     expect(YARD_CORNERS.map((c) => c.id)).toEqual([...CORNER_IDS]);
   });
@@ -42,10 +40,20 @@ describe('content/home (Story 7.1)', () => {
     expect(isVoiceLineId(inviteLine(HOME_STATION))).toBe(true);
   });
 
-  it('awake is derived from the registry: a registered game wakes its corner (Story 7.2: the pen; Story 7.3: the stage; Story 7.4: the bed; Story 8.1: the clinic; Story 8.2: the wardrobe; 2026-10-30: the garden, the car wash; 2026-11-11: the plane; 2026-11-12: the train, the rocket), the others sleep', () => {
+  it('awake is derived from the registry: a registered game wakes its corner (Story 7.2: the pen; Story 7.3: the stage; Story 7.4: the bed; Story 8.1: the clinic; Story 8.2: the wardrobe; 2026-10-30: the garden, the car wash), the others sleep', () => {
     const playable = (id: string): boolean => Object.prototype.hasOwnProperty.call(GAME_CONTENT, id);
-    expect(yardCorners(playable).filter((c) => c.awake).map((c) => c.id)).toEqual(['pen', 'stage', 'bed', 'clinic', 'wardrobe', 'garden', 'car-wash', 'plane', 'train', 'rocket']);
+    expect(yardCorners(playable).filter((c) => c.awake).map((c) => c.id)).toEqual(['pen', 'stage', 'bed', 'clinic', 'wardrobe', 'garden', 'car-wash']);
     expect(yardCorners((id) => id === 'bedtime').filter((c) => c.awake).map((c) => c.id)).toEqual(['bed']);
+  });
+
+  it('2026-11-13: the plane, the train and the rocket are rides on the island, each with its name and invitation lines', () => {
+    expect(RIDES.map((r) => r.id).sort()).toEqual([...RIDE_GAME_IDS].sort());
+    for (const r of RIDES) {
+      expect(Object.prototype.hasOwnProperty.call(GAME_CONTENT, r.id)).toBe(true);
+      expect(VOICE_LINES.find((l) => l.id === stationNameLine(r.id))?.text).toBe(r.label);
+      expect(isVoiceLineId(inviteLine(r.id))).toBe(true);
+      expect(YARD_CORNERS.some((c) => c.gameId === r.id)).toBe(false);
+    }
   });
 
   it('the home station is on the island, awake, without decoration slots; the yard screen needs every corner', () => {

@@ -8,7 +8,9 @@
 // (scenes/HomeYard, content/home.ts) instead of a MiniGame. It is not a GameId (Scene key === GameId
 // stays true for real games) and has no decoration slot.
 // Story 7.2: only the island games (ISLAND_GAME_IDS) have a station; the yard games open from the yard.
-import { ISLAND_GAME_IDS, type IslandGameId } from './types.ts';
+// 2026-11-13 (spec-dao-moi-xe-ra-dao): the rides (RIDES) — the train on its loop round the island, the plane on its
+// airstrip, the rocket on its launch pad — are not stations: no kart stop, no road; a tap opens their game.
+import { ISLAND_GAME_IDS, type IslandGameId, type RideGameId } from './types.ts';
 
 /** Story 7.1: the shell station that opens the yard. */
 export const HOME_STATION = 'home' as const;
@@ -81,6 +83,28 @@ export const STATIONS: readonly Station[] = [
 export const GAME_STATIONS: readonly (Station & { readonly id: IslandGameId })[] = STATIONS.filter(
   (s): s is Station & { readonly id: IslandGameId } => s.id !== HOME_STATION,
 );
+
+/**
+ * 2026-11-13: a ride on the island. Layout ids on the map: `anchors[id]` its home spot (Ga tàu for the train, the
+ * airstrip, the launch pad: the camera zooms there and the post-round pull-back comes back there), `hits[id]` the
+ * tap area of the parked or stopped ride (the train's moving tap area follows it; core/map-rides).
+ */
+export interface Ride {
+  readonly id: RideGameId;
+  /** Parent-facing label (same text as its name line `vo.shell.station-name.<id>`). */
+  readonly label: string;
+}
+
+export const RIDES: readonly Ride[] = [
+  { id: 'train', label: 'Tàu hỏa' },
+  { id: 'plane', label: 'Máy bay' },
+  { id: 'rocket', label: 'Tên lửa' },
+];
+
+/** The rail loop round the island (`path.rail`, closed: its last point joins its first). */
+export const RAIL_PATH = 'rail';
+/** The plane's loop over the sea (`path.plane-loop`, closed; it starts and ends at the airstrip). */
+export const PLANE_LOOP_PATH = 'plane-loop';
 
 /** Where the kart starts on the map (`anchor.kart-start`). */
 export const KART_START_ANCHOR = 'kart-start';

@@ -2997,3 +2997,90 @@ export function validateRocket(layout: ScreenLayout, input: RocketRuleInput, atl
   }
   return problems;
 }
+
+// --- the island's rides (2026-11-13, spec-dao-moi-xe-ra-dao) ------------------------------------------------------
+
+export interface MapRidesLimits {
+  readonly rect: LayoutLimits['rect'];
+  readonly targetMin: number;
+  readonly targetGap: number;
+  readonly keepOut: readonly Rect[];
+  /** The station ids whose hits the rides' static hits keep targetGap from. */
+  readonly stations: readonly string[];
+}
+
+export function mapRidesLimits(stations: readonly string[]): MapRidesLimits {
+  return {
+    rect: layoutLimits().rect,
+    targetMin: Tokens.spacing.targetMin,
+    targetGap: Tokens.spacing.targetGap,
+    keepOut: hudKeepOutRects(),
+    stations,
+  };
+}
+
+/** The anchors map_rides.py writes (core/map-rides and scenes/map-rides-view read them). */
+export const MAP_RIDE_ANCHORS = [
+  'train', 'plane', 'rocket', 'ga-tau', 'volcano', 'train-car-1', 'train-car-2', 'train-car-3',
+  'rail-tunnel-in', 'rail-tunnel-out', 'rail-crossing-from', 'rail-crossing-to', 'rail-signal', 'crossing-near', 'crossing-far',
+] as const;
+
+/**
+ * The rides' layout: every anchor; the closed rail (`path.rail`) with its 1 m twin point for point and on screen inside
+ * the interactive rect; the static ride hits (Ga tàu, the parked plane, the rocket): inside the rect, ≥ targetMin wide,
+ * clear of the Home/Speaker zones and ≥ targetGap from each other and from every station; the plane's loop and its twin
+ * (same count) inside the rect and clear of the Home/Speaker zones; the compass (3 points).
+ */
+export function validateMapRides(layout: ScreenLayout, limits: MapRidesLimits): string[] {
+  const problems: string[] = [];
+  for (const id of MAP_RIDE_ANCHORS) if (!layout.anchors[id]) problems.push(`anchor "${id}": missing (the rides)`);
+  const rail = layout.paths.rail;
+  const railUp = layout.paths['rail-up'];
+  if (!rail || rail.length < 3) problems.push('path "rail": missing or has fewer than 3 points');
+  else {
+    if (!railUp || railUp.length !== rail.length) problems.push(`path "rail-up": must match path "rail" point for point (${railUp?.length ?? 0} vs ${rail.length})`);
+    const out = rail.filter((p) => !inRect(p, limits.rect));
+    if (out.length > 0) problems.push(`path "rail": ${out.length} point(s) outside the interactive rect, e.g. ${fmt(out[0]!)}`);
+  }
+  const hitIds = ['ga-tau', 'plane', 'rocket'];
+  const polys: [string, readonly Point[]][] = [];
+  for (const id of hitIds) {
+    const hit = layout.hits[id];
+    if (!hit || hit.length < MIN_HIT_POINTS) {
+      problems.push(`hit "${id}": missing or has fewer than 3 points (the rides)`);
+      continue;
+    }
+    polys.push([id, hit]);
+    const outside = hit.filter((p) => !inRect(p, limits.rect));
+    if (outside.length > 0) problems.push(`hit "${id}": ${outside.length} vertex(es) outside the interactive rect, e.g. ${fmt(outside[0]!)}`);
+    const w = minWidth(hit);
+    if (w < limits.targetMin) problems.push(`hit "${id}": minimum width ${w.toFixed(1)} px is under ${limits.targetMin}`);
+    if (limits.keepOut.some((k) => polygonDistance(hit, rectPoly(k)) === 0)) problems.push(`hit "${id}": reaches into a Home/Speaker keep-out zone`);
+  }
+  for (let i = 0; i < polys.length; i++) {
+    const [a, pa] = polys[i]!;
+    for (let j = i + 1; j < polys.length; j++) {
+      const [b, pb] = polys[j]!;
+      const d = polygonDistance(pa, pb);
+      if (d < limits.targetGap) problems.push(`hits "${a}" and "${b}": ${d.toFixed(1)} px apart (min ${limits.targetGap})`);
+    }
+    for (const s of limits.stations) {
+      const ps = layout.hits[s];
+      if (!ps) continue;
+      const d = polygonDistance(pa, ps);
+      if (d < limits.targetGap) problems.push(`hits "${a}" and "${s}": ${d.toFixed(1)} px apart (min ${limits.targetGap})`);
+    }
+  }
+  const loop = layout.paths['plane-loop'];
+  const loopUp = layout.paths['plane-loop-up'];
+  if (!loop || loop.length < 3) problems.push('path "plane-loop": missing or has fewer than 3 points');
+  else {
+    if (!loopUp || loopUp.length !== loop.length) problems.push(`path "plane-loop-up": must match path "plane-loop" point for point (${loopUp?.length ?? 0} vs ${loop.length})`);
+    const out = loop.filter((p) => !inRect(p, limits.rect));
+    if (out.length > 0) problems.push(`path "plane-loop": ${out.length} point(s) outside the interactive rect, e.g. ${fmt(out[0]!)}`);
+    const hud = loop.filter((p) => limits.keepOut.some((k) => p.x >= k.x && p.x <= k.x + k.w && p.y >= k.y && p.y <= k.y + k.h));
+    if (hud.length > 0) problems.push(`path "plane-loop": ${hud.length} point(s) inside a Home/Speaker keep-out zone, e.g. ${fmt(hud[0]!)}`);
+  }
+  if ((layout.paths.compass?.length ?? 0) !== 3) problems.push('path "compass": must have 3 points (origin, east, north)');
+  return problems;
+}

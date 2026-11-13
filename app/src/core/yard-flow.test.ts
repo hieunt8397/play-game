@@ -211,50 +211,50 @@ describe('Story 7.1: a yard game mid-round, continuous play', () => {
     expect(session.resumeIds()).toEqual([]);
   });
 
-  it('2026-11-11 (the plane): Home in mid-flight (round:leave + snapshot) keeps the flight; reopening resumes it; a parked plane keeps nothing', () => {
+  it('2026-11-11 (the plane; a ride on the island since 2026-11-13: Home pulls back to the island): Home in mid-flight (round:leave + snapshot) keeps the flight; reopening resumes it; a parked plane keeps nothing', () => {
     const session = new SessionStore();
-    const run: RunningGame = { id: 'plane', level: 0, origin: 'yard' };
+    const run: RunningGame = { id: 'plane', level: 0, origin: 'island' }; // 2026-11-13: a ride, opened from the island
     const partial = { friend: 'cat', gifts: ['red', 'purple'], surprise: 'rainbow' };
     const snapshot: Snapshot = { v: 1, level: 0, seed: 9, questionIndex: 0, partial };
-    expect(onRoundLeave(run, { gameId: 'plane', snapshot }, false, session)).toEqual({ action: 'fade', gameId: 'plane' });
+    expect(onRoundLeave(run, { gameId: 'plane', snapshot }, false, session)).toEqual({ action: 'chain', start: { kind: 'complete', gameId: 'plane' } });
     expect(session.resumeIds()).toEqual(['plane']);
     const data = startData(session)('plane');
     expect(data).toEqual({ level: 0, seed: 9, resume: snapshot });
     // (games/plane/flight.test.ts checks that resumeFlight accepts this kept partial: core may not import games/.)
     expect(data.resume?.partial).toEqual(partial);
     expect(session.resumeIds()).toEqual([]);
-    expect(onRoundLeave(run, { gameId: 'plane' }, false, session)).toEqual({ action: 'fade', gameId: 'plane' });
+    expect(onRoundLeave(run, { gameId: 'plane' }, false, session)).toEqual({ action: 'chain', start: { kind: 'complete', gameId: 'plane' } });
     expect(session.resumeIds()).toEqual([]);
   });
 
-  it('2026-11-12 (the train): Home with a friend aboard (round:leave + snapshot) keeps the trip; reopening resumes it; a train at its start station keeps nothing', () => {
+  it('2026-11-12 (the train; a ride since 2026-11-13): Home with a friend aboard (round:leave + snapshot) keeps the trip; reopening resumes it; a train at its start station keeps nothing', () => {
     const session = new SessionStore();
-    const run: RunningGame = { id: 'train', level: 0, origin: 'yard' };
+    const run: RunningGame = { id: 'train', level: 0, origin: 'island' }; // 2026-11-13: a ride, opened from the island
     const partial = { friends: ['cat', 'pig', 'cow'], aboard: 1, dest: 'beach', surprise: 'bridge', tunnelLeg: 2 };
     const snapshot: Snapshot = { v: 1, level: 0, seed: 9, questionIndex: 0, partial };
-    expect(onRoundLeave(run, { gameId: 'train', snapshot }, false, session)).toEqual({ action: 'fade', gameId: 'train' });
+    expect(onRoundLeave(run, { gameId: 'train', snapshot }, false, session)).toEqual({ action: 'chain', start: { kind: 'complete', gameId: 'train' } });
     expect(session.resumeIds()).toEqual(['train']);
     const data = startData(session)('train');
     expect(data).toEqual({ level: 0, seed: 9, resume: snapshot });
     // (games/train/trip.test.ts checks that resumeTrip accepts this kept partial: core may not import games/.)
     expect(data.resume?.partial).toEqual(partial);
     expect(session.resumeIds()).toEqual([]);
-    expect(onRoundLeave(run, { gameId: 'train' }, false, session)).toEqual({ action: 'fade', gameId: 'train' });
+    expect(onRoundLeave(run, { gameId: 'train' }, false, session)).toEqual({ action: 'chain', start: { kind: 'complete', gameId: 'train' } });
     expect(session.resumeIds()).toEqual([]);
   });
 
-  it('2026-11-12 (the rocket): Home with a part on the rocket keeps the trip; reopening resumes it; an empty pad keeps nothing', () => {
+  it('2026-11-12 (the rocket; a ride since 2026-11-13): Home with a part on the rocket keeps the trip; reopening resumes it; an empty pad keeps nothing', () => {
     const session = new SessionStore();
-    const run: RunningGame = { id: 'rocket', level: 0, origin: 'yard' };
+    const run: RunningGame = { id: 'rocket', level: 0, origin: 'island' }; // 2026-11-13: a ride, opened from the island
     const partial = { step: 'moon', colours: ['red', 'blue', 'white'], surprise: 'ufo', flag: true };
     const snapshot: Snapshot = { v: 1, level: 0, seed: 4, questionIndex: 0, partial };
-    expect(onRoundLeave(run, { gameId: 'rocket', snapshot }, false, session)).toEqual({ action: 'fade', gameId: 'rocket' });
+    expect(onRoundLeave(run, { gameId: 'rocket', snapshot }, false, session)).toEqual({ action: 'chain', start: { kind: 'complete', gameId: 'rocket' } });
     expect(session.resumeIds()).toEqual(['rocket']);
     const data = startData(session)('rocket');
     expect(data).toEqual({ level: 0, seed: 4, resume: snapshot });
     // (games/rocket/trip.test.ts checks that resumeTrip accepts this kept partial: core may not import games/.)
     expect(data.resume?.partial).toEqual(partial);
-    expect(onRoundLeave(run, { gameId: 'rocket' }, false, session)).toEqual({ action: 'fade', gameId: 'rocket' });
+    expect(onRoundLeave(run, { gameId: 'rocket' }, false, session)).toEqual({ action: 'chain', start: { kind: 'complete', gameId: 'rocket' } });
     expect(session.resumeIds()).toEqual([]);
   });
 

@@ -68,6 +68,21 @@ export const Timing = {
   whaleSpoutFrameMs: 250,
   /** Story 5.6: one spout lasts this long (4 × whaleSpoutFrameMs), then idle; no other prominent motion meanwhile. */
   whaleSpoutMs: 1000,
+  /** 2026-11-13 (spec-dao-moi-xe-ra-dao): the map train's lap is about 45 s (reduced motion: half its cruise). */
+  mapTrainLapMs: 45000,
+  /** The map train eases from 0 to cruise (and back) over about this long. */
+  mapTrainEaseMs: 1200,
+  /** It stands at Ga tàu this long every lap. */
+  mapTrainDwellMs: 4000,
+  /** The plane's loop round the island lasts about this long (its take-off and landing ease included). */
+  mapPlaneFlightMs: 16000,
+  /** Its speed eases up from the airstrip and down to it over this long. */
+  mapPlaneEaseMs: 2500,
+  /** It stays parked at least this long between two flights (spec: a take-off at most once every 25 s). */
+  mapPlaneGapMs: 25000,
+  /** The rocket's steam puff comes this often; each puff frame lasts mapRocketPuffFrameMs (≥ flashMinPeriodMs / 3). */
+  mapRocketPuffEveryMs: 9000,
+  mapRocketPuffFrameMs: 260,
 
   // --- Drag & drop (draggable-item) ---
   /** Dropped off the counter → slides back after this delay. */

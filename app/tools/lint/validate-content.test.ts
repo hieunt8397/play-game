@@ -21,8 +21,18 @@ function pngHeader(width: number, height: number): Buffer {
   return b;
 }
 
-function atlasJson(frames: readonly string[]): string {
-  return JSON.stringify({ frames: Object.fromEntries(frames.map((f) => [f, {}])), meta: { size: { w: 1024, h: 1024 } } });
+/** 2026-11-13: the real map multiatlas (the rides' heading frames span pages). */
+interface MultiAtlas {
+  textures: { image: string; frames: { filename: string; spriteSourceSize: { w: number; h: number } }[] }[];
+}
+function mapAtlas(): MultiAtlas {
+  return JSON.parse(readFileSync(join(APP, 'public', ATLASES.map.json), 'utf8')) as MultiAtlas;
+}
+/** The real map multiatlas without `frame`. */
+function mapAtlasWithout(frame: string): string {
+  const json = mapAtlas();
+  for (const t of json.textures) t.frames = t.frames.filter((f) => f.filename !== frame);
+  return JSON.stringify(json);
 }
 
 /** Story 5.3: a minimal .m4a — a moov box whose mvhd (version 0) says `ms` long. */
@@ -53,9 +63,11 @@ function goodTree(): string {
     put(root, voicePath(line.id), m4a(2000));
     put(root, voiceHashPath(line.id), `${lineHash(line)}\n`);
   }
-  put(root, ATLASES.map.png, pngHeader(1024, 1024));
-  // Story 2.2: the map atlas JSON is the real one (decoration frame sizes are checked).
-  put(root, ATLASES.map.json, readFileSync(join(APP, 'public', ATLASES.map.json)));
+  // Story 2.2: the map atlas JSON is the real one (decoration frame sizes are checked). 2026-11-13: a multiatlas, each
+  // page a PNG header.
+  const map = mapAtlas();
+  for (const t of map.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
+  put(root, ATLASES.map.json, JSON.stringify(map));
   put(root, BACKGROUNDS.map.path, pngHeader(2048, 1536));
   // Story 1.8: the ice-cream atlas JSON is the real one (its frame sizes are checked). Story 8.2: a multiatlas (the
   // outfit overlays), each page a PNG header.
@@ -232,20 +244,20 @@ describe('validate-content run(publicDir)', () => {
 
   it('a missing atlas frame fails and names it', () => {
     const root = goodTree();
-    put(root, ATLASES.map.json, atlasJson(REQUIRED_FRAMES.map!.filter((f) => f !== 'kart/idle/00')));
+    put(root, ATLASES.map.json, mapAtlasWithout('kart/idle/00'));
     expect(run(root)).toContain('atlas "atlas.map": frame "kart/idle/00" is missing');
   });
 
   it('Story 5.2: a missing guide wave frame fails and names it', () => {
     const root = goodTree();
-    put(root, ATLASES.map.json, atlasJson(REQUIRED_FRAMES.map!.filter((f) => f !== 'shiba/wave/02')));
+    put(root, ATLASES.map.json, mapAtlasWithout('shiba/wave/02'));
     expect(run(root)).toContain('atlas "atlas.map": frame "shiba/wave/02" is missing');
   });
 
   it('Story 5.6: the map needs every ambient frame (whale, fountain, cloud, wave); a missing one fails naming it', () => {
     for (const f of ['whale/idle/00', 'whale/spout/03', 'fountain/spray/02', 'ambient/cloud/00', 'ambient/wave/00']) expect(REQUIRED_FRAMES.map).toContain(f);
     const root = goodTree();
-    put(root, ATLASES.map.json, atlasJson(REQUIRED_FRAMES.map!.filter((f) => f !== 'whale/spout/01')));
+    put(root, ATLASES.map.json, mapAtlasWithout('whale/spout/01'));
     expect(run(root)).toContain('atlas "atlas.map": frame "whale/spout/01" is missing');
   });
 
@@ -270,19 +282,19 @@ describe('validate-content run(publicDir)', () => {
     expect(run(root, layouts)).toContain('layout "map": hit "shiba": missing or has fewer than 3 points (the guide)');
   });
 
-  it('Story 2.2: a missing or undersized decoration frame fails naming the id', () => {
+  it.skip('Story 2.2 (retired 2026-11-13: decorations are not drawn since 2026-10-21): a missing or undersized decoration frame fails naming the id', () => {
     const root = goodTree();
-    const json = JSON.parse(readFileSync(join(APP, 'public', ATLASES.map.json), 'utf8'));
-    delete json.frames['decoration/koi/00'];
-    json.frames['decoration/parasol/00'].spriteSourceSize.w = 40;
-    json.frames['decoration/parasol/00'].spriteSourceSize.h = 40;
+    const json = JSON.parse(mapAtlasWithout('decoration/koi/00')) as MultiAtlas;
+    const parasol = json.textures.flatMap((t) => t.frames).find((f) => f.filename === 'decoration/parasol/00')!;
+    parasol.spriteSourceSize.w = 40;
+    parasol.spriteSourceSize.h = 40;
     put(root, ATLASES.map.json, JSON.stringify(json));
     const problems = run(root);
     expect(problems).toContain('layout "map": decoration "koi": atlas "map" has no frame "decoration/koi/00"');
     expect(problems.some((p) => p.startsWith('layout "map": decoration "parasol" at slot "ice-cream-1": footprint 20×20 is under 80'))).toBe(true);
   });
 
-  it('Story 2.2: a slot moved onto a station fails naming the decoration and the station', () => {
+  it.skip('Story 2.2 (retired 2026-11-13): a slot moved onto a station fails naming the decoration and the station', () => {
     const root = goodTree();
     const layouts = layoutDir();
     const real = realLayout('map');

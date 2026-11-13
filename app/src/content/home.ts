@@ -9,6 +9,8 @@
 // (Phi công nhí, `plane`; the back row re-laid to four corners: 4 + 4); 2026-11-12 the train corner (Tàu hỏa chở bạn,
 // `train`; up by the fence at the top left, the back row stepping aside: 1 + 4 + 4); 2026-11-12 the rocket corner
 // (Tên lửa lên Mặt Trăng, `rocket`; tall and narrow at the top right under the Speaker zone, the plane stepping down).
+// 2026-11-13 (spec-dao-moi-xe-ra-dao): the plane, the train and the rocket left for the island (content/stations.ts ›
+// RIDES); 7 corners stay (spec-nha-xoai-nha-bup-be re-lays them as a dollhouse and its yard).
 import { ATLASES, BACKGROUNDS } from './assets.ts';
 import type { GameAssets, ScreenRequirements } from './games/types.ts';
 
@@ -16,7 +18,7 @@ import type { GameAssets, ScreenRequirements } from './games/types.ts';
 export const HOME_SCREEN = 'home' as const;
 export const YARD_SCENE_KEY = 'HomeYard';
 
-export const CORNER_IDS = ['pen', 'stage', 'bed', 'clinic', 'wardrobe', 'garden', 'car-wash', 'plane', 'train', 'rocket'] as const;
+export const CORNER_IDS = ['pen', 'stage', 'bed', 'clinic', 'wardrobe', 'garden', 'car-wash'] as const;
 export type CornerId = (typeof CORNER_IDS)[number];
 
 export interface YardCorner {
@@ -36,9 +38,6 @@ export const YARD_CORNERS: readonly YardCorner[] = [
   { id: 'wardrobe', gameId: 'dress-up', label: 'Tủ đồ' },
   { id: 'garden', gameId: 'garden', label: 'Vườn' },
   { id: 'car-wash', gameId: 'car-wash', label: 'Rửa xe' },
-  { id: 'plane', gameId: 'plane', label: 'Máy bay' },
-  { id: 'train', gameId: 'train', label: 'Tàu hỏa' },
-  { id: 'rocket', gameId: 'rocket', label: 'Tên lửa' },
 ];
 
 /** A corner with its awake flag. */

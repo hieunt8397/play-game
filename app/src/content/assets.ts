@@ -29,7 +29,7 @@ export interface BackgroundRef {
  * Story 3.3: screens whose atlas may span several pages (the dino frames cannot fit one 2048² page). Story 8.2: the
  * outfit overlays (11 items over every Shiba frame) push ice-cream and dress-up over one page.
  */
-export const ATLAS_MAX_PAGES: Readonly<Partial<Record<ScreenId, number>>> = { 'dino-puzzle': 4, 'shadow-match': 3, 'touch-talk': 3, 'pet-clinic': 3, 'ice-cream': 3, 'dress-up': 2, garden: 3, 'car-wash': 4, plane: 3, train: 3, rocket: 4 };
+export const ATLAS_MAX_PAGES: Readonly<Partial<Record<ScreenId, number>>> = { map: 3, 'dino-puzzle': 4, 'shadow-match': 3, 'touch-talk': 3, 'pet-clinic': 3, 'ice-cream': 3, 'dress-up': 2, garden: 3, 'car-wash': 4, plane: 3, train: 3, rocket: 4 };
 
 /** The folder of every atlas (a multiatlas loads its pages from here). */
 export const ATLAS_DIR = 'assets/atlases/';
@@ -155,6 +155,50 @@ export const MAP_AMBIENT = {
   cloud: { frame: 'ambient/cloud/00', anchors: ['cloud-1', 'cloud-2', 'cloud-3'] },
   wave: { frame: 'ambient/wave/00', anchors: ['wave-1', 'wave-2', 'wave-3', 'wave-4', 'wave-5'] },
 } as const;
+
+/**
+ * 2026-11-13 (spec-dao-moi-xe-ra-dao): the rides and the railway on the map (tools/render/blender/map_rides.py). The
+ * train's engine and cars and the plane are rendered in 8 headings (h0 = world east, counter-clockwise in 45° steps)
+ * at their anchor (`anchors.train`, `anchors.plane`): the runtime moves and scales them (core/map-rides). The volcano,
+ * the occluders (`anchors.occ-<n>`) and the crossing's barriers are drawn on their anchors by depth.
+ */
+export const MAP_RIDES = {
+  headings: 8,
+  engine: 'train-engine',
+  cars: ['train-car-1', 'train-car-2', 'train-car-3'],
+  plane: 'plane',
+  rocket: { idle: 'rocket/idle/00', puff: ['rocket/puff-1/00', 'rocket/puff-2/00', 'rocket/puff-3/00'] },
+  crossings: ['crossing-near', 'crossing-far'],
+  volcano: 'volcano',
+  /** Layout ids (map.layout.json). */
+  anchors: {
+    tunnelIn: 'rail-tunnel-in',
+    tunnelOut: 'rail-tunnel-out',
+    crossingFrom: 'rail-crossing-from',
+    crossingTo: 'rail-crossing-to',
+    signal: 'rail-signal',
+  },
+  gaTau: 'ga-tau',
+  railUp: 'rail-up',
+  /** The rail points a sprite in front hides from the camera (the train draws under every sprite there). */
+  railBack: 'rail-back',
+  planeLoopUp: 'plane-loop-up',
+  compass: 'compass',
+} as const;
+
+/** A heading frame of a ride sprite (`<sprite>/h<k>/00`). */
+export const headingFrameName = (sprite: string, k: number): string => `${sprite}/h${k}/00`;
+/** A frame of a still sprite in its one state (`<sprite>/<state>/00`). */
+export const stateFrameName = (sprite: string, state = 'idle'): string => `${sprite}/${state}/00`;
+
+/** Every map atlas frame of MAP_RIDES (validate:content requires them). */
+export const MAP_RIDE_FRAMES: readonly string[] = [
+  ...[MAP_RIDES.engine, ...MAP_RIDES.cars, MAP_RIDES.plane].flatMap((s) => Array.from({ length: MAP_RIDES.headings }, (_v, k) => headingFrameName(s, k))),
+  MAP_RIDES.rocket.idle,
+  ...MAP_RIDES.rocket.puff,
+  ...MAP_RIDES.crossings.flatMap((c) => [stateFrameName(c, 'up'), stateFrameName(c, 'down')]),
+  stateFrameName(MAP_RIDES.volcano),
+];
 
 /** Story 5.6: every map atlas frame of MAP_AMBIENT. */
 export const MAP_AMBIENT_FRAMES: readonly string[] = [

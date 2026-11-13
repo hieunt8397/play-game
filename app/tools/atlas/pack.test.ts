@@ -104,15 +104,15 @@ describe('multi-page atlases (Story 3.3)', () => {
       { name: `dino-puzzle-${i}.json`, buffer: page({ [`p${i}/idle/00`]: frame(i) }) },
     ]).flat();
 
-  it('only dino-puzzle (4), touch-talk (3, Story 4.6) and shadow-match (3, 2026-10-22) and pet-clinic (3, Story 8.1), ice-cream (3) and dress-up (2) (Story 8.2: the outfit overlays) and garden (3, 2026-10-30: the outfit overlays) and car-wash (4, 2026-10-30: six cars, each with 24 dirt overlays) and plane (3, 2026-11-11: six friends and houses, the wide ground strip and hills) and train (3, 2026-11-12: six friends standing and seated, the tunnel, the destinations, the wide ground strip) and rocket (4, 2026-11-12: fifteen part frames, the pad world, the big Earth, the Moon) may use several pages; every other screen stays at 1', () => {
-    expect(SCREEN_MAX_PAGES).toEqual({ 'dino-puzzle': 4, 'shadow-match': 3, 'touch-talk': 3, 'pet-clinic': 3, 'ice-cream': 3, 'dress-up': 2, garden: 3, 'car-wash': 4, plane: 3, train: 3, rocket: 4 });
+  it('only dino-puzzle (4), touch-talk (3, Story 4.6) and shadow-match (3, 2026-10-22) and pet-clinic (3, Story 8.1), ice-cream (3) and dress-up (2) (Story 8.2: the outfit overlays) and garden (3, 2026-10-30: the outfit overlays) and car-wash (4, 2026-10-30: six cars, each with 24 dirt overlays) and plane (3, 2026-11-11: six friends and houses, the wide ground strip and hills) and train (3, 2026-11-12: six friends standing and seated, the tunnel, the destinations, the wide ground strip) and rocket (4, 2026-11-12: fifteen part frames, the pad world, the big Earth, the Moon) and the map (3, 2026-11-13: the rides in 8 headings) may use several pages; every other screen stays at 1', () => {
+    expect(SCREEN_MAX_PAGES).toEqual({ map: 3, 'dino-puzzle': 4, 'shadow-match': 3, 'touch-talk': 3, 'pet-clinic': 3, 'ice-cream': 3, 'dress-up': 2, garden: 3, 'car-wash': 4, plane: 3, train: 3, rocket: 4 });
     expect(maxPages('ice-cream')).toBe(3);
     expect(maxPages('dress-up')).toBe(2);
     expect(maxPages('shadow-match')).toBe(3);
     expect(maxPages('touch-talk')).toBe(3);
     expect(maxPages('pet-clinic')).toBe(3);
     expect(maxPages('dino-puzzle')).toBe(4);
-    expect(maxPages('map')).toBe(1);
+    expect(maxPages('map')).toBe(3);
     expect(maxPages('pizza')).toBe(1);
   });
 

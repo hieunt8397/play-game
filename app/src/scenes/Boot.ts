@@ -113,6 +113,7 @@ export class Boot extends Scene {
     for (const item of list) {
       if (item.kind === "audio") this.load.audio(item.key, item.url);
       else if (item.kind === "atlas") this.load.atlas(item.key, item.png, item.json);
+      else if (item.kind === "multiatlas") this.load.multiatlas(item.key, item.json, item.path);
       else this.load.image(item.key, item.path);
     }
     this.load.start();
