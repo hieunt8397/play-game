@@ -16,7 +16,7 @@
 #     must equal params.train.fronts (content/games/train.ts FRONT_SPRITES), else the build fails naming it. The volcano,
 #     the `occ-<n>` scenery and the crossing's barriers (states up, down) are always sprites. Every other station
 #     sprite, the parked plane (its parked heading), the rocket (idle) and the fountain are baked into the plate;
-#   - keeps the map train's 8-heading frames (`train-engine`, `train-car-<n>`, h0…h7, at `anchor.train`): the game draws
+#   - keeps the map train's 16-heading frames (`train-engine`, `train-car-<n>`, h0…h15, at `anchor.train`): the game draws
 #     the same sprites as the map, so the zoom handoff matches; the whale (idle, spout: `anchor.whale`, `hit.whale`);
 #     the kart, moved onto the road beside the level crossing (`anchor.kart`; the trip's kart surprise);
 #   - adds, per friend station (params.train.stations: ice-cream "Ga Xe kem", dino-puzzle "Ga Khủng long",
@@ -248,7 +248,7 @@ def parked_plane_state():
     """The plane's parked heading: its loop's first direction (world), as the map runtime picks it."""
     pts = curve_points('path.plane-loop')
     d = pts[1] - pts[0]
-    k = round(math.degrees(math.atan2(d.y, d.x)) / 45.0) % mr.HEADINGS
+    k = round(math.degrees(math.atan2(d.y, d.x)) / mr.HEADING_STEP) % mr.HEADINGS
     return f'h{k}'
 
 

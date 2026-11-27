@@ -133,3 +133,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-choi-tren-dien-thoai.md`
   summary: No automated browser layout check that #game-container's rendered rect matches playBox(readView()) at phone, squarish and iPad sizes.
   evidence: npm run check has no browser harness; the CSS box formula (stage.css) is only verified by manual headless-Chrome runs, so a CSS/token edit could desync rendering and input silently.
+- source_spec: `_bmad-output/implementation-artifacts/spec-sua-tau-va-ten-lua-tren-dao.md`
+  summary: Train game tests do not assert per-piece rail rotation, the rotated seat offset, or that a car tap's tilt reaches the right car.
+  evidence: Train.test.ts stubs Phaser with a chainable Proxy that records no setRotation/setPosition calls; only audio is asserted.
+- source_spec: `_bmad-output/implementation-artifacts/spec-sua-tau-va-ten-lua-tren-dao.md`
+  summary: map-rides-view has no test harness (per-piece heading memory, parkAll reset, parked plane rotation untested).
+  evidence: no *.test.ts imports createMapRides; only the pure headingPose/smoothDirAt are covered in map-rides.test.ts.

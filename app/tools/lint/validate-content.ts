@@ -112,7 +112,7 @@ export const LAYOUT_DIR = join(APP_DIR, 'src', 'content', 'generated');
 export const REQUIRED_FRAMES: Readonly<Record<string, readonly string[]>> = {
   // Decoration frames are checked by validateDecorations (layoutProblems), naming the decoration id.
   // Story 5.2: the guide Shiba's idle and wave frames (MAP_GUIDE); Story 5.6: the whale, fountain, cloud and wave (MAP_AMBIENT).
-  // 2026-11-13: the rides (the train's and the plane's 8 headings, the rocket, the crossing's barriers, the volcano).
+  // 2026-11-13: the rides (the train's and the plane's MAP_RIDES.headings frames, the rocket, the crossing's barriers, the volcano).
   map: [...STATIONS.map((s) => stationFrame(s.id)), KART_FRAME, MAP_GUIDE.idle, ...MAP_GUIDE.wave, ...MAP_AMBIENT_FRAMES, ...MAP_RIDE_FRAMES],
   'ice-cream': iceCreamScreen.frames,
   pizza: pizzaScreen.frames,

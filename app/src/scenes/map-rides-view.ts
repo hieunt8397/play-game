@@ -21,6 +21,7 @@ import type { TapRouter } from '../core/input/tap-router';
 import {
   createLoop,
   headingFrame,
+  headingPose,
   MapPlane,
   MapTrain,
   markedAt,
@@ -29,6 +30,8 @@ import {
   trainConfig,
   rocketPuffFrame,
   scaleAt,
+  smoothDirAt,
+  TANGENT_HALF,
   type Loop,
   type TrainEvent,
 } from '../core/map-rides';
@@ -52,6 +55,8 @@ export interface RidesContext {
 interface Piece {
   readonly sprite: string;
   readonly image: GameObjects.Image;
+  /** The heading frame shown last (headingPose's hysteresis); undefined after a park. */
+  heading: number | undefined;
 }
 
 interface Box {
@@ -178,7 +183,7 @@ export function createMapRides(scene: Scene, opts: MapRidesOptions): MapRidesVie
     if (!hasFrame(frame)) continue;
     const img = scene.add.image(trainAt.x, trainAt.y, atlasKey, frame).setOrigin(trainAt.x / W, trainAt.y / H).setScale(1 / rs);
     images.push(img);
-    pieces.push({ sprite, image: img });
+    pieces.push({ sprite, image: img, heading: undefined });
   }
   const trainBoxes: Box[] = [];
   const trainHistory: { t: number; boxes: Box[] }[] = [];
@@ -198,9 +203,13 @@ export function createMapRides(scene: Scene, opts: MapRidesOptions): MapRidesVie
       if (!view) return;
       const p = loop.pointAt(piece.s);
       const k = railScale(piece.s);
-      const h = headingFrame(loop.dirAt(piece.s), compass);
+      // 2026-11-27 (spec-sua-tau-va-ten-lua-tren-dao): the frame from the rail's smoothed tangent (with hysteresis),
+      // turned by the residual so the piece lines up with the rail.
+      const pose = headingPose(smoothDirAt(loop, piece.s, TANGENT_HALF * k), compass, view.heading);
+      view.heading = pose.frame;
       view.image
-        .setFrame(headingFrameName(view.sprite, h))
+        .setFrame(headingFrameName(view.sprite, pose.frame))
+        .setRotation(pose.rotation)
         .setOrigin(trainAt.x / W, trainAt.y / H)
         .setPosition(p.x, p.y)
         .setScale((k * bump) / rs)
@@ -220,6 +229,8 @@ export function createMapRides(scene: Scene, opts: MapRidesOptions): MapRidesVie
     ? new MapPlane(planeLoop, planeConfig(planeLoop, Tokens.Timing.mapPlaneFlightMs, Tokens.Timing.mapPlaneEaseMs, Tokens.Timing.mapPlaneGapMs))
     : undefined;
   const parkedHeading = planeLoop ? headingFrame(planeLoop.dirAt(0), compass) : 0;
+  // parked, it already lines up as its first flying frame will (no snap at take-off or landing)
+  const parkedRotation = planeLoop ? headingPose(smoothDirAt(planeLoop, 0, TANGENT_HALF), compass, parkedHeading).rotation : 0;
   const planeImage =
     planeAt && hasFrame(headingFrameName(MAP_RIDES.plane, parkedHeading))
       ? scene.add
@@ -230,6 +241,7 @@ export function createMapRides(scene: Scene, opts: MapRidesOptions): MapRidesVie
       : undefined;
   if (planeImage) images.push(planeImage);
   let planeBox: Box | undefined;
+  let planeHeading: number | undefined;
   const planeHistory: { t: number; box: Box }[] = [];
   const drawPlane = (): void => {
     if (!plane || !planeLoop || !planeImage || !planeAt || !planePath || !planeUp) return;
@@ -239,16 +251,21 @@ export function createMapRides(scene: Scene, opts: MapRidesOptions): MapRidesVie
         .setFrame(headingFrameName(MAP_RIDES.plane, parkedHeading))
         .setOrigin(planeAt.x / W, planeAt.y / H)
         .setPosition(planeAt.x, planeAt.y)
+        .setRotation(parkedRotation)
         .setScale(bump / rs)
         .setDepth(planeAt.y);
       planeBox = undefined;
+      planeHeading = undefined;
       return;
     }
     const s = plane.position;
     const p = planeLoop.pointAt(s);
     const k = scaleAt(planeLoop, planeUp, planePath, s, planeLiftRef);
+    const pose = headingPose(smoothDirAt(planeLoop, s, TANGENT_HALF * k), compass, planeHeading);
+    planeHeading = pose.frame;
     planeImage
-      .setFrame(headingFrameName(MAP_RIDES.plane, headingFrame(planeLoop.dirAt(s), compass)))
+      .setFrame(headingFrameName(MAP_RIDES.plane, pose.frame))
+      .setRotation(pose.rotation)
       .setOrigin(planeAt.x / W, planeAt.y / H)
       .setPosition(p.x, p.y)
       .setScale((k * bump) / rs)
@@ -352,6 +369,7 @@ export function createMapRides(scene: Scene, opts: MapRidesOptions): MapRidesVie
     },
     parkAll() {
       focusStation = false;
+      for (const piece of pieces) piece.heading = undefined;
       handleTrain(train.parkAtStation());
       drawTrain();
       plane?.park();

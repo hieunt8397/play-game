@@ -13,7 +13,7 @@
 // passes (its name: `vo.shell.station-name.<id>`, nothing else), the whale (it spouts).
 // Art (tools/render/blender/build_train.py, from the built map; the same camera at 2× the map's resolution, so the
 // layout's design coordinates are the map's): a plate in TILES, and frames `<sprite>/<state>/<nn>`:
-//   - `train-engine/h<k>/00`, `train-car-<n>/h<k>/00` (the map's 8 heading frames, rendered at `anchor.train`);
+//   - `train-engine/h<k>/00`, `train-car-<n>/h<k>/00` (the map's 16 heading frames, MAP_RIDES.headings, rendered at `anchor.train`);
 //   - the FRONT_SPRITES (`<id>/idle/00` at `anchor.<id>`): drawn over the train by depth (core/map-rides' rail-back);
 //     the crossing's barriers `crossing-near|far/up|down/00`;
 //   - `friend-<f>/<idle|wave|happy>/00` (at `anchor.friend`), `seat-<f>/idle/00` (at `anchor.seat`), `whale/idle/00`,

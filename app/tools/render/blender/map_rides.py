@@ -13,10 +13,10 @@
 # - Ga tàu: a wooden platform on the inland side of the track, a little roof and a round sign (plate); `hit.ga-tau`;
 #   `anchor.train` (the engine's stop) and `anchor.train-car-<n>` (where the cars stand behind it);
 # - the train: the train game's engine and three cars (appended from art/train.blend) at MAP_TRAIN_SCALE, each in
-#   8 headings (`sprite.train-engine`, `sprite.train-car-<n>`, states h0…h7: world east, then counter-clockwise in
-#   45° steps), all rendered standing at `anchor.train` (the runtime moves and scales them);
-# - the airstrip (plate) on the bottom-right beach and the plane (appended from art/plane.blend) in 8 headings
-#   (`sprite.plane`, states h0…h7) rendered parked at `anchor.plane`; `hit.plane`; its flight `path.plane-loop` (closed:
+#   16 headings (`sprite.train-engine`, `sprite.train-car-<n>`, states h0…h15: world east, then counter-clockwise in
+#   22.5° steps), all rendered standing at `anchor.train` (the runtime moves and scales them);
+# - the airstrip (plate) on the bottom-right beach and the plane (appended from art/plane.blend) in 16 headings
+#   (`sprite.plane`, states h0…h15) rendered parked at `anchor.plane`; `hit.plane`; its flight `path.plane-loop` (closed:
 #   the take-off roll, a loop over the island, the landing roll back to its spot);
 # - the launch pad and the rocket (appended from art/rocket.blend: the yard corner's colours) on the bottom-left beach:
 #   `sprite.rocket` (states idle, puff-1…3: a soft steam cloud at its foot), `anchor.rocket`, `hit.rocket`;
@@ -43,7 +43,8 @@ ART = os.path.join(PROJECT, 'art')
 
 RAIL_OBJECT = 'RailPath'
 RAIL_LAYOUT_STEP = 0.25  # path.rail is resampled every this many metres
-HEADINGS = 8
+HEADINGS = 16  # 2026-11-27 (spec-sua-tau-va-ten-lua-tren-dao): 22.5° steps; the runtime turns the residual
+HEADING_STEP = 360.0 / HEADINGS
 
 MAP_TRAIN_SCALE = 0.6
 GAUGE = 0.36 * MAP_TRAIN_SCALE  # each rail this far from the middle (the train game's gauge, scaled)
@@ -660,7 +661,7 @@ def heading_states(sprite_parent, sprite_name):
 
 
 def build_train(rail, station_s, sprite_parent, layout):
-    """The engine and three cars in 8 headings, all at the engine's stop; the cars' places behind it as anchors."""
+    """The engine and three cars in HEADINGS headings, all at the engine's stop; the cars' places behind it as anchors."""
     at = rail.point3(station_s)
     pieces = [('train-engine', 'sprite.engine', ENGINE_ROOT)] + [
         (f'train-car-{n + 1}', f'sprite.{r[:-5]}', r) for n, r in enumerate(CAR_ROOTS)]
@@ -675,7 +676,7 @@ def build_train(rail, station_s, sprite_parent, layout):
                         for o in list(c.all_objects):
                             bpy.data.objects.remove(o, do_unlink=True)
             roots = adopt(colls, child)
-            root = placed_root(f'{sprite_name}-h{k}-root', child, at, 45.0 * k, MAP_TRAIN_SCALE)
+            root = placed_root(f'{sprite_name}-h{k}-root', child, at, HEADING_STEP * k, MAP_TRAIN_SCALE)
             reroot(roots, root_name, root)
     # where the cars stand behind the engine at the station (arc gaps)
     s = station_s
@@ -684,7 +685,7 @@ def build_train(rail, station_s, sprite_parent, layout):
         s -= (half_prev + PIECE_GAP + CAR_LEN / 2) * MAP_TRAIN_SCALE
         add_empty(f'anchor.train-car-{n + 1}', rail.point3(s), layout)
         half_prev = CAR_LEN / 2
-    log('train: engine and 3 cars × 8 headings')
+    log(f'train: engine and 3 cars × {HEADINGS} headings')
 
 
 # --- the plane --------------------------------------------------------------------------------------------------------
@@ -758,14 +759,14 @@ def build_airstrip(rail, centre, mats, plate, sprite_parent, layout, ground_z):
           (q.x, q.y, ground_z + 0.85), (0.0, 90.0, yaw + 40.0), seg=20)
     park = mid - t * (AIRSTRIP[0] * 0.18)
     add_empty('anchor.plane', (park.x, park.y, ground_z), layout)
-    # the plane in 8 headings, parked
+    # the plane in HEADINGS headings, parked
     _g, children = heading_states(sprite_parent, 'plane')
     hull_pts = None
     for k, child in enumerate(children):
         roots = adopt(append_collections('plane.blend', ['sprite.plane']), child)
-        root = placed_root(f'plane-h{k}-root', child, (park.x, park.y, ground_z), 45.0 * k, PLANE_SCALE)
+        root = placed_root(f'plane-h{k}-root', child, (park.x, park.y, ground_z), HEADING_STEP * k, PLANE_SCALE)
         reroot(roots, PLANE_ROOT, root, (0.0, 0.0, PLANE_LIFT))
-        if k == round(((yaw % 360.0) / 45.0)) % HEADINGS:
+        if k == round((yaw % 360.0) / HEADING_STEP) % HEADINGS:
             bpy.context.view_layer.update()
             hull_pts = eval_world_verts(list(child.all_objects), bpy.context.evaluated_depsgraph_get())
     hull_object('hit.plane', hull_pts, layout)
@@ -801,6 +802,27 @@ def drop_rocket_extras(roots):
         if o is not None:
             bpy.data.objects.remove(o, do_unlink=True)
     return [bpy.data.objects[n] for n in names if n not in gone and n in bpy.data.objects]
+
+
+def copy_state(objs, coll, suffix):
+    """Links into `coll` a copy of each of `objs` (sharing its data), parent links remapped onto the copies; each copy
+    keeps its source's local matrices, so the whole copy stands exactly where the source does."""
+    copies = {}
+    for o in objs:
+        c = o.copy()
+        c.name = o.name.split('.')[0] + suffix
+        coll.objects.link(c)
+        copies[o.name] = c
+    for o in objs:
+        c = copies[o.name]
+        if o.parent is not None and o.parent.name in copies:
+            c.parent = copies[o.parent.name]
+            c.matrix_parent_inverse = o.matrix_parent_inverse.copy()
+            c.matrix_basis = o.matrix_basis.copy()
+        else:
+            c.parent = None
+            c.matrix_world = o.matrix_world.copy()
+    return copies
 
 
 def build_rocket(rail, centre, mats, sprite_parent, layout, ground_z, colours):
@@ -843,12 +865,15 @@ def build_rocket(rail, centre, mats, sprite_parent, layout, ground_z, colours):
     hull_object('hit.rocket', pts, layout)
     add_empty('anchor.rocket', (spot.x, spot.y, ground_z), layout)
     steam = mat(colours['puff'], 0.8)
+    idle_objs = list(idle.all_objects)
     for n, puffs in enumerate(PUFFS, 1):
         child = bpy.data.collections.new(f'state.rocket-puff-{n}')
         child['bhc_state'] = f'puff-{n}'
         group.children.link(child)
-        # the rocket again (each state renders alone), plus its puffs
-        seat(drop_rocket_extras(adopt(append_collections('rocket.blend', ROCKET_PARTS), child)), f'rocket-root-{n}', child)
+        # the rocket again (each state renders alone), plus its puffs. 2026-11-27 (spec-sua-tau-va-ten-lua-tren-dao):
+        # an exact copy of the idle state (objects sharing its mesh data, the same parents and matrices), so the rocket
+        # and its shrunk pad stand pixel-identical in every frame; re-appending and re-seating moved them.
+        copy_state(idle_objs, child, f'-puff-{n}')
         for j, (x, y, r) in enumerate(puffs):
             blob(f'rocket-puff-{n}-{j}', steam, child, None, (spot.x + x * pad_r, spot.y + y * pad_r, ground_z + r * pad_r * 0.8),
                  (r * pad_r, r * pad_r, r * pad_r * 0.8), seg=(24, 12))

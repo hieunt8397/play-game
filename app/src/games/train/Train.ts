@@ -64,7 +64,8 @@ import { audio } from '../../core/audio-director';
 import { bus } from '../../core/bus';
 import { pointInPolygon } from '../../core/input/polygon';
 import { createTapRouter } from '../../core/input/tap-router';
-import { headingFrame, markedAt, MIN_LOOP_POINTS } from '../../core/map-rides';
+import { headingPose, markedAt, MIN_LOOP_POINTS, smoothDirAt, TANGENT_HALF } from '../../core/map-rides';
+import { DEG_TO_RAD } from '../../core/motion';
 import type { ReactionSet } from '../../core/reactions';
 import { prefersReducedMotion } from '../../core/reduced-motion';
 import { setTrainView, takeTrainStart } from '../../core/ride-handoff';
@@ -129,6 +130,12 @@ export class Train extends MiniGameBase<'train'> {
   private seatOffset: Point = { x: 0, y: 0 };
   private friendRefK = 1;
   private pieces: (GameObjects.Image | undefined)[] = [];
+  /** Per piece: the heading frame shown last (headingPose's hysteresis). */
+  private headings: (number | undefined)[] = [];
+  /** Per piece: a tap's wobble (degrees) on top of its rail rotation (sync sets the rotation every frame). */
+  private tilts: { deg: number }[] = [];
+  /** Per piece: the rotation sync drew it at last (radians; the seat offset turns with it). */
+  private rotations: number[] = [];
   private seats: (GameObjects.Image | undefined)[] = [];
   private waiting = new Map<StationId, GameObjects.Image>();
   private barrierImgs: { id: string; img: GameObjects.Image | undefined }[] = [];
@@ -167,6 +174,9 @@ export class Train extends MiniGameBase<'train'> {
     this.reduced = prefersReducedMotion(window);
     this.layout = LAYOUTS.train;
     this.pieces = [];
+    this.headings = [];
+    this.tilts = [];
+    this.rotations = [];
     this.seats = [];
     this.waiting = new Map();
     this.barrierImgs = [];
@@ -530,10 +540,18 @@ export class Train extends MiniGameBase<'train'> {
       const hidden = c.hidden(piece);
       const bob = moving && !this.reduced ? (Math.floor(this.bobClock / T.trainWheelFrameMs + n * MOTION.carLag) % 2) * MOTION.bobPx : 0;
       const depth = this.behind(piece.s) ? Tokens.ui.mapTrainBackDepth : p.y;
+      // 2026-11-27 (spec-sua-tau-va-ten-lua-tren-dao): the frame from the rail's smoothed tangent (with hysteresis),
+      // turned by the residual (plus a tap's wobble) so the piece lines up with the rail; its seated friend turns with it.
+      const pose = headingPose(smoothDirAt(loop, piece.s, TANGENT_HALF * piece.k), this.compass, this.headings[n]);
+      this.headings[n] = pose.frame;
+      const frame = pieceFrame(n, pose.frame);
+      const rotation = pose.rotation + (this.tilts[n]?.deg ?? 0) * DEG_TO_RAD;
+      this.rotations[n] = rotation;
+      const off = this.seatAt(n);
       if (img) {
-        const frame = pieceFrame(n, headingFrame(loop.dirAt(piece.s), this.compass));
         if (img.frame.name !== frame && this.hasFrame(frame)) img.setFrame(frame, false, false).setOrigin(this.trainAt.x / d.width, this.trainAt.y / d.height);
         img
+          .setRotation(rotation)
           .setPosition(p.x, p.y - bob * piece.k)
           .setScale((piece.k * this.pulseOf(n)) / rs)
           .setDepth(depth)
@@ -544,7 +562,8 @@ export class Train extends MiniGameBase<'train'> {
       const seat = n > 0 ? this.seats[n - 1] : undefined;
       if (seat && n - 1 < this.seatShown) {
         seat
-          .setPosition(p.x + this.seatOffset.x * piece.k, p.y + this.seatOffset.y * piece.k - bob * piece.k)
+          .setPosition(p.x + off.x * piece.k, p.y + off.y * piece.k - bob * piece.k)
+          .setRotation(rotation)
           .setScale((piece.k * this.pulseOf(n)) / rs)
           .setDepth(depth + MOTION.seatOver)
           .setVisible(!hidden);
@@ -613,7 +632,8 @@ export class Train extends MiniGameBase<'train'> {
       return;
     }
     const g = loop.pointAt(piece.s);
-    const seat = { x: g.x + this.seatOffset.x * piece.k, y: g.y + this.seatOffset.y * piece.k };
+    const off = this.seatAt(car + 1);
+    const seat = { x: g.x + off.x * piece.k, y: g.y + off.y * piece.k };
     from.setVisible(false);
     const ref = this.anchor(ANCHORS.friend) ?? this.trainAt;
     const hopper = this.pivoted(friendFrame(f), ref, { x: from.x, y: from.y }, from.scaleX * this.layout.renderScale)?.setDepth(MOTION.depthParticle);
@@ -653,7 +673,8 @@ export class Train extends MiniGameBase<'train'> {
         this.seats[i]?.setVisible(false);
         this.seatShown = Math.min(this.seatShown, i);
         const g = loop.pointAt(piece.s);
-        const from = { x: g.x + this.seatOffset.x * piece.k, y: g.y + this.seatOffset.y * piece.k };
+        const off = this.seatAt(i + 1);
+        const from = { x: g.x + off.x * piece.k, y: g.y + off.y * piece.k };
         const k = this.friendScale(spot);
         const img = this.pivoted(friendFrame(f, 'happy'), ref, from, k * MOTION.hopScale)?.setDepth(MOTION.depthParticle);
         if (!img) return;
@@ -726,16 +747,22 @@ export class Train extends MiniGameBase<'train'> {
     if (pop) this.tweens.add({ targets: pop, alpha: 0, scale: MOTION.popEnd / this.layout.renderScale, duration: Tokens.Timing.trainBumpMs, ease: EASE_OUT, onComplete: () => pop.destroy() });
   }
 
+  /** The seat's offset from piece `n`'s rail point (unscaled), turned by the rotation the piece was last drawn at. */
+  private seatAt(n: number): Point {
+    const rotation = this.rotations[n] ?? 0;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    return { x: this.seatOffset.x * cos - this.seatOffset.y * sin, y: this.seatOffset.x * sin + this.seatOffset.y * cos };
+  }
+
   /** A tapped car wobbles twice. */
   private wobble(n: number): void {
-    const img = this.pieces[n + 1];
-    if (!img) return;
-    this.tweens.killTweensOf(img);
-    img.setAngle(0);
-    // The friend sitting in it wobbles with it.
-    const seat = this.seats[n];
-    const targets = seat && n < this.seatShown ? [img, seat] : [img];
-    this.tweens.add({ targets, angle: this.amp(MOTION.wobbleDeg), duration: Tokens.Timing.trainWobbleMs / MOTION.wobbleSwings, ease: SINE, yoyo: true, repeat: 1, onComplete: () => targets.forEach((t) => t.setAngle(0)) });
+    if (!this.pieces[n + 1]) return;
+    // sync turns the car (and the friend sitting in it) by its tilt on top of the rail's rotation
+    const tilt = (this.tilts[n + 1] ??= { deg: 0 });
+    this.tweens.killTweensOf(tilt);
+    tilt.deg = 0;
+    this.tweens.add({ targets: tilt, deg: this.amp(MOTION.wobbleDeg), duration: Tokens.Timing.trainWobbleMs / MOTION.wobbleSwings, ease: SINE, yoyo: true, repeat: 1, onComplete: () => (tilt.deg = 0) });
   }
 
   private setBarriers(down: boolean): void {

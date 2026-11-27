@@ -6,7 +6,7 @@
 // an `-up` twin (the same world points lifted 1 m), whose screen distance to the base point is the local scale: a
 // sprite rendered at the ride's anchor is drawn at `scaleAt(s)` (the perspective makes far things smaller). `compass`
 // (`path.compass`: a world origin, +1 m east, +1 m north on the ground) maps a screen direction back to a world heading,
-// which picks one of the 8 rendered heading frames (sprites are never rotated).
+// which picks one of the 16 rendered heading frames; the sprite is turned on screen by the small residual angle (headingPose).
 //
 // The train (MapTrain): its engine runs on the loop's arc length `s` (counter-clockwise seen from above, as the rail
 // was laid); the cars trail it at fixed arc gaps. Speed eases between 0 and cruise with a constant acceleration.
@@ -161,32 +161,94 @@ export function markedAt(loop: Loop, points: readonly Point[], marked: readonly 
 
 // --- headings -----------------------------------------------------------------------------------------------------
 
-/** The 8 heading frames: 0 = world east (+x), counter-clockwise seen from above in 45° steps (1 = north-east …). */
-export const HEADINGS = 8;
+/**
+ * The heading frames: 0 = world east (+x), counter-clockwise seen from above in 360° / HEADINGS steps (2026-11-27,
+ * spec-sua-tau-va-ten-lua-tren-dao: 16 headings, 22.5° steps; equal to MAP_RIDES.headings, kept so by a test).
+ */
+export const HEADINGS = 16;
+/** One heading step (radians, world). */
+const HEADING_STEP = (2 * Math.PI) / HEADINGS;
+/**
+ * A shown frame is kept while the world heading stays within half a step plus this much of it (radians), so a tangent
+ * wobbling near a frame boundary does not flicker between two frames.
+ */
+export const HEADING_HYSTERESIS = HEADING_STEP * 0.1;
+
+/** The angle `a` wrapped onto (−π, π]. */
+function wrapAngle(a: number): number {
+  const r = (a + Math.PI) % (2 * Math.PI);
+  return (r <= 0 ? r + 2 * Math.PI : r) - Math.PI;
+}
+
+/** The screen images of the world axes (1 m east, 1 m north) from `compass`; the default: east = +x, north = −y. */
+function axes(compass: readonly Point[]): { ex: number; ey: number; nx: number; ny: number } {
+  const [o, e, nn] = compass;
+  if (o && e && nn) return { ex: e.x - o.x, ey: e.y - o.y, nx: nn.x - o.x, ny: nn.y - o.y };
+  return { ex: 1, ey: 0, nx: 0, ny: -1 };
+}
+
+export interface HeadingPose {
+  /** The heading frame (0 … HEADINGS − 1). */
+  readonly frame: number;
+  /** The screen rotation (radians, clockwise on screen as Phaser's) that lines the frame up with `d`. */
+  readonly rotation: number;
+}
 
 /**
- * The heading frame of a screen direction `d`, given `compass` = [origin, origin + 1 m east, origin + 1 m north]
- * on screen: `d` is written in the screen images of the world axes (a 2 × 2 inverse), then rounded to 45°.
+ * The heading frame and residual screen rotation of a screen direction `d`, given `compass` = [origin, origin + 1 m
+ * east, origin + 1 m north] on screen: `d` is written in the screen images of the world axes (a 2 × 2 inverse) and
+ * rounded to the nearest heading, except that `prev` (the frame shown last) is kept while `d`'s world heading is within
+ * half a step + HEADING_HYSTERESIS of it. The rotation is `d`'s screen angle minus the frame's heading's screen angle,
+ * clamped (in screen angles) between the screen images of the world headings frame ± (half a step + the hysteresis). A zero `d` or a degenerate compass: frame 0 (or `prev`), no rotation.
  */
-export function headingFrame(d: Point, compass: readonly Point[]): number {
-  const [o, e, nn] = compass;
-  let ex = 1;
-  let ey = 0;
-  let nx = 0;
-  let ny = -1;
-  if (o && e && nn) {
-    ex = e.x - o.x;
-    ey = e.y - o.y;
-    nx = nn.x - o.x;
-    ny = nn.y - o.y;
-  }
+export function headingPose(d: Point, compass: readonly Point[], prev?: number): HeadingPose {
+  const { ex, ey, nx, ny } = axes(compass);
   const det = ex * ny - ey * nx;
-  if (det === 0) return 0;
+  if (det === 0 || (d.x === 0 && d.y === 0) || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return { frame: det === 0 ? 0 : (prev ?? 0), rotation: 0 };
   // d = a·E + b·N  →  (a, b) world east / north components
   const a = (d.x * ny - d.y * nx) / det;
   const b = (ex * d.y - ey * d.x) / det;
-  const k = Math.round(Math.atan2(b, a) / (Math.PI / 4));
-  return ((k % HEADINGS) + HEADINGS) % HEADINGS;
+  const world = Math.atan2(b, a);
+  const limit = HEADING_STEP / 2 + HEADING_HYSTERESIS;
+  let frame: number;
+  if (prev !== undefined && Number.isInteger(prev) && prev >= 0 && prev < HEADINGS && Math.abs(wrapAngle(world - prev * HEADING_STEP)) <= limit) frame = prev;
+  else {
+    const k = Math.round(world / HEADING_STEP);
+    frame = ((k % HEADINGS) + HEADINGS) % HEADINGS;
+  }
+  // the screen angle of a world heading
+  const screenAngle = (h: number): number => Math.atan2(Math.cos(h) * ey + Math.sin(h) * ny, Math.cos(h) * ex + Math.sin(h) * nx);
+  const h = frame * HEADING_STEP;
+  const base = screenAngle(h);
+  const r = wrapAngle(Math.atan2(d.y, d.x) - base);
+  // the clamp is the world limit seen on screen (the perspective squashes some headings, stretches others)
+  const lo = wrapAngle(screenAngle(h - limit) - base);
+  const hi = wrapAngle(screenAngle(h + limit) - base);
+  return { frame, rotation: Math.max(Math.min(lo, hi), Math.min(Math.max(lo, hi), r)) };
+}
+
+/** The heading frame of a screen direction `d` (headingPose's frame, no history). */
+export function headingFrame(d: Point, compass: readonly Point[]): number {
+  return headingPose(d, compass).frame;
+}
+
+/**
+ * The half chord (design px at the ride's reference scale; the runtime scales it by the local perspective) a ride's
+ * piece lines up with: about a piece's wheelbase, so it sits along the rail under it.
+ */
+export const TANGENT_HALF = 20;
+
+/**
+ * The loop's screen direction of travel at `s`, smoothed: the chord from `s − half` to `s + half` (unit), so a sprite
+ * lines up with the rail under it rather than with one ~8 px segment of the polyline. A zero chord (or `half` ≤ 0):
+ * the segment's own direction.
+ */
+export function smoothDirAt(loop: Loop, s: number, half: number): Point {
+  if (!(half > 0) || loop.length <= 0) return loop.dirAt(s);
+  const a = loop.pointAt(s - half);
+  const b = loop.pointAt(s + half);
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  return len > 1e-9 ? { x: (b.x - a.x) / len, y: (b.y - a.y) / len } : loop.dirAt(s);
 }
 
 // --- the train ----------------------------------------------------------------------------------------------------

@@ -183,12 +183,13 @@ export const MAP_AMBIENT = {
 
 /**
  * 2026-11-13 (spec-dao-moi-xe-ra-dao): the rides and the railway on the map (tools/render/blender/map_rides.py). The
- * train's engine and cars and the plane are rendered in 8 headings (h0 = world east, counter-clockwise in 45° steps)
+ * train's engine and cars and the plane are rendered in 16 headings (h0 = world east, counter-clockwise in 22.5° steps;
+ * 2026-11-27 spec-sua-tau-va-ten-lua-tren-dao: 8 before; the runtime turns each by the residual to its rail tangent)
  * at their anchor (`anchors.train`, `anchors.plane`): the runtime moves and scales them (core/map-rides). The volcano,
  * the occluders (`anchors.occ-<n>`) and the crossing's barriers are drawn on their anchors by depth.
  */
 export const MAP_RIDES = {
-  headings: 8,
+  headings: 16,
   engine: 'train-engine',
   cars: ['train-car-1', 'train-car-2', 'train-car-3'],
   plane: 'plane',
