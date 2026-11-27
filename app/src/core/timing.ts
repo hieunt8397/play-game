@@ -487,14 +487,11 @@ export const Timing = {
   planeTapMs: 600,
   /** Phi công nhí: one controller tick covers at most this long (a stalled frame never skips a step's end). */
   planeMaxTickMs: 250,
-  /** Tàu hỏa chở bạn (2026-11-12): the departure (the train toots and speeds up to cruise; longer than 1.5 s: a tap skips it). */
-  trainDepartMs: 1800,
-  /** Tàu hỏa (spec): a departure or arrival longer than this can be skipped with a tap. */
-  trainSkipOverMs: 1500,
-  /** Tàu hỏa: each leg cruises at least this long (the tunnel leg until the tunnel has passed the whole train). */
-  trainRideMs: 3500,
-  /** Tàu hỏa: the next platform or the destination scrolls in and the train eases to a stop within this long. */
-  trainArriveMaxMs: 3500,
+  /**
+   * Tàu hỏa chở bạn (2026-11-12; on the island since 2026-11-13): the train speeds up from a stop to cruise (and brakes
+   * from cruise to a stop) over this long: ≤ 1.5 s, so a departure or an arrival never needs a skip.
+   */
+  trainDepartMs: 1400,
   /** Tàu hỏa: a friend hops into its car (≤ 1.5 s; taps on it ignored); the train waits this long after, then pulls away. */
   trainBoardMs: 1200,
   trainBoardPauseMs: 900,
@@ -502,19 +499,27 @@ export const Timing = {
   trainDropMs: 1000,
   trainDropStaggerMs: 450,
   trainWaveMs: 1500,
-  /** Tàu hỏa: the hot-air balloon or the rainbow shows this long. */
+  /** Tàu hỏa: the sailing boat or the hot-air balloon drifts by this long; it shows this long after a departure. */
   trainSkyMs: 3500,
-  /** Tàu hỏa: the engine's toot (a puff from the chimney) and a car's colour can be asked again after this long. */
+  trainSkyDelayMs: 1500,
+  /** Tàu hỏa: the engine's toot (a puff from the chimney), a car's colour and a place's name can be asked again after this long. */
   trainTootGapMs: 700,
   trainCarGapMs: 900,
-  /** Tàu hỏa: the running engine swaps its two wheel frames this often (under 3 Hz). */
+  trainPlaceGapMs: 1200,
+  /** Tàu hỏa: the whale can be asked to spout again after this long. */
+  trainWhaleGapMs: 700,
+  /** Tàu hỏa: a tap still hits a moving train piece where it was this long ago (the finger lags the eye). */
+  trainTapLagMs: 300,
+  /** Tàu hỏa: the running train bobs one step this often (under 3 Hz). */
   trainWheelFrameMs: 220,
-  /** Tàu hỏa: a puff from the chimney rises and fades; a tapped car wobbles; the cow's hop and the bird's loop. */
+  /** Tàu hỏa: a puff from the chimney rises and fades; a tapped car wobbles; the kart's driver's bounce. */
   trainPuffMs: 900,
   trainWobbleMs: 500,
   trainBumpMs: 500,
-  /** Tàu hỏa: a flying bird flaps (swaps its two frames) this often (under 3 Hz). */
-  trainFlapMs: 380,
+  /** Tàu hỏa: the dropped friends stay at the destination this long after the train leaves, then fade. */
+  trainDropLingerMs: 6000,
+  /** Tàu hỏa: under reduced motion a camera step lasts at least this long. */
+  trainCameraStepMinMs: 600,
   /** Tàu hỏa: after this long idle the next thing to touch bounces and its line plays (≤ ui.trainHintMax per step). */
   trainIdleHintMs: 8000,
   /** Tàu hỏa: the hint bounce. */

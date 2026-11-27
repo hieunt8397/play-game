@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { SCREEN_MAX_PAGES, maxPages, multiAtlas, ALPHA_NOISE_FLOOR, NEAR_IDENTICAL_DIFF, alphaBounds, checkAtlas, clearAlphaNoise, nearlyIdentical, packOptions, packScreen, restoreTrim } from './pack.ts';
+import { SCREEN_MAX_PAGES, backgroundPng, maxPages, multiAtlas, ALPHA_NOISE_FLOOR, NEAR_IDENTICAL_DIFF, alphaBounds, checkAtlas, clearAlphaNoise, nearlyIdentical, packOptions, packScreen, restoreTrim } from './pack.ts';
 
 const json = (frames: string[], w = 1024, h = 1024): Buffer =>
   Buffer.from(JSON.stringify({ frames: Object.fromEntries(frames.map((f) => [f, {}])), meta: { size: { w, h } } }));
@@ -157,5 +161,29 @@ describe('multi-page atlas failures (Story 3.3)', () => {
       { name: 'dino-puzzle-1.png', buffer: Buffer.from([1]) },
     ];
     expect(checkAtlas('dino-puzzle', files, 4)).toEqual(['atlas "dino-puzzle": the packer wrote 2 page image(s) but 1 page JSON(s)']);
+  });
+});
+
+describe('tiled backgrounds (2026-11-13: the train game`s island plate)', () => {
+  it('tile n is the quadrant (n mod cols, n div cols); a size that does not split evenly fails', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tiles-'));
+    try {
+      const colours = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0]] as const;
+      const quad = (c: readonly number[]) => ({ create: { width: 4, height: 3, channels: 3 as const, background: { r: c[0]!, g: c[1]!, b: c[2]! } } });
+      const src = join(dir, 'bg.png');
+      await sharp({ create: { width: 8, height: 6, channels: 3, background: { r: 0, g: 0, b: 0 } } })
+        .composite(colours.map((c, n) => ({ input: { create: quad(c).create }, left: (n % 2) * 4, top: Math.floor(n / 2) * 3 })))
+        .png()
+        .toFile(src);
+      for (let n = 0; n < 4; n++) {
+        const png = await backgroundPng(src, { col: n % 2, row: Math.floor(n / 2), cols: 2, rows: 2 });
+        const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
+        expect([info.width, info.height]).toEqual([4, 3]);
+        expect([...data.subarray(0, 3)]).toEqual([...colours[n]!]);
+      }
+      await expect(backgroundPng(src, { col: 0, row: 0, cols: 3, rows: 2 })).rejects.toThrow('does not split');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -230,7 +230,7 @@ describe('Story 7.1: a yard game mid-round, continuous play', () => {
   it('2026-11-12 (the train; a ride since 2026-11-13): Home with a friend aboard (round:leave + snapshot) keeps the trip; reopening resumes it; a train at its start station keeps nothing', () => {
     const session = new SessionStore();
     const run: RunningGame = { id: 'train', level: 0, origin: 'island' }; // 2026-11-13: a ride, opened from the island
-    const partial = { friends: ['cat', 'pig', 'cow'], aboard: 1, dest: 'beach', surprise: 'bridge', tunnelLeg: 2 };
+    const partial = { friends: ['cat', 'pig', 'cow'], aboard: 1, stops: ['race', 'shadow-match', 'dino-puzzle'], dest: 'beach', surprise: 'kart' };
     const snapshot: Snapshot = { v: 1, level: 0, seed: 9, questionIndex: 0, partial };
     expect(onRoundLeave(run, { gameId: 'train', snapshot }, false, session)).toEqual({ action: 'chain', start: { kind: 'complete', gameId: 'train' } });
     expect(session.resumeIds()).toEqual(['train']);

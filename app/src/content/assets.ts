@@ -56,8 +56,15 @@ export const TOUCH_TALK_PLATES = ['sea', 'street', 'kitchen', 'bathroom', 'baker
 export type TouchTalkPlate = (typeof TOUCH_TALK_PLATES)[number];
 export const SCREEN_PLATES: Readonly<Partial<Record<ScreenId, readonly string[]>>> = { 'touch-talk': TOUCH_TALK_PLATES };
 type PlatedScreen = 'touch-talk';
+/**
+ * 2026-11-13 (spec-tau-quanh-dao): screens whose one plate is bigger than a texture may be (the iPad: 2048 px a side).
+ * The render is cut into `cols` × `rows` tiles of the design size × RENDER_SCALE each (`bg.<screen>.<n>`,
+ * `assets/bg/<screen>-<n>.png`, n = row × cols + col); the scene draws them side by side.
+ */
+export const SCREEN_TILES: Readonly<Partial<Record<ScreenId, { readonly cols: number; readonly rows: number }>>> = { train: { cols: 2, rows: 2 } };
+type TiledScreen = 'train';
 /** A background id: a single-plate screen, or `<screen>-<plate>`. */
-export type BackgroundId = Exclude<ScreenId, PlatedScreen> | `touch-talk-${TouchTalkPlate}`;
+export type BackgroundId = Exclude<ScreenId, PlatedScreen | TiledScreen> | `touch-talk-${TouchTalkPlate}`;
 const plateBackground = (id: ScreenId, plate: string): BackgroundRef => ({ key: `bg.${id}.${plate}`, path: `assets/bg/${id}-${plate}.png` });
 
 export const ATLASES: Readonly<Record<ScreenId, AtlasRef>> = {
@@ -105,13 +112,31 @@ export const BACKGROUNDS: Readonly<Record<BackgroundId, BackgroundRef>> = {
   garden: background('garden'),
   'car-wash': background('car-wash'),
   plane: background('plane'),
-  train: background('train'),
   rocket: background('rocket'),
 };
 
-/** Every background of a screen with its plate (undefined for a single-plate screen). */
-export function screenBackgrounds(id: ScreenId): { plate: string | undefined; ref: BackgroundRef }[] {
+/** A tiled screen's tiles (row by row), each with its place in the plate (in tiles). */
+function tilesOf(id: ScreenId): { ref: BackgroundRef; col: number; row: number }[] {
+  const t = SCREEN_TILES[id];
+  if (!t) return [];
+  return Array.from({ length: t.cols * t.rows }, (_v, n) => ({ ref: { key: `bg.${id}.${n}`, path: `assets/bg/${id}-${n}.png` }, col: n % t.cols, row: Math.floor(n / t.cols) }));
+}
+
+/** 2026-11-13: the train game's island plate, in tiles (SCREEN_TILES; row by row). */
+export const TRAIN_TILES: readonly BackgroundRef[] = tilesOf('train').map((t) => t.ref);
+
+export interface ScreenBackground {
+  readonly plate: string | undefined;
+  readonly ref: BackgroundRef;
+  /** A tiled screen's tile: its column and row in the grid (the render is cut there). */
+  readonly tile?: { readonly col: number; readonly row: number; readonly cols: number; readonly rows: number };
+}
+
+/** Every background of a screen with its plate (undefined for a single-plate screen) or its tile. */
+export function screenBackgrounds(id: ScreenId): ScreenBackground[] {
   const plates = SCREEN_PLATES[id];
+  const grid = SCREEN_TILES[id];
+  if (grid) return tilesOf(id).map((t) => ({ plate: undefined, ref: t.ref, tile: { col: t.col, row: t.row, cols: grid.cols, rows: grid.rows } }));
   const all = BACKGROUNDS as Readonly<Record<string, BackgroundRef>>;
   return plates ? plates.map((plate) => ({ plate, ref: all[`${id}-${plate}`]! })) : [{ plate: undefined, ref: all[id]! }];
 }

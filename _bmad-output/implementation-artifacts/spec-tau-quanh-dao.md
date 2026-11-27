@@ -2,7 +2,7 @@
 title: 'Tàu hỏa quanh đảo (trò Tàu hỏa diễn ra trên đảo)'
 type: 'feature'
 created: '2026-11-13'
-status: 'approved'
+status: 'in-progress'
 route: 'dispatch'
 baseline_commit: 'd47b6c0'
 review_loop_iteration: 0
@@ -149,20 +149,20 @@ Home → `round:leave` → Map's zoom-out (the reverse of the opening zoom), wit
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Back up to `_backup/2026-11-13-tau-quanh-dao/`.
-- [ ] Content and the reworked trip model with tests:
+- [x] Back up to `_backup/2026-11-13-tau-quanh-dao/`.
+- [x] Content and the reworked trip model with tests:
   - one full trip round the loop;
   - boarding and the count;
   - the tunnel once at most;
   - the destination and the drop-off;
   - bags;
   - resume, including old partials.
-- [ ] `camera(s)` with tests (follow, lead, clamp, reduced-motion steps).
-- [ ] `build_train.py` on the island; render and atlas; composites of the train on a curve, boarding at each station,
+- [x] `camera(s)` with tests (follow, lead, clamp, reduced-motion steps).
+- [x] `build_train.py` on the island; render and atlas; composites of the train on a curve, boarding at each station,
   the volcano tunnel and each destination for the parent.
-- [ ] `validateTrain` and its test.
-- [ ] `Train.ts` and the zoom in from / out to the map; scene tests.
-- [ ] Voice lines (`npm run tts`), README provenance.
+- [x] `validateTrain` and its test.
+- [x] `Train.ts` and the zoom in from / out to the map; scene tests.
+- [x] Voice lines (`npm run tts`), README provenance.
 
 **Acceptance Criteria:**
 - Given the map, when Xoài taps the train, then the view zooms in on the same island and the train waits at Ga tàu.
@@ -194,3 +194,136 @@ Home → `round:leave` → Map's zoom-out (the reverse of the opening zoom), wit
 - Composites for the parent before commit.
 - A browser run of two full trips at 1024 × 768 (CDP), Home mid-trip and the resume.
 - The iPad, watching memory (the tiles) and frame rate while the camera follows.
+
+## Implementation Plan (dev, 2026-11-13)
+
+Built by a sub-agent through bmad-build. The parent approved the spec and could not be asked during the run. The spec
+is over the 1600-token target; it is kept whole (one user goal, approved as is).
+
+**World and camera.** The train screen is rendered from the map's own camera at 4096 × 3072 (renderScale 4, design
+1024 × 768), so the train layout's coordinates are the map's design coordinates (`path.rail` is the same). The game's
+Phaser camera shows it at `ui.trainZoom` 2: the same island, closer, and the zoom handoff is exact. The plate is cut
+into four 2048 × 1536 tiles (`bg.train.0..3`, `assets/bg/train-<n>.png`).
+
+**Art.** `build_train.py` opens the built `art/map.blend` (the `blender.ts` source; it holds everything the map built
+from `map-v4.blend`: the stations, the track, Ga tàu, the crossing, the volcano, the whale). It:
+- drops the map-only sprites (clouds, waves, decorations, icons, the guide's outfits);
+- keeps as sprites what must be drawn over the train: the volcano, the `occ-<n>` scenery, the crossing barriers (up,
+  down) and every station sprite that a camera ray to the track hits first. The other station sprites, the parked
+  plane, the rocket and the fountain are baked into the plate;
+- keeps the map's train frames (`train-engine`, `train-car-<n>`, h0…h7), the same sprites as the map's, so the handoff
+  matches. It also keeps the whale (idle, spout) and the kart, moved onto the road beside the crossing;
+- adds the four friend platforms (plate), the friends (`friend-<f>`: idle, wave, happy), the seated busts
+  (`seat-<f>`), `puff`, `pop`, `boat` and `hot-air`;
+- adds the layout: the station and destination stops, the friends' spots, the drop spots, `hit.platform-<station>`,
+  `hit.dest-<d>` and `hit.whale`. It keeps the map's place hulls, `path.rail` (`-up`, `-back`), `path.compass`, and the
+  tunnel and crossing anchors.
+
+The old side-view builder becomes `train_models.py`. `build_train.py` still builds the library collections
+`sprite.engine` and `sprite.car-<colour>` with it. They are never rendered (`bhc_library`), so `map_rides.py` keeps
+appending the same engine and cars from `art/train.blend`. `render_screen.py` gains two opt-ins: it skips
+`bhc_library` collections, and a scene's `bhc_sprite_border` renders each sprite pass only inside its projected box
+(for speed).
+
+**Runtime.**
+- `core/map-rides` (loops, scale, headings, `markedAt`) is reused.
+- New pure `games/train/camera.ts`; `trip.ts` is rewritten on the arc length.
+- `core/ride-handoff.ts` carries the map train's arc length into the game and the game's last view back to Map. Map
+  zooms to `ui.trainZoom` onto the game's opening view, and on Home pulls back from the game's last view.
+- `MiniGameBase` gets an overridable `reveal()`. The train skips the fade, so there is no visible cut.
+
+## Spec Change Log
+
+- 2026-11-13 (dev): **build source.** `build_train.py` starts from the built `art/map.blend`, not `art/src/map-v4.blend`:
+  the built map already holds every station, the railway, Ga tàu and the rides, with the same camera. The map in turn
+  appends the engine and cars from `art/train.blend`, which keeps them as never-rendered library collections.
+- 2026-11-13 (dev): **the game train is the map's train.** It uses the same sprites at the same scale (so the zoom
+  handoff matches), not a bigger "game scale" model; the car pitch is longer (`ui.trainCarPitch`) in the game and on the
+  map so the tap discs stay ≥ targetGap apart.
+- 2026-11-13 (dev): **the start.** The game's train starts where the map's train stood when Xoài tapped it (Ga tàu when
+  she tapped the platform or the train was in the tunnel), so the zoom lands on the game's first view. Waiting at Ga tàu
+  always would need a visible jump of the train.
+- 2026-11-13 (dev): **the tunnel rule.** The volcano's tunnel (spec 1) is shorter than the train, so it cannot cover the
+  whole train. `validateTrain` checks the dim instead: ≥ 400 ms fade-in at cruise, the engine inside ≤ 2 s at the
+  slowest cruise; the dim is relative to the most the tunnel can cover.
+- 2026-11-13 (dev): **the tunnel at most once.** From Ga tàu and every destination, the planner always finds a trip that
+  passes the volcano once (tested on the real island). A first trip handed over from a map train just before the volcano
+  may pass it twice.
+- 2026-11-13 (dev): **surprises.** Each trip still has one surprise (as in spec-tau-hoa) besides the tunnel. "The kart's
+  driver waves" is a bounce of the kart with a honk (the map's kart sprite has no wave frame).
+- 2026-11-13 (dev): **no skip.** The departure and the arrival take 1.4 s, under the 1.5 s skip rule, so there is no
+  skip.
+- 2026-11-13 (review): **reduced-motion camera pace.** A step whose eased peak is the train's cruise averages only 2/π
+  of it, so on a long leg the gap grows step after step and the train leaves the view. A step now averages the cruise
+  (its brief eased peak is π/2 × the cruise) and, once the train stands, steps exactly onto its stop's view. This bends
+  "never moves faster than the train" for the brief peak of a reduced-motion step. The normal follow never does.
+- 2026-11-13 (review): **surprises that cannot happen.** A kart surprise on a trip that never passes the crossing, or
+  a whale surprise on a trip that never passes the whale (or ends at the whale's bay), becomes the sailing boat. A
+  resumed trip still shows its boat or balloon.
+- 2026-11-13 (dev): **workflow.** Step 3 of bmad-build asks for a fresh implementation sub-agent. The planning agent
+  implemented it itself: the plan depended on a long investigation of the art pipeline that the spec could not carry.
+
+## Design Notes (dev)
+
+- **Train size and spacing.** The game uses the map train's own sprites at the same scale: a car is about 40 × 42 map
+  px, 80 × 84 screen px at zoom 2. The tap areas are discs round each piece (radius: engine 26, car 20 design px, × the
+  local scale; ≥ 80 screen px). The cars' arc pitch becomes `ui.trainCarPitch` (62 / 56 / 56 design px), so neighbouring
+  discs stay ≥ targetGap apart. The map train uses the same pitch, so the handoff matches.
+- **Speed.** Cruise is `ui.trainCruiseMapX` (3) × the map train's. That is calmer than 4× at zoom 2: about 290 screen
+  px/s, near the old game's 220. A trip lasts about 40–55 s with prompt taps.
+- **Friend stations:** Ga Xe kem (ice-cream), Ga Khủng long (dino-puzzle), Ga Hang (shadow-match), Ga Đường đua
+  (race). The platform stands on the beach side where the camera can frame it. On the island's left and right edges it
+  stands on the inland sand strip instead: on the beach side it would leave the interactive rect.
+- **Destinations:** the beach (the swim ring), the whale's bay (the shore by the whale) and the fountain park.
+- **The tunnel** is the volcano's arc range from spec 1. It is shorter than the train, so the dim follows the share of
+  the train inside it, relative to the most it can cover; it reaches `ui.trainDimMax` (≤ 50%).
+- **Surprises:**
+  - the kart waiting at the crossing (its driver waves: a bounce and a honk as the engine passes);
+  - the whale's spout as the train passes it;
+  - a sailing boat and a hot-air balloon drifting by in view.
+- **Stops:** the engine stops before the platform (3.9 m of rail) or the destination (2.2 m; the fountain 3.4 m), so the
+  waiting tap area is ahead of the engine, ≥ targetGap from every disc, and the camera (lead 110 design px past the
+  train's middle) frames it. The waiting tap areas are padded by hitPad / zoom (hitPad on screen).
+- **Engine frames:** idle per heading only. The wheel, toot and happy frames are too small to read at this scale (the
+  wheels are ~10 screen px). The toot is the puff and a bounce; running is a small bob.
+- **Waiting friends** are drawn over every sprite: the Ga Hang platform stands on the beach behind the cave, which hid
+  the friend in the browser run.
+
+## Review Triage Log
+
+Review 1, 2026-11-13 (bmad-build step 4: Blind Hunter, Edge Case Hunter, Verification Gap; one pass, no loopback).
+B = Blind, E = Edge, V = Verification gap.
+
+| # | Finding | Verdict | Route | Resolution |
+|---|---------|---------|-------|------------|
+| 1 | B/E: the reduced-motion camera falls further behind each step (peak = cruise, average 2/π of it) | high | patch | step averages the cruise; snaps onto the stop when the train stands; camera test with a moving target |
+| 2 | E: `pulseOf` under reduced motion scales the whole peak (the train shrinks to ~half on every toot) | high | patch | `1 + amp(peak − 1)·sin` |
+| 3 | E/V: reduced-motion stepper may not frame the waiting tap area (rules check the follow camera only) | medium | patch | the stepper's threshold is 0 while the train stands: it lands on the checked view |
+| 4 | B/E: kart / whale surprise off the trip's path never fires (the kart waits all trip); whale dest + whale surprise spouts twice | medium | patch | `reachableSurprise` swaps it for the boat; tests |
+| 5 | B/E: boat / balloon never shows on a trip resumed with 2 aboard | medium | patch | scheduled on the first departure with a friend aboard (`skyQueued`); test |
+| 6 | E/V: a fresh start without a handoff, or reduced motion after Map's fade-out, appeared with a hard cut | medium | patch | `seamless` only for a handoff with motion on; otherwise fade in; test |
+| 7 | B/E: no rail → Home hands back the view (0, 0) | low | patch | hand back only with a rail |
+| 8 | B/E: a stale handoff start from an interrupted open | low | patch | `takeTrainStart()` before setting it |
+| 9 | V: `backgroundPng` untested; E: uneven splits drop pixels silently | medium | patch | throws on an uneven split; quadrant test in pack.test |
+| 10 | E: `sprite_border` measured meshes only (curves, instances could be cropped) | low | patch | returns the whole frame when such geometry renders; checked: no sprite in train.blend has any, so the published frames are unaffected |
+| 11 | E: the friend-frame keep-out (Home/Speaker) check was dropped | medium | patch | restored in validateTrain |
+| 12 | V: Home's handed-back view untested | medium | patch | Train.test asserts it equals `cameraCentre` at the engine |
+| 13 | B: tests dropped (Home at start, nothing plays after Home) | low | patch | re-added in Train.test |
+| 14 | B: borrowed tokens (fish history window, toot gap for the whale) | low | patch | `trainTapLagMs`, `trainWhaleGapMs` |
+| 15 | B: stale docs (README sfx row, MOTION comment, rules header), `hintAt` builds the anchor id by hand, wobble leaves the seated friend behind | low | patch | fixed |
+| 16 | V/E: map and train layouts' `path.rail` differ by up to 10 px at the crossing (map.layout.json is older than art/map.blend) | medium | defer | not caused by this spec: spec 1's map render predates its own last map.blend change; a map re-render makes them equal. Logged in deferred-work |
+| 17 | V: Map's half of the handoff (trainStart, focus, pull-back branch) has no test | medium | defer | no Phaser test harness for Map exists; logged in deferred-work |
+| 18 | E: the train starts where the map train stood, not always at Ga tàu (AC 1) | medium | intent (open question) | decided and logged in the Spec Change Log; the parent was not reachable. Open question in the report |
+| 19 | E: a first trip handed over just before the volcano may pass it twice | low | intent (open question) | logged in the Spec Change Log; open question in the report |
+| 20 | B: map car spacing vs the game's (unscaled pitch on the map) | false | reject | MapTrain.pieces scales each gap by the local scale, like trainPieces |
+| 21 | B: validateTrain does not check the place hulls / whale hit / moving pieces against the Hud | low | reject | the place hulls are the map's (checked by validateMap); a moving piece under the Hud is the same as on the map; a direct fix needs per-frame camera sampling |
+| 22 | B: the drawn-train-size check was removed | false | reject | replaced by the disc size check round the whole loop |
+| 23 | B: drop spots not checked against the rect | false | reject | each drop spot's friend box is inside `hit.dest-<d>`, which is checked at the stop |
+| 24 | B: silent anchor fallbacks in build | low | reject | validateTrain requires every anchor (render, atlas, validate:content) |
+| 25 | B: pull-back falls back to the default zoom with no view | low | reject | free play leaves only through `leave()`, which always hands the view back |
+| 26 | B: camera / geometry live under games/ but scenes and rules import them | low | reject | the layer rule allows scenes → games; rules.ts already imports game geometry |
+| 27 | B: `TiledScreen` hand-written; WAIT_LINE prefix; landing squash uniform | low | reject | cosmetic; the audio id is kept to reuse its file |
+| 28 | E: zero cruise / empty loop never stops | low | reject | unreachable: validateTrain requires a loop and the cruise comes from it |
+| 29 | E: the 2 s tunnel bound is estimated at the tunnel's midpoint scale | low | reject | no stop lies in the tunnel; the scale varies by a few % there |
+| 30 | E: `use_border` reset to False instead of its prior value | low | reject | no scene sets it; render_screen owns the pass |
+

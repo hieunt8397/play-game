@@ -46,8 +46,9 @@ export const SCREENS: Readonly<Record<string, ScreenSpec>> = {
   'car-wash': { source: 'art/src/map-v3.blend', builder: 'build_car_wash.py' },
   // 2026-11-11: the yard's plane game (Phi công nhí).
   plane: { source: 'art/src/map-v3.blend', builder: 'build_plane.py' },
-  // 2026-11-12: the yard's train game (Tàu hỏa chở bạn).
-  train: { source: 'art/src/map-v3.blend', builder: 'build_train.py' },
+  // 2026-11-12: the train game (Tàu hỏa chở bạn). 2026-11-13 (spec-tau-quanh-dao): it happens on the island, built from
+  // the BUILT map (art/map.blend: its stations, railway and rides; build the map first).
+  train: { source: 'art/map.blend', builder: 'build_train.py' },
   // 2026-11-12: the yard's rocket game (Tên lửa lên Mặt Trăng).
   rocket: { source: 'art/src/map-v3.blend', builder: 'build_rocket.py' },
 };

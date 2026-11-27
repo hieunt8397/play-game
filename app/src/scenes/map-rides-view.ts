@@ -33,6 +33,7 @@ import {
   type TrainEvent,
 } from '../core/map-rides';
 import { amplitude } from '../core/reduced-motion';
+import { cameraCentre } from '../games/train/camera';
 import { Tokens } from '../core/tokens';
 import { bounce } from '../core/ui/scale-motion';
 
@@ -68,6 +69,8 @@ export interface MapRidesView {
    * tap was on the platform or the train is (partly) in the tunnel.
    */
   focus(id: RideGameId): Point | undefined;
+  /** 2026-11-13: where the train game's train starts (arc length on `path.rail`): the map train's place, or Ga tàu. */
+  trainStart(): number;
   /** The idle invitation's ring area of a ride (Ga tàu for the train, the airstrip spot, the pad), and its pulse. */
   inviteHit(id: RideGameId): readonly Point[] | undefined;
   pulse(id: RideGameId): void;
@@ -155,10 +158,9 @@ export function createMapRides(scene: Scene, opts: MapRidesOptions): MapRidesVie
       loop,
       {
         stationS,
-        carS: MAP_RIDES.cars.map((_c, i) => {
-          const a = A[`train-car-${i + 1}`];
-          return a ? loop.project(a) : undefined;
-        }),
+        // 2026-11-13 (spec-tau-quanh-dao): the cars stand at the train game's pitch (ui.trainCarPitch), so the zoom
+        // into the game shows the same train.
+        carS: Tokens.ui.trainCarPitch.map((_p, i) => loop.ahead(Tokens.ui.trainCarPitch.slice(0, i + 1).reduce((a, b) => a + b, 0), stationS)),
         tunnel: tIn && tOut ? { from: loop.project(tIn), to: loop.project(tOut) } : undefined,
         crossing: { from: sOf(MAP_RIDES.anchors.crossingFrom, 0), to: sOf(MAP_RIDES.anchors.crossingTo, 0) },
         signalS: sOf(MAP_RIDES.anchors.signal, 0),
@@ -317,10 +319,15 @@ export function createMapRides(scene: Scene, opts: MapRidesOptions): MapRidesVie
         if (rocket.frame.name !== frame && hasFrame(frame)) rocket.setFrame(frame).setOrigin(A.rocket.x / W, A.rocket.y / H);
       }
     },
+    trainStart() {
+      return focusStation || train.tunnel ? stationS : train.engineS;
+    },
     focus(id) {
       if (id === 'train') {
-        const p = focusStation || train.tunnel ? trainAt : loop.pointAt(train.engineS);
-        return { x: p.x, y: p.y - Tokens.ui.mapTrainPieceBox.lift };
+        // The train game's opening view (games/train/camera.ts): the zoom lands exactly where the game starts.
+        const z = Tokens.ui.trainZoom;
+        const middle = Tokens.ui.trainCarPitch.reduce((a, b) => a + b, 0) / 2;
+        return cameraCentre(loop, this.trainStart(), { viewW: W / z, viewH: H / z, boundsW: W, boundsH: H, middle, lead: Tokens.ui.trainCameraLead });
       }
       if (id === 'plane') return planeImage ? { x: planeImage.x, y: planeImage.y } : planeAt;
       return A.rocket;

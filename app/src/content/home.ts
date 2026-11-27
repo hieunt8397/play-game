@@ -1,5 +1,5 @@
 // Story 7.1: the yard (sân nhà) behind the island's home station "Nhà Xoài". One 2048×1536 plate
-// (`bg.home`, tools/render/blender/build_home.py) with 10 big play corners, each a full-frame sprite
+// (`bg.home`, tools/render/blender/build_home.py) with 7 big play corners (10 until 2026-11-13), each a full-frame sprite
 // `<corner>/idle/00` on its ground pivot `anchors[<corner>]`, with its tap area `hits[<corner>]`.
 // A corner is awake only when its game is registered (games/registry GAMES — the shell passes that
 // check in: content imports no runtime layer). Until then a tap bounces it with a happy sound, like a
@@ -10,7 +10,10 @@
 // `train`; up by the fence at the top left, the back row stepping aside: 1 + 4 + 4); 2026-11-12 the rocket corner
 // (Tên lửa lên Mặt Trăng, `rocket`; tall and narrow at the top right under the Speaker zone, the plane stepping down).
 // 2026-11-13 (spec-dao-moi-xe-ra-dao): the plane, the train and the rocket left for the island (content/stations.ts ›
-// RIDES); 7 corners stay (spec-nha-xoai-nha-bup-be re-lays them as a dollhouse and its yard).
+// RIDES); 7 corners stay. 2026-11-13 (spec-nha-xoai-nha-bup-be): the screen is a dollhouse cut open with its yard: the
+// bedroom upstairs (bed, wardrobe), the living room downstairs (the band: drums and a little piano), and outside the
+// pen by the back fence, Shiba's dog house with a first-aid kit (clinic), the vegetable garden and the family car on
+// the driveway (car wash). The ids stay (tests, save data); the labels name the thing: Ban nhạc, Nhà Shiba, Vườn rau.
 import { ATLASES, BACKGROUNDS } from './assets.ts';
 import type { GameAssets, ScreenRequirements } from './games/types.ts';
 
@@ -29,14 +32,14 @@ export interface YardCorner {
   readonly label: string;
 }
 
-/** The 10 corners (2026-10-30: the garden, front row between the clinic and the bed; the car wash, front row far right; 2026-11-11: the plane, back row; 2026-11-12: the train, top left by the fence; the rocket, top right under the Speaker zone). */
+/** The 7 corners: inside the dollhouse (bed and wardrobe upstairs, the band downstairs) and in its yard (pen, clinic = Shiba's dog house, garden, car wash on the driveway). */
 export const YARD_CORNERS: readonly YardCorner[] = [
   { id: 'pen', gameId: 'animal-pens', label: 'Chuồng thú' },
-  { id: 'stage', gameId: 'band', label: 'Sân khấu' },
+  { id: 'stage', gameId: 'band', label: 'Ban nhạc' },
   { id: 'bed', gameId: 'bedtime', label: 'Giường ngủ' },
-  { id: 'clinic', gameId: 'pet-clinic', label: 'Phòng khám' },
+  { id: 'clinic', gameId: 'pet-clinic', label: 'Nhà Shiba' },
   { id: 'wardrobe', gameId: 'dress-up', label: 'Tủ đồ' },
-  { id: 'garden', gameId: 'garden', label: 'Vườn' },
+  { id: 'garden', gameId: 'garden', label: 'Vườn rau' },
   { id: 'car-wash', gameId: 'car-wash', label: 'Rửa xe' },
 ];
 

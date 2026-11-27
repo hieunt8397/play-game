@@ -85,11 +85,11 @@ export const VOICE_LINES = [
   { id: 'vo.shell.home.yard', text: 'Về nhà nào!' },
   // The yard corners' names (content/home.ts › YARD_CORNERS labels): said on an awake corner's tap.
   { id: 'vo.shell.corner-name.pen', text: 'Chuồng thú' },
-  { id: 'vo.shell.corner-name.stage', text: 'Sân khấu' },
+  { id: 'vo.shell.corner-name.stage', text: 'Ban nhạc' },
   { id: 'vo.shell.corner-name.bed', text: 'Giường ngủ' },
-  { id: 'vo.shell.corner-name.clinic', text: 'Phòng khám' },
+  { id: 'vo.shell.corner-name.clinic', text: 'Nhà Shiba' },
   { id: 'vo.shell.corner-name.wardrobe', text: 'Tủ đồ' },
-  { id: 'vo.shell.corner-name.garden', text: 'Vườn' },
+  { id: 'vo.shell.corner-name.garden', text: 'Vườn rau' },
   { id: 'vo.shell.corner-name.car-wash', text: 'Rửa xe' },
   // 2026-11-13 (spec-dao-moi-xe-ra-dao): the rides on the island (content/stations.ts › RIDES): their names (said on a
   // tap, like a station's; the audio of the former yard corner-name lines) and their idle invitations.
@@ -481,8 +481,13 @@ export const VOICE_LINES = [
   { id: 'vo.train.car.blue', text: 'Toa xanh dương!' },
   { id: 'vo.train.tunnel', text: 'Ú òa!' },
   { id: 'vo.train.dest.beach', text: 'Đến biển rồi!' },
-  { id: 'vo.train.dest.playground', text: 'Đến sân chơi rồi!' },
-  { id: 'vo.train.dest.fair', text: 'Đến hội chợ rồi!' },
+  // 2026-11-13 (spec-tau-quanh-dao): the train goes round the island: its destinations and its friend stations.
+  { id: 'vo.train.dest.whale', text: 'Đến vịnh cá voi rồi!' },
+  { id: 'vo.train.dest.fountain', text: 'Đến công viên đài phun nước rồi!' },
+  { id: 'vo.train.station.race', text: 'Ga Đường đua!' },
+  { id: 'vo.train.station.shadow-match', text: 'Ga Hang!' },
+  { id: 'vo.train.station.dino-puzzle', text: 'Ga Khủng long!' },
+  { id: 'vo.train.station.ice-cream', text: 'Ga Xe kem!' },
   { id: 'vo.train.parent.1', text: 'Mời bố mẹ | cùng đi tàu nhé!', keywordPauseMs: 300 },
   // Tên lửa lên Mặt Trăng (2026-11-12): the invitation (names Xoài), each part as it is offered (the idle hint and the
   // Speaker prompt while building), each colour as it is picked, "Phóng!" after the countdown (the numbers reuse

@@ -4,34 +4,33 @@
 # Run by `npm run art:build -- home` (tools/render/build.ts), never by hand:
 #   blender -b --factory-startup art/src/map-v3.blend --python-exit-code 1 --python build_home.py -- \
 #     --out <tmp>/home.blend --params <tmp>/params.json
-# params.json (written by build.ts from Tokens): colours (hex), art (art.home for the props, art.touchTalk for
-# the lawn, sky and haze), design size, renderScale.
+# params.json (written by build.ts from Tokens): colours (hex), art (art.home for the house and the props, art.touchTalk
+# for the lawn, sky and haze), design size, renderScale.
 #
-# One plate, 2048×1536: a soft lawn (the picnic lawn's palette), Xoài's house front (Tiny Treats Homely House
-# `house`) at the back centre with its doormat and a picket fence (Homely House fences) to both
-# sides, trees and bushes behind the fence, a gradient sky with clouds. The backdrop is hazed (as in Chạm là nói)
-# so the corners pop. Nine big corner props (2026-11-12: the train up by the fence at the top left, four in the back row, four in the front row), each its own `sprite.<corner>` (idle at frame 1; the runtime bounce
-# is a scale motion around the ground pivot), with `hit.<corner>` (convex hull of its meshes) and
-# `anchor.<corner>` (its ground pivot) in the hidden `layout` collection:
-#   - pen (back row, far left): a Homely House fence pen with a real Quaternius cow (Cow.fbx, its Idle pose) peeking over the front;
-#   - stage (back row, in front of the door): a round wooden stage with a pink curtain arch and a big drum with sticks (script-built, cute.py);
-#   - bed: the KayKit Furniture single bed with an extra pillow (front row);
-#   - clinic: a big white vet box with a red cross and a handle (script-built, front row);
-#   - wardrobe (back row, third): a lilac wardrobe with two doors, knobs, a crown top and a shirt on its side hook (script-built);
-#   - garden (Trồng cây, 2026-10-30; front row, between clinic and bed): a wooden raised bed of dark soil with a strawberry
-#     plant, a staked tomato plant and a seedling, a sign stake with a strawberry, and a light-blue watering can beside it
-#     (script-built; colours from art.garden);
-#   - car-wash (Rửa xe, 2026-10-30; front row, far right): a pink arch with a bubble sign and a blue roller brush over the
-#     Kenney Car Kit taxi (CC0), foam on its roof and side (colours from art.carWash);
-#   - plane (Phi công nhí, 2026-11-11; back row, far right, a step nearer and under the Speaker zone): a round yellow toy
-#     propeller plane parked on the grass, nose up — cream belly, pink wings and tail, a blue nose with brown blades, a
-#     glass canopy, small wheels — with a red and a purple balloon tied to its tail (script-built; colours from art.plane);
-#   - train (Tàu hỏa chở bạn, 2026-11-12; top left, up by the fence): a toy steam engine with a puff of smoke and one red
-#     car on a stub of track (script-built; colours from art.train).
-# Each prop is fitted into its CORNER_BOXES box (design px; bottom edge = its ground line) by unprojecting
-# through the camera, so the layout is exactly what tools/layout/rules.ts › validateHome checks (hulls inside
-# the interactive rect, clear of the Home/Speaker zones, ≥ targetGap apart, each frame ≥ 150 px).
-# Every constant is in Blender world units (metres) unless its name says otherwise.
+# 2026-11-13 (spec-nha-xoai-nha-bup-be): one plate, 2048×1536, laid out like a dollhouse with its yard.
+#   - On the left, Xoài's house cut open (its front wall removed, script-built with cute.py shapes): a foundation, two
+#     floors, a back wall and two side walls, an attic slab and a pink gable roof with a round attic window.
+#     Upstairs the bedroom (pink wallpaper: a window, a picture frame); downstairs the living room (mint wallpaper: a
+#     window, a picture frame, a standing lamp, a rug). No stairs, no doors.
+#   - On the right and in front, the yard: the lawn, a picket fence along the back (Homely House fences) with hazed trees
+#     behind it, the garage at the back right (a roller door, closed) and the driveway down to the front edge.
+# Seven corner props, each its own `sprite.<corner>` (idle at frame 1; the runtime bounce is a scale motion around the
+# ground pivot), with `hit.<corner>` (convex hull of its meshes) and `anchor.<corner>` (its ground pivot, on its floor)
+# in the hidden `layout` collection:
+#   - bed (upstairs, left): the KayKit Furniture single bed with an extra pillow;
+#   - wardrobe (upstairs, right): a lilac wardrobe with two doors, knobs, a crown top and a shirt on its side hook;
+#   - stage (Ban nhạc; downstairs): a toy drum kit (bass drum, tom, snare, cymbal, sticks) and a little pink piano;
+#   - pen (yard, by the back fence): a Homely House fence pen with a real Quaternius cow (Cow.fbx, its Idle pose);
+#   - clinic (Nhà Shiba; yard, middle left): Shiba's dog house with the chibi Shiba sitting at its door, a white
+#     first-aid kit with a red cross beside it and a food bowl;
+#   - garden (Vườn rau; yard, front left): a wooden raised bed with a strawberry plant, a staked tomato plant, a
+#     seedling, a sign stake, and a watering can (colours from art.garden);
+#   - car-wash (Rửa xe; yard, on the driveway in front of the garage): the family car (Kenney Car Kit sedan, CC0) with
+#     foam on its roof and a hose on its reel spraying it (colours from art.carWash).
+# Each prop is fitted into its CORNER_BOXES box (design px; bottom edge = its ground line, on its floor) by
+# unprojecting through the camera, so the layout is exactly what tools/layout/rules.ts › validateHome checks (hulls
+# inside the interactive rect, clear of the Home/Speaker zones, ≥ targetGap apart, each frame ≥ 150 px).
+# Every constant is in Blender world units (metres) unless its name says otherwise (…_PX: design px).
 import math
 import os
 import random
@@ -43,7 +42,7 @@ from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cute import blob, import_joined, lathe, mat, mesh_obj, rbox, rod, rounded_profile, soften_scene, torus, torus_bm, tt_model  # noqa: E402
+from cute import blob, chibi, chibi_materials, import_joined, key_chibi, lathe, mat, mesh_obj, rbox, rod, rounded_profile, soften_scene, torus, tt_model  # noqa: E402
 from common import add_empty, eval_world_verts, flat_material, force_opaque, hex_to_linear, hull_object, key_constant, move_to, parse_args, principled  # noqa: E402
 
 ASSETS = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', 'assets'))
@@ -51,63 +50,76 @@ RENDER_SIZE = (2048, 1536)
 DESIGN = (1024, 768)  # set from params in main
 IDLE_FRAME = 1
 
-# --- the camera: a little above a child's eye, looking across the lawn at the house ---------------------------
-CAM_LOC = (0.0, -9.0, 4.2)
-CAM_TARGET = (0.0, 2.0, -0.4)
-CAM_LENS = 30.0
+# --- the camera: a little above a child's eye, looking across the lawn -----------------------------------------
+CAM_LOC = (0.0, -26.0, 9.5)
+CAM_TARGET = (0.0, 2.0, 0.2)
+CAM_LENS = 58.0
 
 # --- the backdrop -------------------------------------------------------------------------------------------
 GROUND_HALF = 80.0
 GRASS_Y = (-8.0, 22.0)  # grassNear → verge (art.touchTalk)
-HOUSE_Y = 9.0  # the house's front plane (world y of its centre)
-HOUSE_WIDTH_PX = 330.0  # its projected width (design px): the whole roof under the sky
-DEPTH = HOUSE_Y - 6.2  # the trees and bushes were placed for a house at y 6.2
-FENCE_Y = HOUSE_Y - 0.6
+FENCE_PX = (500.0, 1060.0, 214.0)  # the back fence: screen x span and its ground line (design px)
 FENCE_SCALE = 1.6
 FENCE_MODEL = 'fence_straight'
 FENCE_STEP = 2.0  # module width × FENCE_SCALE (measured: Homely House fence modules are 1.25 wide)
-FENCE_X = [(-15.5, -3.8), (3.8, 15.5)]  # spans left and right of the house
-TREES = [(x, y + DEPTH, stem, k) for x, y, stem, k in [(-9.0, 9.0, 'tree_large', 1.6), (-5.6, 10.5, 'tree', 1.4), (6.0, 10.0, 'tree', 1.5), (9.5, 8.6, 'tree_large', 1.7), (-13.0, 12.0, 'tree', 1.6), (13.5, 12.0, 'tree_large', 1.4)]]
-BUSHES = [(x, y + DEPTH, k) for x, y, k in [(-7.4, 7.0, 1.2), (-4.6, 7.2, 1.0), (4.8, 7.1, 1.0), (7.6, 7.0, 1.3), (-11.0, 7.3, 1.1), (11.0, 7.2, 1.1)]]
-TUFTS = 40
+TREES_BEHIND = [(dx, dy, stem, k) for dx, dy, stem, k in [(-2.0, 2.2, 'tree_large', 1.6), (2.4, 3.6, 'tree', 1.5), (6.2, 1.8, 'tree_large', 1.7), (10.0, 3.4, 'tree', 1.4), (-6.5, 4.0, 'tree', 1.6), (14.0, 2.5, 'tree_large', 1.5)]]
+BUSHES_BEHIND = [(dx, dy, k) for dx, dy, k in [(-0.5, 0.9, 1.1), (4.2, 1.0, 1.0), (8.6, 0.9, 1.2), (12.4, 1.1, 1.0)]]
+TUFTS = 34
 FLOWERS = 30
 SEED = 11
-HAZE = (0.28, 0.6)  # (fac, saturation) of the far backdrop (house, trees, fence)
+HAZE = (0.28, 0.6)  # (fac, saturation) of the far backdrop (fence, trees)
 NEAR_HAZE = (0.08, 0.92)
 SKY_GRADIENT_Z = (0.0, 26.0)
 SKY_EMISSION = 1.1
 CLOUDS = [(-30.0, 120.0, 20.0, 5.0), (-4.0, 130.0, 25.0, 4.2), (28.0, 120.0, 21.0, 5.5)]
 
-# --- the corners: design-px boxes (x0, y0, x1, y1), y1 = the ground line; the prop fills the box ---------------
-# Back row (2026-11-11: four corners, each a little smaller): pen, stage, wardrobe (tall and narrow), plane (far right: its
-# whole box lies below the Speaker zone, y ≥ 257 + hitPad, and its ground line a step nearer than the others'); front row
-# (2026-10-30: four corners): clinic, garden, bed, car-wash. Padded by hitPad (24) each hull stays inside the
-# interactive rect (x 24…1000, y 66…694), off the Home/Speaker zones (top corners) and ≥ targetGap (24) apart.
-# 2026-11-12 (Tàu hỏa chở bạn): a ninth corner, the train, stands on the lawn in front of the fence at the top left (right of the Home zone:
-# x ≥ 124 + hitPad); the pen steps down under it and the stage, wardrobe and plane step right, each box ≥ 72 px
-# (2 × hitPad + targetGap) from its neighbours.
-# 2026-11-12 (Tên lửa lên Mặt Trăng): a tenth corner, the rocket, tall and narrow at the top right just left of the
-# Speaker zone (its padded hull's right edge < 900); the wardrobe narrows and steps left, the plane steps down under it.
-CORNER_BOXES = {
-    'rocket': (806, 96, 874, 255),  # a tall narrow prop: longest side ≥ 150; ≥ 72 px from the wardrobe and the plane
-    'train': (156, 150, 330, 255),  # a long low prop on the lawn in front of the fence: ≥ 150 px wide, right of the Home zone
-    'pen': (50, 327, 270, 432),
-    'stage': (412, 200, 560, 395),
-    'wardrobe': (636, 195, 732, 395),
-    'plane': (818, 327, 974, 470),  # under the Speaker zone (y ≤ 257): top ≥ 257 + hitPad; ≥ 72 px from the bed and the car-wash
-    'clinic': (50, 496, 222, 664),
-    'garden': (296, 490, 500, 664),
-    'bed': (574, 476, 740, 664),
-    'car-wash': (814, 480, 972, 664),
+# --- the dollhouse: laid out in design px on its front plane (the cut-open front), then built in metres ----------
+HOUSE_X_PX = (30.0, 492.0)  # its outer left and right edges at the ground line
+HOUSE_PX = {
+    'ground': 690.0,  # the foundation's front bottom edge (sets the front plane's depth)
+    'floor0': 670.0,  # the living-room floor (top of the foundation)
+    'ceiling0': 412.0,  # the underside of the floor between the rooms
+    'floor1': 376.0,  # the bedroom floor
+    'ceiling1': 126.0,  # the underside of the attic slab
+    'eaves': 104.0,  # the attic slab's top: where the roof starts
+    'ridge': 14.0,  # the top of the gable
 }
+HOUSE_DEPTH = 5.0  # front to back (m)
+WALL_T = 0.3  # wall thickness
+TRIM_T = 0.06  # the white cut-edge trim's proud depth
+ROOF_OVERHANG = 0.35
+ROOF_LIFT = 0.12  # the roof panels' centres sit this far over the gable's slope (half their 0.2 thickness + 0.02)
+WALLPAPER_IN = 0.02  # the wallpaper panels sit this far inside the walls
+
+# --- the garage and the driveway (yard, back right) --------------------------------------------------------------
+GARAGE_PX = (864.0, 1110.0, 300.0)  # its front's screen x span and its ground line
+GARAGE_DEPTH = 3.2  # its width comes from GARAGE_PX
+GARAGE_WALL_H = 2.6
+DRIVEWAY_PX = [(842.0, 300.0), (1100.0, 300.0), (1150.0, 800.0), (640.0, 800.0)]  # a quad on the lawn (design px)
+
+# --- the corners: design-px boxes (x0, y0, x1, y1), y1 = the ground line; the prop fills the box ---------------
+# Inside: the bed and the wardrobe on the bedroom floor (upstairs), the band (drums + piano) on the living-room floor.
+# Outside: the pen by the back fence, Shiba's dog house in the middle, the garden in front, the car on the driveway.
+# Padded by hitPad (24) each hull stays inside the interactive rect (x 24…1000, y 66…694) and off the Home zone
+# (x ≤ 124, y ≤ 177) and the Speaker zone (x ≥ 900, y ≤ 257); the boxes are ≥ 72 px (2 × hitPad + targetGap) apart.
+CORNER_BOXES = {
+    'bed': (74, 220, 286, 350),
+    'wardrobe': (358, 150, 464, 350),
+    'stage': (74, 452, 452, 648),
+    'pen': (556, 98, 842, 262),
+    'clinic': (556, 336, 712, 478),
+    'car-wash': (784, 356, 970, 556),
+    'garden': (556, 552, 712, 668),
+}
+# The floor each prop stands on ('floor1' bedroom, 'floor0' living room; the lawn otherwise, z 0).
+CORNER_FLOOR = {'bed': 'floor1', 'wardrobe': 'floor1', 'stage': 'floor0'}
 PLACE_PASSES = 6
 # Yaw (degrees) of each prop's root (0 = its front toward the camera).
-CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -28.0, 'clinic': 18.0, 'wardrobe': -12.0, 'garden': 8.0, 'car-wash': -10.0, 'plane': -152.0, 'train': -16.0, 'rocket': -10.0}
-# Rửa xe corner: the Kenney Car Kit taxi (CC0) under the arch.
-CAR_WASH_CAR = os.path.join('kenney', 'kenney_car-kit', 'Models', 'GLB format', 'taxi.glb')
-
-# Phi công nhí corner: the parked plane's nose-up tilt (degrees).
-PLANE_TILT = 13.0
+CORNER_YAW = {'pen': 0.0, 'stage': 0.0, 'bed': -30.0, 'clinic': 14.0, 'wardrobe': 0.0, 'garden': 8.0, 'car-wash': -14.0}
+# Rửa xe corner: the family car (Kenney Car Kit sedan, CC0) on the driveway, turned to show its side.
+FAMILY_CAR = os.path.join('kenney', 'kenney_car-kit', 'Models', 'GLB format', 'sedan.glb')
+# Nhà Shiba corner: the chibi Shiba's height (m), a little under the dog house's eaves (build_doghouse: body 1.0 m).
+SHIBA_HEIGHT = 0.95
 
 # The pen: a fence rectangle (modules) and the cow inside, its head over the front rail.
 PEN_W = 3.0  # x extent (m)
@@ -300,47 +312,221 @@ def flat_quad(name, corners, material, coll):
     return mesh_obj(name, bm, material, coll, smooth=False)
 
 
-# --- the plate ----------------------------------------------------------------------------------------------
+def view_ray(scene, px, py):
+    """The camera ray (origin, unit direction) through design px (px, py)."""
+    cam = scene.camera
+    tr, br, bl, tl = [cam.matrix_world @ v for v in cam.data.view_frame(scene=scene)]
+    u, v = px / DESIGN[0], py / DESIGN[1]
+    top = tl + (tr - tl) * u
+    bot = bl + (br - bl) * u
+    return cam.location.copy(), (top + (bot - top) * v - cam.location).normalized()
+
+
+def on_plane_y(scene, px, py, y):
+    """The world point seen at design px (px, py) on the vertical plane at world y (the dollhouse's front)."""
+    o, d = view_ray(scene, px, py)
+    return o + d * ((y - o.y) / d.y)
+
+
+def inside_poly(p, poly):
+    """Even-odd test of a 2D point against a polygon (design px)."""
+    x, y = p
+    hit = False
+    for (ax, ay), (bx, by) in zip(poly, poly[1:] + poly[:1]):
+        if (ay > y) != (by > y) and x < ax + (y - ay) * (bx - ax) / (by - ay):
+            hit = not hit
+    return hit
+
+
+def no_shadow(*objs):
+    for o in objs:
+        o.visible_shadow = False
+
+
+class House:
+    """The dollhouse's measures in metres, from its design-px layout on the front plane (HOUSE_X_PX, HOUSE_PX)."""
+
+    def __init__(self, scene):
+        mid = (HOUSE_X_PX[0] + HOUSE_X_PX[1]) / 2
+        self.front = unproject(scene, mid, HOUSE_PX['ground'], 0.0).y
+        self.x0 = on_plane_y(scene, HOUSE_X_PX[0], HOUSE_PX['ground'], self.front).x
+        self.x1 = on_plane_y(scene, HOUSE_X_PX[1], HOUSE_PX['ground'], self.front).x
+        base = on_plane_y(scene, mid, HOUSE_PX['ground'], self.front).z
+        self.z = {k: on_plane_y(scene, mid, v, self.front).z - base for k, v in HOUSE_PX.items()}
+        self.w = self.x1 - self.x0
+        self.cx = (self.x0 + self.x1) / 2
+        self.back = self.front + HOUSE_DEPTH
+        self.cy = self.front + HOUSE_DEPTH / 2
+        print(f'build_home: house x {self.x0:.2f}…{self.x1:.2f} y {self.front:.2f}…{self.back:.2f} z ' + ' '.join(f'{k} {v:.2f}' for k, v in self.z.items()))
+
+
+def build_house(scene, c, coll):
+    """Xoài's house cut open: two rooms one above the other, seen through the missing front wall."""
+    h = House(scene)
+    z = h.z
+    outer, trim = mat(c['houseWall'], 0.55), mat(c['houseTrim'], 0.45)
+    paper = {'living': mat(c['wallLiving'], 0.7), 'bedroom': mat(c['wallBedroom'], 0.7)}
+    floor = {'living': mat(c['floorLiving'], 0.6), 'bedroom': mat(c['floorBedroom'], 0.6)}
+    rooms = {'living': (z['floor0'], z['ceiling0']), 'bedroom': (z['floor1'], z['ceiling1'])}
+    w, d, t = h.w, HOUSE_DEPTH, WALL_T
+    shell = []
+    # the foundation (the living-room floor), the slab between the rooms, the attic slab: white cut edges in front
+    rbox('house-foundation', (w + 0.12, d + 0.12, z['floor0']), 0.05, outer, coll, None, (h.cx, h.cy, z['floor0'] / 2))
+    shell.append(rbox('house-slab-mid', (w, d, z['floor1'] - z['ceiling0']), 0.06, trim, coll, None, (h.cx, h.cy, (z['ceiling0'] + z['floor1']) / 2)))
+    shell.append(rbox('house-slab-attic', (w, d, z['eaves'] - z['ceiling1']), 0.06, trim, coll, None, (h.cx, h.cy, (z['ceiling1'] + z['eaves']) / 2)))
+    for room, (f0, f1) in rooms.items():
+        shell.append(rbox(f'house-floor-{room}', (w - 2 * t, d - t, 0.05), 0.02, floor[room], coll, None, (h.cx, h.cy - t / 2, f0 - 0.02)))
+        # the wallpaper: on the back wall and on the inner faces of both side walls
+        py = h.back - t - WALLPAPER_IN
+        shell.append(rbox(f'house-paper-back-{room}', (w - 2 * t, 0.03, f1 - f0), 0.01, paper[room], coll, None, (h.cx, py, (f0 + f1) / 2)))
+        for side, x in ((-1, h.x0 + t + WALLPAPER_IN), (1, h.x1 - t - WALLPAPER_IN)):
+            shell.append(rbox(f'house-paper-side-{room}-{side}', (0.03, d - t, f1 - f0), 0.01, paper[room], coll, None, (x, h.cy - t / 2, (f0 + f1) / 2)))
+        # a skirting board along the back
+        rbox(f'house-skirting-{room}', (w - 2 * t, 0.05, 0.12), 0.02, trim, coll, None, (h.cx, py - 0.03, f0 + 0.06))
+    # the back wall and the side walls, white trim on their cut front edges
+    shell.append(rbox('house-wall-back', (w, t, z['eaves']), 0.05, outer, coll, None, (h.cx, h.back - t / 2, z['eaves'] / 2)))
+    for side, x in ((-1, h.x0 + t / 2), (1, h.x1 - t / 2)):
+        shell.append(rbox(f'house-wall-{side}', (t, d, z['eaves']), 0.05, outer, coll, None, (x, h.cy, z['eaves'] / 2)))
+        shell.append(rbox(f'house-wall-trim-{side}', (t + 0.06, TRIM_T, z['eaves']), 0.03, trim, coll, None, (x, h.front - TRIM_T / 2 + 0.01, z['eaves'] / 2)))
+    # the gable: a front triangle with a round attic window, two pink roof panels
+    bm = bmesh.new()
+    gy0, gy1 = h.front, h.front + t
+    tri = [(h.x0, z['eaves']), (h.x1, z['eaves']), (h.cx, z['ridge'])]
+    a = [bm.verts.new((x, gy0, zz)) for x, zz in tri]
+    b = [bm.verts.new((x, gy1, zz)) for x, zz in tri]
+    bm.faces.new(a[::-1])
+    bm.faces.new(b)
+    for i in range(3):
+        j = (i + 1) % 3
+        bm.faces.new([a[i], a[j], b[j], b[i]])
+    shell.append(mesh_obj('house-gable', bm, outer, coll, smooth=False))
+    wz = z['eaves'] + (z['ridge'] - z['eaves']) * 0.36
+    wr = (z['ridge'] - z['eaves']) * 0.2
+    shell.append(torus('house-attic-window-rim', wr, wr * 0.18, trim, coll, None, (h.cx, gy0 - 0.02, wz), (90.0, 0.0, 0.0)))
+    shell.append(blob('house-attic-window', mat(c['glass'], 0.15), coll, None, (h.cx, gy0 - 0.01, wz), (wr, 0.04, wr), seg=(32, 12)))
+    rise, half = z['ridge'] - z['eaves'], w / 2 + ROOF_OVERHANG
+    slope = math.atan2(rise, w / 2)
+    length = half / math.cos(slope)
+    roof, roof_dark = mat(c['roof'], 0.5), mat(c['roofDark'], 0.5)
+    # each panel's centre: halfway up the slope, minus the overhang's drop, raised by ROOF_LIFT (half the panel's
+    # thickness plus a hair, so the panel sits on the gable's edge instead of cutting through it)
+    roof_mid_z = z['eaves'] + rise / 2 - ROOF_OVERHANG * math.tan(slope) / 2 + ROOF_LIFT
+    for side in (-1, 1):
+        shell.append(rbox(f'house-roof-{side}', (length, d + 2 * ROOF_OVERHANG, 0.2), 0.08, roof, coll, None,
+                          (h.cx + side * half / 2, h.cy, roof_mid_z),
+                          (0.0, side * math.degrees(slope), 0.0)))
+        shell.append(rbox(f'house-roof-edge-{side}', (length, 0.14, 0.26), 0.07, roof_dark, coll, None,
+                          (h.cx + side * half / 2, h.front - ROOF_OVERHANG, roof_mid_z),
+                          (0.0, side * math.degrees(slope), 0.0)))
+    no_shadow(*shell)
+    # dressing (part of the plate, never tappable): windows, picture frames, a lamp, a rug
+    py = h.back - t - WALLPAPER_IN - 0.04
+    glass = mat(c['glass'], 0.15)
+    for room, wx in (('bedroom', h.x0 + w * 0.42), ('living', h.cx + w * 0.02)):
+        f0, f1 = rooms[room]
+        wz, ww, wh = f0 + (f1 - f0) * (0.6 if room == 'bedroom' else 0.5), min(1.3, w * 0.16), (f1 - f0) * 0.4
+        rbox(f'{room}-window-frame', (ww + 0.16, 0.06, wh + 0.16), 0.05, trim, coll, None, (wx, py, wz))
+        rbox(f'{room}-window-glass', (ww, 0.06, wh), 0.03, glass, coll, None, (wx, py - 0.02, wz))
+        rbox(f'{room}-window-bar-v', (0.06, 0.06, wh), 0.02, trim, coll, None, (wx, py - 0.05, wz))
+        rbox(f'{room}-window-bar-h', (ww, 0.06, 0.06), 0.02, trim, coll, None, (wx, py - 0.05, wz))
+        for side in (-1, 1):
+            blob(f'{room}-curtain-{side}', mat(c['curtain'] if room == 'bedroom' else c['knob'], 0.7), coll, None, (wx + side * (ww / 2 + 0.12), py - 0.08, wz + 0.02), (0.14, 0.05, wh * 0.62))
+    for room, fx, colour in (('bedroom', h.x0 + w * 0.66, c['tom']), ('living', h.x0 + w * 0.2, c['roof'])):
+        f0, f1 = rooms[room]
+        fz = f0 + (f1 - f0) * 0.66
+        rbox(f'{room}-picture-frame', (0.62, 0.05, 0.5), 0.04, mat(c['woodDark'], 0.6), coll, None, (fx, py, fz))
+        rbox(f'{room}-picture', (0.48, 0.05, 0.36), 0.02, mat(c['houseTrim'], 0.6), coll, None, (fx, py - 0.02, fz))
+        blob(f'{room}-picture-heart', mat(colour, 0.5), coll, None, (fx, py - 0.05, fz), (0.1, 0.02, 0.1))
+    kit = Kit(coll)
+    lamp = kit.put('lamp_standing', 'Furniture', 'living-lamp', (h.x1 - t - 0.42, h.back - t - 0.45, z['floor0']))
+    bpy.context.view_layer.update()
+    pts = eval_world_verts([lamp], bpy.context.evaluated_depsgraph_get())
+    lamp.scale = (((z['ceiling0'] - z['floor0']) * 0.62) / max(max(p.z for p in pts) - min(p.z for p in pts), 1e-6),) * 3
+    rug = kit.put('rug_oval_A', 'Furniture', 'living-rug', (h.cx - w * 0.04, h.cy - 0.2, z['floor0'] + 0.01))
+    bpy.context.view_layer.update()
+    pts = eval_world_verts([rug], bpy.context.evaluated_depsgraph_get())
+    k = (w * 0.66) / max(max(p.x for p in pts) - min(p.x for p in pts), 1e-6)
+    rug.scale = (k, k * 0.85, 1.0)
+    return h
+
+
+def build_garage(scene, c, coll):
+    """The garage at the back right (its roller door closed) and the driveway from it down to the front edge."""
+    gy = unproject(scene, (GARAGE_PX[0] + GARAGE_PX[1]) / 2, GARAGE_PX[2], 0.0).y
+    gx0 = unproject(scene, GARAGE_PX[0], GARAGE_PX[2], 0.0).x
+    gx1 = unproject(scene, GARAGE_PX[1], GARAGE_PX[2], 0.0).x
+    gw, gd, gh = gx1 - gx0, GARAGE_DEPTH, GARAGE_WALL_H
+    cx, cy = (gx0 + gx1) / 2, gy + gd / 2
+    wall, trim, roof = mat(c['garage'], 0.6), mat(c['houseTrim'], 0.45), mat(c['roof'], 0.5)
+    rbox('garage-body', (gw, gd, gh), 0.08, wall, coll, None, (cx, cy, gh / 2))
+    rise = 0.9
+    slope = math.atan2(rise, gw / 2)
+    for side in (-1, 1):
+        rbox(f'garage-roof-{side}', ((gw / 2 + 0.3) / math.cos(slope), gd + 0.5, 0.18), 0.07, roof, coll, None,
+             (cx + side * gw / 4, cy, gh + rise / 2 + 0.05), (0.0, side * math.degrees(slope), 0.0))
+    bm = bmesh.new()
+    tri = [(gx0, gh), (gx1, gh), (cx, gh + rise)]
+    a = [bm.verts.new((x, gy - 0.01, zz)) for x, zz in tri]
+    bm.faces.new(a[::-1])
+    mesh_obj('garage-gable', bm, wall, coll, smooth=False)
+    dw, dh = gw * 0.74, gh * 0.8
+    rbox('garage-door-frame', (dw + 0.24, 0.08, dh + 0.12), 0.05, trim, coll, None, (cx, gy - 0.03, dh / 2 + 0.06))
+    rbox('garage-door', (dw, 0.08, dh), 0.03, mat(c['garageDoor'], 0.5), coll, None, (cx, gy - 0.06, dh / 2))
+    stripe = mat(c['garageStripe'], 0.5)
+    for k in range(4):
+        rbox(f'garage-door-stripe-{k}', (dw - 0.1, 0.06, 0.07), 0.02, stripe, coll, None, (cx, gy - 0.1, dh * (0.2 + 0.2 * k)))
+    quad = [unproject(scene, x, y, 0.006) for x, y in DRIVEWAY_PX]
+    flat_quad('driveway', [tuple(p) for p in quad], mat(c['driveway'], 0.8), coll)
+
 
 def build_plate(scene, screen, params, plate):
     tt = params['art']['touchTalk']
+    c = {**params['colours'], **params['art']['home']}
     grass = gradient_material('yard-grass', 'y', GRASS_Y[0], GRASS_Y[1], tt['grassNear'], tt['verge'], 0.85, noise=(2.0, 0.2))
     flat_quad('yard-grass', [(-GROUND_HALF, -GROUND_HALF, 0.0), (GROUND_HALF, -GROUND_HALF, 0.0), (GROUND_HALF, GROUND_HALF, 0.0), (-GROUND_HALF, GROUND_HALF, 0.0)], grass, plate)
+    house = build_house(scene, c, plate)
+    build_garage(scene, c, plate)
     kit = Kit(plate)
     far = []
-    # Xoài's house: fitted to HOUSE_WIDTH_PX, centred on the screen, its front toward the camera.
-    house = kit.put('house', 'Homely-House', 'yard-house', (0.0, HOUSE_Y, 0.0), 1.0, 0.0)
-    for _ in range(4):
-        bpy.context.view_layer.update()
-        x0, _y0, x1, _y1 = screen.rect(eval_world_verts([house], bpy.context.evaluated_depsgraph_get()))
-        house.scale = house.scale * (HOUSE_WIDTH_PX / max(x1 - x0, 1e-6))
-    bpy.context.view_layer.update()
-    hs = house.scale.x
-    pts = eval_world_verts([house], bpy.context.evaluated_depsgraph_get())
-    front = min(p.y for p in pts)
-    far.append(house)
-    far.append(kit.put('doormat', 'Homely-House', 'yard-doormat', (0.0, front - 0.45 * hs, 0.003), hs * 1.2))
-    for side, (a, b) in enumerate(FENCE_X):
-        n = int((b - a) / FENCE_STEP)
-        for i in range(n + 1):
-            x = a + i * FENCE_STEP
-            far.append(kit.put(FENCE_MODEL, 'Homely-House', f'yard-fence-{side}-{i}', (x, FENCE_Y, 0.0), FENCE_SCALE))
-    for i, (x, y, stem, k) in enumerate(TREES):
-        far.append(kit.put(stem, 'Homely-House', f'yard-tree-{i}', (x, y, 0.0), k))
-    for i, (x, y, k) in enumerate(BUSHES):
-        far.append(kit.put('foliage_A' if i % 2 else 'foliage_B', 'Homely-House', f'yard-bush-{i}', (x, y, 0.0), k))
+    fy = unproject(scene, (FENCE_PX[0] + FENCE_PX[1]) / 2, FENCE_PX[2], 0.0).y
+    fa = unproject(scene, FENCE_PX[0], FENCE_PX[2], 0.0).x
+    fb = unproject(scene, FENCE_PX[1], FENCE_PX[2], 0.0).x
+    for i in range(int((fb - fa) / FENCE_STEP) + 1):
+        far.append(kit.put(FENCE_MODEL, 'Homely-House', f'yard-fence-{i}', (fa + i * FENCE_STEP, fy, 0.0), FENCE_SCALE))
+    for i, (dx, dy, stem, k) in enumerate(TREES_BEHIND):
+        far.append(kit.put(stem, 'Homely-House', f'yard-tree-{i}', (fa + dx, fy + dy, 0.0), k))
+    for i, (dx, dy, k) in enumerate(BUSHES_BEHIND):
+        far.append(kit.put('foliage_A' if i % 2 else 'foliage_B', 'Homely-House', f'yard-bush-{i}', (fa + dx, fy + dy, 0.0), k))
     haze(far, tt['haze'], *HAZE)
+    # tufts and flowers on the open lawn only: not in the house, on the driveway, by the garage or under a corner
     rnd = random.Random(SEED)
     near = []
-    for i in range(TUFTS):
-        x, y = rnd.uniform(-10.0, 10.0), rnd.uniform(-5.0, 5.0)
-        near.append(kit.put('grass_A' if i % 2 else 'grass_B', 'Pretty-Park', f'yard-tuft-{i}', (x, y, 0.0), 0.9, rnd.uniform(0.0, 360.0)))
-    for i in range(FLOWERS):
-        x, y = rnd.uniform(-12.0, 12.0), rnd.uniform(-4.0, 5.2)
-        near.append(kit.put('flower_A' if i % 2 else 'flower_B', 'Pretty-Park', f'yard-flower-{i}', (x, y, 0.0), 1.3, rnd.uniform(0.0, 360.0)))
+
+    def open_lawn(x, y):
+        px, py = screen.project((x, y, 0.0))
+        if not (0 <= px <= DESIGN[0] and FENCE_PX[2] + 10 <= py <= DESIGN[1]):
+            return False
+        if px < HOUSE_X_PX[1] + 24 and py < HOUSE_PX['ground'] + 8:
+            return False
+        if px > GARAGE_PX[0] - 10 and py < GARAGE_PX[2] + 10:
+            return False
+        if inside_poly((px, py), [(x0 - 30, y0) for x0, y0 in DRIVEWAY_PX[:1]] + DRIVEWAY_PX[1:3] + [(DRIVEWAY_PX[3][0] - 30, DRIVEWAY_PX[3][1])]):
+            return False
+        return not any(x0 - 20 <= px <= x1 + 20 and y0 - 10 <= py <= y1 + 24 for x0, y0, x1, y1 in CORNER_BOXES.values())
+
+    for n, (count, stems, scale, pack) in enumerate(((TUFTS, ('grass_A', 'grass_B'), 0.9, 'Pretty-Park'), (FLOWERS, ('flower_A', 'flower_B'), 1.3, 'Pretty-Park'))):
+        made, tries = 0, 0
+        while made < count and tries < count * 40:
+            tries += 1
+            x, y = rnd.uniform(-30.0, 30.0), rnd.uniform(-14.0, fy - 0.6)
+            if open_lawn(x, y):
+                near.append(kit.put(stems[made % 2], pack, f'yard-{n}-{made}', (x, y, 0.0), scale, rnd.uniform(0.0, 360.0)))
+                made += 1
+        if made < count:
+            print(f'build_home: WARNING only {made} of {count} {stems[0][:-2]}s found open lawn')
     haze(near, tt['haze'], *NEAR_HAZE)
     sky(params, plate)
-    return near
+    return house
 
 
 def sky(params, plate):
@@ -452,39 +638,6 @@ def build_pen(root, coll, c):
     cow_root.parent = root
 
 
-def build_stage(root, coll, c):
-    """A round wooden stage with a curtain arch behind and a big drum with two sticks on it."""
-    wood, dark = mat(c['wood'], 0.6), mat(c['woodDark'], 0.6)
-    lathe('stage-floor', rounded_profile(1.7, 0.0, 0.32, 0.12), wood, coll, root)
-    lathe('stage-rim', rounded_profile(1.76, 0.0, 0.12, 0.3), dark, coll, root)
-    curtain = mat(c['curtain'], 0.7)
-    # the arch: two posts and a scalloped top behind the drum
-    for side in (-1, 1):
-        rod(f'stage-post-{side}', (side * 1.35, 0.9, 0.3), (side * 1.35, 0.9, 2.5), 0.12, dark, coll, root)
-        blob(f'stage-drape-{side}', curtain, coll, root, (side * 1.1, 0.95, 1.45), (0.32, 0.12, 1.1))
-    for k in range(5):
-        x = -1.2 + k * 0.6
-        blob(f'stage-valance-{k}', curtain, coll, root, (x, 0.92, 2.45), (0.34, 0.14, 0.22))
-    rbox('stage-bar', (2.9, 0.16, 0.16), 0.06, dark, coll, root, (0.0, 0.92, 2.62))
-    # the drum: red shell, white rims, cream head, gold lugs, on the stage floor
-    drum_r, drum_h, z0 = 0.62, 0.7, 0.32
-    lathe('drum-shell', rounded_profile(drum_r, z0, z0 + drum_h, 0.08), mat(c['drum'], 0.35), coll, root)
-    rim = mat(c['drumRim'], 0.35)
-    torus('drum-rim-top', drum_r, 0.06, rim, coll, root, (0.0, 0.0, z0 + drum_h))
-    torus('drum-rim-bottom', drum_r, 0.06, rim, coll, root, (0.0, 0.0, z0 + 0.04))
-    lathe('drum-head', [(0.0, z0 + drum_h + 0.01), (drum_r * 0.97, z0 + drum_h + 0.01), (0.0, z0 + drum_h + 0.012)], mat(c['drumHead'], 0.5), coll, root)
-    lug = mat(c['knob'], 0.3)
-    for k in range(8):
-        a = 2 * math.pi * k / 8
-        rbox(f'drum-lug-{k}', (0.07, 0.07, 0.22), 0.03, lug, coll, root, (math.cos(a) * (drum_r + 0.02), math.sin(a) * (drum_r + 0.02), z0 + drum_h / 2), (0.0, 0.0, math.degrees(a)))
-    stick = mat(c['stick'], 0.5)
-    top = z0 + drum_h + 0.05
-    rod('drum-stick-l', (-0.2, -0.1, top), (-0.75, -0.55, top + 0.55), 0.045, stick, coll, root)
-    rod('drum-stick-r', (0.2, -0.1, top), (0.75, -0.5, top + 0.6), 0.045, stick, coll, root)
-    blob('drum-stick-tip-l', stick, coll, root, (-0.75, -0.55, top + 0.55), (0.08, 0.08, 0.08))
-    blob('drum-stick-tip-r', stick, coll, root, (0.75, -0.5, top + 0.6), (0.08, 0.08, 0.08))
-
-
 def build_bed(root, coll, c):
     bed = model('bed_single_A', 'Furniture', coll, 'bed-model', root)
     bpy.context.view_layer.update()
@@ -492,21 +645,6 @@ def build_bed(root, coll, c):
     top = max(p.z for p in pts)
     y_head = max(p.y for p in pts)
     model('pillow_A', 'Furniture', coll, 'bed-pillow', root, (0.0, y_head - 0.45, top - 0.05), 1.0, 0.0)
-
-
-def build_clinic(root, coll, c):
-    """The vet box: a big white rounded case, a red cross on its front and top, a handle."""
-    kit = mat(c['kit'], 0.4)
-    cross = mat(c['cross'], 0.35)
-    w, d, h = 1.9, 1.0, 1.35
-    rbox('clinic-box', (w, d, h), 0.16, kit, coll, root, (0.0, 0.0, h / 2))
-    rbox('clinic-lid-line', (w + 0.02, d + 0.02, 0.06), 0.03, cross, coll, root, (0.0, 0.0, h * 0.78))
-    fy = -d / 2 - 0.02
-    rbox('clinic-cross-v', (0.3, 0.08, 0.86), 0.06, cross, coll, root, (0.0, fy, h * 0.42))
-    rbox('clinic-cross-h', (0.86, 0.08, 0.3), 0.06, cross, coll, root, (0.0, fy, h * 0.42))
-    torus('clinic-handle', 0.3, 0.07, cross, coll, root, (0.0, 0.0, h + 0.02), (90.0, 0.0, 0.0), arc=(0.0, 180.0))
-    for sx in (-1, 1):
-        rbox(f'clinic-clasp-{sx}', (0.16, 0.06, 0.2), 0.03, mat(c['knob'], 0.3), coll, root, (sx * 0.62, fy, h * 0.8))
 
 
 def build_wardrobe(root, coll, c):
@@ -608,11 +746,119 @@ def build_garden(root, coll, c):
     blob('can-rose', can_dark, coll, can_root, (-cr - 0.36, 0.0, ch + 0.23), (0.07, 0.09, 0.09))
 
 
-def build_car_wash(root, coll, c):
-    """A pink car-wash arch (two posts, a beam, a white sign with blue bubbles) with a blue roller brush at the back, over
-    the Kenney taxi (turned to show its side), foam blobs on its roof and side and a few on the ground."""
+def build_band(root, coll, c):
+    """Ban nhạc: a toy drum kit (a bass drum on its side, a tom on top, a snare on a stand, a cymbal, two sticks) and a
+    little pink upright piano beside it (white and black keys, a music stand), both facing the camera (−y)."""
+    drum, rim, head = mat(c['drum'], 0.35), mat(c['drumRim'], 0.35), mat(c['drumHead'], 0.5)
+    tom, metal, gold = mat(c['tom'], 0.35), mat(c['woodDark'], 0.4), mat(c['cymbal'], 0.25)
+    dx = -0.95
+    # the bass drum, its axis along y (toward the camera), a heart on its front head
+    r, half = 0.5, 0.24
+    lathe('band-bass', rounded_profile(r, -half, half, 0.06), drum, coll, root, (dx, 0.0, r + 0.04), (90.0, 0.0, 0.0))
+    for k, y in enumerate((-half, half)):
+        torus(f'band-bass-rim-{k}', r, 0.05, rim, coll, root, (dx, y, r + 0.04), (90.0, 0.0, 0.0))
+    blob('band-bass-head', head, coll, root, (dx, -half - 0.01, r + 0.04), (r * 0.94, 0.02, r * 0.94), seg=(40, 10))
+    blob('band-bass-heart', mat(c['curtain'], 0.45), coll, root, (dx, -half - 0.035, r + 0.04), (0.17, 0.02, 0.15), seg=(24, 8))
+    for side in (-1, 1):
+        rod(f'band-bass-foot-{side}', (dx + side * 0.32, -0.1, 0.35), (dx + side * 0.5, -0.25, 0.0), 0.035, metal, coll, root, seg=10)
+    # the tom on top of the bass drum
+    tz = 2 * r + 0.08
+    lathe('band-tom', rounded_profile(0.25, tz, tz + 0.26, 0.1), tom, coll, root, (dx + 0.08, 0.02, 0.0))
+    torus('band-tom-rim', 0.25, 0.035, rim, coll, root, (dx + 0.08, 0.02, tz + 0.26))
+    lathe('band-tom-head', [(0.0, tz + 0.27), (0.24, tz + 0.27), (0.0, tz + 0.272)], head, coll, root, (dx + 0.08, 0.02, 0.0))
+    # the snare on its stand (right of the bass drum) with two crossed sticks on it
+    sx, sz = dx + 0.72, 0.62
+    rod('band-snare-stand', (sx, -0.2, 0.0), (sx, -0.2, sz), 0.035, metal, coll, root, seg=10)
+    lathe('band-snare', rounded_profile(0.27, sz, sz + 0.18, 0.1), drum, coll, root, (sx, -0.2, 0.0))
+    torus('band-snare-rim', 0.27, 0.035, rim, coll, root, (sx, -0.2, sz + 0.18))
+    lathe('band-snare-head', [(0.0, sz + 0.19), (0.26, sz + 0.19), (0.0, sz + 0.192)], head, coll, root, (sx, -0.2, 0.0))
+    stick = mat(c['stick'], 0.5)
+    for side in (-1, 1):
+        a, b = (sx - 0.3, -0.2 - side * 0.12, sz + 0.24), (sx + 0.32, -0.2 + side * 0.18, sz + 0.3)
+        rod(f'band-stick-{side}', a, b, 0.03, stick, coll, root, seg=10)
+        blob(f'band-stick-tip-{side}', stick, coll, root, b, (0.05, 0.05, 0.05), seg=(12, 8))
+    # the cymbal on a tall stand (left)
+    cx, cz = dx - 0.62, 1.42
+    rod('band-cymbal-stand', (cx, 0.1, 0.0), (cx, 0.1, cz), 0.035, metal, coll, root, seg=10)
+    for side in (-1, 1):
+        rod(f'band-cymbal-leg-{side}', (cx, 0.1, 0.25), (cx + side * 0.22, 0.1 - 0.12, 0.0), 0.03, metal, coll, root, seg=8)
+    lathe('band-cymbal', [(0.0, cz + 0.06), (0.06, cz + 0.06), (0.4, cz), (0.4, cz - 0.02), (0.0, cz + 0.02)], gold, coll, root, (cx, 0.1, 0.0), (-14.0, 0.0, 0.0))
+    # the little piano (right): a pink body on short legs, a keyboard shelf, keys, a lid and a music stand
+    piano, dark = mat(c['piano'], 0.35), mat(c['pianoDark'], 0.35)
+    white, black = mat(c['keyWhite'], 0.3), mat(c['keyBlack'], 0.3)
+    px, leg, bw, bd, bh = 0.98, 0.16, 1.3, 0.55, 0.66
+    for sx_ in (-1, 1):
+        rbox(f'band-piano-leg-{sx_}', (0.14, 0.5, leg), 0.04, dark, coll, root, (px + sx_ * (bw / 2 - 0.12), 0.12, leg / 2))
+    rbox('band-piano-body', (bw, bd, bh), 0.1, piano, coll, root, (px, 0.12, leg + bh / 2))
+    rbox('band-piano-lid', (bw + 0.08, bd + 0.06, 0.08), 0.04, dark, coll, root, (px, 0.12, leg + bh + 0.03))
+    kz = leg + bh * 0.62
+    rbox('band-piano-shelf', (bw - 0.04, 0.34, 0.08), 0.03, dark, coll, root, (px, -0.27, kz))
+    n = 8
+    kw = (bw - 0.2) / n
+    for k in range(n):
+        rbox(f'band-piano-key-{k}', (kw - 0.015, 0.28, 0.05), 0.012, white, coll, root, (px - (bw - 0.2) / 2 + kw * (k + 0.5), -0.3, kz + 0.06))
+    for k in (0, 1, 3, 4, 5):
+        rbox(f'band-piano-black-{k}', (kw * 0.55, 0.16, 0.06), 0.012, black, coll, root, (px - (bw - 0.2) / 2 + kw * (k + 1), -0.22, kz + 0.1))
+    blob('band-piano-heart', mat(c['curtain'], 0.4), coll, root, (px, 0.12 - bd / 2 - 0.01, leg + bh * 0.28), (0.1, 0.02, 0.09), seg=(20, 8))
+    rbox('band-piano-stand', (0.62, 0.05, 0.3), 0.03, white, coll, root, (px, 0.2, leg + bh + 0.2), (-12.0, 0.0, 0.0))
+    for k in range(3):
+        rbox(f'band-piano-note-{k}', (0.42, 0.055, 0.02), 0.005, black, coll, root, (px, 0.18, leg + bh + 0.13 + 0.07 * k), (-12.0, 0.0, 0.0))
+
+
+def build_doghouse(root, coll, c):
+    """Nhà Shiba: a blue dog house with a coral gable roof and a round door, the chibi Shiba sitting at its door, a
+    white first-aid kit with a red cross on the other side and a red food bowl."""
+    body, roof, dark = mat(c['dogHouse'], 0.45), mat(c['dogHouseRoof'], 0.45), mat(c['dogHouseDoor'], 0.7)
+    trim = mat(c['houseTrim'], 0.45)
+    hx, hy, w, d, h = -0.15, 0.25, 1.3, 1.25, 1.0
+    rbox('dog-house-body', (w, d, h), 0.12, body, coll, root, (hx, hy, h / 2))
+    rise = 0.62
+    slope = math.atan2(rise, w / 2)
+    length = (w / 2 + 0.16) / math.cos(slope)
+    for side in (-1, 1):
+        rbox(f'dog-house-roof-{side}', (length, d + 0.3, 0.13), 0.05, roof, coll, root,
+             (hx + side * (w / 4 + 0.04), hy, h + rise / 2 + 0.02), (0.0, side * math.degrees(slope), 0.0))
+    bm = bmesh.new()
+    fy = hy - d / 2 - 0.005
+    tri = [(hx - w / 2 + 0.05, h - 0.02), (hx + w / 2 - 0.05, h - 0.02), (hx, h + rise - 0.06)]
+    a = [bm.verts.new((x, fy, z)) for x, z in tri]
+    bm.faces.new(a[::-1])
+    mesh_obj('dog-house-gable', bm, body, coll, smooth=False).parent = root
+    blob('dog-house-door', dark, coll, root, (hx, fy - 0.01, 0.38), (0.3, 0.02, 0.36), seg=(32, 10))
+    torus('dog-house-door-rim', 0.33, 0.04, trim, coll, root, (hx, fy - 0.02, 0.4), (90.0, 0.0, 0.0), arc=(0.0, 180.0))
+    # a bone sign over the door
+    rbox('dog-house-bone', (0.34, 0.04, 0.09), 0.04, trim, coll, root, (hx, fy - 0.03, h + 0.14))
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            blob(f'dog-house-bone-end-{sx}-{sz}', trim, coll, root, (hx + sx * 0.18, fy - 0.03, h + 0.14 + sz * 0.04), (0.06, 0.04, 0.06), seg=(12, 8))
+    # Shiba sitting on the right of the door, facing the camera
+    rig = chibi('dog', 'dog-house-shiba', coll, chibi_materials(c, c['creatureOrange'], c['creatureLight']))
+    rig['root'].parent = root
+    key_chibi(rig, IDLE_FRAME, tail=14.0, eyes='open')
+    bpy.context.scene.frame_set(IDLE_FRAME)
+    bpy.context.view_layer.update()
+    pts = eval_world_verts(rig['meshes'], bpy.context.evaluated_depsgraph_get())
+    k = SHIBA_HEIGHT / max(max(p.z for p in pts) - min(p.z for p in pts), 1e-6)
+    rig['root'].scale = (k, k, k)
+    rig['root'].location = (hx + w / 2 + 0.32, hy - d / 2 - 0.2, 0.0)
+    rig['root'].rotation_euler = (0.0, 0.0, math.radians(-14.0))
+    # the first-aid kit (left of the house): a white case, a red cross, a red handle
+    kit, cross = mat(c['kit'], 0.4), mat(c['cross'], 0.35)
+    kx, ky, kw, kd, kh = hx - w / 2 - 0.5, hy - d / 2 - 0.1, 0.78, 0.42, 0.56
+    rbox('first-aid-kit', (kw, kd, kh), 0.1, kit, coll, root, (kx, ky, kh / 2))
+    rbox('first-aid-lid-line', (kw + 0.02, kd + 0.02, 0.04), 0.02, cross, coll, root, (kx, ky, kh * 0.8))
+    rbox('first-aid-cross-v', (0.13, 0.05, 0.36), 0.03, cross, coll, root, (kx, ky - kd / 2 - 0.01, kh * 0.42))
+    rbox('first-aid-cross-h', (0.36, 0.05, 0.13), 0.03, cross, coll, root, (kx, ky - kd / 2 - 0.01, kh * 0.42))
+    torus('first-aid-handle', 0.14, 0.035, cross, coll, root, (kx, ky, kh + 0.01), (90.0, 0.0, 0.0), arc=(0.0, 180.0))
+    # the food bowl in front of the door
+    lathe('dog-bowl', [(0.0, 0.0), (0.16, 0.0), (0.22, 0.12), (0.18, 0.13), (0.0, 0.08)], mat(c['bowl'], 0.35), coll, root, (hx + 0.1, hy - d / 2 - 0.42, 0.0))
+
+
+def build_family_car(root, coll, c):
+    """Rửa xe: the family car (Kenney sedan) on the driveway, shown from its side, foam on its roof, and a hose on its
+    reel behind it spraying a little arc of water at the car."""
     w = c['carWash']
-    car = import_joined(os.path.join(ASSETS, CAR_WASH_CAR), 'car-wash-taxi')
+    car = import_joined(os.path.join(ASSETS, FAMILY_CAR), 'family-car')
     move_to(car, coll)
     car.parent = root
     car.rotation_mode = 'XYZ'  # the glTF import leaves a quaternion mode
@@ -628,173 +874,40 @@ def build_car_wash(root, coll, c):
             principled(m).inputs['Roughness'].default_value = 0.55
     vs = [v.co for v in car.data.vertices]
     length = max(v.y for v in vs) - min(v.y for v in vs)  # along x once turned
+    width = max(v.x for v in vs) - min(v.x for v in vs)
     height = max(v.z for v in vs)
-    arch, arch_dark = mat(w['arch'], 0.45), mat(w['archDark'], 0.45)
-    brush, brush_dark = mat(w['brush'], 0.7), mat(w['brushDark'], 0.7)
-    post_x = length / 2 + 0.3
-    top = height + 0.75
-    for sx in (-1, 1):
-        rbox(f'cw-post-{sx}', (0.32, 0.32, top), 0.1, arch, coll, root, (sx * post_x, 0.25, top / 2))
-        rbox(f'cw-foot-{sx}', (0.46, 0.46, 0.14), 0.06, arch_dark, coll, root, (sx * post_x, 0.25, 0.07))
-    rbox('cw-beam', (2 * post_x + 0.4, 0.38, 0.36), 0.12, arch, coll, root, (0.0, 0.25, top + 0.1))
-    rbox('cw-sign', (1.5, 0.1, 0.56), 0.2, mat(w['sign'], 0.8), coll, root, (0.0, 0.02, top + 0.5))
-    for j, (dx, dz, r) in enumerate([(-0.42, -0.02, 0.15), (-0.12, 0.06, 0.19), (0.2, -0.01, 0.16), (0.47, 0.07, 0.11)]):
-        blob(f'cw-sign-bubble-{j}', mat(w['wallStripe'], 0.25), coll, root, (dx, -0.04, top + 0.5 + dz), (r, 0.04, r), seg=(24, 10))
-    # The roller brush behind the car, hanging from the beam.
-    lathe('cw-brush', rounded_profile(0.3, 0.3, top - 0.1, 0.4), brush, coll, root, (post_x - 0.6, 0.75, 0.0))
-    for j in range(5):
-        torus(f'cw-brush-ring-{j}', 0.31, 0.03, brush_dark, coll, root, (post_x - 0.6, 0.75, 0.5 + 0.38 * j))
-    # Foam on the car (roof and side) and a little on the ground.
     foam, shade = mat(w['foam'], 0.55), mat(w['foamShade'], 0.55)
-    for j, (x, y, z, r) in enumerate([(-0.5, 0.0, height + 0.05, 0.26), (-0.15, 0.1, height + 0.12, 0.3), (0.25, -0.05, height + 0.04, 0.24),
-                                       (-0.9, -0.78, 0.75, 0.2), (-0.6, -0.8, 0.95, 0.17), (0.35, -0.8, 0.7, 0.18), (0.65, -0.78, 0.9, 0.14),
-                                       (-1.3, -0.9, 0.12, 0.16), (1.35, -0.8, 0.1, 0.13)]):
-        blob(f'cw-foam-{j}', foam if j % 3 else shade, coll, root, (x, y, z), (r, r * 0.9, r * 0.85), seg=(24, 12))
+    for j, (x, y, z, r) in enumerate([(-0.35, 0.0, height + 0.04, 0.22), (-0.05, 0.08, height + 0.1, 0.27), (0.28, -0.04, height + 0.03, 0.2),
+                                       (-0.7, -width / 2 - 0.02, height * 0.55, 0.16), (0.45, -width / 2 - 0.02, height * 0.5, 0.14)]):
+        blob(f'car-foam-{j}', foam if j % 3 else shade, coll, root, (x, y, z), (r, r * 0.9, r * 0.85), seg=(24, 12))
+    # the hose reel behind the car's tail (−x), its axis along y
+    reel, reel_dark, hose = mat(w['reel'], 0.45), mat(w['reelDark'], 0.45), mat(w['hose'], 0.45)
+    rx, ry, rz = -length / 2 - 0.2, width / 2 + 0.3, 0.5
+    for side in (-1, 1):
+        blob(f'hose-reel-disc-{side}', reel, coll, root, (rx, ry + side * 0.17, rz), (0.42, 0.04, 0.42), seg=(32, 8))
+        rod(f'hose-reel-leg-{side}', (rx, ry + side * 0.2, rz), (rx + side * 0.25, ry + side * 0.2, 0.0), 0.04, reel_dark, coll, root, seg=8)
+    for k, rr in enumerate((0.2, 0.26, 0.32)):
+        for j, yy in enumerate((-0.08, 0.0, 0.08)):
+            torus(f'hose-coil-{k}-{j}', rr, 0.045, hose, coll, root, (rx, ry + yy, rz), (90.0, 0.0, 0.0))
+    # the hose from the reel along the ground to the nozzle near the car's rear wheel, and the water arc
+    nx, ny, nz = -length / 2 + 0.05, -width / 2 - 0.55, 0.35
+    rod('hose-run-0', (rx, ry - 0.2, rz - 0.35), (-length / 2 - 0.45, 0.0, 0.05), 0.045, hose, coll, root, seg=10)
+    rod('hose-run-1', (-length / 2 - 0.45, 0.0, 0.05), (nx - 0.25, ny, nz - 0.1), 0.045, hose, coll, root, seg=10)
+    rod('hose-nozzle', (nx - 0.25, ny, nz - 0.1), (nx, ny + 0.06, nz), 0.06, mat(w['nozzle'], 0.35), coll, root, seg=12)
+    drop = mat(w['drop'], 0.15)
+    for k in range(5):
+        t = (k + 1) / 6
+        blob(f'hose-water-{k}', drop, coll, root, (nx + 0.6 * t, ny + 0.06 + 0.35 * t, nz + 0.45 * math.sin(math.pi * t)), (0.07, 0.07, 0.09), seg=(12, 8))
 
 
-def build_plane(root, coll, c):
-    """A round toy propeller plane parked on the grass (its nose along +x, tilted up; the corner's yaw turns it to a
-    three-quarter view): yellow body, cream belly, pink wings and tail, a blue nose with brown blades, a glass canopy,
-    two main wheels and a tail wheel, and a red and a purple balloon tied to its tail."""
-    p = c['plane']
-    body, body_dark, belly = mat(p['body'], 0.3), mat(p['bodyDark'], 0.35), mat(p['belly'], 0.4)
-    wing, wing_dark = mat(p['wing'], 0.35), mat(p['wingDark'], 0.35)
-    nose, prop, tyre = mat(p['nose'], 0.3), mat(p['prop'], 0.45), mat(p['wheel'], 0.55)
-    hull = add_empty('plane-hull', (0.0, 0.0, 1.0), coll)
-    hull.parent = root
-    hull.rotation_euler = (0.0, math.radians(-PLANE_TILT), 0.0)
-
-    def fuselage(d):  # slimmer toward the tail (−x)
-        t = max(0.0, -d.x)
-        k = 1.0 - 0.55 * t * t
-        return Vector((d.x, d.y * k, d.z * k + 0.1 * t * t))
-
-    blob('plane-body', body, coll, hull, (0.0, 0.0, 0.0), (1.35, 0.72, 0.7), shape=fuselage)
-    blob('plane-belly', belly, coll, hull, (0.12, 0.0, -0.2), (1.02, 0.63, 0.52))
-    blob('plane-nose', nose, coll, hull, (1.08, 0.0, 0.0), (0.4, 0.5, 0.5))
-    blob('plane-spinner', prop, coll, hull, (1.5, 0.0, 0.0), (0.17, 0.15, 0.15), seg=(24, 12))
-    for k, a in enumerate((25.0, 205.0)):
-        r = math.radians(a)
-        blob(f'plane-blade-{k}', prop, coll, hull, (1.52, -math.sin(r) * 0.36, math.cos(r) * 0.36), (0.045, 0.13, 0.4), (a, 0.0, 0.0), seg=(24, 12))
-    blob('plane-wing', wing, coll, hull, (0.22, 0.0, -0.2), (0.46, 1.62, 0.1))
-    for sy in (-1, 1):
-        blob(f'plane-wing-tip-{sy}', wing_dark, coll, hull, (0.22, sy * 1.42, -0.2), (0.34, 0.24, 0.115), seg=(24, 12))
-    blob('plane-tailplane', wing, coll, hull, (-1.14, 0.0, 0.12), (0.25, 0.62, 0.07), seg=(24, 12))
-    blob('plane-fin', wing_dark, coll, hull, (-1.16, 0.0, 0.42), (0.3, 0.07, 0.36), (0.0, 18.0, 0.0), seg=(24, 12))
-    blob('plane-canopy', mat(p['gogglesGlass'], 0.12), coll, hull, (0.3, 0.0, 0.56), (0.42, 0.4, 0.3))
-    torus('plane-canopy-rim', 0.36, 0.045, body_dark, coll, hull, (0.3, 0.0, 0.52), (0.0, 0.0, 0.0))
-    # the wheels stand on the ground (the root's frame): two under the wing, one under the tail
-    for sy in (-1, 1):
-        rod(f'plane-strut-{sy}', (0.45, sy * 0.48, 0.8), (0.52, sy * 0.62, 0.26), 0.055, body_dark, coll, root)
-        torus(f'plane-wheel-{sy}', 0.15, 0.1, tyre, coll, root, (0.52, sy * 0.66, 0.25), (90.0, 0.0, 0.0))
-        blob(f'plane-hub-{sy}', belly, coll, root, (0.52, sy * 0.72, 0.25), (0.1, 0.07, 0.1), seg=(16, 8))
-    tail = Vector((-1.15 * math.cos(math.radians(PLANE_TILT)), 0.0, 1.0 - 1.15 * math.sin(math.radians(PLANE_TILT))))
-    rod('plane-tail-strut', (tail.x, 0.0, tail.z - 0.05), (tail.x - 0.05, 0.0, 0.14), 0.045, body_dark, coll, root)
-    blob('plane-tail-wheel', tyre, coll, root, (tail.x - 0.05, 0.0, 0.11), (0.11, 0.08, 0.11), seg=(16, 8))
-
-    def balloon(d):  # a little narrower toward the knot (−z)
-        k = 0.8 + 0.2 * (d.z + 1) / 2
-        return Vector((d.x * k, d.y * k, d.z))
-
-    string, shine = mat(p['string'], 0.6), mat(p['cloud'], 0.2)
-    knot = (tail.x - 0.1, 0.0, tail.z + 0.5)
-    for name, colour, (x, y, z), r in (('red', p['balloonRed'], (-1.9, 0.12, 2.15), 0.4), ('purple', p['balloonPurple'], (-1.15, -0.12, 2.38), 0.36)):
-        rod(f'plane-string-{name}', knot, (x, y, z - r * 1.2), 0.02, string, coll, root, seg=8)
-        blob(f'plane-balloon-{name}', mat(colour, 0.22), coll, root, (x, y, z), (r, r, r * 1.18), shape=balloon)
-        blob(f'plane-balloon-knot-{name}', mat(colour, 0.22), coll, root, (x, y, z - r * 1.2), (0.07, 0.07, 0.06), seg=(12, 6))
-        blob(f'plane-balloon-shine-{name}', shine, coll, root, (x + r * 0.42, y + r * 0.62, z + r * 0.45), (r * 0.12, r * 0.14, r * 0.24), (0.0, 0.0, 0.0), seg=(12, 6))
+BUILDERS = {'bed': build_bed, 'wardrobe': build_wardrobe, 'stage': build_band, 'pen': build_pen, 'clinic': build_doghouse, 'garden': build_garden, 'car-wash': build_family_car}
 
 
-def build_train(root, coll, c):
-    """A toy steam engine and one car on a short stub of track (the engine's nose along +x; the corner's yaw turns it
-    to a three-quarter view): a green boiler with yellow bands, a red cab roof, a dark chimney with a puff of smoke,
-    red wheels with yellow hubs; a red wagon with a white dot; rails on wooden sleepers."""
-    t = c['train']
-    body, dark, band = mat(t['engine'], 0.32), mat(t['engineDark'], 0.4), mat(t['boilerBand'], 0.35)
-    roof, ink, hub = mat(t['cabRoof'], 0.35), mat(t['chimney'], 0.5), mat(t['wheelHub'], 0.35)
-    wheel_m, rail = mat(t['wheel'], 0.4), mat(t['rail'], 0.3)
-    # The track: two rails on six sleepers.
-    for k in range(6):
-        rbox(f'train-sleeper-{k}', (0.22, 1.1, 0.07), 0.02, mat(t['sleeper'], 0.7), coll, root, (-1.75 + 0.62 * k, 0.0, 0.035))
-    for s in (-1, 1):
-        rbox(f'train-rail-{s}', (3.7, 0.08, 0.08), 0.02, rail, coll, root, (-0.2, 0.36 * s, 0.11))
-    # The engine (x 0 … 1.9) and the car behind it (x −1.9 … −0.75).
-    z0 = 0.15
-    rbox('train-footplate', (1.9, 0.92, 0.12), 0.05, dark, coll, root, (0.95, 0.0, z0 + 0.5))
-    lathe('train-boiler', rounded_profile(0.36, 0.0, 1.15, 0.25), body, coll, root, (0.75, 0.0, z0 + 0.9), (0.0, 90.0, 0.0))
-    blob('train-smokebox', ink, coll, root, (1.88, 0.0, z0 + 0.9), (0.06, 0.33, 0.33), seg=(32, 12))
-    for k, x in enumerate((1.0, 1.35, 1.7)):
-        torus(f'train-band-{k}', 0.365, 0.035, band, coll, root, (x, 0.0, z0 + 0.9), (0.0, 90.0, 0.0))
-    lathe('train-chimney', [(0.0, 0.0), (0.13, 0.0), (0.12, 0.28), (0.17, 0.38), (0.22, 0.46), (0.22, 0.5), (0.0, 0.5)], ink, coll, root, (1.58, 0.0, z0 + 1.16), seg=32)
-    blob('train-dome', band, coll, root, (1.2, 0.0, z0 + 1.24), (0.17, 0.17, 0.16), seg=(32, 16))
-    smoke = mat(t['smoke'], 0.7)
-    for k, (dx, dz, r) in enumerate(((-0.08, 1.8, 0.18), (-0.42, 1.92, 0.22), (-0.86, 1.98, 0.24))):
-        blob(f'train-smoke-{k}', smoke, coll, root, (1.58 + dx, 0.0, z0 + dz), (r, r * 0.9, r * 0.85), seg=(24, 12))
-    rbox('train-cab', (0.72, 0.96, 0.5), 0.08, body, coll, root, (0.36, 0.0, z0 + 0.83))
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            rod(f'train-post-{sx}-{sy}', (0.36 + 0.3 * sx, 0.4 * sy, z0 + 1.05), (0.36 + 0.3 * sx, 0.4 * sy, z0 + 1.82), 0.04, dark, coll, root, seg=12)
-    rbox('train-roof', (0.92, 1.18, 0.12), 0.06, roof, coll, root, (0.36, 0.0, z0 + 1.86))
-    rbox('train-cowcatcher', (0.3, 0.8, 0.3), 0.08, roof, coll, root, (1.98, 0.0, z0 + 0.15))
-    for k, x in enumerate((0.4, 0.95, 1.5)):
-        for sy in (-1, 1):
-            blob(f'train-wheel-{k}-{sy}', wheel_m, coll, root, (x, 0.47 * sy, z0 + 0.25), (0.25, 0.07, 0.25), seg=(32, 12))
-            blob(f'train-hub-{k}-{sy}', hub, coll, root, (x, 0.53 * sy, z0 + 0.25), (0.08, 0.03, 0.08), seg=(16, 8))
-    red, red_dark = mat(t['carRed'], 0.32), mat(t['carRedDark'], 0.4)
-    rbox('train-car', (1.15, 0.86, 0.44), 0.1, red, coll, root, (-1.3, 0.0, z0 + 0.62))
-    rbox('train-car-inside', (1.0, 0.72, 0.05), 0.03, red_dark, coll, root, (-1.3, 0.0, z0 + 0.83))
-    for sy in (-1, 1):
-        blob(f'train-car-dot-{sy}', mat(t['trim'], 0.4), coll, root, (-1.3, 0.44 * sy, z0 + 0.6), (0.13, 0.02, 0.13), seg=(24, 8))
-        for k, x in enumerate((-1.62, -0.98)):
-            blob(f'train-car-wheel-{k}-{sy}', mat(t['carWheel'], 0.5), coll, root, (x, 0.45 * sy, z0 + 0.19), (0.19, 0.06, 0.19), seg=(28, 10))
-            blob(f'train-car-hub-{k}-{sy}', hub, coll, root, (x, 0.5 * sy, z0 + 0.19), (0.06, 0.03, 0.06), seg=(12, 8))
-    rod('train-coupler', (-0.72, 0.0, z0 + 0.42), (0.02, 0.0, z0 + 0.42), 0.04, ink, coll, root, seg=8)
-
-
-
-def build_rocket(root, coll, c):
-    """A toy rocket on a little round pad (Tên lửa lên Mặt Trăng): a red body with white bands and a round porthole, a
-    yellow nose, blue fins, a soft puff of smoke at its foot."""
-    k = c['rocket']
-    body, nose, fin = mat(k['red'], 0.28), mat(k['yellow'], 0.28), mat(k['blue'], 0.28)
-    white, metal = mat(k['white'], 0.3), mat(k['metal'], 0.3)
-    lathe('rocket-pad', [(0.0, 0.0), (0.52, 0.0), (0.56, 0.06), (0.52, 0.16), (0.0, 0.16)], mat(k['pad'], 0.45), coll, root)
-    torus('rocket-pad-trim', 0.5, 0.035, mat(k['padTrim'], 0.35), coll, root, (0.0, 0.0, 0.16))
-    z = 0.16
-    lathe('rocket-nozzle', [(0.0, z), (0.3, z), (0.37, z + 0.04), (0.33, z + 0.14), (0.25, z + 0.34), (0.0, z + 0.36)], metal, coll, root)
-    prof = [(0.0, z + 0.3), (0.3, z + 0.31), (0.44, z + 0.37), (0.52, z + 0.5)]
-    for i in range(1, 13):
-        t = i / 12
-        prof.append((0.52 + 0.07 * math.sin(math.pi * min(1.0, t * 1.1)), z + 0.5 + t * 1.65))
-    prof.append((0.0, z + 2.15))
-    lathe('rocket-body', prof, body, coll, root, seg=48)
-    cone = [(0.0, z + 2.1)] + [(0.53 * (1 - (i / 13) ** 1.7) ** 0.62, z + 2.1 + (i / 13) * 0.95) for i in range(14)]
-    cone[-1] = (0.0, z + 3.08)
-    lathe('rocket-nose', cone, nose, coll, root, seg=48)
-    torus('rocket-band-low', 0.55, 0.055, white, coll, root, (0.0, 0.0, z + 0.62))
-    torus('rocket-band-top', 0.535, 0.06, white, coll, root, (0.0, 0.0, z + 2.12))
-    rim = mesh_obj('rocket-port-rim', torus_bm(0.3, 0.07, seg=40, tube=12), white, coll)
-    rim.parent = root
-    rim.location = (0.0, -0.585, z + 1.5)
-    rim.rotation_euler = (math.radians(90), 0.0, 0.0)
-    blob('rocket-port', mat(k['glass'], 0.15), coll, root, (0.0, -0.58, z + 1.5), (0.28, 0.08, 0.28), seg=(32, 12))
-    blob('rocket-port-shine', mat(k['white'], 0.15), coll, root, (-0.1, -0.65, z + 1.6), (0.07, 0.02, 0.04), seg=(12, 6))
-    for n, ang in enumerate((90.0, 270.0, 180.0)):
-        a = math.radians(ang)
-        ca, sa = math.cos(a), math.sin(a)
-        blob(f'rocket-fin-{n}', fin, coll, root, (0.5 * sa, -0.5 * ca, z + 0.55), (0.12 * abs(sa) + 0.08 * abs(ca), 0.12 * abs(ca) + 0.08 * abs(sa), 0.45), seg=(28, 14))
-    for n, (dx, r) in enumerate(((-0.36, 0.15), (0.34, 0.14), (0.0, 0.14))):
-        blob(f'rocket-puff-{n}', mat(k['smoke'], 0.7), coll, root, (dx, -0.3, 0.2 + r * 0.6), (r, r * 0.9, r * 0.8), seg=(20, 10))
-
-
-BUILDERS = {'pen': build_pen, 'stage': build_stage, 'bed': build_bed, 'clinic': build_clinic, 'wardrobe': build_wardrobe, 'garden': build_garden, 'car-wash': build_car_wash, 'plane': build_plane, 'train': build_train, 'rocket': build_rocket}
-
-
-def place_in_box(scene, screen, root, meshes, box):
-    """Scales the prop to fit `box` (design px) and stands it on the ground (z 0) at the box's bottom centre."""
+def place_in_box(scene, screen, root, meshes, box, z0=0.0):
+    """Scales the prop to fit `box` (design px) and stands it on its floor (z `z0`) at the box's bottom centre."""
     x0, y0, x1, y1 = box
-    target = unproject(scene, (x0 + x1) / 2, y1, 0.0)
-    root.location = (target.x, target.y, 0.0)
+    target = unproject(scene, (x0 + x1) / 2, y1, z0)
+    root.location = (target.x, target.y, z0)
     for _ in range(PLACE_PASSES):
         bpy.context.view_layer.update()
         pts = eval_world_verts(meshes, bpy.context.evaluated_depsgraph_get())
@@ -803,13 +916,13 @@ def place_in_box(scene, screen, root, meshes, box):
         bpy.context.view_layer.update()
         pts = eval_world_verts(meshes, bpy.context.evaluated_depsgraph_get())
         rx0, ry0, rx1, ry1 = screen.rect(pts)
-        now = unproject(scene, (rx0 + rx1) / 2, ry1, 0.0)
-        root.location += Vector((target.x - now.x, target.y - now.y, -min(p.z for p in pts)))
+        now = unproject(scene, (rx0 + rx1) / 2, ry1, z0)
+        root.location += Vector((target.x - now.x, target.y - now.y, z0 - min(p.z for p in pts)))
     bpy.context.view_layer.update()
 
 
-def build_corner(scene, screen, cid, params, sprites, layout):
-    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden'], 'carWash': params['art']['carWash'], 'plane': params['art']['plane'], 'train': params['art']['train'], 'rocket': params['art']['rocket']}
+def build_corner(scene, screen, cid, params, sprites, layout, house):
+    c = {**params['colours'], **params['art']['home'], 'garden': params['art']['garden'], 'carWash': params['art']['carWash'], 'creatureLight': params['art']['creatureLight']}
     coll = bpy.data.collections.new(f'sprite.{cid}')
     sprites.children.link(coll)
     root = add_empty(f'{cid}-root', (0.0, 0.0, 0.0), coll)
@@ -818,25 +931,22 @@ def build_corner(scene, screen, cid, params, sprites, layout):
     BUILDERS[cid](inner, coll, c)
     root.rotation_euler = (0.0, 0.0, math.radians(CORNER_YAW[cid]))
     meshes = [o for o in coll.all_objects if o.type == 'MESH']
-    place_in_box(scene, screen, root, meshes, CORNER_BOXES[cid])
+    z0 = house.z[CORNER_FLOOR[cid]] if cid in CORNER_FLOOR else 0.0
+    place_in_box(scene, screen, root, meshes, CORNER_BOXES[cid], z0)
     pts = eval_world_verts(meshes, bpy.context.evaluated_depsgraph_get())
     hull_object(f'hit.{cid}', [tuple(p) for p in pts], layout)
     cx = (min(p.x for p in pts) + max(p.x for p in pts)) / 2
     cy = (min(p.y for p in pts) + max(p.y for p in pts)) / 2
-    add_empty(f'anchor.{cid}', (cx, cy, 0.0), layout)
+    add_empty(f'anchor.{cid}', (cx, cy, z0), layout)
     r = screen.rect(pts)
     print(f'build_home: corner {cid} ({r[0]:.0f},{r[1]:.0f})-({r[2]:.0f},{r[3]:.0f}) {r[2] - r[0]:.0f}x{r[3] - r[1]:.0f}')
+    if cid in CORNER_FLOOR:
+        lo = (min(p.x for p in pts), min(p.y for p in pts), max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts))
+        room = (house.x0 + WALL_T, house.front, house.x1 - WALL_T, house.back - WALL_T)
+        top = house.z['ceiling1' if CORNER_FLOOR[cid] == 'floor1' else 'ceiling0']
+        if lo[0] < room[0] or lo[1] < room[1] - 0.05 or lo[2] > room[2] or lo[3] > room[3] or lo[4] > top:
+            fail(f'corner {cid} does not fit in its room: x {lo[0]:.2f}…{lo[2]:.2f} y {lo[1]:.2f}…{lo[3]:.2f} top {lo[4]:.2f}; room x {room[0]:.2f}…{room[2]:.2f} y {room[1]:.2f}…{room[3]:.2f} top {top:.2f}')
     return coll
-
-
-def clear_tufts_under(near, screen):
-    """Removes lawn tufts and flowers inside a corner box (they would show through the sprite's edges)."""
-    for o in near:
-        p = screen.project(tuple(o.location))
-        for (x0, y0, x1, y1) in CORNER_BOXES.values():
-            if x0 - 20 <= p[0] <= x1 + 20 and y0 <= p[1] <= y1 + 20:
-                bpy.data.objects.remove(o, do_unlink=True)
-                break
 
 
 def main():
@@ -859,10 +969,9 @@ def main():
     layout = bpy.data.collections.new('layout')
     scene.collection.children.link(layout)
     layout.hide_render = True
-    near = build_plate(scene, screen, params, plate)
-    clear_tufts_under(near, screen)
+    house = build_plate(scene, screen, params, plate)
     for cid in BUILDERS:
-        build_corner(scene, screen, cid, params, sprites, layout)
+        build_corner(scene, screen, cid, params, sprites, layout, house)
     scene.frame_set(IDLE_FRAME)
     soften_scene(scene)
     bpy.ops.wm.save_as_mainfile(filepath=args['out'], compress=True)

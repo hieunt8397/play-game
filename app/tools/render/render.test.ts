@@ -75,7 +75,7 @@ describe('art:build', () => {
       shadowMatch: { caveInner: '#F6EEDC', pedestal: '#FF8FB8', pedestalTop: '#FFF1E0' },
       fishing: { yellow: '#FFD23F', orange: '#FF9A3C', blue: '#2F6FDB', stripe: '#FFFFFF', dot: '#FFFFFF', line: '#F5F5F5' },
       touchTalk: { white: '#FFFFFF', beak: '#FFC93C', pavement: '#C9CED6', bus: '#FFD23F', skyTop: '#9ED6F7', skyHorizon: '#E6F6FF', seaNear: '#A6E6F6', seaFar: '#6CC8EE', sandLight: '#F5D9A3', sandWet: '#E8C489', verge: '#B4E09A', pavementLine: '#C0C6D0', haze: '#EEF6FC', fin: '#FFD45C', gullTip: '#B8C4D6', shell: '#FFB3C1', coconut: '#7CC46B', boatHull: '#FF7B72', tire: '#3B4252', hub: '#EEF1F5', glass: '#BDE6FF', banana: '#FFD84A', bananaTip: '#8A5A33', egg: '#FFF1DC', melonRind: '#3E9E52', melonStripe: '#2C7A3D', melonLight: '#D9F5C2', melonFlesh: '#FF5D73', grassNear: '#A2DA84' },
-      home: { wood: '#E8B27A', woodDark: '#C98B55', curtain: '#FF7FAE', drum: '#FF6B6B', drumRim: '#FFFFFF', drumHead: '#FFF4E0', stick: '#F3D9B1', kit: '#FFFFFF', cross: '#F0525B', wardrobe: '#C9A8FF', wardrobeDoor: '#E2D3FF', knob: '#FFE08A', shirt: '#FF9A3C' },
+      home: { wood: '#E8B27A', woodDark: '#C98B55', curtain: '#FF7FAE', drum: '#FF6B6B', drumRim: '#FFFFFF', drumHead: '#FFF4E0', stick: '#F3D9B1', kit: '#FFFFFF', cross: '#F0525B', wardrobe: '#C9A8FF', wardrobeDoor: '#E2D3FF', knob: '#FFE08A', shirt: '#FF9A3C', houseWall: '#FFF1DC', houseTrim: '#FFFFFF', wallBedroom: '#FFD6E4', wallLiving: '#D4F0E2', floorBedroom: '#F2C894', floorLiving: '#E8B27A', roof: '#FF9AA8', roofDark: '#E87D8E', glass: '#BFE6FF', piano: '#FF9FC6', pianoDark: '#E879A8', keyWhite: '#FFFFFF', keyBlack: '#4A3B52', cymbal: '#FFD45E', tom: '#6FC3FF', dogHouse: '#8FD3FF', dogHouseRoof: '#FF8A7A', dogHouseDoor: '#5B4636', bowl: '#FF6B6B', garage: '#FFE7B8', garageDoor: '#FFFFFF', garageStripe: '#9ED8FF', driveway: '#DCD3C6' },
       animalPens: { barn: '#E8735F', barnDark: '#C4574B', trim: '#FFF4E2', roof: '#8E5B43', door: '#F4B870', doorDark: '#D9914E', inside: '#5E3B2F', straw: '#F7D46B', hinge: '#6B4A3A', catFur: '#B8B2CC', catStripe: '#8D86A6', catNose: '#FF9DB0', roosterFur: '#F59A4F', roosterBreast: '#FFD08A', roosterWing: '#D9733A', roosterComb: '#FF4F5E', roosterBeak: '#FFC83D', roosterTail: '#2F8F83', roosterTail2: '#3D6FB8', cowFur: '#FFF8EE', cowPatch: '#5A4741', cowMuzzle: '#FFC4C4', cowHorn: '#FFEBB8', pigFur: '#FFB8C8', pigLight: '#FFD6E0', pigSnout: '#FF94AC', pigHoof: '#D97A92', sheepWool: '#FFFDF7', sheepFace: '#F2DCC0', sheepLeg: '#6B5650', horseFur: '#C07D4E', horseLight: '#F6DDBA', horseMane: '#5E3B2F', hoof: '#5A4741' },
       band: { wood: '#E8B27A', woodDark: '#C98B55', curtain: '#8C7BFF', curtainDark: '#6F5CE0', valance: '#FFD23F', flagRed: '#FF6B6B', flagYellow: '#FFD23F', flagBlue: '#4D96FF', flagGreen: '#6BCB77', drum: '#FF6B6B', drumRim: '#FFFFFF', drumHead: '#FFF4E0', lug: '#FFD166', stick: '#F3D9B1', barRed: '#FF6B6B', barOrange: '#FF9A3C', barYellow: '#FFD23F', barGreen: '#6BCB77', barBlue: '#4D96FF', xyloFrame: '#B8794A', mallet: '#FF7FAE', brass: '#FFC94A', brassDark: '#E0A526', bell: '#FFD23F', bellDark: '#E8B21E', stand: '#4D96FF', stool: '#FF9A3C' },
       bedtime: { wall: '#FFE3D3', wallDot: '#FFC9B5', floor: '#D9A273', floorDark: '#BF8558', skirting: '#FFF6EC', windowFrame: '#FFFFFF', daySkyTop: '#8FD3FF', daySkyLow: '#E6F7FF', cloud: '#FFFFFF', skyTop: '#2E3F8F', skyLow: '#7D7FD1', moon: '#FFF1B3', curtain: '#9FC7FF', curtainDark: '#7EAEF2', paintSun: '#FFD23F', paintSky: '#BDE6FF', paintHill: '#9EDC8A', paintHeart: '#FF8FB1', quilt: '#FFD86B', quiltPatch: '#FFFFFF', quiltTrim: '#FF9EC4', stool: '#B9E3C6', mouth: '#7A3B3B', tongue: '#FF8FA3', eyeLine: '#3A2A22', foam: '#FFFFFF', star: '#FFE066', z: '#C9B8FF', nightTint: '#6F7FD0', glow: '#FFE7A3' },
@@ -193,25 +193,21 @@ describe('art:build', () => {
     });
   });
 
-  it('Tàu hỏa chở bạn (2026-11-12): the train builder gets art.train, the friends, cars, destinations, surprises and the sizes', () => {
+  it('Tàu hỏa quanh đảo (2026-11-13): the train builder gets art.train, the friends, cars, stations, destinations and the sprites over the train', () => {
     const p = buildParams();
     expect(Object.keys(p.art.train)).toEqual(Object.keys(Tokens.art.train));
     expect(p.art.train.engine).toBe(Tokens.art.train.engine.css);
     expect(p.train).toEqual({
       friends: ['cat', 'pig', 'sheep', 'cow', 'horse', 'rooster'],
       cars: ['red', 'yellow', 'blue'],
-      destinations: ['beach', 'playground', 'fair'],
-      surprises: ['crossing', 'bridge', 'hot-air', 'rainbow'],
-      carMinPx: 110,
-      friendMinPx: 120,
-      destMinPx: 150,
-      hitMinPx: 80,
-      gapPx: Tokens.spacing.targetGap,
-      scrollPxPerS: Tokens.ui.trainScrollPxPerS,
-      reducedScroll: Tokens.ui.trainReducedScroll,
-      dimInMinMs: 400,
-      darkMaxMs: 600,
+      stations: ['race', 'shadow-match', 'dino-puzzle', 'ice-cream'],
+      destinations: ['beach', 'whale', 'fountain'],
+      fronts: ['dino-puzzle', 'rocket', 'shadow-match'],
     });
+  });
+
+  it('Tàu hỏa quanh đảo (2026-11-13): the train is built from the built map (the same island and camera)', () => {
+    expect(screenSpec('train')).toEqual({ id: 'train', source: 'art/map.blend', builder: 'build_train.py' });
   });
 
   it('Phi công nhí (2026-11-11): the plane builder gets art.plane, the friends, colours, surprises and the sizes', () => {

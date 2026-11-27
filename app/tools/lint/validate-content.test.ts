@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AUDIO_CATALOG } from '../../src/content/audio-catalog.ts';
 import { VOICE_LINES, voiceHashPath, voicePath } from '../../src/content/voice-lines.ts';
 import { lineHash } from '../tts/line-hash.ts';
-import { ATLASES, BACKGROUNDS, TOUCH_TALK_PLATES } from '../../src/content/assets.ts';
+import { ATLASES, BACKGROUNDS, TOUCH_TALK_PLATES, TRAIN_TILES } from '../../src/content/assets.ts';
 import { REQUIRED_FRAMES, dinoLayoutInfo, featureProblems, run, shadowCatalogueProblems } from './validate-content.ts';
 
 const dirs: string[] = [];
@@ -148,7 +148,8 @@ function goodTree(): string {
   const tr = JSON.parse(readFileSync(join(APP, 'public', ATLASES.train.json), 'utf8')) as { textures: { image: string }[] };
   for (const t of tr.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));
   put(root, ATLASES.train.json, JSON.stringify(tr));
-  put(root, BACKGROUNDS.train.path, pngHeader(2048, 1536));
+  // 2026-11-13: the train's island plate is four tiles.
+  for (const t of TRAIN_TILES) put(root, t.path, pngHeader(2048, 1536));
   // Tên lửa lên Mặt Trăng (2026-11-12): the rocket multiatlas JSON is the real one.
   const rk = JSON.parse(readFileSync(join(APP, 'public', ATLASES.rocket.json), 'utf8')) as { textures: { image: string }[] };
   for (const t of rk.textures) put(root, `assets/atlases/${t.image}`, pngHeader(2048, 2048));

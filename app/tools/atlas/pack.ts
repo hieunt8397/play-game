@@ -364,6 +364,21 @@ function writeAll(files: readonly { path: string; data: Buffer }[]): void {
   for (const f of files) renameSync(`${f.path}.tmp`, f.path);
 }
 
+/**
+ * A published background: the render re-encoded, or (2026-11-13, a tiled screen: content/assets › SCREEN_TILES) the
+ * tile `col`, `row` of a `cols` × `rows` grid cut from it.
+ */
+export async function backgroundPng(src: string, tile?: { col: number; row: number; cols: number; rows: number }): Promise<Buffer> {
+  if (!tile) return sharp(src).png({ compressionLevel: BG_COMPRESSION }).toBuffer();
+  const { width = 0, height = 0 } = await sharp(src).metadata();
+  if (width === 0 || height === 0 || width % tile.cols !== 0 || height % tile.rows !== 0) {
+    throw new Error(`background ${src}: ${width}×${height} does not split into ${tile.cols}×${tile.rows} equal tiles`);
+  }
+  const w = width / tile.cols;
+  const h = height / tile.rows;
+  return sharp(src).extract({ left: tile.col * w, top: tile.row * h, width: w, height: h }).png({ compressionLevel: BG_COMPRESSION }).toBuffer();
+}
+
 export async function packScreen(screenArg: string | undefined): Promise<string[]> {
   if (!SCREEN_IDS.includes(screenArg as ScreenId)) {
     throw new Error(`unknown screen "${screenArg ?? ''}": known screens are ${SCREEN_IDS.join(', ')}`);
@@ -393,7 +408,7 @@ export async function packScreen(screenArg: string | undefined): Promise<string[
   const result = await packAsync(inputs, packOptions(screen));
   const pages = maxPages(screen);
   const problems = checkAtlas(screen, result, pages);
-  const bgData = await Promise.all(bgs.map(async (b) => ({ path: b.ref.path, data: await sharp(b.src).png({ compressionLevel: BG_COMPRESSION }).toBuffer() })));
+  const bgData = await Promise.all(bgs.map(async (b) => ({ path: b.ref.path, data: await backgroundPng(b.src, b.tile) })));
   for (const b of bgData) if (b.data.length > MAX_FILE_BYTES) problems.push(`background "${b.path}": ${b.data.length} bytes (max ${MAX_FILE_BYTES})`);
   if (problems.length > 0) throw new Error(problems.join('\n'));
 

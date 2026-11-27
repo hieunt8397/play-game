@@ -94,6 +94,7 @@ import {
   type PlannedStation,
 } from '../core/map-plan';
 import { enterStation, pullBack, revealScene } from '../core/motion';
+import { setTrainStart, takeTrainStart, takeTrainView } from '../core/ride-handoff';
 import {
   chainAnimMs,
   keepAbandonSnapshot,
@@ -398,6 +399,10 @@ export class MapScene extends Scene {
       pullBack: (id) => {
         // Story 5.3: the pull-back is a skippable window (persistence already ran).
         this.skip?.begin(chainAnimMs(this.reduced));
+        // 2026-11-13 (spec-tau-quanh-dao): back from the train game, the pull-back starts from the game's last view at
+        // its zoom (the same island), the reverse of the opening zoom.
+        const view = id === 'train' ? takeTrainView() : undefined;
+        if (view) return pullBack(this, view, this.reduced, Tokens.ui.trainZoom);
         return pullBack(this, LAYOUTS.map.anchors[id] ?? { x: Tokens.design.width / 2, y: Tokens.design.height / 2 }, this.reduced);
       },
       // A chain of a Map instance that shut down never touches the next one.
@@ -909,7 +914,14 @@ export class MapScene extends Scene {
     }
     setHomeTarget('island');
     const focus = this.rides?.focus(id) ?? LAYOUTS.map.anchors[id] ?? { x: Tokens.design.width / 2, y: Tokens.design.height / 2 };
-    await enterStation(this, focus, this.reduced);
+    // 2026-11-13 (spec-tau-quanh-dao): the train game starts where the map's train stands, in the same view: the zoom
+    // lands exactly on the game's opening camera (the game draws the same island at ui.trainZoom).
+    // A stale value from an earlier, interrupted open is dropped first.
+    takeTrainStart();
+    takeTrainView();
+    const train = id === 'train' ? this.rides?.trainStart() : undefined;
+    if (train !== undefined) setTrainStart(train);
+    await enterStation(this, focus, this.reduced, id === 'train' ? Tokens.ui.trainZoom : undefined);
     if (!this.trip) return; // Map shut down meanwhile
     this.pendingRide = undefined;
     this.lastRide = id;

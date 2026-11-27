@@ -123,3 +123,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-bedtime-shiba-chibi.md`
   summary: Tìm bóng still uses the Quaternius Shiba (parent 2026-10-29: later).
   evidence: Giờ đi ngủ now uses the chibi Shiba; build_shadow_match.py still imports `quaternius/animals/ShibaInu.fbx` (also the map's ice-cream icon, so the FBX stays in the repo).
+- source_spec: `_bmad-output/implementation-artifacts/spec-tau-quanh-dao.md`
+  summary: The map's published layout (map.layout.json) and the train layout disagree by up to 10 design px on path.rail at the level crossing; re-render the map from the current art/map.blend (spec 1), then add a validate-content check that the two rails and anchor.train match.
+  evidence: points 201–214 of the two `path.rail` differ (review 2026-11-13); map.layout.json was rendered before spec 1's last map.blend change (the crossing rise), while the train screen was built from that newer map.blend.
+- source_spec: `_bmad-output/implementation-artifacts/spec-tau-quanh-dao.md`
+  summary: Map's half of the train handoff (map-rides-view trainStart/focus('train'), Map's pull-back from the game's view) has no automated test.
+  evidence: no Phaser test harness exists for Map.ts or map-rides-view.ts; the browser run (2026-11-13) showed the zoom in and the pull-back working.

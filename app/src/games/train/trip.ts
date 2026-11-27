@@ -1,50 +1,52 @@
-// Tàu hỏa chở bạn trip model (2026-11-12, spec-tau-hoa), pure and Phaser-free: free play, no score, no timer, no
-// right or wrong. Behind injected ports (audio, view) so every rule is node-testable; the scene clock drives `tick`.
-// The train's x never changes: the model owns how far the world has scrolled and where every scrolling thing is
-// (the platforms, the destination, the tunnel, the cow, the trip's surprise, the clouds, the bird; design px, each
-// thing's ground pivot x); the scene only draws what it reads here. One trip is four legs (to three stations, then
-// to the destination). Phases:
-//   start   → the train waits at the start station (first trip only); `tapTrain()` starts the departure;
-//   depart  → the train toots and pulls away: the world speeds up to cruise (`departMs`; longer than `skipOverMs`, so
-//             any tap skips to its end);
-//   ride    → cruise for `rideMs` (and, on the tunnel leg, until the tunnel has passed the whole train). The tunnel
-//             leg's hill scrolls over the train: `dim` (0…1) is how much of the train it covers; as the engine comes
-//             out the voice says "Ú òa!". The trip's surprise comes on its leg (the crossing and the bridge scroll by;
-//             the hot-air balloon and the rainbow show in the sky); the cow grazes by the track on some legs;
-//   arrive  → the next platform (or the destination) scrolls in and the world eases to a stop with it at its anchor
-//             (a cubic Hermite from cruise; skippable when long); the brakes hiss;
-//   wait    → a friend waits on the platform (there is no timer: the train always waits); `tapFriend()` boards it;
+// Tàu hỏa quanh đảo trip model (2026-11-13, spec-tau-quanh-dao; the game since 2026-11-12, spec-tau-hoa), pure and
+// Phaser-free: free play, no score, no timer, no right or wrong. Behind injected ports (audio, view) so every rule is
+// node-testable; the scene clock drives `tick`.
+// The train runs on the island's rail loop (`path.rail`, geometry.ts): the model owns the engine's arc length `s`
+// (always forward, counter-clockwise) and its speed; the cars trail it (trainPieces). The scene draws the pieces, and
+// the camera (camera.ts) follows `s`.
+// A trip: FRIENDS_PER_TRIP friend stations in loop order (of the four, one is skipped), then a destination. It is planned
+// where it starts (`planTrip`): the stations are the next ones ahead; the volcano's tunnel lies on the path at most once
+// (the skipped station is chosen so). Phases:
+//   start   → the train waits where the map's train stood (a fresh start); `tapTrain()` starts the departure;
+//   depart  → it toots and speeds up to cruise over `departMs` (≤ 1.5 s: nothing to skip);
+//   ride    → cruise (× the rail's local scale): the places of the island go by; the tunnel dims the scene by the share
+//             of the train inside it (`dim`), and "Ú òa!" plays as the engine comes out; the crossing's barriers come
+//             down while a piece is near it; the trip's surprise comes (the kart's driver waves as the engine passes the
+//             crossing; the whale spouts as it passes the whale; the boat or the balloon drifts by after a departure);
+//   arrive  → it brakes to a stop exactly at the next stop (the same rate it sped up at);
+//   wait    → a friend waits on the platform (no timer: the train always waits); `tapFriend()` boards it;
 //   board   → it hops into the next empty car (from the engine back; `boardMs` ≤ 1.5 s, taps on it ignored) with its
 //             call; the voice says its boarding line and counts; then the train departs again;
 //   dest    → the destination waits for a tap: `tapDest()` drops the friends off;
-//   dropoff → they hop off one by one (`dropMs` each, ≤ 1.5 s, taps ignored) and wave; the train toots and sets off
-//             on the next trip (new friends, a new destination and surprise, the tunnel on a new leg).
-// Taps any time: the engine (a puff and a toot), a car (it wobbles, the voice names its colour), the cow and the bird
-// (`press`), the crossing or the bridge (`press`). Nothing ever fails; nothing is ever wrong.
-// `tapDest` already moves the state to the next trip, so Home during the drop-off never resumes delivered friends;
-// the scene keeps a snapshot on Home only while a friend is aboard (`hasProgress`). The partial is
-// `{ friends, aboard, dest, surprise, tunnelLeg }`; `resumeTrip` validates it (invalid → a fresh trip at the first
-// station). A resumed trip shows at once: stopped at the next station with its friend waiting (or at the destination).
+//   dropoff → they hop off one by one (`dropMs` each, ≤ 1.5 s, taps ignored) and wave; the next trip is planned from
+//             here at once (Home during the drop-off keeps nothing) and the train sets off.
+// Taps any time: the engine (a puff and a toot), a car (it wobbles, the voice names its colour), a place (its name),
+// the whale (it spouts). Nothing ever fails; nothing is ever wrong.
+// The partial is `{ friends, aboard, stops, dest, surprise }` (the stops and the destination as ids); `resumeTrip`
+// validates it (an invalid or old-shape one → a fresh trip). A resumed trip shows at once: stopped at its next station
+// with the friend waiting (or at the destination).
 import {
   CAR_COLOURS,
-  CLOUD_COUNT,
+  DRAW_TRIES,
   DESTINATION_IDS,
   FRIEND_IDS,
   FRIENDS_PER_TRIP,
-  LEGS,
+  STATION_IDS,
   SURPRISE_IDS,
-  TUNNEL_LEGS,
-  WORLD,
   isDestination,
   isFriend,
+  isStation,
   isSurprise,
   type CarColour,
   type DestinationId,
   type FriendId,
+  type PlaceId,
+  type StationId,
   type SurpriseId,
 } from '../../content/games/train.ts';
-import type { Point } from '../../content/layout-types.ts';
+import { wrap } from '../../core/map-rides.ts';
 import { Tokens } from '../../core/tokens.ts';
+import { trainPieces, tunnelCover, type Piece, type Rail } from './geometry.ts';
 
 export interface TripAudio {
   sfx(id: string): void;
@@ -57,60 +59,44 @@ export interface TripAudio {
 /** What the idle hint bounces: the waiting train, the friend on its platform, or the destination. */
 export type HintTarget = 'train' | 'friend' | 'dest';
 
-/** What a press in the world touched (the cars, the engine, the friend and the destination are the scene's hulls). */
-export type PressHit = 'none' | 'bird' | 'cow' | 'surprise';
-
-/** A scrolling thing on the ground. `x` is its ground pivot's x now. */
-export type ThingKind = 'platform' | 'dest' | 'tunnel' | 'cow' | 'crossing' | 'bridge';
-export interface Thing {
-  readonly id: number;
-  readonly kind: ThingKind;
-  /** The friend waiting on a platform (null: nobody, the start station or after it boarded); the destination's id. */
-  readonly friend: FriendId | null;
-  readonly dest: DestinationId | null;
-  readonly x: number;
+/** One trip: its friends (boarding order), stations (loop order), destination and surprise. */
+export interface TripPlan {
+  readonly friends: readonly FriendId[];
+  readonly stops: readonly StationId[];
+  readonly dest: DestinationId;
+  readonly surprise: SurpriseId;
 }
 
 /** A trip shown at once (a resumed start): stopped at a station with its friend waiting, or at the destination. */
-export interface TripState {
-  readonly friends: readonly FriendId[];
+export interface TripState extends TripPlan {
   readonly aboard: number;
-  readonly dest: DestinationId;
   readonly atDest: boolean;
 }
 
 export interface TripView {
-  /** A fresh start: the train waits at the start station. */
-  park(): void;
-  /** The train pulls away (over `ms`). */
-  depart(ms: number): void;
-  /** A tap skipped the running departure or arrival: it jumps to its end. */
-  skip(): void;
-  /** A new thing scrolls in from the right. */
-  thingIn(thing: Thing): void;
-  /** The thing has scrolled away (or is gone). */
-  thingGone(id: number): void;
-  /** The train stops: at a platform with `friend` waiting, or at the destination. */
-  arrived(at: { friend: FriendId } | { dest: DestinationId }): void;
-  /** `friend` hops into car `car` (from 0, the one behind the engine) over `ms`. */
-  board(friend: FriendId, car: number, ms: number): void;
+  /** A trip is planned: its friends wait on their stations' platforms (the kart waits at the crossing for its surprise). */
+  planned(plan: TripPlan, aboard: number): void;
+  /** The train pulls away. */
+  depart(): void;
+  /** The train stops: at a station with `friend` waiting, or at the destination. */
+  arrived(at: { station: StationId; friend: FriendId } | { dest: DestinationId }): void;
+  /** `friend` hops from `station`'s platform into car `car` (from 0, the one behind the engine) over `ms`. */
+  board(friend: FriendId, station: StationId, car: number, ms: number): void;
   /** The friends hop off one by one (car 0 first), `ms` each, one every `staggerMs`, then wave. */
   dropoff(dest: DestinationId, friends: readonly FriendId[], ms: number, staggerMs: number): void;
   /** The engine's toot: a puff from the chimney. */
   toot(): void;
   /** Car `n` wobbles. */
   wobble(car: number): void;
-  /** The tunnel: the hill starts to cover the engine; the engine comes out of it. */
+  /** The engine goes into the volcano; it comes out. */
   tunnelIn(): void;
   tunnelOut(): void;
-  /** A ground surprise (the crossing, the bridge) passes the engine: the driver waves, the fish jumps. */
-  passed(kind: 'crossing' | 'bridge'): void;
-  /** The sky surprise (the hot-air balloon, the rainbow) shows (over `ms`). */
-  sky(id: 'hot-air' | 'rainbow', ms: number): void;
-  /** The cow, the bird or the ground surprise was pressed: a small reaction. */
-  cowTapped(): void;
-  birdTapped(): void;
-  surpriseTapped(kind: 'crossing' | 'bridge'): void;
+  /** The crossing's barriers go down / up. */
+  barriers(down: boolean): void;
+  /** The trip's surprise shows (the kart's wave, the whale's spout, the boat or the balloon over `ms`). */
+  surprise(kind: SurpriseId, ms: number): void;
+  /** A tap on the whale: it spouts. */
+  whaleTapped(): void;
   /** The idle hint: its target bounces. */
   hint(target: HintTarget): void;
   /** A resumed trip shows at once. */
@@ -118,11 +104,8 @@ export interface TripView {
 }
 
 export interface TripTimings {
+  /** From a stop to cruise (and from cruise to a stop) takes this long. */
   readonly departMs: number;
-  /** A departure or arrival longer than this can be skipped with a tap. */
-  readonly skipOverMs: number;
-  readonly rideMs: number;
-  readonly arriveMaxMs: number;
   readonly boardMs: number;
   /** After a boarding, the train waits this long before it pulls away. */
   readonly boardPauseMs: number;
@@ -130,10 +113,14 @@ export interface TripTimings {
   readonly dropStaggerMs: number;
   /** After the last friend is off, they wave this long before the train sets off. */
   readonly waveMs: number;
+  /** The boat or the balloon shows this long, this long after a departure. */
   readonly skyMs: number;
-  /** The engine's toot and a car's colour can be asked again after this long. */
+  readonly skyDelayMs: number;
+  /** The engine's toot, a car's colour and a place's name can be asked again after this long. */
   readonly tootGapMs: number;
   readonly carGapMs: number;
+  readonly placeGapMs: number;
+  readonly whaleGapMs: number;
   readonly idleHintMs: number;
   readonly hintMax: number;
   readonly maxDtMs: number;
@@ -143,66 +130,40 @@ export function defaultTripTimings(): TripTimings {
   const t = Tokens.Timing;
   return {
     departMs: t.trainDepartMs,
-    skipOverMs: t.trainSkipOverMs,
-    rideMs: t.trainRideMs,
-    arriveMaxMs: t.trainArriveMaxMs,
     boardMs: t.trainBoardMs,
     boardPauseMs: t.trainBoardPauseMs,
     dropMs: t.trainDropMs,
     dropStaggerMs: t.trainDropStaggerMs,
     waveMs: t.trainWaveMs,
     skyMs: t.trainSkyMs,
+    skyDelayMs: t.trainSkyDelayMs,
     tootGapMs: t.trainTootGapMs,
     carGapMs: t.trainCarGapMs,
+    placeGapMs: t.trainPlaceGapMs,
+    whaleGapMs: t.trainWhaleGapMs,
     idleHintMs: t.trainIdleHintMs,
     hintMax: Tokens.ui.trainHintMax,
     maxDtMs: t.trainMaxTickMs,
   };
 }
 
-/** Where things are (design px). */
-export interface TripGeometry {
-  /** The screen's width. */
-  readonly width: number;
-  /** The train's front (the engine's nose) and back (the last car's tail). */
-  readonly noseX: number;
-  readonly tailX: number;
-  /** The platform's and the destination's ground pivot x at rest. */
-  readonly platformX: number;
-  readonly destX: number;
-  /** The tunnel: from its left portal (its pivot) to its right portal. */
-  readonly tunnelLen: number;
-  /** Where a press on the cow, the bird or a ground surprise is checked (their tap centres' heights). */
-  readonly cowY: number;
-  readonly surpriseY: number;
-}
-
-export interface TripSizes {
-  /** Speeds in design px per second. */
-  readonly scrollPxPerS: number;
-  readonly cloudPxPerS: number;
-  readonly birdPxPerS: number;
-  /** Every speed is × this (reduced motion: a slower world). */
-  readonly speedScale: number;
-  /** A thing enters this far past the right edge (its pivot) and leaves this far past the left edge (its right side). */
-  readonly enterPadPx: number;
-  readonly leavePadPx: number;
-  readonly tapRadiusPx: number;
-  readonly birdGapPx: number;
-}
-
-export function defaultTripSizes(reduced = false): TripSizes {
-  const u = Tokens.ui;
-  return {
-    scrollPxPerS: u.trainScrollPxPerS,
-    cloudPxPerS: u.trainCloudPxPerS,
-    birdPxPerS: u.trainBirdPxPerS,
-    speedScale: reduced ? u.trainReducedScroll : 1,
-    enterPadPx: u.trainEnterPadPx,
-    leavePadPx: u.trainLeavePadPx,
-    tapRadiusPx: u.trainTapRadiusPx,
-    birdGapPx: u.trainBirdGapPx,
-  };
+/** The island the train runs on (design px of arc on `rail`). */
+export interface TripWorld {
+  readonly rail: Rail;
+  /** The cars' pitch (ui.trainCarPitch). */
+  readonly pitch: readonly number[];
+  /** Each friend station's and destination's engine stop. */
+  readonly stations: Readonly<Record<StationId, number>>;
+  readonly dests: Readonly<Record<DestinationId, number>>;
+  /** The volcano's tunnel, the level crossing (arc ranges) and the barriers' margin. */
+  readonly tunnel: { readonly from: number; readonly to: number } | undefined;
+  readonly crossing: { readonly from: number; readonly to: number };
+  readonly crossingMargin: number;
+  /** The engine passing these makes the kart's driver wave and the whale spout. */
+  readonly kartS: number;
+  readonly whaleS: number;
+  /** Cruise (design px per ms at the scale 1; × reducedScroll under reduced motion). */
+  readonly cruise: number;
 }
 
 // --- the shuffle bags -----------------------------------------------------------------------------------------
@@ -249,16 +210,75 @@ export function createShuffleBag<T extends string>(ids: readonly T[], rng: () =>
   };
 }
 
+
 /** `n` different friends from the bag (never the same friend twice in one trip). */
 export function drawFriends(bag: ShuffleBag<FriendId>, n: number): FriendId[] {
   const out: FriendId[] = [];
-  for (let tries = 0; out.length < n && tries < n * WORLD.drawTries; tries++) {
+  for (let tries = 0; out.length < n && tries < n * DRAW_TRIES; tries++) {
     const f = bag.draw();
     if (!out.includes(f)) out.push(f);
   }
   // A bag that keeps repeating (a test's fixed bag): fill from the list, still all different.
   for (const f of FRIEND_IDS) if (out.length < n && !out.includes(f)) out.push(f);
   return out;
+}
+
+// --- the route ------------------------------------------------------------------------------------------------
+
+/** The forward arc from `a` to `b` (a stop right here is a whole lap away: a leg always moves on). */
+function leg(L: number, a: number, b: number): number {
+  const d = wrap(b - a, L);
+  return d < 1 ? d + L : d;
+}
+
+/** How many times the path from `from` through `stops` (arc lengths) passes the point `x`. */
+export function passes(L: number, from: number, stops: readonly number[], x: number): number {
+  let n = 0;
+  let at = from;
+  for (const s of stops) {
+    const len = leg(L, at, s);
+    const toX = wrap(x - at, L);
+    if (toX < len) n += 1 + Math.floor((len - toX) / L);
+    at = s;
+  }
+  return n;
+}
+
+/** How many times the path from `from` through `stops` (arc lengths) passes the tunnel's mouth. */
+export function tunnelPasses(world: TripWorld, from: number, stops: readonly number[]): number {
+  return world.tunnel ? passes(world.rail.loop.length, from, stops, world.tunnel.from) : 0;
+}
+
+/**
+ * The trip's surprise as drawn, unless it cannot happen on this trip: the kart waves and the whale spouts only as the
+ * engine passes them (and the whale's bay already shows the whale). Then the sailing boat drifts by instead.
+ */
+export function reachableSurprise(world: TripWorld, from: number, stops: readonly StationId[], dest: DestinationId, drawn: SurpriseId): SurpriseId {
+  const path = [...stops.map((id) => world.stations[id]), world.dests[dest]];
+  const L = world.rail.loop.length;
+  if (drawn === 'kart' && passes(L, from, path, world.kartS) === 0) return 'boat';
+  if (drawn === 'whale' && (dest === 'whale' || passes(L, from, path, world.whaleS) === 0)) return 'boat';
+  return drawn;
+}
+
+/**
+ * The trip's stations from `from`: FRIENDS_PER_TRIP of the four, in the order the train meets them going forward, then
+ * `dest`. The skipped station is drawn (rng); when that path would pass the tunnel more than once, the first skip (in
+ * the drawn order) that passes it the fewest times is taken. From Ga tàu and every destination some choice passes it at
+ * most once (trip.test checks the island); only a start the map's train handed over just before the volcano may pass
+ * it twice on its first trip.
+ */
+export function planStops(world: TripWorld, from: number, dest: DestinationId, rng: () => number): StationId[] {
+  const L = world.rail.loop.length;
+  const ahead = (id: StationId): number => leg(L, from, world.stations[id]);
+  let best: { stops: StationId[]; passes: number } | undefined;
+  for (const skip of shuffle(STATION_IDS, rng)) {
+    const stops = STATION_IDS.filter((id) => id !== skip).sort((a, b) => ahead(a) - ahead(b));
+    const passes = tunnelPasses(world, from, [...stops.map((id) => world.stations[id]), world.dests[dest]]);
+    if (passes <= 1) return stops;
+    if (!best || passes < best.passes) best = { stops, passes };
+  }
+  return best!.stops;
 }
 
 // --- the controller -------------------------------------------------------------------------------------------
@@ -268,30 +288,29 @@ export type TripPhase = 'start' | 'depart' | 'ride' | 'arrive' | 'wait' | 'board
 export interface TripPartial {
   friends: string[];
   aboard: number;
+  stops: string[];
   dest: string;
   surprise: string;
-  tunnelLeg: number;
 }
 
-export interface TripResume {
-  readonly friends: readonly FriendId[];
+export interface TripResume extends TripPlan {
   readonly aboard: number;
-  readonly dest: DestinationId;
-  readonly surprise: SurpriseId;
-  readonly tunnelLeg: number;
 }
 
 export interface TripLines {
-  /** The invitation (names Xoài): at the start station. */
+  /** The invitation (names Xoài): at the start. */
   readonly prompt: string;
-  /** A friend waits at the station. */
-  readonly station: string;
+  /** A friend waits at the station (the hint and the Speaker prompt there). */
+  readonly wait: string;
+  /** The station's name, as the train stops there. */
+  readonly station: (s: StationId) => string;
   readonly board: (f: FriendId) => string;
   /** The n-th friend's count (from 1). */
   readonly count: (n: number) => string;
   readonly car: (c: CarColour) => string;
   readonly tunnel: string;
   readonly dest: (d: DestinationId) => string;
+  readonly place: (p: PlaceId) => string;
 }
 
 export interface TripSounds {
@@ -303,8 +322,7 @@ export interface TripSounds {
   readonly chime: string;
   readonly honk: string;
   readonly splash: string;
-  readonly chirp: string;
-  /** A friend's own call (the cow by the track calls too). */
+  /** A friend's own call. */
   readonly call: (f: FriendId) => string;
 }
 
@@ -312,16 +330,17 @@ export interface TripOptions {
   readonly friends: ShuffleBag<FriendId>;
   readonly destinations: ShuffleBag<DestinationId>;
   readonly surprises: ShuffleBag<SurpriseId>;
-  /** The world's own draws in [0, 1): the tunnel's leg, the surprise's leg, the clouds' comebacks. */
+  /** The world's own draws in [0, 1): the skipped station. */
   readonly rng: () => number;
-  readonly geometry: TripGeometry;
+  readonly world: TripWorld;
+  /** Where the engine stands at a fresh start (the map train's place). */
+  readonly startS: number;
   readonly resume?: TripResume | null | undefined;
   readonly lines: TripLines;
   readonly sounds: TripSounds;
   readonly audio: TripAudio;
   readonly view: TripView;
   readonly timings?: Partial<TripTimings>;
-  readonly sizes?: Partial<TripSizes>;
 }
 
 export interface TripProgress {
@@ -331,7 +350,7 @@ export interface TripProgress {
 
 export interface TripController {
   start(): void;
-  /** A tap on the engine (or a car) at the start station: true when it started the departure; elsewhere a toot. */
+  /** A tap on the engine (or a car) at the start: true when it started the departure; elsewhere a toot. */
   tapTrain(): boolean;
   /** A tap on car `n`: it wobbles and the voice names its colour (true when it reacted). */
   tapCar(n: number): boolean;
@@ -339,96 +358,74 @@ export interface TripController {
   tapFriend(): boolean;
   /** A tap on the destination: true when it started the drop-off. */
   tapDest(): boolean;
-  /** A press in the world: the cow, the bird or a ground surprise under it reacts. */
-  press(p: Point): PressHit;
-  /** Any press: the idle hint clock restarts; a long departure or arrival skips to its end. */
+  /** A tap on a place: its name (true when it spoke). */
+  tapPlace(id: PlaceId): boolean;
+  /** A tap on the whale: it spouts. */
+  tapWhale(): boolean;
+  /** Any press: the idle hint clock restarts. */
   anyTap(): void;
   tick(dtMs: number): void;
   stop(): void;
   progress(): TripProgress;
   readonly phase: TripPhase;
-  /** This trip's friends (in boarding order), how many are aboard, its destination, surprise and tunnel leg. */
-  readonly friends: readonly FriendId[];
+  readonly plan: TripPlan;
   readonly aboard: number;
-  readonly dest: DestinationId;
-  readonly surprise: SurpriseId;
-  readonly tunnelLeg: number;
-  /** The leg the train is on (0 … LEGS − 1: to station 1, 2, 3, then to the destination). */
-  readonly leg: number;
-  /** How far the ground has scrolled (design px; it only grows) and how fast it scrolls now (design px per ms). */
-  readonly scroll: number;
+  /** The station the train stands at or runs to next (undefined: the destination is next). */
+  readonly station: StationId | undefined;
+  /** The engine's arc length and speed (design px per ms). */
+  readonly s: number;
   readonly speed: number;
-  /** How much of the train the tunnel covers now (0 … 1). */
+  readonly pieces: readonly Piece[];
+  /** How much the tunnel darkens the scene (0 … 1). */
   readonly dim: number;
-  readonly things: readonly Thing[];
-  readonly clouds: readonly Point[];
-  readonly bird: Point;
+  /** Any piece in the tunnel is hidden. */
+  hidden(piece: Piece): boolean;
   /** A friend is aboard: Home keeps the trip to resume. */
   readonly hasProgress: boolean;
   /** An animation runs (boarding, drop-off): the friend and the destination ignore taps. */
   readonly busy: boolean;
 }
 
-const clamp01 = (k: number): number => Math.max(0, Math.min(1, k));
 
 export function createTripController(opts: TripOptions): TripController {
   const t = { ...defaultTripTimings(), ...opts.timings };
-  const z = { ...defaultTripSizes(), ...opts.sizes };
-  const g = opts.geometry;
+  const w = opts.world;
   const { audio, view, rng } = opts;
-  /** Speeds in design px per ms. */
-  const cruise = (z.scrollPxPerS * z.speedScale) / WORLD.msPerS;
-  const cloudV = (z.cloudPxPerS * z.speedScale) / WORLD.msPerS;
-  const birdV = (z.birdPxPerS * z.speedScale) / WORLD.msPerS;
-  const enterX = g.width + z.enterPadPx;
-  const trainLen = Math.max(1, g.noseX - g.tailX);
+  const loop = w.rail.loop;
+  const L = loop.length;
 
   const r = opts.resume ?? null;
-  let friends: FriendId[] = r ? [...r.friends] : drawFriends(opts.friends, FRIENDS_PER_TRIP);
-  let dest: DestinationId = r ? r.dest : opts.destinations.draw();
-  let surprise: SurpriseId = r ? r.surprise : opts.surprises.draw();
-  const pickTunnelLeg = (): number => TUNNEL_LEGS[Math.min(TUNNEL_LEGS.length - 1, Math.floor(rng() * TUNNEL_LEGS.length))]!;
-  /** The surprise's leg: the first or the last (the tunnel takes a middle one). */
-  const pickSurpriseLeg = (): number => (rng() < 0.5 ? 0 : LEGS - 1);
-  let tunnelLeg = r ? r.tunnelLeg : pickTunnelLeg();
-  let surpriseLeg = pickSurpriseLeg();
+  const fresh = (from: number): TripPlan => {
+    const dest = opts.destinations.draw();
+    const stops = planStops(w, from, dest, rng);
+    return { friends: drawFriends(opts.friends, FRIENDS_PER_TRIP), stops, dest, surprise: reachableSurprise(w, from, stops, dest, opts.surprises.draw()) };
+  };
+  let aboard = r ? r.aboard : 0;
+  let s = r ? (aboard >= FRIENDS_PER_TRIP ? w.dests[r.dest] : w.stations[r.stops[aboard]!]) : wrap(opts.startS, L);
+  let plan: TripPlan = r ? { friends: [...r.friends], stops: [...r.stops], dest: r.dest, surprise: r.surprise } : fresh(s);
   if (r) {
     for (const f of r.friends) opts.friends.note(f);
     opts.destinations.note(r.dest);
     opts.surprises.note(r.surprise);
   }
-  let aboard = r ? r.aboard : 0;
-  let leg = r ? Math.min(LEGS - 1, r.aboard) : 0;
   let phase: TripPhase = 'start';
-  let scroll = 0;
-  let speed = 0;
-  let nextId = 1;
-  let things: { id: number; kind: ThingKind; friend: FriendId | null; dest: DestinationId | null; x: number; passed: boolean }[] = [];
-  /** The thing the train is arriving at (a platform or the destination). */
-  let target: (typeof things)[number] | null = null;
-  const clouds = Array.from({ length: CLOUD_COUNT }, (_, i) => ({
-    x: g.width * (WORLD.cloudStart[i % WORLD.cloudStart.length] ?? 1),
-    y: WORLD.cloudY[i % WORLD.cloudY.length] ?? WORLD.cloudY[0],
-  }));
-  const bird = { x: g.width * WORLD.birdStart, y: WORLD.birdY };
-  let now = 0;
-  /** Time in the running departure or arrival, and its length. */
-  let phaseT = 0;
-  let phaseMs = 0;
-  let arriveFrom = 0;
-  let rideLeft = 0;
-  let legT = 0;
+  let v = 0;
+  /** The arc left to the next stop (design px). */
+  let left = 0;
+  let pieces = trainPieces(w.rail, s, w.pitch);
+  let dim = 0;
+  let engineIn = false;
+  let barriersDown = false;
   let surpriseDone = false;
-  let cowDone = false;
-  let tunnelState: 'none' | 'in' | 'covered' | 'out' = 'none';
+  let skyQueued = false;
+  let now = 0;
   let busyUntil = 0;
-  let skipEnd = 0;
-  let skippable = false;
   let tootAt = -Infinity;
+  let whaleAt = -Infinity;
+  let placeAt = -Infinity;
   const carAt: number[] = CAR_COLOURS.map(() => -Infinity);
   let idleMs = 0;
   let hints = 0;
-  let dim = 0;
   let stopped = false;
   let queue: { at: number; fn: () => void }[] = [];
 
@@ -443,199 +440,123 @@ export function createTripController(opts: TripOptions): TripController {
   const busyFor = (ms: number): void => {
     busyUntil = Math.max(busyUntil, now + ms);
   };
-  const stepLine = (): string => (phase === 'start' ? opts.lines.prompt : phase === 'dest' || phase === 'dropoff' ? opts.lines.dest(dest) : opts.lines.station);
+  const nextStation = (): StationId | undefined => (aboard < FRIENDS_PER_TRIP ? plan.stops[aboard] : undefined);
+  const nextStopS = (): number => {
+    const st = nextStation();
+    return st ? w.stations[st] : w.dests[plan.dest];
+  };
+  const stepLine = (): string => (phase === 'start' ? opts.lines.prompt : phase === 'dest' || phase === 'dropoff' ? opts.lines.dest(plan.dest) : opts.lines.wait);
   /** A new step begins: its line is the Speaker prompt, the idle hint starts over. */
   const step = (): void => {
     hints = 0;
     idleMs = 0;
     audio.setPrompt(stepLine());
   };
+  const inTunnel = (x: number): boolean => w.tunnel !== undefined && loop.inRange(x, w.tunnel.from, w.tunnel.to);
 
-  const add = (kind: ThingKind, x: number, extra: { friend?: FriendId | null; dest?: DestinationId | null } = {}): (typeof things)[number] => {
-    const thing = { id: nextId++, kind, friend: extra.friend ?? null, dest: extra.dest ?? null, x, passed: false };
-    things.push(thing);
-    view.thingIn({ ...thing });
-    return thing;
-  };
-  /** How far right of its pivot a thing reaches (so it leaves only once it is wholly off screen). */
-  const reach = (kind: ThingKind): number => (kind === 'tunnel' ? g.tunnelLen + z.leavePadPx : z.leavePadPx);
-
-  /** The train pulls away (from a station, the destination or the start). */
+  /** The train pulls away toward its next stop. */
   const depart = (): void => {
     phase = 'depart';
-    phaseT = 0;
-    phaseMs = t.departMs;
-    skippable = t.departMs > t.skipOverMs;
-    skipEnd = now + t.departMs;
-    // A platform's friend has boarded: the platform scrolls away empty.
+    left = leg(L, s, nextStopS());
     audio.sfx(opts.sounds.toot);
     audio.sfx(opts.sounds.chug);
     view.toot();
-    view.depart(t.departMs);
+    view.depart();
     step();
-    after(t.departMs, ride);
-  };
-
-  /** Cruise: the leg's events come; the arrival starts once the ride is over and the tunnel has passed. */
-  function ride(): void {
-    phase = 'ride';
-    skippable = false;
-    rideLeft = t.rideMs;
-    legT = 0;
-    surpriseDone = false;
-    cowDone = false;
-    tunnelState = 'none';
-    if (leg === tunnelLeg) {
-      add('tunnel', enterX);
-      tunnelState = 'in';
+    // The boat or the balloon: after the trip's first departure with a friend aboard (a resumed trip too).
+    if ((plan.surprise === 'boat' || plan.surprise === 'hot-air') && !surpriseDone && !skyQueued && aboard >= 1) {
+      skyQueued = true;
+      after(t.skyDelayMs, () => {
+        if (surpriseDone) return;
+        surpriseDone = true;
+        audio.sfx(opts.sounds.chime);
+        view.surprise(plan.surprise, t.skyMs);
+      });
     }
-  }
-
-  /** The leg is over: the next platform (or the destination) scrolls in and the world eases to a stop. */
-  const arrive = (): void => {
-    phase = 'arrive';
-    phaseT = 0;
-    const toDest = aboard >= FRIENDS_PER_TRIP;
-    const stopX = toDest ? g.destX : g.platformX;
-    target = toDest ? add('dest', enterX, { dest }) : add('platform', enterX, { friend: friends[aboard] ?? null });
-    arriveFrom = target.x;
-    const d = arriveFrom - stopX;
-    phaseMs = cruise > 0 ? Math.min(t.arriveMaxMs, (2 * d) / cruise) : t.arriveMaxMs;
-    skippable = phaseMs > t.skipOverMs;
-    skipEnd = now + phaseMs;
-    after(phaseMs, stopAt);
   };
 
-  /** The train stands still at its target. */
+  /** The train stands at its stop. */
   const stopAt = (): void => {
-    skippable = false;
-    speed = 0;
-    const tg = target;
-    if (tg) tg.x = tg.kind === 'dest' ? g.destX : g.platformX;
+    v = 0;
     audio.sfx(opts.sounds.hiss);
-    if (aboard >= FRIENDS_PER_TRIP) {
+    const st = nextStation();
+    if (!st) {
       phase = 'dest';
       step();
-      view.arrived({ dest });
-      audio.say(opts.lines.dest(dest));
-    } else {
-      phase = 'wait';
-      step();
-      const f = friends[aboard]!;
-      view.arrived({ friend: f });
-      audio.say(opts.lines.station);
+      view.arrived({ dest: plan.dest });
+      audio.say(opts.lines.dest(plan.dest));
+      return;
     }
+    phase = 'wait';
+    step();
+    view.arrived({ station: st, friend: plan.friends[aboard]! });
+    audio.say(opts.lines.station(st));
   };
 
-  /** A new trip: new friends, destination, surprise and tunnel leg. */
-  const nextTrip = (): void => {
-    friends = drawFriends(opts.friends, FRIENDS_PER_TRIP);
-    dest = opts.destinations.draw();
-    surprise = opts.surprises.draw();
-    tunnelLeg = pickTunnelLeg();
-    surpriseLeg = pickSurpriseLeg();
-    aboard = 0;
-    leg = 0;
-  };
-
-  const coverOf = (x: number): number => {
-    const lo = Math.max(g.tailX, x);
-    const hi = Math.min(g.noseX, x + g.tunnelLen);
-    return clamp01((hi - lo) / trainLen);
-  };
-
-  /** The leg's own events while cruising: the surprise, the cow; the tunnel's cover. */
-  const legEvents = (dt: number): void => {
-    legT += dt;
-    if (leg === surpriseLeg && !surpriseDone && legT >= t.rideMs * WORLD.surpriseAt) {
-      surpriseDone = true;
-      if (surprise === 'crossing' || surprise === 'bridge') add(surprise, enterX);
-      else {
-        view.sky(surprise, t.skyMs);
-        audio.sfx(opts.sounds.chime);
-      }
-    }
-    if (!cowDone && leg !== tunnelLeg && leg % WORLD.cowEvery === 0 && legT >= t.rideMs / 2) {
-      cowDone = true;
-      add('cow', enterX);
-    }
-  };
-
-  /** Everything that moves, over `dt` ms. */
-  const motion = (dt: number): void => {
-    const k0 = phaseMs > 0 ? clamp01(phaseT / phaseMs) : 1;
-    if (phase === 'depart' || phase === 'arrive') phaseT += dt;
-    const k1 = phaseMs > 0 ? clamp01(phaseT / phaseMs) : 1;
-    let dx = 0;
-    if (phase === 'depart') {
-      dx = (cruise * phaseMs * (k1 * k1 - k0 * k0)) / 2;
-      speed = cruise * k1;
-    } else if (phase === 'ride') {
-      dx = cruise * dt;
-      speed = cruise;
-    } else if (phase === 'arrive' && target) {
-      // A cubic Hermite from the cruise speed to 0 over the distance D: no speed jump even when the arrival is capped.
-      const d = arriveFrom - (target.kind === 'dest' ? g.destX : g.platformX);
-      const pos = (k: number): number => {
-        const k2 = k * k;
-        const k3 = k2 * k;
-        return arriveFrom - (phaseMs * cruise * (k3 - 2 * k2 + k) + d * (k2 + 2 * (k2 - k3)));
-      };
-      dx = pos(k0) - pos(k1);
-      speed = dt > 0 ? dx / dt : speed;
-    } else {
-      speed = 0;
-    }
-    scroll += dx;
-    for (const th of things) th.x -= dx;
-    // Ground surprises: the driver waves, the fish jumps as they pass the engine.
-    for (const th of things) {
-      if (th.passed || (th.kind !== 'crossing' && th.kind !== 'bridge') || th.x > g.noseX) continue;
-      th.passed = true;
-      if (th.kind === 'crossing') audio.sfx(opts.sounds.honk);
-      else audio.sfx(opts.sounds.splash);
-      view.passed(th.kind);
-    }
-    const gone = things.filter((th) => th.x + reach(th.kind) < 0 && th !== target);
-    if (gone.length > 0) {
-      things = things.filter((th) => !gone.includes(th));
-      for (const th of gone) view.thingGone(th.id);
-    }
-    // The tunnel: how much of the train it covers.
-    const tunnel = things.find((th) => th.kind === 'tunnel');
-    const was = dim;
-    dim = tunnel ? coverOf(tunnel.x) : 0;
-    if (tunnel && was === 0 && dim > 0 && tunnelState === 'in') {
-      view.tunnelIn();
-    }
-    if (tunnel && dim >= 1 && tunnelState === 'in') tunnelState = 'covered';
-    if (tunnel && tunnelState === 'covered' && tunnel.x + g.tunnelLen <= g.noseX) {
+  /** The pieces, the tunnel, the barriers and the passing surprises after the engine moved from `from` to `s`. */
+  const sense = (from: number, moved: number): void => {
+    pieces = trainPieces(w.rail, s, w.pitch);
+    dim = tunnelCover(pieces, L, w.tunnel);
+    const inside = inTunnel(s);
+    if (inside && !engineIn) view.tunnelIn();
+    if (!inside && engineIn) {
       // The engine comes out into the light.
-      tunnelState = 'out';
       audio.sfx(opts.sounds.toot);
       audio.say(opts.lines.tunnel);
       view.tunnelOut();
     }
-    // The clouds drift (a little even while the train stands still); the bird always flies.
-    const share = dt > 0 && cruise > 0 ? Math.min(1, dx / (cruise * dt)) : 0;
-    const cv = cloudV * (WORLD.cloudIdle + (1 - WORLD.cloudIdle) * share);
-    for (const c of clouds) {
-      c.x -= cv * dt;
-      if (c.x < -z.leavePadPx) c.x = g.width + z.leavePadPx + rng() * g.width * 0.5;
+    engineIn = inside;
+    const m = w.crossingMargin;
+    const near = pieces.some((p) => loop.inRange(p.s, w.crossing.from - m, w.crossing.to + m));
+    if (near !== barriersDown) {
+      barriersDown = near;
+      view.barriers(near);
     }
-    bird.x -= birdV * dt;
-    if (bird.x < -z.leavePadPx) bird.x = g.width + z.leavePadPx + z.birdGapPx;
-    if (phase !== 'ride') return;
-    legEvents(dt);
-    rideLeft -= dt;
-    const tunnelBusy = tunnelState === 'in' || tunnelState === 'covered' || (tunnel !== undefined && coverOf(tunnel.x) > 0);
-    if (rideLeft <= 0 && !tunnelBusy) arrive();
+    const passed = (x: number): boolean => moved > 0 && wrap(x - from, L) > 0 && wrap(x - from, L) <= moved;
+    if (!surpriseDone && plan.surprise === 'kart' && passed(w.kartS)) {
+      surpriseDone = true;
+      audio.sfx(opts.sounds.honk);
+      view.surprise('kart', t.skyMs);
+    }
+    if (!surpriseDone && plan.surprise === 'whale' && passed(w.whaleS)) {
+      surpriseDone = true;
+      audio.sfx(opts.sounds.splash);
+      view.surprise('whale', t.skyMs);
+    }
+  };
+
+  /** The train moves over `dt` ms: it speeds up (or cruises) and brakes to stop exactly at its stop. */
+  const motion = (dt: number): void => {
+    if (phase !== 'depart' && phase !== 'ride' && phase !== 'arrive') return;
+    const k = w.rail.scale(s);
+    const vMax = w.cruise * k;
+    const a = vMax / Math.max(1, t.departMs);
+    const brake = Math.sqrt(2 * a * Math.max(0, left));
+    const target = Math.min(vMax, brake);
+    v = v < target ? Math.min(target, v + a * dt) : Math.max(target, v - a * dt);
+    let stepPx = v * dt;
+    if (stepPx >= left) stepPx = left;
+    const from = s;
+    s = wrap(s + stepPx, L);
+    left -= stepPx;
+    phase = brake < vMax && v >= brake ? 'arrive' : v < vMax ? 'depart' : 'ride';
+    sense(from, stepPx);
+    if (left <= 0) stopAt();
   };
 
   const hintTarget = (): HintTarget | undefined => {
     if (phase === 'start') return 'train';
     if (phase === 'wait') return 'friend';
     return phase === 'dest' ? 'dest' : undefined;
+  };
+
+  const toot = (): boolean => {
+    if (dim > 0 || now - tootAt < t.tootGapMs) return false;
+    tootAt = now;
+    audio.sfx(opts.sounds.toot);
+    audio.sfx(opts.sounds.puff);
+    view.toot();
+    return true;
   };
 
   const tapTrain = (): boolean => {
@@ -648,39 +569,22 @@ export function createTripController(opts: TripOptions): TripController {
     return false;
   };
 
-  const toot = (): boolean => {
-    if (dim > 0 || now - tootAt < t.tootGapMs) return false;
-    tootAt = now;
-    audio.sfx(opts.sounds.toot);
-    audio.sfx(opts.sounds.puff);
-    view.toot();
-    return true;
-  };
-
   return {
     start() {
       if (stopped) return;
+      sense(s, 0);
+      view.planned(plan, aboard);
       if (!r) {
-        // The first trip starts at a station of its own (nobody waits there).
-        target = add('platform', g.platformX);
-        view.park();
         step();
         audio.say(opts.lines.prompt);
         return;
       }
-      // A resumed trip: stopped at the next station with its friend waiting, or at the destination.
+      // A resumed trip: stopped at its next station with the friend waiting, or at the destination.
       const atDest = aboard >= FRIENDS_PER_TRIP;
-      surpriseLeg = -1;
-      if (atDest) {
-        phase = 'dest';
-        target = add('dest', g.destX, { dest });
-      } else {
-        phase = 'wait';
-        target = add('platform', g.platformX, { friend: friends[aboard] ?? null });
-      }
+      phase = atDest ? 'dest' : 'wait';
       step();
-      view.restore({ friends: [...friends], aboard, dest, atDest });
-      audio.say(stepLine());
+      view.restore({ ...plan, aboard, atDest });
+      audio.say(atDest ? opts.lines.dest(plan.dest) : opts.lines.station(nextStation()!));
     },
     tapTrain,
     tapCar(n) {
@@ -694,32 +598,31 @@ export function createTripController(opts: TripOptions): TripController {
       return true;
     },
     tapFriend() {
-      if (stopped || isBusy() || phase !== 'wait') return false;
-      const f = friends[aboard]!;
+      const st = nextStation();
+      if (stopped || isBusy() || phase !== 'wait' || !st) return false;
+      const f = plan.friends[aboard]!;
       const car = aboard;
       aboard += 1;
       phase = 'board';
       idleMs = 0;
       hints = 0;
-      if (target) target.friend = null;
       busyFor(t.boardMs);
-      view.board(f, car, t.boardMs);
+      view.board(f, st, car, t.boardMs);
       audio.sfx(opts.sounds.call(f));
       audio.sayChain([opts.lines.board(f), opts.lines.count(aboard)]);
       after(t.boardMs, () => audio.sfx(opts.sounds.pop));
-      after(t.boardMs + t.boardPauseMs, () => {
-        leg = Math.min(LEGS - 1, leg + 1);
-        target = null;
-        depart();
-      });
+      after(t.boardMs + t.boardPauseMs, depart);
       return true;
     },
     tapDest() {
       if (stopped || isBusy() || phase !== 'dest') return false;
-      const dropped = [...friends];
-      const at = dest;
-      // The state moves to the next trip now: Home during the drop-off never resumes delivered friends.
-      nextTrip();
+      const dropped = [...plan.friends];
+      const at = plan.dest;
+      // The next trip is planned now: Home during the drop-off never resumes delivered friends.
+      plan = fresh(s);
+      aboard = 0;
+      surpriseDone = false;
+      skyQueued = false;
       phase = 'dropoff';
       idleMs = 0;
       hints = 0;
@@ -729,44 +632,26 @@ export function createTripController(opts: TripOptions): TripController {
       after(landed, () => audio.sfx(opts.sounds.chime));
       busyFor(landed + t.waveMs);
       after(landed + t.waveMs, () => {
-        target = null;
+        view.planned(plan, aboard);
         depart();
       });
       return true;
     },
-    press(p) {
-      if (stopped) return 'none';
-      const near = (x: number, y: number): boolean => Math.hypot(x - p.x, y - p.y) <= z.tapRadiusPx;
-      if (near(bird.x, bird.y)) {
-        audio.sfx(opts.sounds.chirp);
-        view.birdTapped();
-        return 'bird';
-      }
-      const cow = things.find((th) => th.kind === 'cow' && near(th.x, g.cowY));
-      if (cow) {
-        audio.sfx(opts.sounds.call('cow'));
-        view.cowTapped();
-        return 'cow';
-      }
-      const s = things.find((th) => (th.kind === 'crossing' || th.kind === 'bridge') && near(th.x, g.surpriseY));
-      if (s && (s.kind === 'crossing' || s.kind === 'bridge')) {
-        audio.sfx(s.kind === 'crossing' ? opts.sounds.honk : opts.sounds.splash);
-        view.surpriseTapped(s.kind);
-        return 'surprise';
-      }
-      return 'none';
+    tapPlace(id) {
+      if (stopped || now - placeAt < t.placeGapMs) return false;
+      placeAt = now;
+      audio.say(opts.lines.place(id));
+      return true;
+    },
+    tapWhale() {
+      if (stopped || now - whaleAt < t.whaleGapMs) return false;
+      whaleAt = now;
+      audio.sfx(opts.sounds.splash);
+      view.whaleTapped();
+      return true;
     },
     anyTap() {
       idleMs = 0;
-      if (stopped || !skippable || now >= skipEnd) return;
-      // Skip: the clock jumps to the animation's end (everything queued moves up with it).
-      const jump = skipEnd - now;
-      for (const q of queue) q.at = Math.max(now, q.at - jump);
-      busyUntil = Math.max(now, busyUntil - jump);
-      skipEnd = now;
-      motion(jump);
-      view.skip();
-      runDue();
     },
     tick(dtMs) {
       if (stopped) return;
@@ -793,46 +678,34 @@ export function createTripController(opts: TripOptions): TripController {
     },
     progress() {
       // questionIndex stays 0: free play closes no question.
-      return { questionIndex: 0, partial: { friends: [...friends], aboard, dest, surprise, tunnelLeg } };
+      return { questionIndex: 0, partial: { friends: [...plan.friends], aboard, stops: [...plan.stops], dest: plan.dest, surprise: plan.surprise } };
     },
     get phase() {
       return phase;
     },
-    get friends() {
-      return friends;
+    get plan() {
+      return plan;
     },
     get aboard() {
       return aboard;
     },
-    get dest() {
-      return dest;
+    get station() {
+      return nextStation();
     },
-    get surprise() {
-      return surprise;
-    },
-    get tunnelLeg() {
-      return tunnelLeg;
-    },
-    get leg() {
-      return leg;
-    },
-    get scroll() {
-      return scroll;
+    get s() {
+      return s;
     },
     get speed() {
-      return speed;
+      return v;
+    },
+    get pieces() {
+      return pieces;
     },
     get dim() {
       return dim;
     },
-    get things() {
-      return things;
-    },
-    get clouds() {
-      return clouds;
-    },
-    get bird() {
-      return bird;
+    hidden(piece) {
+      return inTunnel(piece.s);
     },
     get hasProgress() {
       return aboard > 0 && phase !== 'dropoff' && phase !== 'start';
@@ -845,18 +718,20 @@ export function createTripController(opts: TripOptions): TripController {
 
 /**
  * The resume a snapshot allows, or null (a fresh trip): `questionIndex` 0; FRIENDS_PER_TRIP different known friends;
- * 1 … FRIENDS_PER_TRIP aboard; a known destination and surprise; the tunnel on one of TUNNEL_LEGS.
+ * 1 … FRIENDS_PER_TRIP aboard; FRIENDS_PER_TRIP different known stations; a known destination and surprise. An old
+ * partial (the countryside's `{ friends, aboard, dest, surprise, tunnelLeg }`) has no stops: null.
  */
 export function resumeTrip(resumeAt: { readonly questionIndex: number; readonly partial?: unknown } | null): TripResume | null {
   if (!resumeAt || resumeAt.questionIndex !== 0) return null;
   const p = resumeAt.partial;
   if (typeof p !== 'object' || p === null || Array.isArray(p)) return null;
-  const { friends, aboard, dest, surprise, tunnelLeg } = p as Partial<Record<keyof TripPartial, unknown>>;
-  if (!Array.isArray(friends) || friends.length !== FRIENDS_PER_TRIP || !friends.every(isFriend) || new Set(friends).size !== friends.length) return null;
+  const { friends, aboard, stops, dest, surprise } = p as Partial<Record<keyof TripPartial, unknown>>;
+  const distinct = (xs: unknown[]): boolean => new Set(xs).size === xs.length;
+  if (!Array.isArray(friends) || friends.length !== FRIENDS_PER_TRIP || !friends.every(isFriend) || !distinct(friends)) return null;
+  if (!Array.isArray(stops) || stops.length !== FRIENDS_PER_TRIP || !stops.every(isStation) || !distinct(stops)) return null;
   if (typeof aboard !== 'number' || !Number.isInteger(aboard) || aboard < 1 || aboard > FRIENDS_PER_TRIP) return null;
   if (!isDestination(dest) || !isSurprise(surprise)) return null;
-  if (typeof tunnelLeg !== 'number' || !(TUNNEL_LEGS as readonly number[]).includes(tunnelLeg)) return null;
-  return { friends: [...(friends as FriendId[])], aboard, dest, surprise, tunnelLeg };
+  return { friends: [...(friends as FriendId[])], aboard, stops: [...(stops as StationId[])], dest, surprise };
 }
 
 /** Every friend, destination and surprise id (the scene's bags). */

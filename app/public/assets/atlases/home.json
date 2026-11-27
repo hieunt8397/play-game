@@ -1,19 +1,19 @@
 {
   "frames": {
-    "garden/idle/00": {
+    "stage/idle/00": {
       "frame": {
         "x": 2,
         "y": 2,
-        "w": 409,
-        "h": 275
+        "w": 758,
+        "h": 340
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 592,
-        "y": 1054,
-        "w": 409,
-        "h": 275
+        "x": 147,
+        "y": 957,
+        "w": 758,
+        "h": 340
       },
       "sourceSize": {
         "w": 2048,
@@ -26,42 +26,18 @@
     },
     "pen/idle/00": {
       "frame": {
-        "x": 415,
+        "x": 764,
         "y": 2,
-        "w": 372,
-        "h": 212
+        "w": 574,
+        "h": 325
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 134,
-        "y": 653,
-        "w": 372,
-        "h": 212
-      },
-      "sourceSize": {
-        "w": 2048,
-        "h": 1536
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
-    "clinic/idle/00": {
-      "frame": {
-        "x": 791,
-        "y": 2,
-        "w": 346,
-        "h": 287
-      },
-      "rotated": false,
-      "trimmed": true,
-      "spriteSourceSize": {
-        "x": 99,
-        "y": 1042,
-        "w": 346,
-        "h": 287
+        "x": 1111,
+        "y": 200,
+        "w": 574,
+        "h": 325
       },
       "sourceSize": {
         "w": 2048,
@@ -74,114 +50,18 @@
     },
     "bed/idle/00": {
       "frame": {
-        "x": 415,
-        "y": 218,
-        "w": 333,
-        "h": 374
-      },
-      "rotated": false,
-      "trimmed": true,
-      "spriteSourceSize": {
-        "x": 1147,
-        "y": 954,
-        "w": 333,
-        "h": 374
-      },
-      "sourceSize": {
-        "w": 2048,
-        "h": 1536
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
-    "train/idle/00": {
-      "frame": {
-        "x": 2,
-        "y": 281,
-        "w": 332,
-        "h": 212
-      },
-      "rotated": false,
-      "trimmed": true,
-      "spriteSourceSize": {
-        "x": 320,
-        "y": 299,
-        "w": 332,
-        "h": 212
-      },
-      "sourceSize": {
-        "w": 2048,
-        "h": 1536
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
-    "car-wash/idle/00": {
-      "frame": {
-        "x": 2,
-        "y": 497,
-        "w": 318,
-        "h": 241
-      },
-      "rotated": false,
-      "trimmed": true,
-      "spriteSourceSize": {
-        "x": 1627,
-        "y": 1088,
-        "w": 318,
-        "h": 241
-      },
-      "sourceSize": {
-        "w": 2048,
-        "h": 1536
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
-    "plane/idle/00": {
-      "frame": {
-        "x": 1141,
+        "x": 1342,
         "y": 2,
-        "w": 314,
-        "h": 282
+        "w": 426,
+        "h": 251
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 1635,
-        "y": 659,
-        "w": 314,
-        "h": 282
-      },
-      "sourceSize": {
-        "w": 2048,
-        "h": 1536
-      },
-      "pivot": {
-        "x": 0.5,
-        "y": 0.5
-      }
-    },
-    "stage/idle/00": {
-      "frame": {
-        "x": 1459,
-        "y": 2,
-        "w": 298,
-        "h": 330
-      },
-      "rotated": false,
-      "trimmed": true,
-      "spriteSourceSize": {
-        "x": 823,
-        "y": 461,
-        "w": 298,
-        "h": 330
+        "x": 147,
+        "y": 449,
+        "w": 426,
+        "h": 251
       },
       "sourceSize": {
         "w": 2048,
@@ -194,18 +74,18 @@
     },
     "wardrobe/idle/00": {
       "frame": {
-        "x": 1761,
+        "x": 1772,
         "y": 2,
-        "w": 193,
-        "h": 304
+        "w": 214,
+        "h": 344
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 1271,
-        "y": 487,
-        "w": 193,
-        "h": 304
+        "x": 715,
+        "y": 357,
+        "w": 214,
+        "h": 344
       },
       "sourceSize": {
         "w": 2048,
@@ -216,20 +96,68 @@
         "y": 0.5
       }
     },
-    "rocket/idle/00": {
+    "car-wash/idle/00": {
       "frame": {
-        "x": 1761,
-        "y": 310,
-        "w": 136,
-        "h": 303
+        "x": 1342,
+        "y": 257,
+        "w": 373,
+        "h": 219
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 1612,
-        "y": 208,
-        "w": 136,
-        "h": 303
+        "x": 1568,
+        "y": 894,
+        "w": 373,
+        "h": 219
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "garden/idle/00": {
+      "frame": {
+        "x": 1719,
+        "y": 350,
+        "w": 314,
+        "h": 216
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 1111,
+        "y": 1121,
+        "w": 314,
+        "h": 216
+      },
+      "sourceSize": {
+        "w": 2048,
+        "h": 1536
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "clinic/idle/00": {
+      "frame": {
+        "x": 764,
+        "y": 331,
+        "w": 313,
+        "h": 253
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 1112,
+        "y": 704,
+        "w": 313,
+        "h": 253
       },
       "sourceSize": {
         "w": 2048,
@@ -247,8 +175,8 @@
     "image": "home.png",
     "format": "RGBA8888",
     "size": {
-      "w": 1956,
-      "h": 740
+      "w": 2035,
+      "h": 586
     },
     "scale": 1
   }
