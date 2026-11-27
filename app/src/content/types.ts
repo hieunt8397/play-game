@@ -89,11 +89,10 @@ export type SnapshotPartials = {
    */
   plane: { friend: string; gifts: string[]; surprise: string };
   /**
-   * Tàu hỏa (2026-11-12; on the island since 2026-11-13, spec-tau-quanh-dao): this trip's three friends (in boarding
-   * order), how many are aboard, its three stations (loop order) and destination as ids, and its surprise. Kept on Home
-   * only while a friend is aboard. An old-shape partial (`tunnelLeg`, no `stops`) resumes as a fresh trip.
+   * Tàu hỏa chở bạn (2026-11-12): this trip's three friends (in boarding order), how many are aboard, its
+   * destination, its surprise and the leg its tunnel falls on. Kept on Home only while a friend is aboard.
    */
-  train: { friends: string[]; aboard: number; stops: string[]; dest: string; surprise: string };
+  train: { friends: string[]; aboard: number; dest: string; surprise: string; tunnelLeg: number };
   /**
    * Tên lửa lên Mặt Trăng (2026-11-12): where the trip is ('build' with 1–2 parts fitted, 'pad' built, 'moon'), the
    * parts' colours, the trip's surprise and whether the flag stands. Kept on Home only while a part is on the rocket.

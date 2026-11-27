@@ -517,42 +517,31 @@ const ui = {
   /** Phi công nhí: the idle hint at most this many times per step; its bounce (scale). */
   planeHintMax: 3,
   planeHintBounce: 1.1,
-  /**
-   * Tàu hỏa (2026-11-12; on the island since 2026-11-13, spec-tau-quanh-dao). Sizes in SCREEN px (the world × the zoom ×
-   * the rail's local scale): every tap area (a car's, the waiting friend's) at least trainHitMinPx wide; a waiting friend
-   * drawn at least trainFriendMinPx (longest side); a destination's tap area at least trainDestMinPx × trainDestMinHPx.
-   */
+  /** Tàu hỏa chở bạn (2026-11-12): the engine and each car are drawn at least this wide; their tap areas (and the destination's) at least this wide (design px). */
+  trainCarMinPx: 110,
   trainHitMinPx: 80,
+  /** Tàu hỏa: a waiting friend is drawn at least this tall (longest side); the destination at least this big. */
   trainFriendMinPx: 120,
   trainDestMinPx: 150,
-  trainDestMinHPx: 110,
-  /** Tàu hỏa: the camera shows the island this many times closer than the map (the plate is rendered at 2× the map). */
-  trainZoom: 2,
-  /** Tàu hỏa: the train cruises this many times the map train's speed (design px per second: the map's lap). */
-  trainCruiseMapX: 3,
-  /** Tàu hỏa: under reduced motion the cruise is × this (a slower ride). */
+  /** Tàu hỏa: the world scrolls this fast at cruise (design px per second); the clouds and the bird drift this fast. */
+  trainScrollPxPerS: 220,
+  trainCloudPxPerS: 40,
+  trainBirdPxPerS: 120,
+  /** Tàu hỏa: under reduced motion every scroll speed is × this (a slower world). */
   trainReducedScroll: 0.6,
-  /** Tàu hỏa: each car stands this far (design px of arc, at the local scale 1) behind the piece in front (engine → car 1 …). */
-  trainCarPitch: [62, 56, 56],
-  /**
-   * Tàu hỏa: each piece's tap disc (design px at the local scale 1): the engine's and a car's radius, centred this high over
-   * the piece's ground point. × trainZoom they are ≥ trainHitMinPx wide and neighbouring discs ≥ spacing.targetGap apart.
-   */
-  trainEngineHitR: 26,
-  trainCarHitR: 21,
-  trainPieceLift: 20,
-  /** Tàu hỏa: the camera looks this far (design px of arc) past the train's middle. */
-  trainCameraLead: 110,
-  /** Tàu hỏa: under reduced motion the camera steps when its target is this share of the view's width away. */
-  trainCameraStepShare: 0.22,
-  /** Tàu hỏa: the crossing's barriers go down this far (design px of arc) before a piece reaches the crossing and up this far after. */
-  trainCrossingMargin: 30,
-  /** Tàu hỏa: the tunnel darkens the scene by at most this much (the dim's alpha over art.train.tunnelInside); under reduced motion, this much. */
+  /** Tàu hỏa: a scrolling thing enters this far past the right edge (its ground pivot) and leaves this far past the left edge. */
+  trainEnterPadPx: 260,
+  trainLeavePadPx: 260,
+  /** Tàu hỏa: a press this close to the cow's, the bird's or a ground surprise's tap centre makes it react (design px). */
+  trainTapRadiusPx: 80,
+  /** Tàu hỏa: the bird crosses again after flying this far past the screen (design px). */
+  trainBirdGapPx: 1400,
+  /** Tàu hỏa: the tunnel darkens the scene by at most this much (the dim's alpha over colors.ink); under reduced motion, this much. */
   trainDimMax: 0.45,
   trainDimReduced: 0.3,
-  /** Tàu hỏa: the engine is inside the volcano at most this long at the slowest cruise (ms: "out within 2 s"). */
-  trainTunnelMaxMs: 2000,
-  /** Tàu hỏa: the dim fades in over at least this long at the fastest cruise (ms). */
+  /** Tàu hỏa: the whole train stays in the dark at most this long (ms; the tunnel's length minus the train's, at the slowest cruise). */
+  trainDarkMaxMs: 600,
+  /** Tàu hỏa: the dim fades in over at least this long (ms; the train's length at the fastest cruise). */
   trainDimInMinMs: 400,
   /** Tàu hỏa: the idle hint at most this many times per step; its bounce (scale). */
   trainHintMax: 3,
@@ -1185,11 +1174,6 @@ const art = {
     basket: colour('#C99A6B'),
     string: colour('#FFFFFF'),
     trim: colour('#FFFFFF'),
-    /** 2026-11-13 (spec-tau-quanh-dao): the little sailing boat that drifts by (a trip's surprise). */
-    boatHull: colour('#F2616D'),
-    boatDeck: colour('#FFF4E2'),
-    boatSail: colour('#FFFFFF'),
-    boatFlag: colour('#FFD23F'),
     ink: colour('#5E4B45'),
     pop: colour('#FFF6C2'),
     rainbow1: colour('#FF8FA3'),

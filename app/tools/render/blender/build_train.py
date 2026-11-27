@@ -1,112 +1,138 @@
-# Builds art/train.blend (Tàu hỏa quanh đảo, spec-tau-quanh-dao, 2026-11-13): the train game on Xoài's island.
+# Builds art/train.blend (Tàu hỏa chở bạn, spec-tau-hoa, 2026-11-12) from the vendored island art/src/map-v3.blend
+# (only its render settings, world and Sun are kept).
 #
 # Run by `npm run art:build -- train` (tools/render/build.ts), never by hand:
-#   blender -b --factory-startup art/map.blend --python-exit-code 1 --python build_train.py -- \
+#   blender -b --factory-startup art/src/map-v3.blend --python-exit-code 1 --python build_train.py -- \
 #     --out <tmp>/train.blend --params <tmp>/params.json
-# The source is the BUILT map (art/map.blend: build_map.py's island with its stations, the railway, Ga tàu, the crossing,
-# the volcano and the rides). Same camera, rendered at RENDER_SIZE = 2 × the map's (4096 × 3072: renderScale 4 over the
-# 1024 × 768 design), so the train layout's design coordinates ARE the map's: the game shows it through a Phaser camera
-# zoomed `ui.trainZoom` (2) and following the train. render.ts splits the plate into 2048 × 1536 tiles (pack.ts).
+# params.json (written by build.ts from Tokens and content): colours, art.train, art.animalPens (the friends),
+# art.creatureLight, train (friends, cars, destinations, surprises, the sizes, the scroll speed), design size, the
+# interactive rect.
 #
-# What it does to the map:
-#   - drops the map-only sprites: the clouds and waves (`ambient`), the decorations, the play-again icons, the guide's
-#     outfits; and the layout the game does not use (slots, kart stops, the road, the plane's loop, clouds, waves);
-#   - FRONTS: every sprite that a camera ray to the track (at the train's heights) hits first stays a sprite, drawn over
-#     the train by depth (and under it nowhere: `path.rail-back` says where the train goes under every sprite). That set
-#     must equal params.train.fronts (content/games/train.ts FRONT_SPRITES), else the build fails naming it. The volcano,
-#     the `occ-<n>` scenery and the crossing's barriers (states up, down) are always sprites. Every other station
-#     sprite, the parked plane (its parked heading), the rocket (idle) and the fountain are baked into the plate;
-#   - keeps the map train's 16-heading frames (`train-engine`, `train-car-<n>`, h0…h15, at `anchor.train`): the game draws
-#     the same sprites as the map, so the zoom handoff matches; the whale (idle, spout: `anchor.whale`, `hit.whale`);
-#     the kart, moved onto the road beside the level crossing (`anchor.kart`; the trip's kart surprise);
-#   - adds, per friend station (params.train.stations: ice-cream "Ga Xe kem", dino-puzzle "Ga Khủng long",
-#     shadow-match "Ga Hang", race "Ga Đường đua"), a small wooden platform with a round sign beside the track (plate),
-#     `anchor.stop-<station>` (the engine's stop on the rail), `anchor.friend-<station>` (where the friend stands) and
-#     `hit.platform-<station>` (the deck and a friend-sized box over it);
-#   - per destination (beach: the swim ring; whale: the shore by the whale; fountain: the fountain park),
-#     `anchor.stop-<dest>`, `anchor.dest-<dest>`, `anchor.drop-<dest>-<n>` (where the friends hop off to) and
-#     `hit.dest-<dest>`;
-#   - the friends `friend-<f>` (idle [1], wave [10], happy [20]) standing on the beach below Ga tàu (`anchor.friend`:
-#     the runtime draws them at a station's spot, scaled by the rail's local scale), the seated busts `seat-<f>` (the
-#     friend sitting in a car at Ga tàu, cut below the chest by a holdout box; `anchor.seat`), `puff` and `pop`
-#     (particles), `boat` (a little sailing boat) and `hot-air` (a balloon): drawn by their trimmed centre;
-#   - the library collections `sprite.engine` / `sprite.car-<colour>` (train_models.build_library: never rendered) for
-#     build_map.py's map_rides.py, which appends them from art/train.blend.
-# Every length is in world metres.
+# The camera, the fitting and the shared shapes are Phi công nhí's (build_plane.py: an ORTHOGRAPHIC camera tilted
+# CAM_PITCH degrees down, so a shift along world x is a shift in design px); world (0, 0, 0) — the middle of the track —
+# projects to REF_PX. The track runs along world x at depth 0; the far side is +y, the near side −y.
+# One plate, 2048×1536: ONLY a still sky (a soft gradient, a soft sun, faint far clouds). Everything else is a sprite
+# (script-built from cute.py shapes; every sprite renders alone):
+#   - engine: a round toy steam engine facing screen right (green boiler with yellow bands, a red cab roof, a dark
+#     chimney, a lamp, a cowcatcher, three red wheels with yellow hubs and a rod), driven by the chibi Shiba
+#     (cute.chibi('dog')) in a blue conductor's cap. States: idle [1], run [10, 11] (the wheels a quarter turn apart,
+#     the rod up / forward), toot [20] (a puff over the chimney, the Shiba's head up), happy [30] (eyes shut, tongue);
+#   - car-<colour>: three open wagons (red, yellow, blue), each where it stands behind the engine (states idle: the
+#     whole wagon; front: its front wall alone, drawn over the friend sitting inside);
+#   - seat-<friend>: the friend sitting in car 0 (drawn between the car and its front wall: it sits inside);
+#   - friend-<friend> (idle [1], wave [10], happy [20]) on the platform's ground pivot anchor.friend;
+#   - platform (a wooden platform with a little blue roof and a round sign), dest-<id> (the beach, a playground, a
+#     fair), tunnel (states back: the hill behind the train; front: the mound over the track, drawn over the train),
+#     tunnel-portal (one stone portal on the track, drawn at both ends; back: its dark mouth behind the train; front: the
+#     arch and the grass wall over it, drawn over the train): drawn where they stop (the scene scrolls them);
+#   - ground (a strip as wide as the frame with the track on it; it tiles), hill (a, b), tree (a, b), fence: their
+#     rendered y kept;
+#   - cloud (a, b), bird (a, b), cow (idle, happy), puff, pop, crossing (idle, wave: a level crossing, its sign and a
+#     little pink car whose fox driver waves), crossing-road (its road, drawn under the train), bridge (a river under the track and its stone bridge), fish,
+#     hot-air, rainbow.
+# Layout: hit.engine, hit.car-<n> (raw hulls: render.ts keeps them unpadded), hit.platform, hit.friend-<id>,
+# hit.dest-<id>; anchors engine, chimney, nose, tail, car-<n>, seat-<n>, platform, friend, dest, drop-<n>, tunnel,
+# tunnel-end, portal, portal-edge, surprise, cow.
+import bmesh
 import json
 import math
 import os
+import random
 import sys
 
 import bpy
-from bpy_extras.object_utils import world_to_camera_view
-import bmesh
 from mathutils import Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cute import blob, chibi, key_chibi, mat, rbox, rod, soften_scene, torus  # noqa: E402
-from common import add_empty, eval_world_verts, hull_object, move_to, parse_args  # noqa: E402
+from cute import blob, chibi, chibi_materials, key_chibi, lathe, mat, on_body, rbox, rod, rounded_profile, soften_scene, torus, torus_bm, mesh_obj  # noqa: E402
+from common import add_empty, hull_object, parse_args  # noqa: E402
 from build_animal_pens import PEN_CHIBIS, chibi_mats  # noqa: E402  (its main() only runs as a script)
-import build_plane as bp  # noqa: E402  (puffs, gore_ball, envelope)
-import map_rides as mr  # noqa: E402
-import train_models  # noqa: E402
+import build_plane as bp  # noqa: E402  (the camera, fit and shapes; its main() only runs as a script)
 
-RENDER_SIZE = (4096, 3072)
-BORDER_PROP = 'bhc_sprite_border'  # render_screen.py: each sprite pass renders inside its box + this margin
-SPRITE_BORDER = 0.012
+RENDER_SIZE = (2048, 1536)
+DESIGN = (1024, 768)  # set from params in main
 
-DROP_SPRITES = ('sprite.ambient', 'sprite.decoration', 'sprite.icon')
-DROP_PREFIX = 'sprite.shiba-'  # the guide's outfits (sprite.shiba itself stays)
-ALWAYS_FRONT = ('volcano', 'crossing-near', 'crossing-far')
-OCC_PREFIX = 'occ-'
-TRAIN_SPRITES = ('train-engine', 'train-car-1', 'train-car-2', 'train-car-3')
-KEEP_SPRITES = TRAIN_SPRITES + ('whale', 'kart')
-# Station-like sprites that may be fronts or baked into the plate.
-PLACES = ('ice-cream', 'pizza', 'race', 'fishing', 'touch-talk', 'dino-puzzle', 'shadow-match', 'home', 'shiba', 'rocket', 'plane', 'fountain')
-# Layout objects the game keeps (everything else in the map's layout goes).
-KEEP_LAYOUT = (
-    'anchor.train', 'anchor.rail-tunnel-in', 'anchor.rail-tunnel-out', 'anchor.rail-crossing-from', 'anchor.rail-crossing-to',
-    'anchor.crossing-near', 'anchor.crossing-far', 'anchor.volcano', 'anchor.whale',
-    'path.rail', 'path.rail-up', 'path.rail-back', 'path.compass',
-) + tuple(f'anchor.{p}' for p in PLACES) + tuple(f'anchor.{OCC_PREFIX}{n}' for n in range(1, 10))  # the fronts' render pivots; the places' spots
-# The place hulls the game keeps (a tap says the place's name): the map's own.
-PLACE_HITS = ('ice-cream', 'pizza', 'race', 'fishing', 'touch-talk', 'dino-puzzle', 'shadow-match', 'home', 'plane', 'rocket')
+# --- the world (design px) ------------------------------------------------------------------------------------------
+REF_PX = (512.0, 600.0)  # world (0, 0, 0): the middle of the track
+RAIL_GAUGE = 0.36  # each rail this far from the track's middle (m)
+RAIL_TOP = 0.1
 
-# --- the friend stations ----------------------------------------------------------------------------------------------
-# Per station: the side of the track its platform stands on (+1 the beach, −1 inland: on the island's left and right
-# edges the beach side would leave the camera's interactive rect) and a shift along the rail (m) from the rail point
-# nearest the place.
-STATION_SPOTS = {
-    'ice-cream': {'side': -1, 'shift': -3.4},
-    'dino-puzzle': {'side': 1, 'shift': 0.6},
-    'shadow-match': {'side': 1, 'shift': 0.0},
-    'race': {'side': -1, 'shift': -1.5},
-}
-PLATFORM = (1.1, 0.62, 0.12)  # along the track, across, high
-PLATFORM_CLEAR = 0.5  # its near edge this far from the track's middle
-SIGN_UP = 0.95
-STOP_BEFORE = 3.9  # the engine stops this far (m of rail) before the platform's middle: its tap disc ≥ targetGap from the friend's area
+# --- the sky plate --------------------------------------------------------------------------------------------------
+SUN_PX = (812.0, 128.0)
 
-# --- the destinations -------------------------------------------------------------------------------------------------
-DEST_STOP_BEFORE = {'beach': 2.2, 'whale': 2.2, 'fountain': 3.4}  # the engine stops this far (m of rail) before the point nearest the destination (like a station)
-WHALE_SHIFT = -1.8  # the whale's bay: the shore this far (m of rail) from the point nearest the whale (between the swim ring and the airstrip)
-WHALE_SHORE = 1.0  # … this far outside the track's middle
-DROP_RING = 0.45  # the dropped friends stand round the destination's point at about this radius
-FOUNTAIN_PARK = (-1.4, 0.0)  # the fountain park's drop spots: this far (world x, y m) from the fountain, on the grass beside it (clear of Ga tàu)
-DEST_BOX = (1.4, 1.0, 1.2)  # a destination without its own mesh in the hull (the whale's shore): this box (x, y, z)
+# --- the train (design px along x; built in metres, 1 m = ORTHO_PX_PER_M px) ----------------------------------------
+ENGINE_X = 610.0  # the engine's middle
+CAR_X = [418.0, 270.0, 122.0]  # car 0 (behind the engine) … car 2 (the tail): ≥ targetGap between their raw hulls
+CAR_LEN = 1.15
+CAR_W = 0.86
+ENGINE_LEN = 1.9
+WHEEL_R = 0.25
+CAR_WHEEL_R = 0.19
+SHIBA_SCALE = 0.46
+E_IDLE, E_RUN, E_TOOT, E_HAPPY = [1], [10, 11], [20], [30]
+ENGINE_STATES = {'idle': E_IDLE, 'run': E_RUN, 'toot': E_TOOT, 'happy': E_HAPPY}
+ENGINE_FRAMES = E_IDLE + E_RUN + E_TOOT + E_HAPPY
+SEAT_Z = 0.6  # the seated friend's ground: the car's floor
+SEAT_Y = 0.12
+SEAT_HEIGHT_PX = 116.0
+CAR_COLOUR_KEYS = {'red': 'carRed', 'yellow': 'carYellow', 'blue': 'carBlue'}
 
-# --- the friends, the seats, the free sprites ------------------------------------------------------------------------
-FRIEND_PX = 64.0  # a friend's drawn height (design px) at `anchor.friend`
-FRIEND_OUT = 1.6  # `anchor.friend`: this far outside the track at Ga tàu (on the beach)
+# --- the station, the friends, the destinations (design px) ---------------------------------------------------------
+PLATFORM_X = 878.0  # padded by hitPad its deck stays inside x ≤ 1000 and ≥ targetGap from the engine
+PLATFORM_DEPTH = (0.62, 1.7)  # its front and back edges (world y)
+PLATFORM_Z = 0.24
+PLATFORM_LEN = 1.86
+FRIEND_X = 868.0
+FRIEND_DEPTH = 1.08
 F_IDLE, F_WAVE, F_HAPPY = [1], [10], [20]
 FRIEND_STATES = {'idle': F_IDLE, 'wave': F_WAVE, 'happy': F_HAPPY}
-FRIEND_YAW = 0.0  # facing the camera (its front is −y)
-SEAT_PX = 40.0  # a seated friend's whole drawn height before the cut
-SEAT_CUT = 0.42  # the holdout box hides it below this share of its height (the car's walls)
-SEAT_FLOOR = 0.34  # its pivot (`anchor.seat`): this high over the rail at Ga tàu (the car's floor at the map scale)
-FREE_AT = (0.0, -2.6)  # the free sprites stand this far (m: along, out) from Ga tàu, apart along the track
-FREE_PX = {'puff': 26.0, 'pop': 30.0, 'boat': 70.0, 'hot-air': 84.0}
-FREE_GAP = 3.0
+FRIEND_YAW = -36.0  # three-quarter: toward the camera and the train (screen left)
+FRIEND_HEIGHT_PX = {'cat': 132.0, 'pig': 126.0, 'sheep': 132.0, 'cow': 140.0, 'horse': 146.0, 'rooster': 132.0}
+DEST_X = 878.0
+DEST_DEPTH = 1.5
+DEST_BOX_PX = (192.0, 250.0)  # padded by hitPad its hull stays ≥ targetGap from the engine and inside x ≤ 1000
+DROP_X = [800.0, 878.0, 956.0]
+DROP_DEPTH = 0.5  # the dropped friends stand in front of the destination (the scene draws them a little smaller)
+HIT_PAD_PX = 24.0  # Tokens.spacing.hitPad (the pipeline pads the platform, friend and destination hulls)
+
+# --- the tunnel (design px) -----------------------------------------------------------------------------------------
+TUNNEL_MARGIN_PX = 20.0  # each end of the mound this far outside the train's tail and nose
+TUNNEL_SHIFT_PX = 116.0  # the hill rendered this far right of the train: centred in frame
+TUNNEL_FRONT_TOP_PX = 300.0  # the mound's front edge: over the portals' arches (and the engine's roof)
+TUNNEL_BACK_TOP_PX = 215.0
+PORTAL_X = 512.0  # the portal sprite is rendered here (the scene draws it at both ends of the tunnel)
+PORTAL_R, PORTAL_LEG = 0.86, 1.7  # the arch (m; its tube 0.14): the opening is taller than the engine (~2.2 m)
+
+# --- the ground, hills, trees, fences (design px) -------------------------------------------------------------------
+GROUND_TOP_DEPTH = 7.0
+GROUND_FRONT_DEPTH = -9.0
+GROUND_W_PX = 1021.0
+GROUND_OVER_PX = 30.0
+GROUND_EDGE_PX = 48.0
+SLEEPERS = 23  # over the strip's width: they tile
+HILL_BOTTOM_PX = 500.0
+HILL_BOX_PX = {'a': (560.0, 200.0), 'b': (470.0, 160.0)}
+HILL_Y = 12.0
+TREE_DEPTH = 3.4
+TREE_HEIGHT_PX = {'a': 150.0, 'b': 120.0}
+FENCE_DEPTH = 2.3
+FENCE_W_PX = 300.0
+COW_DEPTH = -4.0  # on the near grass, in front of the track (the train never hides it)
+COW_HEIGHT_PX = 88.0
+SEED = 43
+
+# --- the surprises and the free sprites ------------------------------------------------------------------------------
+SURPRISE_X = 512.0
+CROSSING_CAR_DEPTH = -3.3  # the little car waits well in front of the track (the train passes behind it)
+FREE = {
+    'puff': ((300.0, 200.0), 70.0), 'pop': ((420.0, 200.0), 80.0),
+    'cloud-a': ((512.0, 150.0), 210.0), 'cloud-b': ((512.0, 150.0), 176.0),
+    'bird': ((700.0, 200.0), 64.0), 'rainbow': ((512.0, 280.0), 340.0), 'hot-air': ((740.0, 190.0), 180.0),
+    'fish': ((512.0, 690.0), 70.0),
+}
+FREE_Y = -6.0
+
+HIDDEN = (0.0001, 0.0001, 0.0001)
 
 
 def fail(msg):
@@ -117,434 +143,962 @@ def log(msg):
     print(f'build_train: {msg}')
 
 
-class Screen:
-    """World → design px with the scene camera (render_screen.py's projection over the design size)."""
+# --- small helpers over build_plane's camera --------------------------------------------------------------------------
 
-    def __init__(self, scene, design):
-        self.scene, self.w, self.h = scene, design[0], design[1]
-
-    def project(self, p):
-        v = world_to_camera_view(self.scene, self.scene.camera, Vector(p))
-        return (v.x * self.w, (1 - v.y) * self.h)
-
-    def rect(self, pts):
-        sp = [self.project(p) for p in pts]
-        xs, ys = [p[0] for p in sp], [p[1] for p in sp]
-        return (min(xs), min(ys), max(xs), max(ys))
+def wx(sx):
+    return bp.wx(sx)
 
 
-def depsgraph():
-    bpy.context.view_layer.update()
-    return bpy.context.evaluated_depsgraph_get()
+def pt(sx, sy, y):
+    return bp.pt(sx, sy, y)
 
 
-def objects_under(root):
-    out = [root]
-    for c in root.children_recursive:
-        out.append(c)
-    return out
+def gy(sy, z=0.0):
+    return bp.gy(sy, z)
 
 
-def remove_collection(coll):
-    for o in list(coll.all_objects):
-        bpy.data.objects.remove(o, do_unlink=True)
-    for ch in list(coll.children_recursive):
-        bpy.data.collections.remove(ch)
-    bpy.data.collections.remove(coll)
+def screen_y(y, z):
+    """Design px y of a world point at depth y, height z."""
+    return bp.SCREEN.project((0.0, y, z))[1]
 
 
-def layout_point(name):
-    o = bpy.data.objects.get(name)
-    if o is None:
-        fail(f'the map layout has no "{name}"')
-    return o.matrix_world.translation.copy()
+def project(p):
+    return bp.SCREEN.project(p)
 
 
-def curve_points(name):
-    o = bpy.data.objects.get(name)
-    if o is None:
-        fail(f'the map layout has no "{name}"')
-    mw = o.matrix_world
-    return [mw @ p.co.xyz for p in o.data.splines[0].points]
+def mesh_rect(objs):
+    return bp.SCREEN.rect(bp.world_pts(objs))
 
 
-def sprite_group(sprites, name, **props):
-    coll = bpy.data.collections.new(f'sprite.{name}')
-    sprites.children.link(coll)
-    for k, v in props.items():
-        coll[k] = v
-    return coll
+def rect_of(root):
+    return bp.rect_of(root)
 
 
-# --- the map's sprites -------------------------------------------------------------------------------------------------
-
-def drop_map_only(sprites, layout):
-    for coll in list(sprites.children):
-        if coll.name in DROP_SPRITES or coll.name.startswith(DROP_PREFIX):
-            remove_collection(coll)
-    keep_hits = {f'hit.{h}' for h in PLACE_HITS}
-    for o in list(layout.all_objects):
-        if o.name not in KEEP_LAYOUT and o.name not in keep_hits:
-            bpy.data.objects.remove(o, do_unlink=True)
+def fmt_rect(r):
+    return bp.fmt_rect(r)
 
 
-def first_sprite_hit(scene, dg, cam, target, owner):
-    """The sprite collection of the first sprite mesh on the ray from the camera to `target` (plate meshes and the
-    rides' own copies pass), or None."""
-    d = target - cam
-    total = d.length
-    d.normalize()
-    origin = cam.copy()
-    gone = 0.0
-    for _ in range(64):
-        left = total - gone - 0.02
-        if left <= 0:
-            return None
-        hit, loc, _n, _i, obj, _m = scene.ray_cast(dg, origin, d, distance=left)
-        if not hit:
-            return None
-        if obj is not None and obj.name in owner:
-            return owner[obj.name]
-        step = (loc - origin).length + 0.005
-        gone += step
-        origin = origin + d * step
-    return None
+def fmt_px(p):
+    return f'({p[0]:.0f}, {p[1]:.0f})'
 
 
-def find_fronts(scene, sprites, rail_pts):
-    """The PLACES sprites a camera ray to the track hits first (at the train's heights)."""
-    owner = {}
-    for coll in sprites.children:
-        sid = coll.name[len('sprite.'):]
-        if sid in PLACES or sid in ALWAYS_FRONT or sid.startswith(OCC_PREFIX):
-            for o in coll.all_objects:
-                if o.type == 'MESH':
-                    owner[o.name] = sid
-    dg = depsgraph()
-    cam = scene.camera.matrix_world.translation.copy()
-    hits = {}
-    for p in rail_pts:
-        for h in mr.BACK_HEIGHTS:
-            sid = first_sprite_hit(scene, dg, cam, p + Vector((0.0, 0.0, h)), owner)
-            if sid is not None:
-                hits[sid] = hits.get(sid, 0) + 1
-    log(f'sprites in front of the track (rail points × heights hidden): {hits}')
-    return sorted(s for s in hits if s in PLACES)
+def empty(name, coll, parent=None, loc=(0.0, 0.0, 0.0), rot=(0.0, 0.0, 0.0)):
+    return bp.empty(name, coll, parent, loc, rot)
 
 
-def keep_state(coll, state):
-    """A sprite with `state.*` children keeps one (its objects move up into the group; the others are deleted)."""
-    for ch in list(coll.children):
-        if ch.get('bhc_state', ch.name) == state or ch.name.endswith(f'-{state}'):
-            for o in list(ch.objects):
-                move_to(o, coll)
-        else:
-            for o in list(ch.all_objects):
-                bpy.data.objects.remove(o, do_unlink=True)
-        bpy.data.collections.remove(ch)
+def sprite(sprites, name, **props):
+    return bp.sprite(sprites, name, **props)
 
 
-def parked_plane_state():
-    """The plane's parked heading: its loop's first direction (world), as the map runtime picks it."""
-    pts = curve_points('path.plane-loop')
-    d = pts[1] - pts[0]
-    k = round(math.degrees(math.atan2(d.y, d.x)) / mr.HEADING_STEP) % mr.HEADINGS
-    return f'h{k}'
+def show_on(obj, on, frames, scale=(1.0, 1.0, 1.0)):
+    bp.show_on(obj, on, frames, scale)
 
 
-def still_places(plane_state):
-    """The parked plane keeps its parked heading, the rocket its idle state (no puff)."""
-    keep_state(bpy.data.collections['sprite.plane'], plane_state)
-    keep_state(bpy.data.collections['sprite.rocket'], 'idle')
+def key_rot(obj, by_frame):
+    bp.key_rot(obj, by_frame)
 
 
-def settle_places(sprites, fronts):
-    """Fronts stay sprites in their idle state; every other place is baked into the plate (World)."""
-    plate = bpy.data.collections['World']
-    for coll in list(sprites.children):
-        sid = coll.name[len('sprite.'):]
-        if sid not in PLACES:
-            continue
-        if 'states' in coll.keys():
-            coll['states'] = json.dumps({'idle': [1]}, separators=(',', ':'))
-        coll['occlude'] = 1
-        coll['movable'] = 0
-        if sid in fronts:
-            continue
-        for o in list(coll.all_objects):
-            move_to(o, plate)
-        bpy.data.collections.remove(coll)
+def key_loc(obj, by_frame):
+    """Keys location per frame, constant."""
+    from common import key_constant
+    for f, loc in by_frame.items():
+        obj.location = loc
+        obj.keyframe_insert('location', frame=f)
+    key_constant(obj)
 
 
-def move_kart(sprites, layout, rail):
-    """The kart waits on the road a little inland of the crossing (the trip's kart surprise)."""
-    import build_map
-    coll = bpy.data.collections.get('sprite.kart')
-    if coll is None:
-        fail('the map has no sprite.kart')
-    a, b = layout_point('anchor.rail-crossing-from'), layout_point('anchor.rail-crossing-to')
-    c = (a + b) / 2
-    road = build_map.ROAD_CENTRE
-    inland = (Vector(road[1]) - Vector(road[0])).normalized()
-    _d, (tx, ty) = build_map.nearest_on_road(tuple(c.xy + inland * KART_BACK))
-    objs = list(coll.all_objects)
-    pts = eval_world_verts(objs, depsgraph())
-    kx = (min(p.x for p in pts) + max(p.x for p in pts)) / 2
-    ky = (min(p.y for p in pts) + max(p.y for p in pts)) / 2
-    kz = min(p.z for p in pts)
-    delta = Vector((tx - kx, ty - ky, 0.0))
-    for o in objs:
-        if o.parent is None or o.parent not in objs:
-            o.location += delta
-    add_empty('anchor.kart', (tx, ty, kz), layout)
-    log(f'kart at ({tx:.2f}, {ty:.2f})')
+def free_root(name, coll):
+    at, _size = FREE[name]
+    return bp.billboard(f'{name}-root', coll, pt(at[0], at[1], FREE_Y))
 
 
-KART_BACK = 2.2  # the kart waits this far (m) inland of the crossing along the road
+def free_fit(name, root, longest=None):
+    at, size = FREE[name]
+    r = bp.fit(root, at, longest=longest or size)
+    if r[0] < 4 or r[1] < 4 or r[2] > DESIGN[0] - 4 or r[3] > DESIGN[1] - 4:
+        fail(f'{name} {fmt_rect(r)} leaves the frame')
+    log(f'{name} {fmt_rect(r)}')
+    return r
 
 
-# --- the platforms and destinations --------------------------------------------------------------------------------
-
-def rail_dir(rail, s):
-    _p, t = rail.at(s)
-    return t
+def ground_root(name, coll, sx, depth, yaw=0.0):
+    """An empty on the ground at design x `sx`, world depth `depth` (its local front −y faces the camera)."""
+    return empty(name, coll, None, (wx(sx), depth, 0.0), (0.0, 0.0, yaw))
 
 
-def build_platform(sid, rail, mats, plate, layout, friend_h):
-    spot = STATION_SPOTS[sid]
-    place = layout_point(f'anchor.{sid}')
-    s0, _d = rail.project(place)
-    s = rail.wrap(s0 + spot['shift'])
-    p, t = rail.at(s)
-    nrm = rail.inward(s) * (-spot['side'])  # +1: the beach (outside the loop)
-    yaw = math.degrees(math.atan2(t.y, t.x))
-    centre = p + nrm * (PLATFORM_CLEAR + PLATFORM[1] / 2)
-    z = rail.z
-    objs = [rbox(f'stop-{sid}-deck', PLATFORM, 0.04, mats['platform'], plate, None, (centre.x, centre.y, z + PLATFORM[2] / 2), (0.0, 0.0, yaw)),
-            rbox(f'stop-{sid}-edge', (PLATFORM[0], 0.08, 0.03), 0.015, mats['platformEdge'], plate, None,
-                 tuple(p + nrm * (PLATFORM_CLEAR + 0.04)) + (z + PLATFORM[2] + 0.012,), (0.0, 0.0, yaw))]
-    q = centre + t * (PLATFORM[0] / 2 - 0.12) + nrm * (PLATFORM[1] / 2 - 0.1)
-    objs.append(rod(f'stop-{sid}-pole', (q.x, q.y, z + PLATFORM[2]), (q.x, q.y, z + SIGN_UP), 0.025, mats['platformPost'], plate, None, seg=10))
-    objs.append(blob(f'stop-{sid}-sign', mats['sign'], plate, None, (q.x, q.y, z + SIGN_UP + 0.12), (0.15, 0.035, 0.15), (0.0, 0.0, yaw), seg=(28, 8)))
-    objs.append(torus(f'stop-{sid}-sign-rim', 0.15, 0.022, mats['platformRoof'], plate, None, (q.x, q.y, z + SIGN_UP + 0.12), (90.0, 0.0, yaw)))
-    ground = Vector((centre.x, centre.y, z + PLATFORM[2]))
-    box = [ground + Vector((dx, dy, dz)) for dx in (-0.45, 0.45) for dy in (-0.3, 0.3) for dz in (0.0, friend_h)]
-    hull_object(f'hit.platform-{sid}', eval_world_verts(objs, depsgraph()) + box, layout)
-    add_empty(f'anchor.friend-{sid}', tuple(ground), layout)
-    add_empty(f'anchor.stop-{sid}', rail.point3(s - STOP_BEFORE), layout)
-    log(f'station {sid}: rail s {s:.2f} m (place {s0:.2f}), side {spot["side"]}, stop {rail.wrap(s - STOP_BEFORE):.2f}')
-    return s
+def cyl_x(name, r, x0, x1, material, coll, parent, y=0.0, z=0.0, round_=0.25):
+    """A cylinder along x from x0 to x1 (radius r) with rounded rims."""
+    o = lathe(name, rounded_profile(r, 0.0, x1 - x0, round_), material, coll, parent, (x0, y, z), (0.0, 90.0, 0.0), seg=40)
+    return o
 
 
-def drop_spots(at, outward, n=3):
-    """`n` spots round `at`, spread across the outward direction (the friends face the camera)."""
-    side = Vector((-outward.y, outward.x))
-    return [at + side * (DROP_RING * (k - (n - 1) / 2)) + outward * (0.25 if k == 1 else 0.0) for k in range(n)]
+# --- the plate ------------------------------------------------------------------------------------------------------
+
+def build_sky(c, plate):
+    bp.SUN_PX = SUN_PX
+    bp.FAR_CLOUDS = [(180.0, 96.0, 0.9), (560.0, 70.0, 0.7), (960.0, 250.0, 0.55)]
+    bp.build_sky(c, plate)
 
 
-def build_destinations(rail, layout, friend_h, ground_z):
-    dests = {}
-    ring = bpy.data.objects.get('swim-ring')
-    if ring is None:
-        fail('the map has no swim-ring')
-    rp = ring.matrix_world.translation
-    s_ring, _d = rail.project(rp)
-    dests['beach'] = {'s': s_ring, 'at': Vector((rp.x, rp.y)), 'out': -rail.inward(s_ring), 'objs': [ring]}
-    wp = layout_point('anchor.whale')
-    s_w, _d = rail.project(wp)
-    s_w = rail.wrap(s_w + WHALE_SHIFT)
-    pw, _t = rail.at(s_w)
-    dests['whale'] = {'s': s_w, 'at': pw - rail.inward(s_w) * WHALE_SHORE, 'out': -rail.inward(s_w), 'objs': []}
-    fp = layout_point('anchor.fountain') if bpy.data.objects.get('anchor.fountain') else None
-    fobjs = []
-    fcoll = bpy.data.collections.get('sprite.fountain')
-    if fp is None:
-        fail('the map has no anchor.fountain')
-    if fcoll is not None:
-        fobjs = list(fcoll.all_objects)
-    s_f, _d = rail.project(fp)
-    toward_rail = (rail.at(s_f)[0] - Vector((fp.x, fp.y))).normalized()
-    dests['fountain'] = {'s': s_f, 'at': Vector((fp.x, fp.y)) + Vector(FOUNTAIN_PARK), 'out': toward_rail, 'objs': fobjs}
-    dg = depsgraph()
-    for did, d in dests.items():
-        spots = drop_spots(d['at'], d['out'])
-        pts = eval_world_verts(d['objs'], dg)
-        for q in spots:
-            pts += [Vector((q.x + dx, q.y + dy, ground_z + dz)) for dx in (-0.3, 0.3) for dy in (-0.25, 0.25) for dz in (0.0, friend_h)]
-        if not d['objs']:
-            c = d['at']
-            pts += [Vector((c.x + dx, c.y + dy, ground_z + dz)) for dx in (-DEST_BOX[0] / 2, DEST_BOX[0] / 2) for dy in (-DEST_BOX[1] / 2, DEST_BOX[1] / 2) for dz in (0.0, DEST_BOX[2])]
-        hull_object(f'hit.dest-{did}', pts, layout)
-        add_empty(f'anchor.dest-{did}', (d['at'].x, d['at'].y, ground_z), layout)
-        for n, q in enumerate(spots):
-            add_empty(f'anchor.drop-{did}-{n}', (q.x, q.y, ground_z), layout)
-        stop = rail.wrap(d['s'] - DEST_STOP_BEFORE[did])
-        add_empty(f'anchor.stop-{did}', rail.point3(stop), layout)
-        log(f'destination {did}: rail s {d["s"]:.2f} m, stop {stop:.2f}')
+# --- the engine -----------------------------------------------------------------------------------------------------
+
+def wheel_set(name, c, coll, parent, x, r, near_y, run_frames, all_frames, tyre_key='wheel'):
+    """A toy wheel on the near side (a fat disc, a darker rim, a yellow hub and four spoke dots that turn a quarter
+    between the two run frames) and a plain one on the far side."""
+    tyre, rim, hub = mat(c[tyre_key], 0.4), mat(bp.mix_hex(c[tyre_key], c['ink'], 0.35), 0.45), mat(c['wheelHub'], 0.35)
+    z = RAIL_TOP + r
+    for side, y in (('near', near_y), ('far', -near_y)):
+        blob(f'{name}-{side}', tyre, coll, parent, (x, y, z), (r, 0.07, r), seg=(40, 12))
+        torus(f'{name}-{side}-rim', r * 0.92, r * 0.1, rim, coll, parent, (x, y - 0.06 * (1 if side == 'near' else -1), z), (90.0, 0.0, 0.0))
+    blob(f'{name}-hub', hub, coll, parent, (x, near_y - 0.07, z), (r * 0.3, 0.04, r * 0.3), seg=(24, 10))
+    spokes = empty(f'{name}-spokes', coll, parent, (x, near_y - 0.075, z))
+    for k in range(4):
+        a = math.radians(90.0 * k + 45.0)
+        blob(f'{name}-spoke-{k}', hub, coll, spokes, (math.cos(a) * r * 0.62, 0.0, math.sin(a) * r * 0.62), (r * 0.12, 0.03, r * 0.12), seg=(16, 8))
+    key_rot(spokes, {f: (0.0, (45.0 if f == run_frames[-1] else 0.0), 0.0) for f in all_frames})
+    return z
 
 
-# --- the friends, seats and free sprites -----------------------------------------------------------------------------
-
-def fit_height(root, screen, target_px, frame=1):
-    """Scales `root` so its meshes are drawn `target_px` tall (design px). Returns the metric height."""
-    bpy.context.scene.frame_set(frame)
-    meshes = [o for o in objects_under(root) if o.type == 'MESH']
-    r = screen.rect(eval_world_verts(meshes, depsgraph()))
-    k = target_px / max(1e-6, r[3] - r[1])
-    root.scale = root.scale * k
-    pts = eval_world_verts(meshes, depsgraph())
-    return max(p.z for p in pts) - min(p.z for p in pts)
-
-
-def build_friend(fid, params, sprites, at, screen):
-    coll = sprite_group(sprites, f'friend-{fid}', states=json.dumps(FRIEND_STATES, separators=(',', ':')), movable=1, occlude=0)
-    kind, colours = PEN_CHIBIS[fid][0], PEN_CHIBIS[fid][1]
-    rig = chibi(kind, f'friend-{fid}', coll, chibi_mats(params, colours))
+def build_driver(params, c, coll, parent, at):
+    colours = {**params['colours'], 'creatureLight': params['art']['creatureLight']}
+    mats = chibi_materials(colours, colours['creatureOrange'], colours['creatureLight'])
+    rig = chibi('dog', 'driver', coll, mats)
     root = rig['root']
+    root.parent = parent
     root.location = at
+    root.rotation_euler = (0.0, 0.0, math.radians(90.0 - 38.0))  # its front (−y) toward the nose (+x), turned to the camera
+    root.scale = (SHIBA_SCALE, SHIBA_SCALE, SHIBA_SCALE)
+    rig['tail'].scale = HIDDEN
+    head = rig['head']
+    # The conductor's cap: a round blue crown, a yellow band and a short peak over the eyes.
+    cap, band = mat(c['cap'], 0.45), mat(c['capBand'], 0.4)
+    skull_c, skull_r = (0.0, -0.03, 0.38), (0.62, 0.55, 0.55)
+    top = Vector(skull_c) + Vector((0.0, 0.02, skull_r[2] * 0.82))
+    lathe('driver-cap', [(0.0, 0.0), (0.5, 0.0), (0.52, 0.06), (0.5, 0.2), (0.44, 0.28), (0.0, 0.3)], cap, coll, head, top, (-8.0, 0.0, 0.0), seg=40)['cute'] = 1
+    torus('driver-cap-band', 0.5, 0.05, band, coll, head, top + Vector((0.0, 0.0, 0.06)), (-8.0, 0.0, 0.0))['cute'] = 1
+    peak = blob('driver-cap-peak', cap, coll, head, top + Vector((0.0, -0.46, 0.0)), (0.36, 0.2, 0.04), (-14.0, 0.0, 0.0), seg=(24, 10))
+    peak['cute'] = 1
+    blob('driver-cap-badge', band, coll, head, top + Vector((0.0, -0.49, 0.14)), (0.07, 0.03, 0.07), (-8.0, 0.0, 0.0), seg=(16, 8))['cute'] = 1
+    turn = -10.0
+    key_chibi(rig, E_IDLE[0], head_pitch=-4.0, head_yaw=turn, eyes='open')
+    for f in E_RUN:
+        key_chibi(rig, f, head_pitch=-4.0, head_yaw=turn, eyes='open')
+    key_chibi(rig, E_TOOT[0], head_pitch=-14.0, head_yaw=turn - 6.0, head_roll=5.0, eyes='squint', tongue=False)
+    key_chibi(rig, E_HAPPY[0], head_pitch=-16.0, head_yaw=turn - 8.0, head_roll=7.0, tongue=True, eyes='shut', bob=0.06)
+    return rig
+
+
+def build_engine(params, c, sprites, layout):
+    coll = sprite(sprites, 'engine', states=json.dumps(ENGINE_STATES, separators=(',', ':')))
+    root = ground_root('engine-root', coll, ENGINE_X, 0.0)
+    body, dark = mat(c['engine'], 0.32), mat(c['engineDark'], 0.4)
+    band, roof = mat(c['boilerBand'], 0.35), mat(c['cabRoof'], 0.35)
+    ink = mat(c['chimney'], 0.5)
+    half = ENGINE_LEN / 2
+    # The footplate and the buffer beam.
+    rbox('engine-footplate', (ENGINE_LEN, CAR_W + 0.06, 0.12), 0.05, dark, coll, root, (0.0, 0.0, 0.66))
+    # The boiler: a fat cylinder from the cab to the front, a dark smokebox face, three yellow bands.
+    cyl_x('engine-boiler', 0.36, -0.2, half - 0.05, body, coll, root, z=1.02)
+    blob('engine-smokebox', ink, coll, root, (half - 0.06, 0.0, 1.02), (0.06, 0.33, 0.33), seg=(32, 12))
+    for k, x in enumerate((0.05, 0.38, 0.72)):
+        torus(f'engine-band-{k}', 0.365, 0.035, band, coll, root, (x, 0.0, 1.02), (0.0, 90.0, 0.0))
+    # The chimney (flared), the yellow dome, the lamp.
+    lathe('engine-chimney', [(0.0, 0.0), (0.13, 0.0), (0.12, 0.28), (0.17, 0.38), (0.22, 0.46), (0.22, 0.5), (0.0, 0.5)], ink, coll, root, (0.62, 0.0, 1.28), seg=32)
+    torus('engine-chimney-rim', 0.21, 0.035, band, coll, root, (0.62, 0.0, 1.78))
+    blob('engine-dome', band, coll, root, (0.25, 0.0, 1.36), (0.17, 0.17, 0.16), seg=(32, 16))
+    blob('engine-lamp', mat(c['lamp'], 0.2), coll, root, (half - 0.02, -0.12, 1.36), (0.1, 0.1, 0.1), seg=(24, 12))
+    torus('engine-lamp-rim', 0.1, 0.025, ink, coll, root, (half + 0.02, -0.12, 1.36), (0.0, 90.0, 0.0))
+    # The cowcatcher and the buffers.
+    bp.prism('engine-cowcatcher', [(0.0, 0.0), (0.0, 0.42), (0.3, 0.0)], 0.8, roof, coll, root, (half - 0.04, 0.0, RAIL_TOP + 0.02), bevel=0.03)
+    for s in (-1, 1):
+        blob(f'engine-buffer-{s}', ink, coll, root, (half + 0.04, 0.3 * s, 0.66), (0.06, 0.07, 0.07), seg=(16, 8))
+    # The cab at the back: low walls, a window frame, a red roof on four posts; the Shiba driver sits inside.
+    cab_x = -half + 0.36
+    rbox('engine-cab', (0.72, CAR_W + 0.04, 0.46), 0.08, body, coll, root, (cab_x, 0.0, 0.92))
+    rbox('engine-cab-trim', (0.76, CAR_W + 0.08, 0.08), 0.035, band, coll, root, (cab_x, 0.0, 1.16))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            rod(f'engine-post-{sx}-{sy}', (cab_x + 0.3 * sx, 0.4 * sy, 1.15), (cab_x + 0.3 * sx, 0.4 * sy, 1.98), 0.04, dark, coll, root, seg=12)
+    rbox('engine-roof', (0.92, CAR_W + 0.24, 0.12), 0.06, roof, coll, root, (cab_x, 0.0, 2.02))
+    build_driver(params, c, coll, root, (cab_x - 0.02, 0.1, 0.86))
+    # The wheels: three big driving wheels on each side (the near ones turn) and the rod joining the near ones.
+    xs = (-0.52, 0.02, 0.56)
+    near = -(CAR_W / 2 + 0.02)
+    for k, x in enumerate(xs):
+        z = wheel_set(f'engine-wheel-{k}', c, coll, root, x, WHEEL_R, near, E_RUN, ENGINE_FRAMES)
+    rodroot = empty('engine-rod', coll, root, (0.0, near - 0.12, RAIL_TOP + WHEEL_R))
+    rbox('engine-rod-bar', (xs[-1] - xs[0] + 0.12, 0.04, 0.06), 0.02, mat(c['rod'], 0.3), coll, rodroot, (0.0, 0.0, 0.0))
+    for k, x in enumerate(xs):
+        blob(f'engine-rod-pin-{k}', mat(c['rod'], 0.3), coll, rodroot, (x, -0.02, 0.0), (0.045, 0.03, 0.045), seg=(12, 8))
+    crank = WHEEL_R * 0.55
+    key_loc(rodroot, {f: (0.0, near - 0.12, RAIL_TOP + WHEEL_R + (-crank if f == E_RUN[-1] else crank)) for f in ENGINE_FRAMES})
+    # The toot: a soft puff over the chimney.
+    puff = empty('engine-puff', coll, root, (0.62, 0.0, 2.02))
+    bp.puffs('engine-puff', [(-0.12, 0.0, 0.17), (0.08, 0.1, 0.21), (0.26, 0.2, 0.16), (0.05, -0.08, 0.15)], mat(c['smoke'], 0.7), mat(c['smokeShade'], 0.7), coll, puff, depth=0.16, drop=0.05)
+    show_on(puff, E_TOOT, ENGINE_FRAMES)
+    scene = bpy.context.scene
+    scene.frame_set(E_IDLE[0])
+    meshes = bp.meshes_of(root)
+    r = mesh_rect(meshes)
+    log(f'engine idle {fmt_rect(r)}')
+    for f in ENGINE_FRAMES[1:]:
+        scene.frame_set(f)
+        log(f'engine frame {f} {fmt_rect(mesh_rect(bp.meshes_of(root)))}')
+    scene.frame_set(E_IDLE[0])
+    bpy.context.view_layer.update()
+    if r[2] - r[0] < params['train']['carMinPx']:
+        fail(f'the engine is under {params["train"]["carMinPx"]} px wide')
+    hull_object('hit.engine', [p for p in bp.world_pts([o for o in meshes if not o.name.startswith('engine-puff')])], layout)
+    add_empty('anchor.engine', (wx(ENGINE_X), 0.0, 0.0), layout)
+    add_empty('anchor.chimney', root.matrix_world @ Vector((0.62, 0.0, 1.8)), layout)
+    return r
+
+
+def build_car(n, colour, params, c, sprites, layout):
+    key = CAR_COLOUR_KEYS[colour]
+    if key not in c or f'{key}Dark' not in c:
+        fail(f'Tokens.art.train.{key}(Dark) is missing')
+    group = sprite(sprites, f'car-{colour}')
+    main, dark = mat(c[key], 0.32), mat(c[f'{key}Dark'], 0.4)
+    trim = mat(c['trim'], 0.4)
+    ink = mat(c['chimney'], 0.5)
+    wall, half_w, z0, z1 = 0.08, CAR_W / 2, 0.56, 1.0
+
+    def front_wall(tag, coll, root):
+        """The near wall, its rim and its dots: drawn over the friend sitting inside (and part of the whole car)."""
+        rbox(f'car-{colour}-{tag}-front', (CAR_LEN, wall, z1 - z0), 0.04, main, coll, root, (0.0, -(half_w - wall / 2), (z0 + z1) / 2))
+        rbox(f'car-{colour}-{tag}-rim-front', (CAR_LEN + 0.02, 0.1, 0.07), 0.03, trim, coll, root, (0.0, -(half_w - 0.03), z1))
+        face_y = -half_w - 0.005
+        blob(f'car-{colour}-{tag}-dot', trim, coll, root, (0.0, face_y, 0.76), (0.13, 0.02, 0.13), seg=(28, 8))
+        for sx in (-1, 1):
+            blob(f'car-{colour}-{tag}-dot-{sx}', trim, coll, root, (0.33 * sx, face_y, 0.76), (0.06, 0.02, 0.06), seg=(20, 8))
+
+    # idle: the whole open wagon (a floor, the back and end walls, their rims, the front wall, wheels and hooks); the
+    # friend sits on its floor, drawn over it. front: the front wall alone, drawn over the friend.
+    idle = bp.state_child(group, f'car-{colour}', 'idle')
+    root = ground_root(f'car-{colour}-root', idle, CAR_X[n], 0.0)
+    rbox(f'car-{colour}-chassis', (CAR_LEN - 0.06, CAR_W, 0.1), 0.04, ink, idle, root, (0.0, 0.0, 0.5))
+    rbox(f'car-{colour}-floor', (CAR_LEN, CAR_W, 0.08), 0.03, dark, idle, root, (0.0, 0.0, z0 + 0.04))
+    rbox(f'car-{colour}-back', (CAR_LEN, wall, z1 - z0), 0.04, main, idle, root, (0.0, half_w - wall / 2, (z0 + z1) / 2))
+    rbox(f'car-{colour}-back-in', (CAR_LEN - 2 * wall, 0.01, z1 - z0 - 0.06), 0.004, dark, idle, root, (0.0, half_w - wall - 0.006, (z0 + z1) / 2))
+    rbox(f'car-{colour}-rim-back', (CAR_LEN + 0.02, 0.1, 0.07), 0.03, trim, idle, root, (0.0, half_w - 0.03, z1))
+    for sx in (-1, 1):
+        rbox(f'car-{colour}-end-{sx}', (wall, CAR_W, z1 - z0), 0.04, main, idle, root, (sx * (CAR_LEN / 2 - wall / 2), 0.0, (z0 + z1) / 2))
+        rbox(f'car-{colour}-rim-end-{sx}', (0.1, CAR_W + 0.02, 0.07), 0.03, trim, idle, root, (sx * (CAR_LEN / 2 - 0.03), 0.0, z1))
+    front_wall('idle', idle, root)
+    # Two wheels a side and short hooks at the ends (kept inside the car's own length).
+    near = -(CAR_W / 2 + 0.02)
+    for k, x in enumerate((-0.33, 0.33)):
+        wheel_set(f'car-{colour}-wheel-{k}', c, idle, root, x, CAR_WHEEL_R, near, E_RUN, [1], tyre_key='carWheel')
+    for sx in (-1, 1):
+        blob(f'car-{colour}-hook-{sx}', ink, idle, root, (sx * (CAR_LEN / 2 - 0.02), 0.0, 0.52), (0.05, 0.06, 0.05), seg=(12, 8))
+    front = bp.state_child(group, f'car-{colour}', 'front')
+    froot = ground_root(f'car-{colour}-front-root', front, CAR_X[n], 0.0)
+    front_wall('front', front, froot)
+    bpy.context.view_layer.update()
+    meshes = bp.meshes_of(root)
+    r = mesh_rect(meshes)
+    log(f'car-{colour} {fmt_rect(r)}')
+    if r[2] - r[0] < params['train']['carMinPx']:
+        fail(f'car {colour} is under {params["train"]["carMinPx"]} px wide')
+    hull_object(f'hit.car-{n}', bp.world_pts(meshes), layout)
+    add_empty(f'anchor.car-{n}', (wx(CAR_X[n]), 0.0, 0.0), layout)
+    add_empty(f'anchor.seat-{n}', (wx(CAR_X[n]), SEAT_Y, SEAT_Z), layout)
+    return r
+
+
+# --- the friends ----------------------------------------------------------------------------------------------------
+
+def friend_rig(fid, name, params, coll):
+    kind, colour_keys = PEN_CHIBIS[fid][0], PEN_CHIBIS[fid][1]
+    return chibi(kind, name, coll, chibi_mats(params, colour_keys))
+
+
+def build_friend(fid, params, sprites, layout, platform_z):
+    coll = sprite(sprites, f'friend-{fid}', states=json.dumps(FRIEND_STATES, separators=(',', ':')))
+    rig = friend_rig(fid, f'friend-{fid}', params, coll)
+    root = rig['root']
+    root.location = (wx(FRIEND_X), FRIEND_DEPTH, platform_z)
     root.rotation_euler = (0.0, 0.0, math.radians(FRIEND_YAW))
     key_chibi(rig, F_IDLE[0], head_pitch=-6.0, head_yaw=8.0, eyes='open')
     key_chibi(rig, F_WAVE[0], head_pitch=-10.0, head_roll=-12.0, head_yaw=4.0, tail=30.0, eyes='open', bob=0.04)
     key_chibi(rig, F_HAPPY[0], head_pitch=-19.0, head_roll=11.0, head_yaw=14.0, tail=26.0, tongue=True, bob=0.07, eyes='shut')
-    h = fit_height(root, screen, FRIEND_PX)
-    bpy.context.scene.frame_set(1)
-    return h
+    scene = bpy.context.scene
+    scene.frame_set(F_IDLE[0])
+    pivot = project((wx(FRIEND_X), FRIEND_DEPTH, platform_z))
+    r = bp.fit(root, pivot, height=FRIEND_HEIGHT_PX[fid], bottom=True)
+    # fit moves the root in x and z; keep it standing on the platform (its feet at platform_z).
+    hull_object(f'hit.friend-{fid}', bp.world_pts(bp.meshes_of(root)), layout)
+    for f in F_WAVE + F_HAPPY:
+        scene.frame_set(f)
+        log(f'friend-{fid} frame {f} {fmt_rect(rect_of(root))}')
+    scene.frame_set(F_IDLE[0])
+    log(f'friend-{fid} idle {fmt_rect(r)}')
+    if max(r[2] - r[0], r[3] - r[1]) < params['train']['friendMinPx'] + 4:
+        fail(f'friend {fid} is under {params["train"]["friendMinPx"]} px')
+    return r, root
 
 
-def build_seat(fid, params, sprites, at, screen, mats):
-    coll = sprite_group(sprites, f'seat-{fid}', movable=1, occlude=0)
-    kind, colours = PEN_CHIBIS[fid][0], PEN_CHIBIS[fid][1]
-    rig = chibi(kind, f'seat-{fid}', coll, chibi_mats(params, colours))
+def build_seat(fid, params, sprites):
+    coll = sprite(sprites, f'seat-{fid}')
+    rig = friend_rig(fid, f'seat-{fid}', params, coll)
     root = rig['root']
-    root.location = at
-    root.rotation_euler = (0.0, 0.0, math.radians(-20.0))
-    rig['tail'].scale = train_models.HIDDEN
+    root.location = (wx(CAR_X[0]), SEAT_Y, SEAT_Z)
+    root.rotation_euler = (0.0, 0.0, math.radians(-24.0))
+    rig['tail'].scale = HIDDEN
     key_chibi(rig, 1, head_pitch=-8.0, head_yaw=10.0, eyes='open')
-    h = fit_height(root, screen, SEAT_PX)
-    # A holdout box round the lower body: the bust peeks out of the car.
+    bpy.context.scene.frame_set(1)
+    pivot = project((wx(CAR_X[0]), SEAT_Y, SEAT_Z))
+    r = bp.fit(root, pivot, height=SEAT_HEIGHT_PX, bottom=True)
+    log(f'seat-{fid} {fmt_rect(r)}')
+    return r
+
+
+# --- the platform ---------------------------------------------------------------------------------------------------
+
+def build_platform(params, c, sprites, layout):
+    coll = sprite(sprites, 'platform')
+    d0, d1 = PLATFORM_DEPTH
+    mid = (d0 + d1) / 2
+    root = ground_root('platform-root', coll, PLATFORM_X, 0.0)
+    deck, edge = mat(c['platform'], 0.55), mat(c['platformEdge'], 0.45)
+    rbox('platform-base', (PLATFORM_LEN, d1 - d0, PLATFORM_Z - 0.03), 0.05, mat(c['stone'], 0.7), coll, root, (0.0, mid, (PLATFORM_Z - 0.03) / 2))
+    rbox('platform-deck', (PLATFORM_LEN + 0.04, d1 - d0 + 0.04, 0.06), 0.025, deck, coll, root, (0.0, mid, PLATFORM_Z))
+    for k in range(7):  # plank lines
+        x = -PLATFORM_LEN / 2 + PLATFORM_LEN * (k + 1) / 8
+        rbox(f'platform-plank-{k}', (0.018, d1 - d0, 0.012), 0.005, mat(bp.mix_hex(c['platform'], c['ink'], 0.2), 0.6), coll, root, (x, mid, PLATFORM_Z + 0.032))
+    rbox('platform-edge', (PLATFORM_LEN + 0.06, 0.1, 0.07), 0.03, edge, coll, root, (0.0, d0 + 0.03, PLATFORM_Z + 0.02))
+    # The little roof on two posts at the back, and a round sign on a post at its right end.
+    post = mat(c['post'], 0.45)
+    for sx in (-1, 1):
+        rod(f'platform-post-{sx}', (0.62 * sx, d1 - 0.2, PLATFORM_Z), (0.62 * sx, d1 - 0.2, 1.9), 0.045, post, coll, root, seg=12)
+    roof_w = PLATFORM_LEN + 0.1
+    bp.prism('platform-roof', [(-roof_w / 2, 0.0), (roof_w / 2, 0.0), (0.0, 0.32)], 0.95, mat(c['platformRoof'], 0.4), coll, root, (0.0, d1 - 0.42, 1.9), bevel=0.04)
+    rbox('platform-roof-trim', (roof_w + 0.06, 0.98, 0.06), 0.03, edge, coll, root, (0.0, d1 - 0.42, 1.9))
+    sx = PLATFORM_LEN / 2 - 0.18
+    rod('platform-sign-post', (sx, d0 + 0.32, PLATFORM_Z), (sx, d0 + 0.32, 1.12), 0.035, post, coll, root, seg=10)
+    sign = empty('platform-sign', coll, root, (sx, d0 + 0.3, 1.28), (0.0, 0.0, -24.0))
+    blob('platform-sign-disc', mat(c['sign'], 0.4), coll, sign, (0.0, 0.0, 0.0), (0.2, 0.04, 0.2), seg=(32, 10))
+    torus('platform-sign-rim', 0.2, 0.03, mat(c['platformRoof'], 0.4), coll, sign, (0.0, -0.01, 0.0), (90.0, 0.0, 0.0))
+    # A tiny engine drawn on the sign (a green blob and a chimney).
+    blob('platform-sign-engine', mat(c['engine'], 0.4), coll, sign, (0.0, -0.045, -0.02), (0.1, 0.01, 0.055), seg=(20, 8))
+    blob('platform-sign-chimney', mat(c['chimney'], 0.4), coll, sign, (0.06, -0.05, 0.06), (0.025, 0.01, 0.045), seg=(12, 6))
+    # A flower box at the left end.
+    rbox('platform-box', (0.36, 0.2, 0.14), 0.04, mat(c['trunk'], 0.6), coll, root, (-PLATFORM_LEN / 2 + 0.3, d0 + 0.22, PLATFORM_Z + 0.08))
+    for k in range(3):
+        bp.flower(f'platform-flower-{k}', coll, root, (-PLATFORM_LEN / 2 + 0.18 + 0.12 * k, d0 + 0.2, PLATFORM_Z + 0.2), 0.09, mat(c['flower'], 0.5), mat(c['flowerCentre'], 0.5))
+    bpy.context.view_layer.update()
+    meshes = bp.meshes_of(root)
+    r = mesh_rect(meshes)
+    log(f'platform {fmt_rect(r)}')
+    deck_objs = [o for o in meshes if o.name.startswith(('platform-base', 'platform-deck', 'platform-edge', 'platform-box'))]
+    hull_object('hit.platform', bp.world_pts(deck_objs), layout)
+    add_empty('anchor.platform', (wx(PLATFORM_X), 0.0, 0.0), layout)
+    deck = mesh_rect(deck_objs)
+    log(f'platform deck (its tap area) {fmt_rect(deck)}')
+    if deck[2] + HIT_PAD_PX > params['rect']['x1']:
+        fail(f'the platform deck {fmt_rect(deck)}: padded, it leaves the interactive rect')
+    return deck
+
+
+# --- the destinations (each built facing local −y, its ground at z 0) -------------------------------------------------
+
+def dest_beach(c, coll, root):
+    """Sand with the sea behind (white wave crests), a tall pink-and-white umbrella, a sandcastle with a flag, a bucket
+    and spade, a beach ball."""
+    rbox('beach-sea', (2.4, 1.6, 0.04), 0.02, mat(c['sea'], 0.2), coll, root, (0.0, 1.5, 0.02))
+    rbox('beach-sea-far', (2.4, 0.5, 0.045), 0.02, mat(c['seaDark'], 0.2), coll, root, (0.0, 2.1, 0.025))
+    for k, (x, y) in enumerate(((-0.8, 1.0), (-0.25, 1.35), (0.35, 1.05), (0.85, 1.4), (-0.55, 1.75), (0.6, 1.8))):
+        rod(f'beach-wave-{k}', (x - 0.16, y, 0.06), (x + 0.16, y, 0.06), 0.03, mat(c['umbrellaStripe'], 0.3), coll, root, seg=8)
+    blob('beach-sand', mat(c['sand'], 0.8), coll, root, (0.0, 0.0, 0.0), (1.25, 0.85, 0.1), shape=bp.flat_bottom, seg=(48, 12))
+    # The umbrella: a tall pole and a striped dome, tilted a little.
+    tilt = empty('beach-umbrella', coll, root, (0.35, 0.3, 0.0), (0.0, 10.0, 0.0))
+    rod('beach-pole', (0.0, 0.0, 0.0), (0.0, 0.0, 2.0), 0.035, mat(c['umbrellaStripe'], 0.4), coll, tilt, seg=10)
+    bp.gore_ball('beach-canopy', [mat(c['umbrella'], 0.45), mat(c['umbrellaStripe'], 0.45)], 8, (0.85, 0.85, 0.4), coll, tilt, (0.0, 0.0, 1.86), dome=True)
+    blob('beach-tip', mat(c['umbrella'], 0.4), coll, tilt, (0.0, 0.0, 2.28), (0.06, 0.06, 0.07), seg=(12, 8))
+    # The sandcastle: three round towers and a flag.
+    sand_dark = mat(bp.mix_hex(c['sand'], c['soil'], 0.35), 0.8)
+    for k, (x, h, r) in enumerate(((-0.62, 0.42, 0.17), (-0.32, 0.6, 0.2), (-0.04, 0.38, 0.15))):
+        lathe(f'beach-tower-{k}', rounded_profile(r, 0.0, h, 0.2), sand_dark, coll, root, (x, 0.05, 0.05), seg=28)
+        for j in range(4):
+            a = math.pi / 2 * j + 0.4
+            rbox(f'beach-crenel-{k}-{j}', (0.06, 0.06, 0.07), 0.02, sand_dark, coll, root, (x + math.cos(a) * r * 0.8, 0.05 + math.sin(a) * r * 0.8, 0.05 + h + 0.03))
+    rod('beach-flag-pole', (-0.32, 0.05, 0.65), (-0.32, 0.05, 1.05), 0.015, mat(c['ink'], 0.5), coll, root, seg=6)
+    bp.prism('beach-flag', [(0.0, 0.0), (0.0, 0.16), (0.2, 0.08)], 0.02, mat(c['flag'], 0.4), coll, root, (-0.31, 0.05, 0.88), bevel=0.0)
+    # The bucket and spade, and a beach ball.
+    lathe('beach-bucket', [(0.0, 0.0), (0.13, 0.0), (0.17, 0.24), (0.15, 0.25), (0.0, 0.25)], mat(c['slideFrame'], 0.4), coll, root, (0.75, -0.35, 0.04), seg=28)
+    rod('beach-spade', (0.92, -0.3, 0.05), (0.98, -0.22, 0.42), 0.02, mat(c['slide'], 0.4), coll, root, seg=8)
+    bp.gore_ball('beach-ball', [mat(c['umbrella'], 0.35), mat(c['slide'], 0.35)], 6, (0.18, 0.18, 0.18), coll, root, (0.1, -0.5, 0.2))
+
+
+def dest_playground(c, coll, root):
+    """A slide tower: four blue posts, a deck, a red pointed roof with a flag, a ladder on the left and a yellow chute
+    curling down to the right; a little swing beside it."""
+    blob('play-mat', mat(c['sand'], 0.8), coll, root, (0.0, 0.1, 0.0), (1.25, 0.8, 0.08), shape=bp.flat_bottom, seg=(48, 12))
+    frame, slide, red = mat(c['slideFrame'], 0.4), mat(c['slide'], 0.35), mat(c['swing'], 0.4)
+    tx, top = -0.3, 1.05
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            rod(f'play-leg-{sx}-{sy}', (tx + 0.28 * sx, 0.28 * sy, 0.0), (tx + 0.28 * sx, 0.28 * sy, 1.95), 0.045, frame, coll, root, seg=12)
+    rbox('play-deck', (0.66, 0.66, 0.08), 0.03, mat(c['platform'], 0.5), coll, root, (tx, 0.0, top))
+    for sy in (-1, 1):
+        rod(f'play-rail-{sy}',(tx - 0.28, 0.28 * sy, top + 0.36), (tx + 0.28, 0.28 * sy, top + 0.36), 0.03, frame, coll, root, seg=10)
+    bp.prism('play-roof', [(-0.48, 0.0), (0.48, 0.0), (0.0, 0.5)], 0.78, red, coll, root, (tx, 0.0, 1.95), bevel=0.04)
+    rod('play-flag-pole', (tx, 0.0, 2.4), (tx, 0.0, 2.75), 0.018, mat(c['ink'], 0.5), coll, root, seg=6)
+    bp.prism('play-flag', [(0.0, 0.0), (0.0, 0.16), (0.22, 0.08)], 0.02, mat(c['slide'], 0.4), coll, root, (tx + 0.01, 0.0, 2.58), bevel=0.0)
+    for sy in (-1, 1):
+        rod(f'play-ladder-{sy}', (tx - 0.62, 0.18 * sy, 0.0), (tx - 0.3, 0.18 * sy, top), 0.028, mat(c['trim'], 0.4), coll, root, seg=8)
+    for k in range(4):
+        t = (k + 0.7) / 4.6
+        rod(f'play-rung-{k}', (tx - 0.62 + 0.32 * t, -0.18, top * t), (tx - 0.62 + 0.32 * t, 0.18, top * t), 0.022, mat(c['trim'], 0.4), coll, root, seg=8)
+    a, b = Vector((tx + 0.3, 0.0, top + 0.02)), Vector((tx + 1.25, 0.0, 0.12))
+    d = b - a
+    chute = empty('play-chute', coll, root, (a + b) / 2, (0.0, -math.degrees(math.atan2(d.z, d.x)), 0.0))
+    rbox('play-chute-bed', (d.length + 0.1, 0.44, 0.06), 0.03, slide, coll, chute, (0.0, 0.0, 0.0))
+    for sy in (-1, 1):
+        rbox(f'play-chute-side-{sy}', (d.length + 0.1, 0.06, 0.16), 0.03, slide, coll, chute, (0.0, 0.22 * sy, 0.07))
+    blob('play-ball', red, coll, root, (0.75, -0.45, 0.14), (0.14, 0.14, 0.14), seg=(20, 10))
+
+
+def dest_fair(c, coll, root):
+    """A little Ferris wheel (a purple rim, coloured cars) on a stand, with a line of flags."""
+    frame, dark = mat(c['wheelFair'], 0.4), mat(c['wheelFairDark'], 0.4)
+    blob('fair-ground', mat(c['sand'], 0.8), coll, root, (0.0, 0.1, 0.0), (1.2, 0.7, 0.06), shape=bp.flat_bottom, seg=(48, 12))
+    hub = Vector((0.1, 0.25, 1.15))
+    r = 0.78
+    for sy in (-1, 1):
+        rod(f'fair-stand-a-{sy}', (hub.x - 0.5, hub.y + 0.2 * sy, 0.0), (hub.x, hub.y + 0.08 * sy, hub.z), 0.04, dark, coll, root, seg=10)
+        rod(f'fair-stand-b-{sy}', (hub.x + 0.5, hub.y + 0.2 * sy, 0.0), (hub.x, hub.y + 0.08 * sy, hub.z), 0.04, dark, coll, root, seg=10)
+    torus('fair-rim', r, 0.04, frame, coll, root, hub, (90.0, 0.0, 0.0))
+    torus('fair-rim-in', r * 0.45, 0.03, frame, coll, root, hub + Vector((0.0, -0.01, 0.0)), (90.0, 0.0, 0.0))
+    blob('fair-hub', mat(c['gondola2'], 0.3), coll, root, hub + Vector((0.0, -0.05, 0.0)), (0.09, 0.05, 0.09), seg=(16, 8))
+    cars = [mat(c['gondola1'], 0.4), mat(c['gondola2'], 0.4), mat(c['gondola3'], 0.4)]
+    for k in range(8):
+        a = 2 * math.pi * k / 8 + 0.2
+        p = hub + Vector((math.cos(a) * r, -0.02, math.sin(a) * r))
+        rod(f'fair-spoke-{k}', hub, p, 0.018, frame, coll, root, seg=8)
+        g = p + Vector((0.0, -0.06, -0.14))
+        lathe(f'fair-car-{k}', rounded_profile(0.1, 0.0, 0.16, 0.4), cars[k % 3], coll, root, g, seg=20)
+        rod(f'fair-hang-{k}', p, g + Vector((0.0, 0.0, 0.16)), 0.012, dark, coll, root, seg=6)
+    # A line of little flags from the wheel's top to a pole on the right.
+    pole = Vector((1.05, -0.05, 0.0))
+    rod('fair-pole', pole, pole + Vector((0.0, 0.0, 1.35)), 0.025, mat(c['trim'], 0.4), coll, root, seg=8)
+    top = hub + Vector((0.0, -0.08, r + 0.05))
+    end = pole + Vector((0.0, 0.0, 1.32))
+    flags = [mat(c['flag'], 0.4), mat(c['gondola2'], 0.4), mat(c['gondola3'], 0.4)]
+    rod('fair-flag-line', top, end, 0.008, mat(c['string'], 0.5), coll, root, seg=6)
+    for k in range(5):
+        t = (k + 0.6) / 5.6
+        p = top.lerp(end, t) - Vector((0.0, 0.0, 0.12 * math.sin(math.pi * t)))
+        bp.prism(f'fair-flag-{k}', [(-0.07, 0.0), (0.07, 0.0), (0.0, -0.14)], 0.02, flags[k % 3], coll, root, p, bevel=0.0)
+
+
+DESTINATIONS = {'beach': dest_beach, 'playground': dest_playground, 'fair': dest_fair}
+
+
+def build_dest(did, params, c, sprites, layout):
+    coll = sprite(sprites, f'dest-{did}')
+    root = ground_root(f'dest-{did}-root', coll, DEST_X, DEST_DEPTH, -14.0)
+    DESTINATIONS[did](c, coll, root)
+    pivot = project((wx(DEST_X), DEST_DEPTH, 0.0))
+    # Keep the destination on the ground at its depth: fit scales it into the box with its bottom on the pivot.
+    r = bp.fit(root, (DEST_X, pivot[1]), box=DEST_BOX_PX, bottom=True)
+    hull_object(f'hit.dest-{did}', bp.world_pts(bp.meshes_of(root)), layout)
+    log(f'dest-{did} {fmt_rect(r)}')
+    if max(r[2] - r[0], r[3] - r[1]) < params['train']['destMinPx'] + 4:
+        fail(f'destination {did} is under {params["train"]["destMinPx"]} px')
+    return r
+
+
+# --- the tunnel -----------------------------------------------------------------------------------------------------
+
+def hill_shape(d):
+    return Vector((d.x, d.y, max(d.z, 0.0)))
+
+
+def build_tunnel(c, sprites, layout, tail_x, nose_x):
+    """The tunnel, in two sprites. `tunnel` (back: the tall hill behind the track; front: the grassy mound over the
+    track between the portals, drawn over the train) runs from x0 to x1 (anchor.tunnel, anchor.tunnel-end: where the
+    train goes out of sight). `tunnel-portal` is one stone portal standing ON the track (the scene draws it at both
+    ends, its inner opening edge on x0 and on x1): back, its dark mouth behind the track (the train passes in front of
+    it, in the doorway); front, the arch, its legs and the wall of grass over it (drawn over the train). The train
+    rides into the dark doorway and goes out of sight behind the portal's inner leg and the mound; never under a
+    rounded corner (the cab's roof once peeked out there). Two sprites keep each one well under the atlas width."""
+    group = sprite(sprites, 'tunnel')
+    # Rendered so the whole hill is centred in frame (it scrolls: only its length matters).
+    x0, x1 = tail_x - TUNNEL_MARGIN_PX + TUNNEL_SHIFT_PX, nose_x + TUNNEL_MARGIN_PX + TUNNEL_SHIFT_PX
+    mid = (x0 + x1) / 2
+    half = (x1 - x0) / 2 / bp.ORTHO_PX_PER_M
+    hill, hill_dark = mat(c['tunnelHill'], 0.85), mat(c['tunnelHillDark'], 0.85)
+    stone, stone_dark = mat(c['stone'], 0.7), mat(c['stoneDark'], 0.7)
+    inside = mat(c['tunnelInside'], 0.9)
+    fz = (REF_PX[1] - TUNNEL_FRONT_TOP_PX) / bp.ORTHO_PX_PER_M / math.cos(bp.P) - 1.0 * math.tan(bp.P)
+    # Back: a tall rounded hill behind the track (past both portals) with a few trees on it.
+    back = bp.state_child(group, 'tunnel', 'back')
+    broot = ground_root('tunnel-back-root', back, mid, 1.2)
+    top_z = (REF_PX[1] - TUNNEL_BACK_TOP_PX) / bp.ORTHO_PX_PER_M / math.cos(bp.P)
+    blob('tunnel-back-hill', hill_dark, back, broot, (0.0, 0.6, 0.0), (half + 1.4, 1.6, top_z), shape=hill_shape, seg=(64, 24))
+    for k, (dx, s) in enumerate(((-0.45, 1.0), (0.1, 1.2), (0.55, 0.9))):
+        x = dx * half
+        z = top_z * math.sqrt(max(0.0, 1 - (x / (half + 1.4)) ** 2)) - 0.12
+        bp.tree(f'tunnel-tree-{k}', c, back, broot, (x, 0.2, z), s)
+    # Front: the mound over the track from x0 to x1 (its ends go under the portals' walls), flowers on its face.
+    front = bp.state_child(group, 'tunnel', 'front')
+    froot = ground_root('tunnel-front-root', front, mid, -0.1)
+    rbox('tunnel-front-hill', (2 * half + 0.3, 1.5, fz), 0.22, hill, front, froot, (0.0, 0.2, fz / 2), seg=6)
+    blob('tunnel-front-crest', hill, front, froot, (0.0, 0.3, fz - 0.2), (half, 0.7, 0.45), seg=(96, 16))
+    for k, x in enumerate((-half * 0.55, -half * 0.2, half * 0.18, half * 0.55)):
+        bp.flower(f'tunnel-flower-{k}', front, froot, (x, -0.58, fz * (0.45 + 0.12 * (k % 2))), 0.13, mat(c['flower'] if k % 2 else c['trim'], 0.5), mat(c['flowerCentre'], 0.5))
+        bp.flower(f'tunnel-flower-top-{k}', front, froot, (x + 0.3, -0.1, fz + 0.02), 0.11, mat(c['flower'], 0.5), mat(c['flowerCentre'], 0.5))
+    bpy.context.view_layer.update()
+    rb = mesh_rect(bp.meshes_of(broot))
+    rf = mesh_rect(bp.meshes_of(froot))
+    log(f'tunnel back {fmt_rect(rb)}, front {fmt_rect(rf)}; out of sight x {x0:.0f} … {x1:.0f}')
+    add_empty('anchor.tunnel', (wx(x0), 0.0, 0.0), layout)
+    add_empty('anchor.tunnel-end', (wx(x1), 0.0, 0.0), layout)
+
+    # The portal (one, drawn at both ends): the arch on the track, just in front of the train's near side.
+    pgroup = sprite(sprites, 'tunnel-portal')
+    pr, tube, leg = PORTAL_R, 0.14, PORTAL_LEG
+    inner = pr - tube
+    outer = pr + tube
+    pback = bp.state_child(pgroup, 'tunnel-portal', 'back')
+    pbroot = ground_root('tunnel-portal-back-root', pback, PORTAL_X, 0.55)
+    # The dark mouth fills the opening (a box up to the legs' tops, a disc over it), behind the track.
+    rbox('tunnel-mouth-low', (2 * inner + 0.1, 0.1, leg), 0.02, inside, pback, pbroot, (0.0, 0.0, leg / 2))
+    blob('tunnel-mouth-top', inside, pback, pbroot, (0.0, 0.0, leg), (inner + 0.05, 0.05, inner + 0.05), seg=(40, 16))
+    pfront = bp.state_child(pgroup, 'tunnel-portal', 'front')
+    pfroot = ground_root('tunnel-portal-front-root', pfront, PORTAL_X, -0.62)
+    arch = torus_bm(pr, tube, arc=(0.0, 180.0), seg=40, tube=12)
+    o = mesh_obj('tunnel-arch', arch, stone, pfront)
+    bp.place(o, pfroot, (0.0, 0.0, leg), (90.0, 0.0, 0.0))
+    o['cute'] = 1
+    for s2 in (-1, 1):
+        rbox(f'tunnel-jamb-{s2}', (2 * tube + 0.04, 0.3, leg + 0.02), 0.07, stone, pfront, pfroot, (pr * s2, 0.0, (leg + 0.02) / 2))
+    for k in range(5):
+        a = math.radians(18.0 + 36.0 * k)
+        blob(f'tunnel-stone-{k}', stone_dark, pfront, pfroot, (math.cos(a) * pr, -0.13, leg + math.sin(a) * pr), (0.09, 0.05, 0.07), seg=(12, 8))
+    # The wall of grass over the arch, up to the mound's top: a slab with an arched hole (its edge under the arch).
+    hole = pr
     bm = bmesh.new()
-    bmesh.ops.create_cube(bm, size=1.0)
-    me = bpy.data.meshes.new(f'seat-{fid}-cut')
-    bm.to_mesh(me)
-    bm.free()
-    cut = bpy.data.objects.new(f'seat-{fid}-cut', me)
-    coll.objects.link(cut)
-    cut.scale = (h * 1.6, h * 1.6, h * SEAT_CUT + 0.05)
-    cut.location = (at.x, at.y, at.z + (h * SEAT_CUT - 0.05) / 2)
-    cut.is_holdout = True
-    cut['cute'] = 1  # soften_scene leaves it alone
-    return h
+    outline = [(-outer, leg)]
+    for i in range(33):
+        a = math.pi * (1 - i / 32)
+        outline.append((math.cos(a) * hole, leg + math.sin(a) * hole))
+    outline += [(outer, leg), (outer, fz), (-outer, fz)]
+    ring_f = [bm.verts.new((x, -0.12, z)) for x, z in outline]
+    ring_b = [bm.verts.new((x, 0.12, z)) for x, z in outline]
+    bm.faces.new(ring_f)
+    bm.faces.new(list(reversed(ring_b)))
+    n = len(outline)
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((ring_f[j], ring_f[i], ring_b[i], ring_b[j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    wall = mesh_obj('tunnel-wall', bm, hill, pfront, smooth=False)
+    bp.place(wall, pfroot, (0.0, 0.08, 0.0), (0.0, 0.0, 0.0))
+    blob('tunnel-wall-crest', hill, pfront, pfroot, (0.0, 0.1, fz - 0.05), (outer + 0.05, 0.25, 0.3), seg=(32, 12))
+    for s2 in (-1, 1):
+        bp.flower(f'tunnel-wall-flower-{s2}', pfront, pfroot, (s2 * (inner * 0.55), -0.16, leg + inner + 0.25), 0.11, mat(c['flower'], 0.5), mat(c['flowerCentre'], 0.5))
+    bpy.context.view_layer.update()
+    rp = mesh_rect(bp.meshes_of(pfroot))
+    log(f'tunnel portal front {fmt_rect(rp)}; opening ±{inner * bp.ORTHO_PX_PER_M:.0f} px')
+    # The portal's pivot (its middle on the track) and its opening's right edge: the scene puts that edge on x0 (and
+    # the mirrored left edge on x1).
+    add_empty('anchor.portal', (wx(PORTAL_X), 0.0, 0.0), layout)
+    add_empty('anchor.portal-edge', (wx(PORTAL_X + inner * bp.ORTHO_PX_PER_M), 0.0, 0.0), layout)
+    return rf
 
 
-def build_free(name, sprites, at, screen, c, colours, mats):
-    coll = sprite_group(sprites, name, movable=1, occlude=0)
-    root = bpy.data.objects.new(f'{name}-root', None)
-    coll.objects.link(root)
-    root.location = at
-    if name == 'puff':
-        bp.puffs('puff', [(-0.26, -0.04, 0.26), (0.0, 0.1, 0.33), (0.27, -0.03, 0.25), (0.02, -0.14, 0.26)],
-                 mat(c['smoke'], 0.7), mat(c['smokeShade'], 0.7), coll, root, drop=0.07)
-    elif name == 'pop':
-        m = mat(c['pop'], 0.55)
-        for j in range(8):
-            a = 360.0 * j / 8
-            ar = math.radians(a)
-            blob(f'pop-petal-{j}', m, coll, root, (0.36 * math.sin(ar), 0.0, 0.36 * math.cos(ar)), (0.075, 0.05, 0.16), (0.0, a, 0.0), seg=(20, 10))
-            b = math.radians(a + 22.5)
-            blob(f'pop-dot-{j}', m, coll, root, (0.5 * math.sin(b), 0.0, 0.5 * math.cos(b)), (0.045, 0.04, 0.045), seg=(12, 8))
-    elif name == 'boat':
-        hull, sail, mast = mat(c['boatHull'], 0.35), mat(c['boatSail'], 0.5), mat(c['trunk'], 0.6)
-        blob('boat-hull', hull, coll, root, (0.0, 0.0, 0.12), (0.7, 0.28, 0.16), seg=(32, 12))
-        rbox('boat-deck', (1.1, 0.4, 0.06), 0.03, mat(c['boatDeck'], 0.6), coll, root, (0.0, 0.0, 0.25))
-        rod('boat-mast', (0.0, 0.0, 0.25), (0.0, 0.0, 1.45), 0.035, mast, coll, root, seg=10)
-        bp.prism('boat-sail', [(0.0, 0.0), (0.0, 1.05), (0.62, 0.0)], 0.03, sail, coll, root, (0.05, 0.0, 0.36), (90.0, 0.0, 0.0), bevel=0.012)
-        bp.prism('boat-jib', [(0.0, 0.0), (0.0, 0.8), (-0.4, 0.0)], 0.03, sail, coll, root, (-0.05, 0.0, 0.36), (90.0, 0.0, 0.0), bevel=0.012)
-        blob('boat-flag', mat(c['boatFlag'], 0.5), coll, root, (0.1, 0.0, 1.45), (0.14, 0.02, 0.06), seg=(12, 6))
-    elif name == 'hot-air':
-        a, b = mat(c['hotAir'], 0.4), mat(c['hotAirStripe'], 0.4)
-        bp.gore_ball('hot-air-envelope', [a, b], 10, (0.74, 0.74, 0.76), coll, root, (0.0, 0.0, 1.0), shape=bp.envelope)
-        torus('hot-air-band', 0.69, 0.045, b, coll, root, (0.0, 0.0, 0.6))
-        rbox('hot-air-basket', (0.44, 0.38, 0.3), 0.08, mat(c['basket'], 0.7), coll, root, (0.0, 0.0, -0.5))
-        rbox('hot-air-basket-rim', (0.5, 0.44, 0.08), 0.035, mat(c['trunk'], 0.6), coll, root, (0.0, 0.0, -0.35))
+# --- the ground, hills, trees, fences --------------------------------------------------------------------------------
+
+def build_ground(c, sprites):
+    coll = sprite(sprites, 'ground')
+    wide = (GROUND_W_PX + GROUND_OVER_PX) / bp.ORTHO_PX_PER_M
+    cx = wx((GROUND_W_PX - GROUND_OVER_PX) / 2)
+    left = wx(0.0)
+    grass, dark = mat(c['grass'], 0.85), mat(c['grassDark'], 0.85)
+    back, front = GROUND_TOP_DEPTH, GROUND_FRONT_DEPTH
+    slabs = [
+        rbox('ground-grass', (wide, back - front, 0.4), 0.004, grass, coll, None, (cx, (back + front) / 2, -0.2)),
+        rbox('ground-ballast', (wide, 1.3, 0.08), 0.004, mat(c['ballast'], 0.9), coll, None, (cx, 0.0, 0.0)),
+    ]
+    for s in (-1, 1):
+        slabs.append(rbox(f'ground-rail-{s}', (wide, 0.07, 0.07), 0.004, mat(c['rail'], 0.3), coll, None, (cx, s * RAIL_GAUGE, RAIL_TOP - 0.035)))
+        slabs.append(rbox(f'ground-rail-foot-{s}', (wide, 0.12, 0.03), 0.004, mat(c['railDark'], 0.4), coll, None, (cx, s * RAIL_GAUGE, RAIL_TOP - 0.085)))
+    for o in slabs:
+        for poly in o.data.polygons:
+            poly.use_smooth = False
+        o['cute'] = 1
+    # The sleepers: evenly spaced so the strip tiles (the first and last half a gap from the ends).
+    step = GROUND_W_PX / SLEEPERS / bp.ORTHO_PX_PER_M
+    sleeper = mat(c['sleeper'], 0.7)
+    for k in range(SLEEPERS):
+        x = left + step * (k + 0.5)
+        rbox(f'ground-sleeper-{k}', (step * 0.42, 1.0, 0.06), 0.015, sleeper, coll, None, (x, 0.0, 0.05))
+    rnd = random.Random(SEED)
+    petals = [mat(c['flower'], 0.6), mat(c['trim'], 0.6), mat(c['flowerCentre'], 0.6)]
+    hearts = [mat(c['flowerCentre'], 0.5), mat(c['flowerCentre'], 0.5), mat(c['flower'], 0.5)]
+    placed = []
+    bands = [(gy(560.0), gy(490.0)), (gy(752.0), gy(632.0)), (gy(752.0), gy(632.0))]  # far grass, near grass ×2 (world depth ranges)
+    for i in range(900):
+        if len(placed) >= 52:
+            break
+        sx = rnd.uniform(GROUND_EDGE_PX + 22, DESIGN[0] - GROUND_EDGE_PX - 22)
+        lo, hi = bands[i % 3]
+        y = rnd.uniform(min(lo, hi), max(lo, hi))
+        sy = screen_y(y, 0.0)
+        if any(abs(sx - px) < 52 and abs(sy - py) < 22 for px, py in placed):
+            continue
+        k = len(placed)
+        placed.append((sx, sy))
+        if k % 3 == 0:
+            bp.flower(f'ground-flower-{k}', coll, None, (wx(sx), y, 0.05), rnd.uniform(0.11, 0.15), petals[(k // 3) % 3], hearts[(k // 3) % 3])
+        else:
+            t = blob(f'ground-tuft-{k}', dark, coll, None, (wx(sx), y, 0.0), (rnd.uniform(0.16, 0.3), rnd.uniform(0.1, 0.16), 0.03), seg=(20, 8))
+            t.visible_shadow = False
+    r = mesh_rect([o for o in coll.all_objects if o.type == 'MESH'])
+    log(f'ground strip {fmt_rect(r)}; rails at y {screen_y(RAIL_GAUGE, RAIL_TOP):.0f} / {screen_y(-RAIL_GAUGE, RAIL_TOP):.0f}')
+    d = mesh_rect([o for o in coll.all_objects if o.name.startswith(('ground-flower', 'ground-tuft'))])
+    if d[0] < GROUND_EDGE_PX - 8 or d[2] > DESIGN[0] - GROUND_EDGE_PX + 8:
+        fail('the ground details come too close to the frame edges (the strip must tile)')
+
+
+def build_hills(c, sprites):
+    group = sprite(sprites, 'hill')
+    green, dark = mat(c['hill'], 0.85), mat(c['hillDark'], 0.85)
+    specs = {
+        'a': ([(-0.5, 0.0, 2.3, 1.9, green), (1.55, 0.5, 1.75, 1.3, dark), (-2.0, 0.4, 1.2, 0.8, dark)], [(0, 0.42, 1.0), (1, 0.55, 0.8)]),
+        'b': ([(0.6, 0.0, 1.95, 1.55, green), (-1.2, 0.5, 1.65, 1.15, dark), (1.9, 0.4, 0.9, 0.62, dark)], [(1, -0.3, 0.85)]),
+    }
+    for state, (domes, trees) in specs.items():
+        child = bp.state_child(group, 'hill', state)
+        root = empty(f'hill-{state}-root', child, None, (wx(DESIGN[0] / 2), HILL_Y, bp.wz(HILL_BOTTOM_PX, HILL_Y)))
+        for j, (x, dy, rx, rz, m) in enumerate(domes):
+            blob(f'hill-{state}-{j}', m, child, root, (x, dy, 0.0), (rx, 0.55, rz), shape=bp.flat_bottom, seg=(64, 24))
+        for j, (dome, share, s) in enumerate(trees):
+            x, dy, rx, rz, _m = domes[dome]
+            bp.tree(f'hill-{state}-tree-{j}', c, child, root, (x + share * rx, dy - 0.1, rz * math.sqrt(1 - share * share) - 0.04), s)
+        r = bp.fit(root, (DESIGN[0] / 2, HILL_BOTTOM_PX), box=HILL_BOX_PX[state], bottom=True)
+        log(f'hill-{state} {fmt_rect(r)}')
+
+
+def build_trees(c, sprites):
+    group = sprite(sprites, 'tree')
+    trunk = mat(c['trunk'], 0.7)
+    leaf, leaf_dark = mat(c['leaf'], 0.7), mat(c['leafDark'], 0.7)
+    for state in ('a', 'b'):
+        child = bp.state_child(group, 'tree', state)
+        root = ground_root(f'tree-{state}-root', child, DESIGN[0] / 2, TREE_DEPTH)
+        if state == 'a':  # a round tree with three puffs
+            rod('tree-a-trunk', (0.0, 0.0, 0.0), (0.0, 0.0, 0.8), 0.09, trunk, child, root, seg=12)
+            for j, (dx, dz, rr, m) in enumerate(((0.0, 1.15, 0.5, leaf), (-0.32, 0.92, 0.36, leaf_dark), (0.34, 0.95, 0.38, leaf_dark))):
+                blob(f'tree-a-crown-{j}', m, child, root, (dx, 0.1 * j, dz), (rr, rr * 0.9, rr), seg=(32, 16))
+            for j, (dx, dz) in enumerate(((-0.15, 1.3), (0.2, 1.05), (-0.3, 0.95))):
+                blob(f'tree-a-fruit-{j}', mat(c['flower'], 0.4), child, root, (dx, -0.42, dz), (0.06, 0.04, 0.06), seg=(12, 8))
+        else:  # a cone tree in three tiers
+            rod('tree-b-trunk', (0.0, 0.0, 0.0), (0.0, 0.0, 0.4), 0.08, trunk, child, root, seg=12)
+            for j in range(3):
+                lathe(f'tree-b-tier-{j}', [(0.0, 0.0), (0.5 - 0.12 * j, 0.0), (0.42 - 0.12 * j, 0.1), (0.0, 0.62 - 0.06 * j)], leaf if j % 2 else leaf_dark, child, root, (0.0, 0.0, 0.3 + 0.36 * j), seg=32)
+        pivot = project((wx(DESIGN[0] / 2), TREE_DEPTH, 0.0))
+        r = bp.fit(root, (DESIGN[0] / 2, pivot[1]), height=TREE_HEIGHT_PX[state], bottom=True)
+        log(f'tree-{state} {fmt_rect(r)}')
+
+
+def build_fence(c, sprites):
+    coll = sprite(sprites, 'fence')
+    root = ground_root('fence-root', coll, DESIGN[0] / 2, FENCE_DEPTH)
+    wood = mat(c['fence'], 0.6)
+    n = 9
+    span = FENCE_W_PX / bp.ORTHO_PX_PER_M
+    for k in range(n):
+        x = -span / 2 + span * k / (n - 1)
+        lathe(f'fence-picket-{k}', [(0.0, 0.0), (0.05, 0.0), (0.05, 0.4), (0.03, 0.47), (0.0, 0.5)], wood, coll, root, (x, 0.0, 0.0), seg=4)
+    for z in (0.16, 0.34):
+        rbox(f'fence-rail-{z}', (span + 0.08, 0.04, 0.05), 0.02, wood, coll, root, (0.0, 0.04, z))
+    bpy.context.view_layer.update()
+    r = mesh_rect(bp.meshes_of(root))
+    log(f'fence {fmt_rect(r)}')
+
+
+def build_clouds(c, sprites):
+    group = sprite(sprites, 'cloud')
+    white, shade = mat(c['cloud'], 0.75), mat(c['cloudShade'], 0.75)
+    specs = {
+        'a': [(-0.82, -0.06, 0.4), (-0.36, 0.2, 0.52), (0.26, 0.27, 0.6), (0.82, -0.02, 0.42), (0.02, -0.12, 0.48), (-0.48, -0.16, 0.36), (0.5, -0.16, 0.38)],
+        'b': [(-0.62, 0.0, 0.42), (-0.06, 0.26, 0.56), (0.5, 0.1, 0.46), (0.9, -0.1, 0.3), (-0.2, -0.14, 0.4), (0.36, -0.16, 0.36)],
+    }
+    for state, spec in specs.items():
+        child = bp.state_child(group, 'cloud', state)
+        root = free_root(f'cloud-{state}', child)
+        bp.puffs(f'cloud-{state}', spec, white, shade, child, root)
+        free_fit(f'cloud-{state}', root)
+
+
+def build_birds(c, colours, sprites):
+    group = sprite(sprites, 'bird')
+    wing = mat(bp.mix_hex(c['bird'], c['birdBelly'], 0.3), 0.5)
+    for state, up in (('a', True), ('b', False)):
+        child = bp.state_child(group, 'bird', state)
+        root = free_root('bird', child)
+        bp.bird_body(f'bird-{state}', c, colours, child, root)
+        if up:
+            blob(f'bird-{state}-wing-near', wing, child, root, (0.06, -0.2, 0.26), (0.15, 0.05, 0.25), (-12.0, 18.0, 0.0), seg=(24, 12))
+            blob(f'bird-{state}-wing-far', wing, child, root, (0.1, 0.2, 0.26), (0.14, 0.05, 0.23), (12.0, 30.0, 0.0), seg=(24, 12))
+        else:
+            blob(f'bird-{state}-wing-near', wing, child, root, (0.07, -0.24, -0.17), (0.15, 0.05, 0.23), (22.0, -20.0, 0.0), seg=(24, 12))
+            blob(f'bird-{state}-wing-far', wing, child, root, (0.12, 0.2, -0.2), (0.13, 0.05, 0.2), (-14.0, -32.0, 0.0), seg=(24, 12))
+        at, size = FREE['bird']
+        r = bp.fit(root, at, width=size)
+        log(f'bird-{state} {fmt_rect(r)}')
+
+
+def build_cow(params, sprites, layout):
+    coll = sprite(sprites, 'cow', states=json.dumps({'idle': [1], 'happy': [20]}, separators=(',', ':')))
+    rig = friend_rig('cow', 'grazer', params, coll)
+    root = rig['root']
+    root.location = (wx(DESIGN[0] / 2), COW_DEPTH, 0.0)
+    root.rotation_euler = (0.0, 0.0, math.radians(-60.0))
+    key_chibi(rig, 1, head_pitch=14.0, head_yaw=20.0, eyes='open')
+    key_chibi(rig, 20, head_pitch=-16.0, head_roll=10.0, head_yaw=-10.0, tail=26.0, tongue=True, eyes='shut', bob=0.06)
+    bpy.context.scene.frame_set(1)
+    pivot = project((wx(DESIGN[0] / 2), COW_DEPTH, 0.0))
+    r = bp.fit(root, (DESIGN[0] / 2, pivot[1]), height=COW_HEIGHT_PX, bottom=True)
+    log(f'cow {fmt_rect(r)}')
+    add_empty('anchor.cow', (wx(DESIGN[0] / 2), COW_DEPTH, 0.0), layout)
+
+
+def build_particles(c, sprites):
+    coll = sprite(sprites, 'puff')
+    root = free_root('puff', coll)
+    bp.puffs('puff', [(-0.26, -0.04, 0.26), (0.0, 0.1, 0.33), (0.27, -0.03, 0.25), (0.02, -0.14, 0.26)], mat(c['smoke'], 0.7), mat(c['smokeShade'], 0.7), coll, root, drop=0.07)
+    free_fit('puff', root)
+    coll = sprite(sprites, 'pop')
+    root = free_root('pop', coll)
+    m = mat(c['pop'], 0.55)
+    for j in range(8):
+        a = 360.0 * j / 8
+        ar = math.radians(a)
+        blob(f'pop-petal-{j}', m, coll, root, (0.36 * math.sin(ar), 0.0, 0.36 * math.cos(ar)), (0.075, 0.05, 0.16), (0.0, a, 0.0), seg=(20, 10))
+        b = math.radians(a + 22.5)
+        blob(f'pop-dot-{j}', m, coll, root, (0.5 * math.sin(b), 0.0, 0.5 * math.cos(b)), (0.045, 0.04, 0.045), seg=(12, 8))
+    free_fit('pop', root)
+
+
+# --- the surprises --------------------------------------------------------------------------------------------------
+
+def build_crossing(params, c, sprites, layout):
+    # The road is a sprite of its own (crossing-road), drawn on the ground under the train: one sprite drawn over the
+    # train cut the stopped train's cars in two. The crossbuck and the little car (in front of the track) stay here.
+    ground = sprite(sprites, 'crossing-road')
+    groot = ground_root('crossing-road-root', ground, SURPRISE_X, 0.0)
+    road = mat(c['road'], 0.85)
+    # The road across the track (planks between the rails), from the far grass to the near grass.
+    rbox('crossing-road', (1.1, 13.0, 0.02), 0.01, road, ground, groot, (0.0, -2.6, 0.035))
+    for k in range(4):
+        rbox(f'crossing-plank-{k}', (1.1, 0.14, 0.03), 0.01, mat(c['sleeper'], 0.7), ground, groot, (0.0, -0.25 + 0.17 * k, 0.09))
+    for k in range(3):
+        rbox(f'crossing-stripe-{k}', (0.12, 0.5, 0.01), 0.004, mat(c['crossingSign'], 0.6), ground, groot, (0.0, -1.6 - 1.0 * k, 0.05))
+    coll = sprite(sprites, 'crossing', states=json.dumps({'idle': [1], 'wave': [10]}, separators=(',', ':')))
+    root = ground_root('crossing-root', coll, SURPRISE_X, 0.0)
+    # The crossbuck on its post by the road (near side).
+    post = Vector((0.85, -1.0, 0.0))
+    rod('crossing-post', post, post + Vector((0.0, 0.0, 1.25)), 0.04, mat(c['crossingSign'], 0.4), coll, root, seg=10)
+    for k in range(4):
+        rbox(f'crossing-post-band-{k}', (0.09, 0.09, 0.12), 0.03, mat(c['crossingStripe'], 0.4), coll, root, post + Vector((0.0, 0.0, 0.15 + 0.28 * k)))
+    sign = empty('crossing-sign', coll, root, post + Vector((0.0, -0.05, 1.2)), (0.0, 0.0, -10.0))
+    for s in (-1, 1):
+        board = rbox(f'crossing-board-{s}', (0.62, 0.03, 0.12), 0.04, mat(c['crossingSign'], 0.4), coll, sign, (0.0, 0.0, 0.0), (0.0, 35.0 * s, 0.0))
+        rbox(f'crossing-board-edge-{s}', (0.64, 0.02, 0.04), 0.015, mat(c['crossingStripe'], 0.4), coll, sign, (0.0, -0.02, 0.0), (0.0, 35.0 * s, 0.0))
+        del board
+    # The little pink car waiting on the near side, its fox driver looking at the train.
+    car = empty('crossing-car', coll, root, (0.0, CROSSING_CAR_DEPTH, 0.0), (0.0, 0.0, -62.0))
+    pink, pink_dark = mat(c['littleCar'], 0.35), mat(c['littleCarDark'], 0.4)
+    rbox('crossing-car-body', (0.62, 1.05, 0.34), 0.14, pink, coll, car, (0.0, 0.0, 0.33))
+    rbox('crossing-car-hood', (0.58, 0.32, 0.12), 0.06, pink_dark, coll, car, (0.0, -0.42, 0.52))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            torus(f'crossing-car-wheel-{sx}-{sy}', 0.1, 0.06, mat(c['tire'], 0.6), coll, car, (0.33 * sx, 0.32 * sy, 0.16), (0.0, 90.0, 0.0))
+    for sx in (-1, 1):
+        blob(f'crossing-car-light-{sx}', mat(c['lamp'], 0.2), coll, car, (0.2 * sx, -0.53, 0.38), (0.06, 0.03, 0.06), seg=(12, 8))
+    colours = {**params['colours'], 'creatureLight': params['art']['creatureLight']}
+    mats = chibi_materials(colours, colours['creatureOrange'], colours['creatureLight'])
+    rig = chibi('fox', 'crossing-fox', coll, mats)
+    froot = rig['root']
+    froot.parent = car
+    froot.location = (0.0, 0.12, 0.2)
+    froot.scale = (0.38, 0.38, 0.38)
+    froot.rotation_euler = (0.0, 0.0, math.radians(-50.0))
+    rig['tail'].scale = HIDDEN
+    # The wave: one paw up beside the head (the wave frame only).
+    arm = empty('crossing-fox-arm', coll, car)
+    rod('crossing-fox-arm-rod', (0.14, -0.04, 0.5), (0.3, -0.16, 0.9), 0.045, mats['fur'], coll, arm, seg=10)
+    blob('crossing-fox-paw', mats['light'], coll, arm, (0.3, -0.16, 0.9), (0.06, 0.055, 0.06), seg=(16, 8))
+    show_on(arm, [10], [1, 10])
+    key_chibi(rig, 1, head_pitch=-4.0, head_yaw=30.0, eyes='open')
+    key_chibi(rig, 10, head_pitch=-12.0, head_roll=10.0, head_yaw=20.0, tongue=True, eyes='shut')
+    bpy.context.scene.frame_set(1)
+    bpy.context.view_layer.update()
+    r = mesh_rect(bp.meshes_of(root))
+    log(f'crossing {fmt_rect(r)}')
+    car_px = project(car.matrix_world.translation)
+    log(f'crossing car at {fmt_px(car_px)}')
+    add_empty('anchor.surprise', (wx(SURPRISE_X), CROSSING_CAR_DEPTH, 0.0), layout)
+
+
+def build_bridge(c, sprites):
+    coll = sprite(sprites, 'bridge')
+    root = ground_root('bridge-root', coll, SURPRISE_X, 0.0)
+    river, river_dark = mat(c['river'], 0.15), mat(c['riverDark'], 0.2)
+    stone, stone_dark = mat(c['bridge'], 0.7), mat(c['bridgeDark'], 0.7)
+    # The river across the strip, from the far grass to the screen's bottom (its banks a darker blue).
+    rbox('bridge-river', (1.4, 16.0, 0.02), 0.01, river, coll, root, (0.0, -1.0, 0.03))
+    for s in (-1, 1):
+        rbox(f'bridge-bank-{s}', (0.12, 16.0, 0.025), 0.01, river_dark, coll, root, (0.72 * s, -1.0, 0.032))
+    for k, (dx, dy) in enumerate(((-0.3, -1.6), (0.25, -2.6), (-0.2, -3.8), (0.3, 2.4))):
+        torus(f'bridge-ripple-{k}', 0.12, 0.018, mat(c['trim'], 0.3), coll, root, (dx, dy, 0.05), (0.0, 0.0, 0.0), arc=(200.0, 340.0))
+    # The stone bridge under the track: a deck with its own sleepers and rails, a low parapet on each side.
+    rbox('bridge-deck', (1.8, 2.1, 0.1), 0.03, stone, coll, root, (0.0, 0.0, -0.01))
+    for k in range(4):
+        rbox(f'bridge-sleeper-{k}', (0.19, 1.0, 0.05), 0.015, mat(c['sleeper'], 0.7), coll, root, (-0.66 + 0.44 * k, 0.0, 0.05))
+    for s in (-1, 1):
+        rbox(f'bridge-rail-{s}', (1.8, 0.07, 0.07), 0.01, mat(c['rail'], 0.3), coll, root, (0.0, s * RAIL_GAUGE, RAIL_TOP - 0.035))
+        rbox(f'bridge-parapet-{s}', (1.9, 0.14, 0.18), 0.05, stone_dark, coll, root, (0.0, s * 1.02, 0.08))
+        for k in range(5):
+            rbox(f'bridge-cap-{s}-{k}', (0.3, 0.17, 0.05), 0.02, stone, coll, root, (-0.76 + 0.38 * k, s * 1.02, 0.19))
+    bpy.context.view_layer.update()
+    r = mesh_rect(bp.meshes_of(root))
+    log(f'bridge {fmt_rect(r)}')
+
+
+def build_fish(c, sprites):
+    coll = sprite(sprites, 'fish')
+    root = free_root('fish', coll)
+    body, fin = mat(c['fish'], 0.35), mat(c['fishFin'], 0.4)
+    tilt = empty('fish-tilt', coll, root, (0.0, 0.0, 0.0), (0.0, -30.0, 0.0))
+    blob('fish-body', body, coll, tilt, (0.0, 0.0, 0.0), (0.42, 0.18, 0.26), seg=(32, 16))
+    bp.prism('fish-tail', [(0.0, 0.0), (0.3, 0.2), (0.3, -0.2)], 0.06, fin, coll, tilt, (0.36, 0.0, 0.0), bevel=0.03)
+    bp.prism('fish-fin', [(-0.1, 0.0), (0.12, 0.0), (0.0, 0.16)], 0.04, fin, coll, tilt, (0.0, 0.0, 0.22), bevel=0.02)
+    blob('fish-eye', mat(c['ink'], 0.2), coll, tilt, (-0.25, -0.15, 0.06), (0.05, 0.03, 0.05), seg=(16, 8))
+    blob('fish-eye-shine', mat(c['trim'], 0.2), coll, tilt, (-0.26, -0.175, 0.08), (0.016, 0.01, 0.016), seg=(10, 6))
+    for k in range(2):
+        blob(f'fish-drop-{k}', mat(c['river'], 0.15), coll, root, (0.2 + 0.18 * k, -0.05, -0.32 - 0.08 * k), (0.05, 0.03, 0.07), seg=(12, 8))
+    free_fit('fish', root)
+
+
+def build_rainbow(c, sprites):
+    coll = sprite(sprites, 'rainbow')
+    root = free_root('rainbow', coll)
+    radius, minor, legs = 1.5, 0.046, 0.5
+    for k in range(6):
+        m = mat(c[f'rainbow{k + 1}'], 0.45)
+        rk = radius - minor - k * 2 * minor * 0.97
+        torus(f'rainbow-band-{k}', rk, minor, m, coll, root, (0.0, 0.0, 0.0), (90.0, 0.0, 0.0), arc=(0.0, 180.0))
         for sx in (-1, 1):
-            for sy in (-1, 1):
-                rod(f'hot-air-rope-{sx}-{sy}', (0.2 * sx, 0.17 * sy, -0.35), (0.17 * sx, 0.15 * sy, 0.04), 0.014, mat(c['string'], 0.6), coll, root, seg=8)
-    else:
-        fail(f'no free sprite "{name}"')
-    fit_height(root, screen, FREE_PX[name])
+            rod(f'rainbow-leg-{k}-{sx}', (rk * sx, 0.0, 0.02), (rk * sx, 0.0, -legs), minor, m, coll, root, seg=14)
+    white, shade = mat(c['cloud'], 0.75), mat(c['cloudShade'], 0.75)
+    mid = radius - 6 * minor
+    for sx in (-1, 1):
+        foot = empty(f'rainbow-foot-{sx}', coll, root, (sx * mid, -0.2, -legs))
+        bp.puffs(f'rainbow-cloud-{sx}', [(-0.3, -0.02, 0.22), (0.0, 0.08, 0.3), (0.3, -0.02, 0.22), (0.0, -0.1, 0.24)], white, shade, coll, foot, depth=0.2, drop=0.06)
+    free_fit('rainbow', root)
 
 
-# --- main -------------------------------------------------------------------------------------------------------------
-
-def check_list(what, built, wanted):
-    if sorted(built) != sorted(wanted):
-        fail(f'{what}: built {sorted(built)}, content/games/train.ts says {sorted(wanted)}')
+def build_hot_air(c, colours, sprites):
+    coll = sprite(sprites, 'hot-air')
+    root = free_root('hot-air', coll)
+    a, b = mat(c['hotAir'], 0.4), mat(c['hotAirStripe'], 0.4)
+    bp.gore_ball('hot-air-envelope', [a, b], 10, (0.74, 0.74, 0.76), coll, root, (0.0, 0.0, 1.0), shape=bp.envelope)
+    lathe('hot-air-mouth', rounded_profile(0.2, 0.0, 0.16, 0.3), a, coll, root, (0.0, 0.0, 0.0), seg=24)
+    torus('hot-air-band', 0.69, 0.045, b, coll, root, (0.0, 0.0, 0.6))
+    rbox('hot-air-basket', (0.44, 0.38, 0.3), 0.08, mat(c['basket'], 0.7), coll, root, (0.0, 0.0, -0.5))
+    rbox('hot-air-basket-rim', (0.5, 0.44, 0.08), 0.035, mat(c['trunk'], 0.6), coll, root, (0.0, 0.0, -0.35))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            rod(f'hot-air-rope-{sx}-{sy}', (0.2 * sx, 0.17 * sy, -0.35), (0.17 * sx, 0.15 * sy, 0.04), 0.014, mat(c['string'], 0.6), coll, root, seg=8)
+    rider = empty('hot-air-rider', coll, root, (0.02, -0.02, -0.22))
+    rider.scale = (0.56, 0.56, 0.56)
+    bp.bird_body('hot-air-bird', c, colours, coll, rider)
+    free_fit('hot-air', root)
 
 
 def main():
+    global DESIGN
     args = parse_args('build_train', required=('out', 'params'))
     params = args['params']
+    DESIGN = (params['design']['width'], params['design']['height'])
+    bp.DESIGN = DESIGN
     tr = params['train']
-    design = (params['design']['width'], params['design']['height'])
+    c = params['art']['train']
+    if list(tr['cars']) != list(CAR_COLOUR_KEYS) or len(tr['cars']) != len(CAR_X):
+        fail(f'the cars {tr["cars"]} do not match {list(CAR_COLOUR_KEYS)}')
+    if list(tr['destinations']) != list(DESTINATIONS):
+        fail(f'the destinations {tr["destinations"]} do not match {list(DESTINATIONS)}')
+    if any(f not in PEN_CHIBIS or f not in FRIEND_HEIGHT_PX for f in tr['friends']):
+        fail(f'no chibi for a friend in {tr["friends"]}')
+    for s in tr['surprises']:
+        if s not in ('crossing', 'bridge', 'hot-air', 'rainbow'):
+            fail(f'no art for the surprise "{s}"')
     scene = bpy.context.scene
-    library = train_models.build_library(params)
-    sprites = bpy.data.collections.get('sprites')
-    layout = bpy.data.collections.get('layout')
-    if sprites is None or layout is None or 'World' not in bpy.data.collections:
-        fail('art/map.blend has no sprites / layout / World collection (build the map first)')
-    for sid in KEEP_SPRITES + ALWAYS_FRONT:
-        if f'sprite.{sid}' not in bpy.data.collections:
-            fail(f'art/map.blend has no sprite.{sid}')
-    check_list('the friend stations', list(STATION_SPOTS), tr['stations'])
-    check_list('the destinations', list(DEST_STOP_BEFORE), tr['destinations'])
-    still_places(parked_plane_state())
-    drop_map_only(sprites, layout)
+    bp.clear_island(scene)
     scene.render.resolution_x, scene.render.resolution_y = RENDER_SIZE
     scene.render.resolution_percentage = 100
-    scene[BORDER_PROP] = SPRITE_BORDER
-    screen = Screen(scene, design)
-
-    rail = mr.rail_from_scene()
-    rail_pts = curve_points('path.rail')
-    fronts = find_fronts(scene, sprites, rail_pts)
-    check_list('the sprites drawn over the train (FRONT_SPRITES)', fronts, tr['fronts'])
-    settle_places(sprites, fronts)
-    move_kart(sprites, layout, rail)
-    whale = bpy.data.collections['sprite.whale']
-    hull_object('hit.whale', eval_world_verts(list(whale.all_objects), depsgraph()), layout)
-
-    c = params['art']['train']
-    mats = mr.materials(params)
-    plate = bpy.data.collections['World']
-    ground_z = rail.z - mr.TRACK_LIFT
-    s_ga, _d = rail.project(layout_point('anchor.train'))
-    p_ga, t_ga = rail.at(s_ga)
-    out_ga = -rail.inward(s_ga)
-    friend_at = Vector((p_ga.x, p_ga.y, ground_z)) + out_ga.to_3d() * FRIEND_OUT
-    add_empty('anchor.friend', tuple(friend_at), layout)
-    heights = [build_friend(fid, params, sprites, friend_at, screen) for fid in tr['friends']]
-    friend_h = max(heights)
-    seat_at = rail.point3(s_ga) + Vector((0.0, 0.0, SEAT_FLOOR))
-    add_empty('anchor.seat', tuple(seat_at), layout)
+    scene.frame_set(1)
+    bp.FRIEND_PX = REF_PX
+    bp.setup_camera(scene)
+    bpy.context.view_layer.update()
+    bp.SCREEN = bp.Screen(scene)
+    log(f'render engine {scene.render.engine}')
+    plate = bpy.data.collections.new('train-plate')
+    scene.collection.children.link(plate)
+    sprites = bpy.data.collections.new('sprites')
+    scene.collection.children.link(sprites)
+    layout = bpy.data.collections.new('layout')
+    scene.collection.children.link(layout)
+    layout.hide_render = True
+    build_sky(c, plate)
+    engine = build_engine(params, c, sprites, layout)
+    cars = [build_car(n, colour, params, c, sprites, layout) for n, colour in enumerate(tr['cars'])]
+    nose, tail = engine[2], min(r[0] for r in cars)
+    for a, b in [(cars[i + 1], cars[i]) for i in range(len(cars) - 1)] + [(cars[0], engine)]:
+        if b[0] - a[2] < tr['gapPx'] + 1:
+            fail(f'two train pieces are only {b[0] - a[2]:.0f} px apart (min {tr["gapPx"]})')
+    add_empty('anchor.nose', (wx(nose), 0.0, 0.0), layout)
+    add_empty('anchor.tail', (wx(tail), 0.0, 0.0), layout)
+    log(f'train: tail {tail:.0f}, nose {nose:.0f} ({nose - tail:.0f} px)')
+    platform = build_platform(params, c, sprites, layout)
+    platform_z = PLATFORM_Z + 0.03
+    add_empty('anchor.friend', (wx(FRIEND_X), FRIEND_DEPTH, platform_z), layout)
     for fid in tr['friends']:
-        build_seat(fid, params, sprites, seat_at, screen, mats)
-    for k, name in enumerate(FREE_PX):
-        q = p_ga + t_ga * (FREE_AT[0] + (k - 1.5) * FREE_GAP) + out_ga * -FREE_AT[1]
-        build_free(name, sprites, Vector((q.x, q.y, ground_z + 1.2)), screen, c, params['colours'], mats)
-    log(f'friends {friend_h:.2f} m tall (drawn {FRIEND_PX:.0f} px at anchor.friend)')
-
-    for sid in tr['stations']:
-        build_platform(sid, rail, mats, plate, layout, friend_h)
-    build_destinations(rail, layout, friend_h, ground_z)
-    for p in PLACES:
-        if p not in PLACE_HITS and p not in fronts and bpy.data.objects.get(f'anchor.{p}'):
-            bpy.data.objects.remove(bpy.data.objects[f'anchor.{p}'], do_unlink=True)
-
+        r, _root = build_friend(fid, params, sprites, layout, platform_z)
+        if r[0] - HIT_PAD_PX - nose < tr['gapPx']:
+            fail(f'friend {fid} comes within {r[0] - HIT_PAD_PX - nose:.0f} px of the engine')
+        build_seat(fid, params, sprites)
+    if platform[0] - HIT_PAD_PX - nose < tr['gapPx']:
+        fail(f'the platform comes within {platform[0] - HIT_PAD_PX - nose:.0f} px of the engine')
+    for did in tr['destinations']:
+        r = build_dest(did, params, c, sprites, layout)
+        if r[0] - HIT_PAD_PX - nose < tr['gapPx']:
+            fail(f'destination {did} comes within {r[0] - HIT_PAD_PX - nose:.0f} px of the engine')
+    add_empty('anchor.dest', (wx(DEST_X), DEST_DEPTH, 0.0), layout)
+    for n, x in enumerate(DROP_X):
+        add_empty(f'anchor.drop-{n}', (wx(x), DROP_DEPTH, 0.0), layout)
+    build_tunnel(c, sprites, layout, tail, nose)
+    build_ground(c, sprites)
+    build_hills(c, sprites)
+    build_trees(c, sprites)
+    build_fence(c, sprites)
+    build_clouds(c, sprites)
+    build_birds(c, params['colours'], sprites)
+    build_cow(params, sprites, layout)
+    build_particles(c, sprites)
+    build_crossing(params, c, sprites, layout)
+    build_bridge(c, sprites)
+    build_fish(c, sprites)
+    build_rainbow(c, sprites)
+    build_hot_air(c, params['colours'], sprites)
     scene.frame_set(1)
     soften_scene(scene)
-    for name in library:
-        if bpy.data.collections.get(name) is None:
-            fail(f'library collection {name} lost')
     bpy.ops.wm.save_as_mainfile(filepath=args['out'], compress=True)
     log(f'saved {args["out"]}')
 

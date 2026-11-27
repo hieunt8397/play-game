@@ -14,10 +14,10 @@ export type EnterPlan =
   | { readonly kind: 'fade'; readonly ms: number };
 
 /** Normal: zoom over `Timing.cameraZoomInMs`. Under reduced motion: the `sceneFadeMs` fade. */
-export function enterPlan(reduced: boolean, zoom: number = Tokens.ui.cameraZoomScale): EnterPlan {
+export function enterPlan(reduced: boolean): EnterPlan {
   return reduced
     ? { kind: 'fade', ms: Tokens.Timing.sceneFadeMs }
-    : { kind: 'zoom', zoom, ms: Tokens.Timing.cameraZoomInMs };
+    : { kind: 'zoom', zoom: Tokens.ui.cameraZoomScale, ms: Tokens.Timing.cameraZoomInMs };
 }
 
 /** The slice of a Phaser camera these transitions use. */
@@ -49,10 +49,9 @@ export function enterStation(
   scene: SceneWithCamera,
   focus: Point,
   reduced: boolean,
-  zoom: number = Tokens.ui.cameraZoomScale,
 ): Promise<void> {
   const cam = scene.cameras.main;
-  const plan = enterPlan(reduced, zoom);
+  const plan = enterPlan(reduced);
   return new Promise((resolve) => {
     if (plan.kind === 'fade') {
       cam.once(FADE_OUT_COMPLETE, () => resolve());
@@ -78,10 +77,10 @@ const PULL_BACK_EASE = 'Cubic.easeOut';
  * centre (scroll 0) over `Timing.cameraPullBackMs`, ease-out. Reduced: zoom 1, scroll 0, a fade-in
  * over `Timing.sceneFadeMs`.
  */
-export function pullBackPlan(reduced: boolean, fromZoom: number = Tokens.ui.cameraZoomScale): PullBackPlan {
+export function pullBackPlan(reduced: boolean): PullBackPlan {
   return reduced
     ? { kind: 'fade', ms: Tokens.Timing.sceneFadeMs }
-    : { kind: 'zoom', fromZoom, toZoom: 1, ms: Tokens.Timing.cameraPullBackMs, ease: PULL_BACK_EASE };
+    : { kind: 'zoom', fromZoom: Tokens.ui.cameraZoomScale, toZoom: 1, ms: Tokens.Timing.cameraPullBackMs, ease: PULL_BACK_EASE };
 }
 
 /** The camera slice the pull-back also needs (it sets the start state at once). */
@@ -100,9 +99,9 @@ export interface SceneWithPullBackCamera {
  * Story 2.3: the island appears zoomed on `focus` and pulls back to the whole island (or fades in
  * under reduced motion). Resolves when the camera is done; the camera ends at zoom 1, scroll 0.
  */
-export function pullBack(scene: SceneWithPullBackCamera, focus: Point, reduced: boolean, fromZoom: number = Tokens.ui.cameraZoomScale): Promise<void> {
+export function pullBack(scene: SceneWithPullBackCamera, focus: Point, reduced: boolean): Promise<void> {
   const cam = scene.cameras.main;
-  const plan = pullBackPlan(reduced, fromZoom);
+  const plan = pullBackPlan(reduced);
   cam.resetFX();
   if (plan.kind === 'fade') {
     cam.setZoom(1);

@@ -481,13 +481,8 @@ export const VOICE_LINES = [
   { id: 'vo.train.car.blue', text: 'Toa xanh dương!' },
   { id: 'vo.train.tunnel', text: 'Ú òa!' },
   { id: 'vo.train.dest.beach', text: 'Đến biển rồi!' },
-  // 2026-11-13 (spec-tau-quanh-dao): the train goes round the island: its destinations and its friend stations.
-  { id: 'vo.train.dest.whale', text: 'Đến vịnh cá voi rồi!' },
-  { id: 'vo.train.dest.fountain', text: 'Đến công viên đài phun nước rồi!' },
-  { id: 'vo.train.station.race', text: 'Ga Đường đua!' },
-  { id: 'vo.train.station.shadow-match', text: 'Ga Hang!' },
-  { id: 'vo.train.station.dino-puzzle', text: 'Ga Khủng long!' },
-  { id: 'vo.train.station.ice-cream', text: 'Ga Xe kem!' },
+  { id: 'vo.train.dest.playground', text: 'Đến sân chơi rồi!' },
+  { id: 'vo.train.dest.fair', text: 'Đến hội chợ rồi!' },
   { id: 'vo.train.parent.1', text: 'Mời bố mẹ | cùng đi tàu nhé!', keywordPauseMs: 300 },
   // Tên lửa lên Mặt Trăng (2026-11-12): the invitation (names Xoài), each part as it is offered (the idle hint and the
   // Speaker prompt while building), each colour as it is picked, "Phóng!" after the countdown (the numbers reuse

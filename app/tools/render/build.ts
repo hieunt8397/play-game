@@ -20,7 +20,7 @@ import { OUTFIT_ITEMS } from '../../src/content/games/dress-up.ts';
 import { FRUIT_IDS, FRUITS_PER_PLANT, GIANT_FRUIT, PACKET_SLOTS, STAGES } from '../../src/content/games/garden.ts';
 import { DIRT_IDS, DIRT_SPOTS, VEHICLE_IDS } from '../../src/content/games/car-wash.ts';
 import { COLOUR_IDS as PLANE_COLOURS, FRIEND_IDS as PLANE_FRIENDS, GIFTS_PER_FLIGHT, SURPRISE_IDS as PLANE_SURPRISES } from '../../src/content/games/plane.ts';
-import { CAR_COLOURS as TRAIN_CARS, DESTINATION_IDS as TRAIN_DESTINATIONS, FRIEND_IDS as TRAIN_FRIENDS, FRONT_SPRITES as TRAIN_FRONTS, STATION_IDS as TRAIN_STATIONS } from '../../src/content/games/train.ts';
+import { CAR_COLOURS as TRAIN_CARS, DESTINATION_IDS as TRAIN_DESTINATIONS, FRIEND_IDS as TRAIN_FRIENDS, SURPRISE_IDS as TRAIN_SURPRISES } from '../../src/content/games/train.ts';
 import { ALIEN_IDS as ROCKET_ALIENS, COLOUR_IDS as ROCKET_COLOURS, CRATERS as ROCKET_CRATERS, PART_IDS as ROCKET_PARTS, ROCKS as ROCKET_ROCKS, SURPRISE_IDS as ROCKET_SURPRISES } from '../../src/content/games/rocket.ts';
 import { GAME_IDS, ISLAND_GAME_IDS } from '../../src/content/types.ts';
 import { Tokens } from '../../src/core/tokens.ts';
@@ -110,8 +110,8 @@ export interface BuildParams {
   carWash: { vehicles: string[]; dirts: string[]; spots: number; carMinPx: number; hoseMinPx: number; hitMinPx: number; gapPx: number };
   /** Phi công nhí (2026-11-11): the friends, colours and surprises, the gifts per flight (content/games/plane.ts), the sizes (design px): a balloon drawn ≥ balloonMinPx, a friend and a house each ≥ friendMinPx with a tap area ≥ hitMinPx, and the plane's flight band (its centre between topY and bottomY). */
   plane: { friends: string[]; colours: string[]; surprises: string[]; gifts: number; balloonMinPx: number; friendMinPx: number; hitMinPx: number; topY: number; bottomY: number };
-  /** Tàu hỏa quanh đảo (2026-11-13, content/games/train.ts): the friends, the car colours (the library engine and cars), the friend stations, the destinations, and the map sprites drawn over the train (build_train.py checks its own geometry against them). */
-  train: { friends: string[]; cars: string[]; stations: string[]; destinations: string[]; fronts: string[] };
+  /** Tàu hỏa chở bạn (2026-11-12): the friends, car colours, destinations and surprises (content/games/train.ts), the sizes (design px): the engine and each car ≥ carMinPx wide, a friend ≥ friendMinPx, a destination ≥ destMinPx, every tap area ≥ hitMinPx, ≥ gapPx apart; the tunnel's length against the train's at cruise (scrollPxPerS, × reducedScroll), so the dim fades in over ≥ dimInMinMs and the train is wholly in the dark ≤ darkMaxMs. */
+  train: { friends: string[]; cars: string[]; destinations: string[]; surprises: string[]; carMinPx: number; friendMinPx: number; destMinPx: number; hitMinPx: number; gapPx: number; scrollPxPerS: number; reducedScroll: number; dimInMinMs: number; darkMaxMs: number };
   /** Tên lửa lên Mặt Trăng (2026-11-12): the parts, colours, surprises and aliens, the craters and rocks (content/games/rocket.ts), the sizes (design px): a choice bubble ≥ choiceMinPx with a tap area ≥ choiceHitMinPx, the two ≥ choiceGapPx apart; the built rocket ≥ rocketMinPx tall; Shiba on the Moon ≥ astroMinPx; every other tap area ≥ hitMinPx, ≥ gapPx apart; space's darkest colour keeps ≥ spaceDeepMinLum. */
   rocket: { parts: string[]; colours: string[]; surprises: string[]; aliens: string[]; craters: number; rocks: number; choiceMinPx: number; choiceHitMinPx: number; choiceGapPx: number; rocketMinPx: number; astroMinPx: number; hitMinPx: number; gapPx: number; spaceDeepMinLum: number };
   renderScale: number;
@@ -200,9 +200,17 @@ export function buildParams(): BuildParams {
     train: {
       friends: [...TRAIN_FRIENDS],
       cars: [...TRAIN_CARS],
-      stations: [...TRAIN_STATIONS],
       destinations: [...TRAIN_DESTINATIONS],
-      fronts: [...TRAIN_FRONTS],
+      surprises: [...TRAIN_SURPRISES],
+      carMinPx: Tokens.ui.trainCarMinPx,
+      friendMinPx: Tokens.ui.trainFriendMinPx,
+      destMinPx: Tokens.ui.trainDestMinPx,
+      hitMinPx: Tokens.ui.trainHitMinPx,
+      gapPx: Tokens.spacing.targetGap,
+      scrollPxPerS: Tokens.ui.trainScrollPxPerS,
+      reducedScroll: Tokens.ui.trainReducedScroll,
+      dimInMinMs: Tokens.ui.trainDimInMinMs,
+      darkMaxMs: Tokens.ui.trainDarkMaxMs,
     },
     rocket: {
       parts: [...ROCKET_PARTS],

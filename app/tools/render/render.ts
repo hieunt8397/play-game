@@ -79,6 +79,7 @@ import { HITS, screen as iceCreamScreen } from '../../src/content/games/ice-crea
 import { HITS as DRESS_UP_HITS } from '../../src/content/games/dress-up.ts';
 import { HITS as GARDEN_HITS } from '../../src/content/games/garden.ts';
 import { VEHICLE_IDS as CAR_WASH_VEHICLES, carHit } from '../../src/content/games/car-wash.ts';
+import { CAR_COLOURS as TRAIN_CARS, ENGINE_HIT as TRAIN_ENGINE_HIT, carHit as trainCarHit } from '../../src/content/games/train.ts';
 import { CHOICES as ROCKET_CHOICES, CRATERS as ROCKET_CRATERS, EARTH_HIT as ROCKET_EARTH_HIT, EARTH_MOON_HIT as ROCKET_EARTH_MOON_HIT, MOON_ROCKET_HIT as ROCKET_MOON_HIT, choiceHit as rocketChoiceHit, craterHit as rocketCraterHit } from '../../src/content/games/rocket.ts';
 import { LayoutError, formatLayout, toLayout, type RawProjection, type ToLayoutOptions } from '../layout/to-layout.ts';
 import { resolveBlender, type Env } from '../shared/binaries.ts';
@@ -138,7 +139,7 @@ export const SCREEN_RULES: Readonly<Record<string, (layout: ScreenLayout, frames
 export const FRAME_RULE_SCREENS: ReadonlySet<string> = new Set(['dino-puzzle', 'shadow-match', 'race', 'fishing', 'touch-talk', 'home', 'animal-pens', 'band', 'bedtime', 'pet-clinic', 'dress-up', 'garden', 'car-wash', 'plane', 'train', 'rocket']);
 
 /** Per-screen toLayout options: hit ids kept `stationGap` apart (map), unpadded drop areas (ice-cream, the dino lawn). */
-export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'separate' | 'unpadded'> & Partial<Pick<ToLayoutOptions, 'hitPad'>>>> = {
+export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'separate' | 'unpadded'>>> = {
   map: { separate: { ids: STATIONS.map((s) => s.id), gap: Tokens.spacing.stationGap } },
   'ice-cream': { unpadded: [HITS.counterUpper, HITS.counterTop] },
   'dino-puzzle': { unpadded: [GRASS_HIT] },
@@ -152,8 +153,8 @@ export const SCREEN_SEPARATE: Readonly<Record<string, Pick<ToLayoutOptions, 'sep
   garden: { unpadded: [GARDEN_HITS.shiba] },
   // Rửa xe: each car's tap area is its raw hull (the hose circle keeps ≥ targetGap from it; the rub reaches a little further at runtime).
   'car-wash': { unpadded: CAR_WASH_VEHICLES.map(carHit) },
-  // Tàu hỏa quanh đảo (2026-11-13): the camera shows this layout ui.trainZoom × closer, so the pad is hitPad on screen.
-  train: { hitPad: Tokens.spacing.hitPad / Tokens.ui.trainZoom },
+  // Tàu hỏa chở bạn: the engine's and each car's tap areas are their raw hulls (they stand close in a row, ≥ targetGap apart).
+  train: { unpadded: [TRAIN_ENGINE_HIT, ...TRAIN_CARS.map((_, n) => trainCarHit(n))] },
   // Tên lửa: the two bubbles, the Moon rocket, the craters (they stand close; ≥ targetGap apart) and the two Earths (already cut to the interactive rect) are their raw shapes.
   rocket: { unpadded: [...Array.from({ length: ROCKET_CHOICES }, (_, n) => rocketChoiceHit(n)), ROCKET_MOON_HIT, ROCKET_EARTH_HIT, ROCKET_EARTH_MOON_HIT, ...Array.from({ length: ROCKET_CRATERS }, (_, n) => rocketCraterHit(n))] },
 };

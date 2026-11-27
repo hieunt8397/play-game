@@ -173,20 +173,12 @@ export abstract class MiniGameBase<G extends GameId = GameId> extends Scene {
       this.holdAmbient('hint', level >= AMBIENT_HINT_LEVEL);
     });
     this.build();
-    this.revealOnStart();
+    void revealScene(this);
   }
 
   /** True once the round no longer plays questions: free play (Story 5.8) or after the start's last event. */
   protected get inert(): boolean {
     return this.guard?.inert ?? false;
-  }
-
-  /**
-   * How the scene appears after `build()`: a fade-in from the sky colour. 2026-11-13: the train game overrides it (Map's
-   * zoom already shows the same island, so it appears at once, with no visible cut).
-   */
-  protected revealOnStart(): void {
-    void revealScene(this);
   }
 
   /** Story 5.8: true between `round:complete` and `round:leave` (the finished game stays on screen). */

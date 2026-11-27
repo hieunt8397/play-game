@@ -1,7 +1,7 @@
 // Layout and asset rules (Story 1.4). Pure: used by `npm run render` (before publishing) and by
 // `validate:content` (inside `npm run check`). Every message names the offending id or file.
 import type { Rect } from '../../src/core/safe-rect.ts';
-import { MS_PER_SECOND, Tokens } from '../../src/core/tokens.ts';
+import { Tokens } from '../../src/core/tokens.ts';
 import { relativeLuminance, rgbOf } from '../shared/colour.ts';
 import type { Point, ScreenLayout } from '../../src/content/layout-types.ts';
 import type { Station } from '../../src/content/stations.ts';
@@ -64,22 +64,22 @@ import {
   laneYs as planeLaneYs,
 } from '../../src/content/games/plane.ts';
 import {
+  ALL_ENGINE_FRAMES as ALL_TRAIN_ENGINE_FRAMES,
   ANCHORS as TRAIN_ANCHORS,
+  CAR_COLOURS as TRAIN_CAR_COLOURS,
   DESTINATION_IDS as TRAIN_DESTINATIONS,
+  ENGINE_HIT as TRAIN_ENGINE_HIT,
   FRIEND_IDS as TRAIN_FRIENDS,
   FRIEND_STATES as TRAIN_FRIEND_STATES,
-  PATHS as TRAIN_PATHS,
-  STATION_IDS as TRAIN_STATION_IDS,
+  PLATFORM_HIT as TRAIN_PLATFORM_HIT,
   TRAIN_SCREEN,
+  carFrame as trainCarFrame,
+  carHit as trainCarHit,
+  destFrame as trainDestFrame,
   destHit as trainDestHit,
-  friendAnchor as trainFriendAnchor,
   friendFrame as trainFriendFrame,
-  platformHit as trainPlatformHit,
-  stopAnchor as trainStopAnchor,
+  friendHit as trainFriendHit,
 } from '../../src/content/games/train.ts';
-import { MIN_LOOP_POINTS, wrap } from '../../src/core/map-rides.ts';
-import { cameraCentre, toScreen } from '../../src/games/train/camera.ts';
-import { cruisePerMs, pieceDisc, railOf, trainPieces, trainSpan, type DiscSizes } from '../../src/games/train/geometry.ts';
 import {
   ASTRO_STATES as ROCKET_ASTRO_STATES,
   BUBBLE_FRAME as ROCKET_BUBBLE_FRAME,
@@ -2720,204 +2720,151 @@ export function validatePlane(layout: ScreenLayout, input: PlaneRuleInput, atlas
   return problems;
 }
 
-// --- Tàu hỏa quanh đảo (2026-11-13; the train game since 2026-11-12) ------------------------------------------------------------------------------------
+// --- Tàu hỏa chở bạn (2026-11-12) ------------------------------------------------------------------------------------
 
-/** Tàu hỏa quanh đảo (spec-tau-quanh-dao): what validateTrain needs (trainLimits fills it from Tokens and content). */
 export interface TrainRuleInput {
   ids: ScreenIds;
-  /** The rail (`path.rail`, `path.rail-up`) and the reference point of its scale (`anchor.train`: Ga tàu's stop). */
-  rail: string;
-  railUp: string;
-  refAnchor: string;
-  /** Each friend station: its engine stop (anchor), its tap area (the platform and the friend), the friend's spot. */
-  stations: readonly { readonly stop: string; readonly hit: string; readonly spot: string }[];
-  /** Each destination: its engine stop and its tap area. */
-  dests: readonly { readonly stop: string; readonly hit: string }[];
-  /** The friend frames (drawn at `friendAnchor`, × the scale at a spot / the scale at it). */
-  friendFrames: readonly string[];
-  friendAnchor: string;
-  /** The tunnel's arc range (`anchor.rail-tunnel-in` / `-out`). */
-  tunnelIn: string;
-  tunnelOut: string;
+  /** `hit.engine` and `hit.car-<n>` (raw hulls) with their frames (every engine frame; each car's). */
+  engine: { readonly hit: string; readonly frames: readonly string[] };
+  cars: readonly { readonly hit: string; readonly frame: string }[];
+  /** `hit.platform` and each `hit.friend-<id>` (tapped at rest, while the train waits), each friend's frames. */
+  platformHit: string;
+  friends: readonly { readonly hit: string; readonly frames: readonly string[] }[];
+  /** Each `hit.dest-<id>` and its frame. */
+  dests: readonly { readonly hit: string; readonly frame: string }[];
+  /** `anchor.nose` / `anchor.tail` (the train's front and back) and `anchor.tunnel` / `anchor.tunnel-end` (its portals). */
+  noseAnchor: string;
+  tailAnchor: string;
+  tunnelAnchor: string;
+  tunnelEndAnchor: string;
   limits: LayoutLimits;
-  /** ui.trainZoom; the camera's follow (ui.trainCameraLead), the cars' pitch and the pieces' tap discs. */
-  zoom: number;
-  lead: number;
-  pitch: readonly number[];
-  discs: DiscSizes;
-  /** Screen px: every tap area ≥ hitMinPx wide (a car's disc too), a friend drawn ≥ friendMinPx, a destination ≥ destMinPx × destMinHPx. */
-  hitMinPx: number;
+  /** ui.trainCarMinPx: the engine and each car are drawn at least this wide. */
+  carMinPx: number;
+  /** ui.trainFriendMinPx / ui.trainDestMinPx: a friend's and a destination's longest side. */
   friendMinPx: number;
   destMinPx: number;
-  destMinHPx: number;
-  /** spacing.targetGap (screen px): the pieces' discs apart, and every waiting tap area from the train at its stop. */
+  /** ui.trainHitMinPx: every tap area is at least this wide. */
+  hitMinPx: number;
+  /** spacing.targetGap: the engine and the cars are this far apart, and every waiting target this far from the train. */
   gap: number;
-  /** The cruise (design px per s at the scale 1) and its reduced-motion share; the dim's fade-in and the engine's time inside. */
-  cruisePxPerS: number;
+  /** The cruise speed (design px per s) and its reduced-motion share: the dim's fade-in and the time in the dark. */
+  scrollPxPerS: number;
   reducedScroll: number;
   dimInMinMs: number;
-  tunnelMaxMs: number;
-  /** Every this many design px of arc the pieces' discs are checked. */
-  stepPx: number;
+  darkMaxMs: number;
   keepOut: readonly { readonly id: string; readonly rect: Rect }[];
   renderScale: number;
   design: { width: number; height: number };
 }
 
-/** The train rules from Tokens and content (spec-tau-quanh-dao). */
+/** The train rules from Tokens and content (spec-tau-hoa). */
 export function trainLimits(ids: ScreenIds = TRAIN_SCREEN): TrainRuleInput {
   const u = Tokens.ui;
   return {
     ids,
-    rail: TRAIN_PATHS.rail,
-    railUp: TRAIN_PATHS.railUp,
-    refAnchor: TRAIN_ANCHORS.train,
-    stations: TRAIN_STATION_IDS.map((s) => ({ stop: trainStopAnchor(s), hit: trainPlatformHit(s), spot: trainFriendAnchor(s) })),
-    dests: TRAIN_DESTINATIONS.map((d) => ({ stop: trainStopAnchor(d), hit: trainDestHit(d) })),
-    friendFrames: TRAIN_FRIENDS.flatMap((f) => TRAIN_FRIEND_STATES.map((s) => trainFriendFrame(f, s))),
-    friendAnchor: TRAIN_ANCHORS.friend,
-    tunnelIn: TRAIN_ANCHORS.tunnelIn,
-    tunnelOut: TRAIN_ANCHORS.tunnelOut,
+    engine: { hit: TRAIN_ENGINE_HIT, frames: ALL_TRAIN_ENGINE_FRAMES },
+    cars: TRAIN_CAR_COLOURS.map((c, n) => ({ hit: trainCarHit(n), frame: trainCarFrame(c) })),
+    platformHit: TRAIN_PLATFORM_HIT,
+    friends: TRAIN_FRIENDS.map((f) => ({ hit: trainFriendHit(f), frames: TRAIN_FRIEND_STATES.map((s) => trainFriendFrame(f, s)) })),
+    dests: TRAIN_DESTINATIONS.map((d) => ({ hit: trainDestHit(d), frame: trainDestFrame(d) })),
+    noseAnchor: TRAIN_ANCHORS.nose,
+    tailAnchor: TRAIN_ANCHORS.tail,
+    tunnelAnchor: TRAIN_ANCHORS.tunnel,
+    tunnelEndAnchor: TRAIN_ANCHORS.tunnelEnd,
     limits: layoutLimits(),
-    zoom: u.trainZoom,
-    lead: u.trainCameraLead,
-    pitch: u.trainCarPitch,
-    discs: { engineR: u.trainEngineHitR, carR: u.trainCarHitR, lift: u.trainPieceLift },
-    hitMinPx: u.trainHitMinPx,
+    carMinPx: u.trainCarMinPx,
     friendMinPx: u.trainFriendMinPx,
     destMinPx: u.trainDestMinPx,
-    destMinHPx: u.trainDestMinHPx,
+    hitMinPx: u.trainHitMinPx,
     gap: Tokens.spacing.targetGap,
-    // 0: validateTrain measures the layout's rail (games/train/geometry › cruisePerMs).
-    cruisePxPerS: 0,
+    scrollPxPerS: u.trainScrollPxPerS,
     reducedScroll: u.trainReducedScroll,
     dimInMinMs: u.trainDimInMinMs,
-    tunnelMaxMs: u.trainTunnelMaxMs,
-    stepPx: TRAIN_RULE_STEP_PX,
+    darkMaxMs: u.trainDarkMaxMs,
     keepOut: hudKeepOutRects().map((rect) => ({ id: 'Home/Speaker keep-out zone', rect })),
     renderScale: RENDER_SCALE,
     design: { width: Tokens.design.width, height: Tokens.design.height },
   };
 }
 
-/** validateTrain checks the train's tap discs every this many design px of arc round the loop. */
-const TRAIN_RULE_STEP_PX = 8;
-
 /**
- * Tàu hỏa quanh đảo screen rules (spec-tau-quanh-dao; run by `render`, `atlas` and `validate:content`). The world is the
- * map's design space shown through a camera zoomed `zoom` × (games/train/camera.ts); every size is checked ON SCREEN.
- *   - required: every hit (≥ 3 points), anchor and path; with the atlas, every frame;
- *   - the rail is a loop; every anchor lies on the design rect;
- *   - round the whole loop (every stepPx of arc, so in every heading): each piece's tap disc is ≥ hitMinPx wide and
- *     neighbouring discs are ≥ gap apart;
- *   - at each friend station and destination, the camera stopped there (cameraCentre): its tap area is ≥ hitMinPx wide
- *     (a destination's ≥ destMinPx × destMinHPx), inside the interactive rect, clear of the Home/Speaker zones and ≥ gap
- *     from every piece's disc; (atlas) every friend frame drawn there is ≥ friendMinPx (longest side) and inside the rect;
- *   - the tunnel: at the fastest cruise the dim fades in over ≥ dimInMinMs; at the slowest the engine is inside ≤ tunnelMaxMs.
+ * Tàu hỏa chở bạn screen rules (spec-tau-hoa; run by `render`, `atlas` and `validate:content`). Each message names the id.
+ *   - required: every hit (≥ 3 points) and anchor; with the atlas, every frame;
+ *   - every anchor lies on the design rect; every tap area (the engine, the cars, the platform, each friend, each
+ *     destination) is at least hitMinPx wide, inside the interactive rect and clear of the Home/Speaker zones;
+ *   - the engine and the cars are ≥ gap apart, and the platform, each friend and each destination ≥ gap from all of them;
+ *   - the tunnel covers the whole train (its portals outside the tail and the nose); at the fastest cruise the dim fades
+ *     in over ≥ dimInMinMs; at the slowest (reduced) the whole train stays in the dark ≤ darkMaxMs;
+ *   - (atlas) the engine and each car are drawn ≥ carMinPx wide, every engine frame inside the interactive rect; each
+ *     friend frame is drawn ≥ friendMinPx (longest side) and each destination ≥ destMinPx, both inside the rect.
  */
 export function validateTrain(layout: ScreenLayout, input: TrainRuleInput, atlas?: AtlasJsonLike): string[] {
   const problems = requiredIdProblems(layout, input.ids);
-  for (const id of [input.rail, input.railUp]) if (!layout.paths[id]) problems.push(`path "${id}" is missing`);
   const r = input.limits.rect;
+  const rectOut = (at: Rect): boolean => at.x < r.x0 || at.y < r.y0 || at.x + at.w > r.x1 || at.y + at.h > r.y1;
   const rectText = `x∈[${r.x0},${r.x1}] y∈[${r.y0},${r.y1}]`;
   for (const id of input.ids.anchors) {
     const a = layout.anchors[id];
     if (a && (a.x < 0 || a.y < 0 || a.x > input.design.width || a.y > input.design.height)) problems.push(`anchor "${id}": ${fmt(a)} is off the screen`);
   }
-  const railPts = layout.paths[input.rail];
-  const upPts = layout.paths[input.railUp];
-  const ref = layout.anchors[input.refAnchor];
-  if (!railPts || !upPts || !ref || railPts.length < MIN_LOOP_POINTS) return problems;
-  const rail = railOf(railPts, upPts, ref);
-  const L = rail.loop.length;
-  const z = input.zoom;
-  const frame = { viewW: input.design.width / z, viewH: input.design.height / z, boundsW: input.design.width, boundsH: input.design.height };
-  const middle = input.pitch.reduce((a, b) => a + b, 0) / 2;
-  const follow = { ...frame, middle, lead: input.lead };
-  const sOf = (id: string): number | undefined => {
-    const a = layout.anchors[id];
-    return a ? rail.loop.project(a) : undefined;
+  const hull = (id: string): readonly Point[] | undefined => {
+    const h = layout.hits[id];
+    return h && h.length >= MIN_HIT_POINTS ? h : undefined;
   };
-
-  // The pieces' discs round the whole loop.
-  let worstW = Infinity;
-  let worstGap = Infinity;
-  for (let s = 0; s < L; s += input.stepPx) {
-    const discs = trainPieces(rail, s, input.pitch).map((p) => pieceDisc(rail, p, input.discs));
-    for (const d of discs) worstW = Math.min(worstW, 2 * d.r * z);
-    for (let i = 1; i < discs.length; i++) {
-      const a = discs[i - 1]!;
-      const b = discs[i]!;
-      worstGap = Math.min(worstGap, (Math.hypot(a.x - b.x, a.y - b.y) - a.r - b.r) * z);
-    }
-  }
-  if (worstW < input.hitMinPx) problems.push(`a train piece's tap disc is ${round2(worstW)} px wide on screen somewhere on the loop (min ${input.hitMinPx})`);
-  if (worstGap < input.gap) problems.push(`two train pieces' tap discs come ${round2(worstGap)} px apart on screen somewhere on the loop (min ${input.gap})`);
-
-  // A waiting tap area with the camera stopped at its stop.
-  const atStop = (stopId: string, hitId: string, min: { w: number; bw?: number; bh?: number }): Point | undefined => {
-    const s = sOf(stopId);
-    const hull = layout.hits[hitId];
-    if (s === undefined || !hull || hull.length < MIN_HIT_POINTS) return undefined;
-    const c = cameraCentre(rail.loop, s, follow);
-    const on = hull.map((p) => toScreen(p, c, frame, z));
-    const w = minWidth(on);
-    if (w < min.w) problems.push(`hit "${hitId}": ${round2(w)} px wide on screen at its stop (min ${min.w})`);
-    if (min.bw !== undefined && min.bh !== undefined) {
-      const xs = on.map((p) => p.x);
-      const ys = on.map((p) => p.y);
-      const bw = Math.max(...xs) - Math.min(...xs);
-      const bh = Math.max(...ys) - Math.min(...ys);
-      if (bw < min.bw || bh < min.bh) problems.push(`hit "${hitId}": ${round2(bw)} × ${round2(bh)} px on screen (min ${min.bw} × ${min.bh})`);
-    }
-    const out = on.find((p) => !inRect(p, r));
-    if (out) problems.push(`hit "${hitId}": ${fmt({ x: round2(out.x), y: round2(out.y) })} leaves the interactive rect ${rectText} with the camera at its stop`);
-    for (const k of input.keepOut) if (polygonDistance(on, rectPolygon4(k.rect)) === 0) problems.push(`hit "${hitId}": reaches into the ${k.id} ${fmtRect(k.rect)} with the camera at its stop`);
-    for (const p of trainPieces(rail, s, input.pitch)) {
-      const d = pieceDisc(rail, p, input.discs);
-      const centre = toScreen({ x: d.x, y: d.y }, c, frame, z);
-      const inside = pointInPolygon(centre, on);
-      const gap = inside ? -1 : distToPolyline(centre, [...on, on[0]!]) - d.r * z;
-      if (gap < input.gap) problems.push(`hit "${hitId}": ${round2(Math.max(0, gap))} px from piece ${p.index}'s tap disc at the stop (min ${input.gap})`);
-    }
-    return c;
+  const tapArea = (id: string): void => {
+    const h = hull(id);
+    if (!h) return;
+    const w = minWidth(h);
+    if (w < input.hitMinPx) problems.push(`hit "${id}": ${round2(w)} px wide (min ${input.hitMinPx})`);
+    const out = h.find((p) => !inRect(p, r));
+    if (out) problems.push(`hit "${id}": ${fmt(out)} leaves the interactive rect ${rectText}`);
+    for (const k of input.keepOut) if (polygonDistance(h, rectPolygon4(k.rect)) === 0) problems.push(`hit "${id}": reaches into the ${k.id} ${fmtRect(k.rect)}`);
   };
-  for (const st of input.stations) {
-    const c = atStop(st.stop, st.hit, { w: input.hitMinPx });
-    const spot = layout.anchors[st.spot];
-    const fa = layout.anchors[input.friendAnchor];
-    if (!c || !spot || !fa || !atlas) continue;
-    const k = rail.scale(rail.loop.project(spot)) / rail.scale(rail.loop.project(fa));
-    for (const f of input.friendFrames) {
-      const at = designRect(atlas, f, layout.renderScale);
-      if (!at) continue;
-      const tl = toScreen({ x: spot.x + (at.x - fa.x) * k, y: spot.y + (at.y - fa.y) * k }, c, frame, z);
-      const w = at.w * k * z;
-      const h = at.h * k * z;
-      if (Math.max(w, h) < input.friendMinPx) problems.push(`frame "${f}" at ${st.spot}: longest side ${round2(Math.max(w, h))} px on screen (min ${input.friendMinPx})`);
-      const box = { x: tl.x, y: tl.y, w, h };
-      if (box.x < r.x0 || box.y < r.y0 || box.x + w > r.x1 || box.y + h > r.y1) problems.push(`frame "${f}" at ${st.spot} ${fmtRect(box)} leaves the interactive rect ${rectText}`);
-      for (const k of input.keepOut) if (overlaps(box, k.rect)) problems.push(`frame "${f}" at ${st.spot} ${fmtRect(box)}: reaches into the ${k.id} ${fmtRect(k.rect)}`);
-    }
-  }
-  for (const d of input.dests) atStop(d.stop, d.hit, { w: input.destMinHPx, bw: input.destMinPx, bh: input.destMinHPx });
-
-  // The tunnel.
-  const tIn = sOf(input.tunnelIn);
-  const tOut = sOf(input.tunnelOut);
-  if (tIn !== undefined && tOut !== undefined) {
-    const len = wrap(tOut - tIn, L);
-    const mid = wrap(tIn + len / 2, L);
-    const k = rail.scale(mid);
-    const span = trainSpan(trainPieces(rail, tOut, input.pitch), L);
-    const cruise = input.cruisePxPerS > 0 ? input.cruisePxPerS : cruisePerMs(L, false) * MS_PER_SECOND;
-    const fadeMs = (Math.min(len, span) / (cruise * k)) * MS_PER_SECOND;
-    if (fadeMs < input.dimInMinMs) problems.push(`the dim fades in over ${round2(fadeMs)} ms at cruise (min ${input.dimInMinMs})`);
-    const insideMs = (len / (cruise * input.reducedScroll * k)) * MS_PER_SECOND;
-    if (insideMs > input.tunnelMaxMs) problems.push(`the engine is inside the tunnel ${round2(insideMs)} ms at the slowest cruise (max ${input.tunnelMaxMs})`);
+  const apart = (a: string, b: string): void => {
+    const ha = hull(a);
+    const hb = hull(b);
+    if (!ha || !hb) return;
+    const d = polygonDistance(ha, hb);
+    if (d < input.gap) problems.push(`hits "${a}" and "${b}": ${round2(d)} px apart (min ${input.gap})`);
+  };
+  const train = [input.engine.hit, ...input.cars.map((c) => c.hit)];
+  const waiting = [input.platformHit, ...input.friends.map((f) => f.hit), ...input.dests.map((d) => d.hit)];
+  for (const id of [...train, ...waiting]) tapArea(id);
+  for (let i = 0; i < train.length; i++) for (let j = i + 1; j < train.length; j++) apart(train[i]!, train[j]!);
+  for (const w of waiting) for (const t of train) apart(w, t);
+  const nose = layout.anchors[input.noseAnchor];
+  const tail = layout.anchors[input.tailAnchor];
+  const t0 = layout.anchors[input.tunnelAnchor];
+  const t1 = layout.anchors[input.tunnelEndAnchor];
+  if (nose && tail && t0 && t1) {
+    const trainLen = nose.x - tail.x;
+    const len = t1.x - t0.x;
+    if (trainLen <= 0) problems.push(`anchors "${input.tailAnchor}" and "${input.noseAnchor}": the tail ${round2(tail.x)} is not left of the nose ${round2(nose.x)}`);
+    if (len < trainLen) problems.push(`the tunnel is ${round2(len)} px long, shorter than the train (${round2(trainLen)} px): it never covers it all`);
+    const fadeMs = (trainLen / input.scrollPxPerS) * 1000;
+    if (fadeMs < input.dimInMinMs) problems.push(`the dim fades in over ${round2(fadeMs)} ms (min ${input.dimInMinMs})`);
+    const darkMs = ((len - trainLen) / (input.scrollPxPerS * input.reducedScroll)) * 1000;
+    if (darkMs > input.darkMaxMs) problems.push(`the whole train stays in the dark ${round2(darkMs)} ms at the slowest cruise (max ${input.darkMaxMs})`);
   }
   if (!atlas) return problems;
   for (const f of input.ids.frames) if (!trimmedSize(atlas, f)) problems.push(`atlas "train": frame "${f}" is missing`);
+  const wide = (f: string): void => {
+    const at = designRect(atlas, f, input.renderScale);
+    if (!at) return;
+    if (at.w < input.carMinPx) problems.push(`frame "${f}": ${round2(at.w)} px wide (min ${input.carMinPx})`);
+    if (rectOut(at)) problems.push(`frame "${f}" ${fmtRect(at)} leaves the interactive rect ${rectText}`);
+  };
+  for (const f of input.engine.frames) wide(f);
+  for (const c of input.cars) wide(c.frame);
+  const big = (f: string, min: number): void => {
+    const at = designRect(atlas, f, input.renderScale);
+    if (!at) return;
+    if (Math.max(at.w, at.h) < min) problems.push(`frame "${f}": longest side ${round2(Math.max(at.w, at.h))} is under ${min}`);
+    if (rectOut(at)) problems.push(`frame "${f}" ${fmtRect(at)} leaves the interactive rect ${rectText}`);
+    for (const k of input.keepOut) if (overlaps(at, k.rect)) problems.push(`frame "${f}" ${fmtRect(at)}: reaches into the ${k.id} ${fmtRect(k.rect)}`);
+  };
+  for (const fr of input.friends) for (const f of fr.frames) big(f, input.friendMinPx);
+  for (const d of input.dests) big(d.frame, input.destMinPx);
   return problems;
 }
 

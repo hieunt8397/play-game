@@ -160,7 +160,7 @@ describe('SnapshotPartials (compile-time)', () => {
       garden: { offer: ['lemon', 'tomato'], kind: 'lemon', waterings: 2, left: [], surprise: 'worm' },
       'car-wash': { vehicle: 'taxi', dirt: 'mud', covered: [0, 3], surprise: 'duck' },
       plane: { friend: 'cat', gifts: ['red', 'purple'], surprise: 'rainbow' },
-      train: { friends: ['cat', 'pig', 'cow'], aboard: 2, stops: ['race', 'shadow-match', 'ice-cream'], dest: 'beach', surprise: 'kart' },
+      train: { friends: ['cat', 'pig', 'cow'], aboard: 2, dest: 'beach', surprise: 'bridge', tunnelLeg: 1 },
       rocket: { step: 'moon', colours: ['red', 'blue', 'white'], surprise: 'ufo', flag: true },
     };
     expect(isJsonOnly(touch)).toBe(true);

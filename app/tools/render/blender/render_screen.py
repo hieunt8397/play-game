@@ -26,9 +26,6 @@
 #                                   Story 8.2: `bhc_holdout_sprites` = JSON list of sprite names: in this
 #                                   group's pass their objects become holdouts instead of being hidden (the
 #                                   Shiba cuts its outfit items: its head hides the back of a hat).
-#                                   2026-11-13: `bhc_library` = 1: a model kept for other builders to
-#                                   append, never rendered. A scene prop `bhc_sprite_border` (a margin)
-#                                   renders each sprite pass only inside its projected box (speed).
 #                                   Story 3.3: `ghost` = 1 lists the object in raw.json `ghosts`;
 #                                   render.ts then draws <object>/ghost/00 (tools/render/ghost.ts).
 #                                   Story 3.5: `silhouette` = 1 lists the object in raw.json
@@ -123,64 +120,9 @@ def scene_collections(scene):
     return set(scene.collection.children_recursive)
 
 
-def library_of(c):
-    """2026-11-13: `bhc_library` = 1: a model kept in the file for other builders to append (art/train.blend's engine
-    and cars, for build_map.py), linked to no scene: never rendered."""
-    return bool(c.get('bhc_library', 0))
-
-
 def sprite_collections(scene=None):
     owned = scene_collections(scene) if scene is not None else None
-    return sorted((c for c in bpy.data.collections if c.name.startswith('sprite.') and not library_of(c) and (owned is None or c in owned)), key=lambda c: c.name)
-
-
-BORDER_PROP = 'bhc_sprite_border'
-
-
-def sprite_border(scene, depsgraph, objs):
-    """2026-11-13: the scene prop `bhc_sprite_border` (a margin, a share of the frame) renders a sprite pass only inside
-    the projected box of its visible meshes grown by that margin (the rest of the frame stays transparent, as it would
-    anyway): a big frame (the train screen is 4096 × 3072) renders much faster. Returns (x0, y0, x1, y1) in camera
-    view shares (y up), or None (the whole frame)."""
-    margin = scene.get(BORDER_PROP)
-    if margin is None:
-        return None
-    cam = scene.camera
-    xs, ys = [], []
-    for o in objs:
-        if o.hide_render or not o.visible_camera:
-            continue
-        if o.type in ('CURVE', 'FONT', 'SURFACE', 'META', 'GPENCIL', 'GREASEPENCIL', 'VOLUME', 'POINTCLOUD', 'CURVES') or o.instance_type != 'NONE':
-            return None  # geometry the box cannot measure: the whole frame (review 2026-11-13)
-        if o.type != 'MESH':
-            continue
-        ev = o.evaluated_get(depsgraph)
-        me = ev.to_mesh()
-        mw = ev.matrix_world
-        for v in me.vertices:
-            p = world_to_camera_view(scene, cam, mw @ v.co)
-            if p.z > 0:
-                xs.append(p.x)
-                ys.append(p.y)
-        ev.to_mesh_clear()
-    if not xs:
-        return None
-    m = float(margin)
-    return (max(0.0, min(xs) - m), max(0.0, min(ys) - m), min(1.0, max(xs) + m), min(1.0, max(ys) + m))
-
-
-def render_sprite(scene, path, objs):
-    """A sprite pass: inside its border when the scene asks for one (sprite_border), else the whole frame."""
-    r = scene.render
-    border = sprite_border(scene, bpy.context.evaluated_depsgraph_get(), objs)
-    if border is not None:
-        r.use_border = True
-        r.use_crop_to_border = False
-        r.border_min_x, r.border_min_y, r.border_max_x, r.border_max_y = border
-    try:
-        render_to(scene, path)
-    finally:
-        r.use_border = False
+    return sorted((c for c in bpy.data.collections if c.name.startswith('sprite.') and (owned is None or c in owned)), key=lambda c: c.name)
 
 
 def layout_collection(scene):
@@ -330,7 +272,7 @@ def main():
                 hidden = [(o, o.hide_render) for other, objs in members.items() if other != k.name for o in objs]
                 for o, _hide in hidden:
                     o.hide_render = True
-                render_sprite(scene, os.path.join(out, 'frames', name, state, '00.png'), members[k.name])
+                render_to(scene, os.path.join(out, 'frames', name, state, '00.png'))
                 raw['frames'].append(f'{name}/{state}/00')
                 for o, hide in hidden:
                     o.hide_render = hide
@@ -339,7 +281,7 @@ def main():
                 for n, f in enumerate(timeline):
                     scene.frame_set(int(f))
                     frame = f'{name}/{state}/{n:02d}'
-                    render_sprite(scene, os.path.join(out, 'frames', name, state, f'{n:02d}.png'), sprite_objs[c.name])
+                    render_to(scene, os.path.join(out, 'frames', name, state, f'{n:02d}.png'))
                     raw['frames'].append(frame)
         scene.frame_set(PLATE_FRAME)
         for o, hide, hold in saved:
