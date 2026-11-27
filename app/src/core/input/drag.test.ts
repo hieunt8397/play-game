@@ -5,7 +5,7 @@ import { createDraggable, type DragArea } from './drag-controller';
 import { clampDrag, createDropTarget, dragBounds, hudExclusions, intersectRect, nudgeApart } from './drop';
 import { fakeScene, press } from './fakes';
 import { InputGuard } from './guard';
-import { locate, NO_INSETS, visibleDesignRect } from './space';
+import { designToLocal, locate, NO_INSETS, visibleDesignRect } from './space';
 import { createTapRouter } from './tap-router';
 import { createTapTarget } from './tap-target';
 import { Tokens } from '../tokens';
@@ -35,6 +35,60 @@ describe('dragBounds / hudExclusions', () => {
     const s = 1180 / 1024;
     expect(b.x).toBeCloseTo(v.x + 24 / s);
     expect(b.y + b.h).toBeCloseTo(v.y + v.h - (40 + 20) / s);
+  });
+
+  describe('phone 844x390 (play box 569.4x390 between two 137.3 px bars)', () => {
+    const phone = { w: 844, h: 390, rotated: false, insets: NO_INSETS };
+    const BOX_W = 390 * Tokens.supportedAspect.max;
+    const BAR = (844 - BOX_W) / 2;
+    const S = BOX_W / 1024;
+    // Hud offsets from the visible rect corners (design px): edgeInset + half, buttonTop/speakerTop + half.
+    const HALF = Tokens.components.buttonRound.size / 2;
+    const HOME_DX = Tokens.spacing.edgeInset + HALF;
+    const HOME_DY = Tokens.spacing.buttonTop + HALF;
+    const SPEAKER_DY = Tokens.spacing.speakerTop + HALF;
+    const R = HALF + Tokens.spacing.hitPad;
+
+    it('bounds are the play box (not the bars) inset by the strips; a notch inside the bar adds nothing', () => {
+      const v = visibleDesignRect(phone);
+      const b = dragBounds(phone);
+      expect(b.x).toBe(v.x + 24 / S);
+      expect(b.y).toBe(v.y + 32 / S);
+      expect(b.w).toBeCloseTo(v.w - 48 / S, 9);
+      expect(b.h).toBeCloseTo(v.h - 72 / S, 9);
+      expect(dragBounds({ ...phone, insets: { top: 0, right: 0, bottom: 0, left: 47 } })).toEqual(b);
+    });
+
+    it('the Hud circles sit at the play box corners (exact, design and local px)', () => {
+      const v = visibleDesignRect(phone);
+      const [home, speaker] = hudExclusions(phone);
+      expect(home).toEqual({ x: v.x + HOME_DX, y: v.y + HOME_DY, r: R });
+      expect(speaker).toEqual({ x: v.x + v.w - HOME_DX, y: v.y + SPEAKER_DY, r: R });
+      // On screen: Home is HOME_DX × s right of the left bar, at the top of the box.
+      const local = designToLocal(home!, phone);
+      expect(local.x).toBeCloseTo(BAR + HOME_DX * S, 9);
+      expect(local.y).toBeCloseTo(HOME_DY * S, 9);
+      const sl = designToLocal(speaker!, phone);
+      expect(sl.x).toBeCloseTo(844 - BAR - HOME_DX * S, 9);
+      expect(sl.y).toBeCloseTo(SPEAKER_DY * S, 9);
+    });
+
+    it('rotated (portrait iPhone, screen insets top 47 / bottom 34): insets lie in the bars, Hud unchanged', () => {
+      const port = { ...phone, rotated: true, insets: { top: 47, right: 0, bottom: 34, left: 0 } };
+      expect(hudExclusions(port)).toEqual(hudExclusions(phone));
+      expect(dragBounds(port)).toEqual(dragBounds(phone));
+    });
+
+    it('an inset reaching past the bar shifts the Hud by the residue only (landscape and rotated)', () => {
+      const v = visibleDesignRect(phone);
+      const land = { ...phone, insets: { top: 0, right: 0, bottom: 0, left: 150 } };
+      const [home] = hudExclusions(land);
+      expect(home).toEqual({ x: v.x + Tokens.spacing.edgeInset + (150 - BAR) / S + HALF, y: v.y + HOME_DY, r: R });
+      expect(dragBounds(land).x).toBe(v.x + (24 + 150 - BAR) / S);
+      // Rotated: the screen top inset is the stage-local left inset.
+      const port = { ...phone, rotated: true, insets: { top: 150, right: 0, bottom: 0, left: 0 } };
+      expect(hudExclusions(port)).toEqual(hudExclusions(land));
+    });
   });
 
   it('the Hud circles, r = size/2 + hitPad', () => {

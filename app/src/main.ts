@@ -42,6 +42,10 @@ const config: Types.Core.GameConfig = {
 installPageGuards();
 installRotationSafeScaleManager();
 document.body.style.backgroundColor = Tokens.colors.sky.css;
+// The play box (#game-container, stage.css) clamps its aspect to the supported iPad range; outside
+// it (phones, squarish windows) the body's sky colour shows as bars. Set before the game measures it.
+document.documentElement.style.setProperty('--play-aspect-min', String(Tokens.supportedAspect.min));
+document.documentElement.style.setProperty('--play-aspect-max', String(Tokens.supportedAspect.max));
 
 // Story 1.11: register the precaching service worker once, before the game boots (Boot's readiness
 // gate reads the same promise). Skipped in dev; an update waits for the next cold open (no reload).

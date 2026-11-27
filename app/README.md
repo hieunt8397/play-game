@@ -87,8 +87,8 @@ install and preview deploy*). Real-device checks happen on the iPad through an H
 
 ```text
 src/
-  main.ts          Phaser config: 1024×768, Scale.ENVELOP + CENTER_BOTH, input.activePointers
-  styles/stage.css NFR6 page guards (touch-action, user-select, callout, overscroll) + portrait rotation
+  main.ts          Phaser config: 1024×768, Scale.ENVELOP + CENTER_BOTH (inside the play box), input.activePointers
+  styles/stage.css NFR6 page guards (touch-action, user-select, callout, overscroll) + portrait rotation + play box
   core/            services: tokens(.generated), timing, bus, stage …   (core → content)
   content/         typed data; imports only types from other layers
   scenes/          shell scenes: Boot, Start, Map (placeholder), AudioUnlockOverlay  (scenes → games/core/content)
@@ -436,8 +436,9 @@ npm run atlas -- map       # frames → public/assets/atlases/map.{png,json} (at
 
 - Every tap goes through `src/core/input`: one `TapRouter` per scene forwards each press to the global
   `InputGuard`. It drops presses in the edge strip (24 px sides, 32 px top, 40 px bottom, plus the
-  safe-area inset), lets only the first finger play (a second finger may still tap the Hud's Speaker),
-  and resolves the press to the topmost target over the layers overlay > hud > scene.
+  safe-area inset, measured from the play box; a tap in a bar outside the play box is dropped too),
+  lets only the first finger play (a second finger may still tap the Hud's Speaker), and resolves the
+  press to the topmost target over the layers overlay > hud > scene.
 - `src/core/input/space.ts` is the only screen ↔ design transform; it also handles the portrait CSS rotation.
 - ESLint bans raw pointer events (`pointerdown`, `gameobjectup`, `POINTER_DOWN`, …) and `clientX/Y`,
   `pageX/Y` outside `src/core/input/`.
@@ -495,9 +496,27 @@ the tools in this repo; these are manual steps.
 4. From then on it works in airplane mode.
 
 **Supported devices:** a regular iPad, iPad Air or iPad Pro, landscape, **installed to the Home
-Screen**. The iPad mini and Safari tabs are not supported: the visible area must have an aspect ratio of
-at most 1.46 for `Tokens.safeRect` to fit, and the iPad mini screen, or Safari's toolbars, are narrower
-than that.
+Screen**: the whole screen is the play area (aspect 4:3 … 1.46). Anything wider (a phone, the iPad
+mini, a Safari tab with toolbars) or squarer still plays, inside a play box with sky-coloured bars — see
+*Phones* below.
+
+### Phones
+
+`#game-container` is a **play box**: the largest centred box whose aspect is clamped to
+`Tokens.supportedAspect` [4/3, 1.46] (stage.css, from `--play-aspect-min/max` that `main.ts` sets from
+the tokens). Phaser's ENVELOP covers that box, not the whole viewport. On every iPad the box is the whole
+stage (no bars, nothing changes). On a phone in landscape (e.g. 844×390, aspect ≈ 2.17) the box is the
+iPad 1.46 layout, 569×390, with sky bars left and right; in portrait the stage is rotated as usual and
+the same box shows (the box is laid out in the rotated stage's own landscape frame). A squarish
+landscape window (e.g. 1000×900) gets a 4:3 box with bars top and bottom. Taps in a bar are ignored like
+the edge strips; the Hud sits at the box corners, and a safe-area inset (notch) only moves it by the part
+that reaches past the bar. `readView()` in `src/core/input/space.ts` measures the laid-out box (the
+same size Phaser's ENVELOP reads), so taps always match what is drawn; `playBox()` computes it only
+without a DOM. `safeRect`, the Hud keep-out and the validators need no new rule.
+
+**Phones need iOS 16+** (container queries). On older phones the CSS cannot clamp the box, so it stays
+the whole stage and the phone gets the old cropped view (about 38 % of the height cut off, the Hud can
+be off-screen); taps still map correctly. iPads are unaffected (their box is the whole stage anyway).
 
 ## Tip for parents
 

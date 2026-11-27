@@ -129,3 +129,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-tau-quanh-dao.md`
   summary: Map's half of the train handoff (map-rides-view trainStart/focus('train'), Map's pull-back from the game's view) has no automated test.
   evidence: no Phaser test harness exists for Map.ts or map-rides-view.ts; the browser run (2026-11-13) showed the zoom in and the pull-back working.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-choi-tren-dien-thoai.md`
+  summary: No automated browser layout check that #game-container's rendered rect matches playBox(readView()) at phone, squarish and iPad sizes.
+  evidence: npm run check has no browser harness; the CSS box formula (stage.css) is only verified by manual headless-Chrome runs, so a CSS/token edit could desync rendering and input silently.

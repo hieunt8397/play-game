@@ -5,16 +5,16 @@ import type { Rect } from '../safe-rect';
 import { Tokens } from '../tokens';
 import { inputGuard, type InputGuard } from './guard';
 import { pointInPolygon, type Point } from './polygon';
-import { designInsets, envelop, localInsets, visibleDesignRect, type View } from './space';
+import { boxInsets, designInsets, envelop, visibleDesignRect, type View } from './space';
 import { inCircle, type Circle } from './tap-target';
 
 export type { Circle, Rect };
 
-/** The visible design rect inset by the edge dead strips plus the safe-area insets (÷ s). */
+/** The visible design rect (play box) inset by the edge dead strips plus the box insets (÷ s). */
 export function dragBounds(view: View): Rect {
   const sp = Tokens.spacing;
   const { s } = envelop(view);
-  const li = localInsets(view);
+  const li = boxInsets(view);
   const v = visibleDesignRect(view);
   const left = (sp.edgeDeadSide + li.left) / s;
   const right = (sp.edgeDeadSide + li.right) / s;

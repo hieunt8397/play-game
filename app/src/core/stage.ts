@@ -26,8 +26,10 @@ let scaleManagerPatched = false;
  * (getParentBounds) and the canvas (updateCenter) with getBoundingClientRect(), which returns
  * the *rotated* (portrait) box: ENVELOP would letterbox and CENTER_BOTH would mis-centre the
  * landscape stage. clientWidth/offsetWidth are layout sizes, unaffected by transforms, so the
- * stage keeps its landscape cover layout. Pointer mapping under rotation (canvasBounds,
- * transformX/Y) is corrected separately in core/input/space.ts (Story 1.6).
+ * stage keeps its landscape cover layout. The parent is the play box (#game-container, aspect
+ * clamped to Tokens.supportedAspect), so ENVELOP covers that box, not the whole viewport. Pointer
+ * mapping under rotation (canvasBounds, transformX/Y) is corrected separately in
+ * core/input/space.ts (Story 1.6).
  */
 export function installRotationSafeScaleManager(): void {
   if (scaleManagerPatched) return;

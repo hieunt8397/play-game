@@ -6,6 +6,10 @@
   --sai-right: env(safe-area-inset-right, 0px);
   --sai-bottom: env(safe-area-inset-bottom, 0px);
   --sai-left: env(safe-area-inset-left, 0px);
+  /* Play box aspect bounds = Tokens.supportedAspect (main.ts sets them from the tokens; these
+     fallbacks are the same values). */
+  --play-aspect-min: 1.3333333333333333;
+  --play-aspect-max: 1.46;
 }
 
 html,
@@ -37,7 +41,7 @@ img {
   pointer-events: none;
 }
 
-/* Landscape: the stage fills the viewport. Phaser ENVELOP covers it (no black bars). */
+/* Landscape: the stage fills the viewport and centres the play box (#game-container). */
 #stage {
   position: fixed;
   top: 0;
@@ -48,12 +52,31 @@ img {
   overflow: hidden;
   touch-action: none;
   overscroll-behavior: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  container-type: size;
 }
 
+/* The play box: the largest centred box whose aspect is clamped to [--play-aspect-min,
+   --play-aspect-max] (= Tokens.supportedAspect; mirrored by playBox() in core/input/space.ts).
+   Every iPad: the whole stage (no bars). Phone landscape: side bars; squarish window: top/bottom
+   bars. Bars show the body background (sky). Phaser ENVELOP covers the box. The box is laid out in
+   the stage's local (unrotated) frame, so portrait gets the same box. */
 #game-container {
+  flex: none;
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+/* Without container queries (iOS < 16) the box stays the whole stage; readView() measures it, so
+   taps still match what Phaser renders. */
+@supports (container-type: size) {
+  #game-container {
+    width: min(100cqw, 100cqh * var(--play-aspect-max));
+    height: min(100cqh, 100cqw / var(--play-aspect-min));
+  }
 }
 
 #game-container canvas {
